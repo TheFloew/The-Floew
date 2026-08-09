@@ -1,6 +1,8 @@
 Versiyon 1.1.0
 - Kategoriler algısal hale geldi.
 - Yeni kategoriler eklendi.
+- Picture-in-Picture desteği.
+- Kaydırma yönü ayarı.
 - Menü arayüzünde değişiklikler.
 - Haberlere "Kaynağa git" butonu ekledi.
 - Kaynak ve kategori tercihleri artık tarayıcı bazlı hatırlanıyor.
