@@ -73,12 +73,13 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
   opacity:0;
   visibility:hidden;
   pointer-events:none;
-  transition:opacity .2s ease,visibility .2s ease;
+  transition:opacity .55s cubic-bezier(.22,.61,.36,1),visibility 0s linear .55s;
 }
 #fullscreen-button.is-visible{
   opacity:1;
   visibility:visible;
   pointer-events:auto;
+  transition:opacity .55s cubic-bezier(.22,.61,.36,1),visibility 0s linear 0s;
 }
 #fullscreen-button:hover{
   text-shadow:0 1px 3px rgba(0,0,0,.55),0 2px 6px rgba(0,0,0,.32);
@@ -248,7 +249,16 @@ const SOURCE_LOGOS={
 };
 
 const slides=[document.getElementById("a"),document.getElementById("b")];
-const state={stories:[],index:0,active:0,busy:false,timer:null,x:0,y:0,t:0};
+const state={
+  stories:[],
+  index:0,
+  active:0,
+  busy:false,
+  timer:null,
+  x:0,y:0,t:0,
+  history:[],
+  historyPos:0
+};
 
 function status(msg){const e=document.getElementById("status");e.textContent=msg;e.hidden=false}
 function clearStatus(){document.getElementById("status").hidden=true}
@@ -296,64 +306,179 @@ function timer(){
   bir haber seçilir. Önce farklı kaynaklar filtrelenir;
   ardından o kaynaklardan rastgele bir haber seçilir.
 */
-function chooseNext(dir){
-  if(!state.stories.length)return 0;
+function sourceKey(source){
+  return String(source||"").trim().toLocaleLowerCase("tr-TR");
+}
 
-  const currentSource=sourceKey(state.stories[state.index]?.source);
+/*
+  İleri giderken farklı bir kaynak seçilir ve seçilen haber history'ye
+  eklenir. Geri giderken history'deki gerçek önceki haber gösterilir;
+  böylece aynı haberin yeni bir versiyonu seçilmez.
+*/
+function chooseForward(){
+  if(!state.stories.length)return -1;
 
-  const different=state.stories
-    .map((story,i)=>({story,i}))
-    .filter(x=>sourceKey(x.story.source)!==currentSource);
+  const currentSource=sourceKey(
+    state.stories[state.index]?.source
+  );
 
-  if(!different.length){
-    return (state.index+dir+state.stories.length)%state.stories.length;
+  for(let step=1;step<=state.stories.length;step++){
+    const i=(state.index+step)%state.stories.length;
+
+    if(
+      sourceKey(state.stories[i]?.source)!==
+      currentSource
+    ){
+      return i;
+    }
+  }
+
+  return (state.index+1)%state.stories.length;
+}
+
+function preloadImage(url){
+  return new Promise(resolve=>{
+    if(!url){
+      resolve();
+      return;
+    }
+
+    const img=new Image();
+    let done=false;
+
+    const finish=()=>{
+      if(done)return;
+      done=true;
+      resolve();
+    };
+
+    img.onload=finish;
+    img.onerror=finish;
+
+    img.src=url;
+
+    /*
+      Çok yavaş bir görsel geçişi sonsuza kadar
+      bekletmesin.
+    */
+    setTimeout(finish,5000);
+  });
+}
+
+async function move(dir){
+  if(state.busy||state.stories.length<2)return;
+
+  /*
+    GERİ:
+    Daha önce gerçekten gösterilmiş habere dön.
+  */
+  if(dir<0){
+    if(state.historyPos<=0)return;
+
+    const target=
+      state.history[state.historyPos-1];
+
+    await transitionTo(target,true);
+
+    state.historyPos--;
+
+    return;
   }
 
   /*
-    İleri geçişte listedeki sıralamayı koruyan,
-    fakat kaynağı farklı ilk uygun haberi bul.
-    Böylece haberler rastgele zıplamaz.
+    İLERİ:
+    Eğer geri gelmişsek history'deki sonraki habere dön.
+    Böylece ileri/geri arasında deterministik gezinme olur.
   */
-  if(dir>0){
-    for(let step=1;step<=state.stories.length;step++){
-      const i=(state.index+step)%state.stories.length;
-      if(sourceKey(state.stories[i].source)!==currentSource)return i;
-    }
-  }else{
-    for(let step=1;step<=state.stories.length;step++){
-      const i=(state.index-step+state.stories.length)%state.stories.length;
-      if(sourceKey(state.stories[i].source)!==currentSource)return i;
-    }
+  if(state.historyPos < state.history.length-1){
+    const target=
+      state.history[state.historyPos+1];
+
+    await transitionTo(target,true);
+
+    state.historyPos++;
+
+    return;
   }
 
-  return different[0].i;
+  const next=chooseForward();
+
+  if(next<0)return;
+
+  await transitionTo(next,false);
+
+  state.history.push(next);
+  state.historyPos=state.history.length-1;
 }
 
-function move(dir){
-  if(state.busy||state.stories.length<2)return;
+async function transitionTo(nextIndex,fromHistory){
+  if(state.busy)return;
+
   state.busy=true;
   clearTimeout(state.timer);
 
-  const next=chooseNext(dir);
-  const cur=slides[state.active];
-  const nxt=slides[1-state.active];
+  const currentSlide=
+    slides[state.active];
 
-  fill(nxt,state.stories[next]);
-  cur.className="slide";
-  nxt.className="slide";
-  void nxt.offsetWidth;
+  const nextSlide=
+    slides[1-state.active];
 
-  nxt.classList.add(dir>0?"enter-up":"enter-down");
-  cur.classList.add(dir>0?"exit-up":"exit-down");
+  const story=
+    state.stories[nextIndex];
 
-  nxt.addEventListener("animationend",()=>{
-    nxt.className="slide active";
-    cur.className="slide";
-    state.active=1-state.active;
-    state.index=next;
-    state.busy=false;
-    timer();
-  },{once:true});
+  /*
+    KRİTİK NOKTA:
+    Yeni slide ekrana alınmadan önce görsel tamamen yükleniyor.
+    Böylece animasyon sırasında eski/boş görsel görünmüyor.
+  */
+  await preloadImage(story.image);
+
+  fill(nextSlide,story);
+
+  /*
+    Görselin DOM'a yerleşmesini ve decode edilmesini
+    mümkün olduğunca tamamla.
+  */
+  const nextImage=
+    nextSlide.querySelector(".slide-image");
+
+  if(nextImage.decode){
+    try{
+      await nextImage.decode();
+    }catch(e){}
+  }
+
+  currentSlide.className="slide";
+  nextSlide.className="slide";
+
+  void nextSlide.offsetWidth;
+
+  nextSlide.classList.add(
+    "enter-up"
+  );
+
+  currentSlide.classList.add(
+    "exit-up"
+  );
+
+  nextSlide.addEventListener(
+    "animationend",
+    ()=>{
+      nextSlide.className="slide active";
+      currentSlide.className="slide";
+
+      state.active=
+        1-state.active;
+
+      state.index=
+        nextIndex;
+
+      state.busy=false;
+
+      timer();
+    },
+    {once:true}
+  );
 }
 
 async function load(){
@@ -367,6 +492,8 @@ async function load(){
     if(!state.stories.length){
       state.stories=list;
       state.index=0;
+      state.history=[0];
+      state.historyPos=0;
       fill(slides[0],list[0]);
       slides[0].className="slide active";
       clearStatus();
@@ -374,18 +501,39 @@ async function load(){
       return;
     }
 
-    const link=state.stories[state.index]?.link;
-    const oldSource=sourceKey(state.stories[state.index]?.source);
+    const currentStory=
+      state.stories[state.index];
+
+    const link=currentStory?.link;
+    const oldSource=sourceKey(currentStory?.source);
+
     state.stories=list;
 
     if(link){
       const i=list.findIndex(x=>x.link===link);
-      if(i>=0)state.index=i;
-      else{
-        const i2=list.findIndex(x=>sourceKey(x.source)!==oldSource);
-        if(i2>=0)state.index=i2;
+
+      if(i>=0){
+        state.index=i;
+
+        /*
+          Keep history pointing at the same currently visible story.
+        */
+        if(state.history.length){
+          state.history[state.historyPos]=i;
+        }
+      }else{
+        const i2=list.findIndex(
+          x=>sourceKey(x.source)!==oldSource
+        );
+
+        if(i2>=0){
+          state.index=i2;
+          state.history=[i2];
+          state.historyPos=0;
+        }
       }
     }
+
     clearStatus();
   }catch(err){
     console.error("NEWS WALL:",err);
