@@ -365,6 +365,57 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
   .enter-up,.exit-up,.enter-down,.exit-down{animation-duration:1ms}
 }
 body.pip-mode #pip-button{display:none!important}
+
+/* V27 — transparent background + bottom black message band + close button */
+#status{
+  background:transparent !important;
+  pointer-events:none !important;
+  display:flex !important;
+  align-items:flex-end !important;
+  justify-content:center !important;
+  padding:0 24px 6vh !important;
+  z-index:200 !important;
+}
+
+#status .empty-state-message{
+  position:relative;
+  width:max-content;
+  max-width:min(82vw,1000px);
+  margin:0 auto;
+  padding:14px 48px 14px 22px;
+  background:rgba(0,0,0,.78);
+  border-radius:2px;
+  text-align:center;
+  box-sizing:border-box;
+}
+
+#status .empty-state-title,
+#status .empty-state-subtitle,
+#status .empty-state-hint{
+  text-align:center;
+}
+
+#status-close{
+  position:absolute;
+  top:7px;
+  right:9px;
+  width:28px;
+  height:28px;
+  padding:0;
+  border:0;
+  background:transparent;
+  color:#fff;
+  font:700 24px/28px Arial,sans-serif;
+  cursor:pointer;
+  opacity:.72;
+  pointer-events:auto !important;
+  z-index:1001;
+}
+
+#status-close:hover{
+  opacity:1;
+}
+
 </style>
 </head>
 
@@ -1205,5 +1256,13 @@ setFullscreenIcon();
 load();
 setInterval(load,REFRESH_MS);
 </script>
+
+<script>
+document.getElementById("status-close")?.addEventListener("click", function(e){
+  e.stopPropagation();
+  clearStatus();
+});
+</script>
+
 </body>
 </html>
