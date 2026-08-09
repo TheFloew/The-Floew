@@ -1,3 +1,6 @@
+Beta 7:
+Gezinme yönü sorunu düzeltildi.
+
 Beta 6:
 - Gezinmeyi artık bir haber geçmişi üzerinden yapıyoruz. Yani geri kaydırdığında sistem tekrar "farklı bir kaynak bulayım" diye yeni bir haber seçmeyecek; daha önce gördüğün gerçek habere dönecek. Ayrıca geri gelip tekrar ileri gidince de aynı gezinme geçmişini koruyor.
 - Yeni haberin görseli artık geçiş sırasında karışmıyor. Önceden yeni görsel henüz hazır değilse eski/boş görsel animasyonun altında görünebiliyordu. Şimdi görsel hazır olmadan haber kaymaya başlamıyor.
