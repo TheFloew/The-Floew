@@ -29,7 +29,7 @@
 <main id="wall">
   <img id="logo" src="logo.png" alt="Flöw" draggable="false">
 
-  <button id="menu-button" type="button" aria-label="Haber menüsü" title="Tercihler">☰</button>
+  <button id="menu-button" type="button" aria-label="Tercihler" title="Tercihler">⚙</button>
   <button id="pip-button" type="button" aria-label="Picture-in-Picture" title="Köşeye indir">⧉</button>
   <button id="fullscreen-button" type="button" aria-label="Tam ekran" title="Tam ekran">⤢</button>
 
@@ -47,6 +47,7 @@
         <button class="menu-tab active" data-tab="sources" type="button">Kaynaklar</button>
         <button class="menu-tab" data-tab="categories" type="button">Kategoriler</button>
         <button class="menu-tab" data-tab="motion" type="button">Görünüm</button>
+        <button class="menu-tab" data-tab="weather" type="button">Hava &amp; Su</button>
       </div>
 
       <div class="menu-panel active" id="sources-panel" data-panel="sources">
@@ -66,6 +67,18 @@
           <button class="direction-option" data-direction="right" type="button"><span>→</span> Soldan sağa</button>
         </div>
 
+        <div class="duration-setting-group">
+          <div class="setting-copy">
+            <strong>Haber süresi</strong>
+            <small>Bir haberin ekranda kalacağı süre</small>
+          </div>
+          <div class="duration-control" role="group" aria-label="Haber süresi">
+            <button id="duration-minus" type="button" aria-label="Süreyi azalt">−</button>
+            <span id="duration-value">10 sn</span>
+            <button id="duration-plus" type="button" aria-label="Süreyi artır">+</button>
+          </div>
+        </div>
+
         <div class="media-setting-group">
           <button id="video-setting" class="media-setting" type="button" aria-pressed="true">
             <span>
@@ -77,6 +90,31 @@
         </div>
       </div>
 
+      <div class="menu-panel" id="weather-panel" data-panel="weather">
+        <div class="weather-settings">
+          <label class="weather-field" for="weather-city">
+            <span>Şehir</span>
+            <div class="weather-city-row">
+              <input id="weather-city" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="İstanbul">
+              <button id="weather-apply" type="button">Uygula</button>
+            </div>
+          </label>
+
+          <div class="weather-field">
+            <span>Sıcaklık birimi</span>
+            <div class="weather-unit-list" role="group" aria-label="Sıcaklık birimi">
+              <button class="weather-unit-option" data-unit="celsius" type="button">Selsiyus °C</button>
+              <button class="weather-unit-option" data-unit="fahrenheit" type="button">Fahrenayt °F</button>
+            </div>
+          </div>
+
+          <div id="weather-feedback" class="weather-feedback" aria-live="polite"></div>
+          <div class="weather-attribution">
+            Hava durumu verisi: <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a>
+          </div>
+        </div>
+      </div>
+
       <div class="menu-footer">
         <span id="filter-count"></span>
       </div>
@@ -84,6 +122,11 @@
   </div>
 
   <div id="clock" aria-hidden="true">
+    <div id="weather-current" hidden>
+      <span id="weather-icon"></span>
+      <span id="weather-temp"></span>
+      <span id="weather-city-label"></span>
+    </div>
     <div id="clock-time">00:00</div>
     <div id="clock-date"></div>
   </div>
@@ -124,6 +167,13 @@
 </main>
 
 <div id="status" hidden></div>
+
+<div id="cookie-notice" hidden>
+  <div class="status-band">
+    <span class="status-message">Flöw, tercihlerinizi hatırlamak için çerezleri kullanır. Siteye girerek çerez kullanımına izin vermektesiniz.</span>
+    <button id="cookie-close" class="status-close" type="button" aria-label="Çerez uyarısını kapat">×</button>
+  </div>
+</div>
 
 <script src="app.js"></script>
 
