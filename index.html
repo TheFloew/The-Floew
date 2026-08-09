@@ -416,6 +416,22 @@ body.pip-mode #pip-button{display:none!important}
   opacity:1;
 }
 
+
+.source-link{
+  display:inline-block;
+  margin-top:10px;
+  font-size:18px;
+  line-height:1;
+  color:#fff;
+  text-decoration:none;
+  opacity:.82;
+  text-shadow:0 1px 3px rgba(0,0,0,.65),0 2px 7px rgba(0,0,0,.42);
+  pointer-events:auto;
+  cursor:pointer;
+}
+.source-link:hover{opacity:1}
+.source-link[aria-hidden="true"]{display:none}
+
 </style>
 </head>
 
@@ -443,18 +459,10 @@ body.pip-mode #pip-button{display:none!important}
       </div>
 
       <div class="menu-panel active" id="sources-panel" data-panel="sources">
-        <div class="menu-actions">
-          <button id="sources-all" type="button">Tümünü aç</button>
-          <button id="sources-none" type="button">Tümünü kapat</button>
-        </div>
         <div id="source-options" class="option-list"></div>
       </div>
 
       <div class="menu-panel" id="categories-panel" data-panel="categories">
-        <div class="menu-actions">
-          <button id="categories-all" type="button">Tümünü aç</button>
-          <button id="categories-none" type="button">Tümünü kapat</button>
-        </div>
         <div id="category-options" class="option-list"></div>
       </div>
 
@@ -480,6 +488,7 @@ body.pip-mode #pip-button{display:none!important}
       </div>
       <h1></h1>
       <div class="time"></div>
+      <a class="source-link" href="#" target="_blank" rel="noopener noreferrer" aria-label="Haber kaynağına git">⎋</a>
     </div>
   </article>
 
@@ -494,6 +503,7 @@ body.pip-mode #pip-button{display:none!important}
       </div>
       <h1></h1>
       <div class="time"></div>
+      <a class="source-link" href="#" target="_blank" rel="noopener noreferrer" aria-label="Haber kaynağına git">⎋</a>
     </div>
   </article>
 </main>
@@ -744,6 +754,19 @@ function fill(el,s){
   if(category) category.textContent=s.flowCategory||"#Gündem";
   el.querySelector("h1").textContent=s.title||"";
   el.querySelector(".time").textContent=timeText(s.published);
+
+  const sourceLink=el.querySelector(".source-link");
+  if(sourceLink){
+    if(s.link){
+      sourceLink.href=s.link;
+      sourceLink.removeAttribute("aria-hidden");
+      sourceLink.style.display="inline-block";
+    }else{
+      sourceLink.removeAttribute("href");
+      sourceLink.setAttribute("aria-hidden","true");
+      sourceLink.style.display="none";
+    }
+  }
 }
 
 function timer(){
@@ -1185,10 +1208,12 @@ document.querySelectorAll(".menu-tab").forEach(tab=>{
   });
 });
 
-document.getElementById("sources-all").addEventListener("click",()=>setAllSources(true));
-document.getElementById("sources-none").addEventListener("click",()=>setAllSources(false));
-document.getElementById("categories-all").addEventListener("click",()=>setAllCategories(true));
-document.getElementById("categories-none").addEventListener("click",()=>setAllCategories(false));
+
+document.querySelectorAll(".source-link").forEach(link=>{
+  link.addEventListener("pointerdown",e=>e.stopPropagation());
+  link.addEventListener("pointerup",e=>e.stopPropagation());
+  link.addEventListener("click",e=>e.stopPropagation());
+});
 
 document.addEventListener("keydown",e=>{
   if(e.key==="Escape")closeMenu();
