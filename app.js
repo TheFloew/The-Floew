@@ -1,4 +1,3 @@
-```javascript
 const API_URL =
   "https://thefloew.thefloewback.workers.dev/news";
 
@@ -11,18 +10,21 @@ const slides = [
   document.getElementById("slide-b")
 ];
 
+const newsWall = document.getElementById("news-wall");
+
 const state = {
   stories: [],
   index: 0,
   activeSlide: 0,
 
   timer: null,
-
   animating: false,
 
   pointerStartX: 0,
   pointerStartY: 0,
-  pointerStartTime: 0
+  pointerStartTime: 0,
+
+  moved: false
 };
 
 
@@ -47,11 +49,6 @@ function hideStatus() {
 
 /*
    TARİH
-
-   RSS tarihini:
-   "5 dakika önce"
-   "2 saat önce"
-   şeklinde gösterir.
 */
 
 function formatTime(value) {
@@ -71,25 +68,20 @@ function formatTime(value) {
   const minutes =
     Math.floor(difference / 60000);
 
-
   if (minutes < 1) {
     return "az önce";
   }
-
 
   if (minutes < 60) {
     return `${minutes} dakika önce`;
   }
 
-
   const hours =
     Math.floor(minutes / 60);
-
 
   if (hours < 24) {
     return `${hours} saat önce`;
   }
-
 
   return date.toLocaleDateString(
     "tr-TR",
@@ -107,7 +99,6 @@ function formatTime(value) {
 */
 
 function fillSlide(slide, story) {
-
   const image =
     slide.querySelector(".slide-image");
 
@@ -120,9 +111,7 @@ function fillSlide(slide, story) {
   const time =
     slide.querySelector(".time");
 
-
   image.src = story.image;
-
   image.alt = story.title || "";
 
   source.textContent =
@@ -137,11 +126,10 @@ function fillSlide(slide, story) {
 
 
 /*
-   OTOMATİK SAYACI BAŞLAT
+   OTOMATİK SAYACI
 */
 
 function restartTimer() {
-
   clearTimeout(state.timer);
 
   state.timer =
@@ -159,25 +147,17 @@ function restartTimer() {
 */
 
 function move(direction) {
-
   if (state.animating) {
     return;
   }
-
 
   if (state.stories.length < 2) {
     return;
   }
 
-
   state.animating = true;
 
   clearTimeout(state.timer);
-
-
-  /*
-     Yeni haberin index'i
-  */
 
   const nextIndex =
     (
@@ -187,102 +167,46 @@ function move(direction) {
     ) %
     state.stories.length;
 
-
   const currentSlide =
     slides[state.activeSlide];
 
   const nextSlide =
     slides[1 - state.activeSlide];
 
-
-  /*
-     Yeni haberi diğer slide'a koy
-  */
-
   fillSlide(
     nextSlide,
     state.stories[nextIndex]
   );
 
-
-  /*
-     Animasyon sınıflarını temizle
-  */
-
   currentSlide.className = "slide";
-
   nextSlide.className = "slide";
-
-
-  /*
-     Browser'ın değişiklikleri uygulamasını bekle
-  */
 
   void nextSlide.offsetWidth;
 
-
-  /*
-     İLERİ
-  */
-
   if (direction > 0) {
-
-    nextSlide.classList.add(
-      "enter-up"
-    );
-
-    currentSlide.classList.add(
-      "exit-up"
-    );
-
+    nextSlide.classList.add("enter-up");
+    currentSlide.classList.add("exit-up");
+  } else {
+    nextSlide.classList.add("enter-down");
+    currentSlide.classList.add("exit-down");
   }
-
-
-  /*
-     GERİ
-  */
-
-  else {
-
-    nextSlide.classList.add(
-      "enter-down"
-    );
-
-    currentSlide.classList.add(
-      "exit-down"
-    );
-  }
-
-
-  /*
-     Animasyon tamamlandı
-  */
 
   nextSlide.addEventListener(
     "animationend",
     () => {
-
-      nextSlide.className =
-        "slide active";
-
-      currentSlide.className =
-        "slide";
-
+      nextSlide.className = "slide active";
+      currentSlide.className = "slide";
 
       state.activeSlide =
         1 - state.activeSlide;
 
-
       state.index =
         nextIndex;
-
 
       state.animating =
         false;
 
-
       restartTimer();
-
     },
     {
       once: true
@@ -296,9 +220,7 @@ function move(direction) {
 */
 
 async function loadNews() {
-
   try {
-
     const response =
       await fetch(
         API_URL,
@@ -307,31 +229,14 @@ async function loadNews() {
         }
       );
 
-
-    /*
-       HTTP hatası
-    */
-
     if (!response.ok) {
-
       throw new Error(
         `Worker HTTP ${response.status}`
       );
     }
 
-
-    /*
-       JSON
-    */
-
     const data =
       await response.json();
-
-
-    /*
-       Sadece geçerli ve görselli
-       haberleri kullan
-    */
 
     const stories =
       Array.isArray(data)
@@ -343,24 +248,18 @@ async function loadNews() {
           )
         : [];
 
-
     if (!stories.length) {
-
       throw new Error(
         "Worker görselli haber döndürmedi."
       );
     }
-
 
     /*
        İlk yükleme
     */
 
     if (!state.stories.length) {
-
-      state.stories =
-        stories;
-
+      state.stories = stories;
       state.index = 0;
 
       fillSlide(
@@ -368,68 +267,47 @@ async function loadNews() {
         state.stories[0]
       );
 
-
       slides[0].className =
         "slide active";
 
-
       hideStatus();
-
       restartTimer();
 
       return;
     }
 
-
     /*
-       Hali hazırda gösterilen haberi
-       mümkünse koru.
+       Mevcut haberi mümkünse koru.
     */
 
     const currentLink =
       state.stories[state.index]?.link;
 
-
     state.stories =
       stories;
 
-
     if (currentLink) {
-
       const sameStory =
         state.stories.findIndex(
           story =>
             story.link === currentLink
         );
 
-
       if (sameStory >= 0) {
-
         state.index =
           sameStory;
       }
     }
 
-
     hideStatus();
 
-  }
-
-  catch (error) {
-
+  } catch (error) {
     console.error(
       "NEWS WALL ERROR:",
       error
     );
 
-
-    /*
-       İlk yüklemede hata varsa
-       artık siyah ekran bırakmıyoruz.
-    */
-
     if (!state.stories.length) {
-
       showStatus(
         "Haberler alınamadı. " +
         "Cloudflare Worker bağlantısını kontrol edin."
@@ -446,29 +324,17 @@ async function loadNews() {
 window.addEventListener(
   "wheel",
   event => {
-
     event.preventDefault();
 
-
-    if (
-      Math.abs(event.deltaY) < 5
-    ) {
+    if (Math.abs(event.deltaY) < 5) {
       return;
     }
 
-
-    if (event.deltaY > 0) {
-
-      move(1);
-
-    }
-
-    else {
-
-      move(-1);
-
-    }
-
+    move(
+      event.deltaY > 0
+        ? 1
+        : -1
+    );
   },
   {
     passive: false
@@ -483,42 +349,36 @@ window.addEventListener(
 window.addEventListener(
   "keydown",
   event => {
-
     if (
       event.key === "ArrowDown" ||
       event.key === "PageDown"
     ) {
-
       event.preventDefault();
-
       move(1);
-
       return;
     }
-
 
     if (
       event.key === "ArrowUp" ||
       event.key === "PageUp"
     ) {
-
       event.preventDefault();
-
       move(-1);
-
     }
-
   }
 );
 
 
 /*
-   MOUSE / TOUCH SÜRÜKLEME
+   MOUSE / TOUCH BAŞLANGICI
 */
 
 window.addEventListener(
   "pointerdown",
   event => {
+    if (event.button !== 0) {
+      return;
+    }
 
     state.pointerStartX =
       event.clientX;
@@ -529,86 +389,85 @@ window.addEventListener(
     state.pointerStartTime =
       performance.now();
 
+    state.moved = false;
   }
 );
 
 
+/*
+   MOUSE / TOUCH BIRAKMA
+*/
+
 window.addEventListener(
   "pointerup",
   event => {
+    if (event.button !== 0) {
+      return;
+    }
 
     const deltaY =
       event.clientY -
       state.pointerStartY;
 
-
     const deltaX =
       event.clientX -
       state.pointerStartX;
-
 
     const duration =
       performance.now() -
       state.pointerStartTime;
 
-
     /*
-       Çok uzun basılı tutulduysa
-       swipe kabul etme.
-    */
-
-    if (duration > 1000) {
-      return;
-    }
-
-
-    /*
-       Yeterince hareket yok
+       Sürükleme
     */
 
     if (
-      Math.abs(deltaY) <
-      SWIPE_DISTANCE
+      Math.abs(deltaY) >= SWIPE_DISTANCE &&
+      Math.abs(deltaY) >= Math.abs(deltaX) &&
+      duration <= 1000
     ) {
+      state.moved = true;
+
+      move(
+        deltaY < 0
+          ? 1
+          : -1
+      );
+
       return;
     }
 
-
     /*
-       Yatay hareket daha fazlaysa
-       ignore et.
+       Normal tıklama:
+       Sayfanın HER YERİ sonraki habere geçer.
+
+       Logo da pointer-events:none olduğu için
+       tıklama olayını engellemez.
     */
 
     if (
-      Math.abs(deltaY) <
-      Math.abs(deltaX)
+      !state.moved &&
+      duration <= 1000 &&
+      Math.abs(deltaX) < 10 &&
+      Math.abs(deltaY) < 10
     ) {
-      return;
-    }
-
-
-    /*
-       Yukarı sürükleme:
-       sonraki haber
-    */
-
-    if (deltaY < 0) {
-
       move(1);
-
     }
 
-    /*
-       Aşağı sürükleme:
-       önceki haber
-    */
+    state.moved = false;
+  }
+);
 
-    else {
 
-      move(-1);
+/*
+   TARAYICININ GÖRSELİ SÜRÜKLEMESİNİ
+   EK GÜVENLİK OLARAK ENGELLE
+*/
 
-    }
-
+window.addEventListener(
+  "dragstart",
+  event => {
+    event.preventDefault();
   }
 );
 
@@ -621,12 +480,10 @@ loadNews();
 
 
 /*
-   2 dakikada bir haber listesini
-   arka planda yenile.
+   HABER LİSTESİNİ 2 DAKİKADA BİR YENİLE
 */
 
 setInterval(
   loadNews,
   REFRESH_TIME
 );
-```

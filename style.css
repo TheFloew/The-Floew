@@ -1,4 +1,3 @@
-```css
 * {
   box-sizing: border-box;
 }
@@ -30,6 +29,30 @@ body {
   background: #000;
 }
 
+/* THE FLÖW LOGOSU */
+
+#site-logo {
+  position: fixed;
+  z-index: 100;
+
+  top: 2.2vh;
+  left: 2.2vw;
+
+  /* Ekran genişliğinin %4'ünü geçmez. */
+  width: min(4vw, 90px);
+  height: auto;
+
+  display: block;
+
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+
+  filter:
+    drop-shadow(0 2px 3px rgba(0, 0, 0, 0.95))
+    drop-shadow(0 5px 12px rgba(0, 0, 0, 0.8));
+}
+
 .slide {
   position: absolute;
   inset: 0;
@@ -46,7 +69,7 @@ body {
   transform: translateY(0);
 }
 
-/* HABER GÖRSELİ */
+/* Haber görseli artık browser tarafından sürüklenemez. */
 
 .slide-image {
   position: absolute;
@@ -58,6 +81,10 @@ body {
   object-fit: cover;
 
   background: #111;
+
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 /* Görselin alt kısmına koyu geçiş */
@@ -92,9 +119,9 @@ body {
   text-shadow:
     0 2px 8px rgba(0, 0, 0, 0.9),
     0 4px 24px rgba(0, 0, 0, 0.7);
-}
 
-/* KAYNAK */
+  pointer-events: none;
+}
 
 .source {
   margin-bottom: 12px;
@@ -110,8 +137,6 @@ body {
   opacity: 0.9;
 }
 
-/* MANŞET BAŞLIĞI */
-
 .headline h1 {
   margin: 0;
   padding: 0;
@@ -123,8 +148,6 @@ body {
   letter-spacing: -0.025em;
 }
 
-/* YAYIN ZAMANI */
-
 .time {
   margin-top: 15px;
 
@@ -134,9 +157,7 @@ body {
   opacity: 0.75;
 }
 
-/*
-   YUKARI DOĞRU GEÇİŞ
-*/
+/* YUKARI DOĞRU GEÇİŞ */
 
 .enter-up {
   animation:
@@ -150,9 +171,7 @@ body {
     forwards;
 }
 
-/*
-   GERİ GİDERKEN
-*/
+/* GERİ GİDERKEN */
 
 .enter-down {
   animation:
@@ -165,9 +184,6 @@ body {
     exitDown 700ms cubic-bezier(0.22, 0.61, 0.36, 1)
     forwards;
 }
-
-
-/* İLERİ */
 
 @keyframes enterUp {
   from {
@@ -189,9 +205,6 @@ body {
   }
 }
 
-
-/* GERİ */
-
 @keyframes enterDown {
   from {
     transform: translateY(-100%);
@@ -212,14 +225,7 @@ body {
   }
 }
 
-
-/*
-   HATA / DURUM MESAJI
-
-   Normalde görünmez.
-   API tamamen çalışmazsa siyah ekran yerine
-   problemi görebilmemiz için kullanılır.
-*/
+/* HATA / DURUM MESAJI */
 
 #status {
   position: fixed;
@@ -238,16 +244,15 @@ body {
 
   font-size: 18px;
   line-height: 1.5;
+
+  z-index: 200;
 }
 
 #status[hidden] {
   display: none;
 }
 
-
-/*
-   DAHA DAR EKRANLAR
-*/
+/* DAHA DAR EKRANLAR */
 
 @media (max-width: 900px) {
   .headline {
@@ -260,12 +265,13 @@ body {
   .headline h1 {
     font-size: clamp(28px, 6vw, 48px);
   }
+
+  #site-logo {
+    width: min(4vw, 70px);
+  }
 }
 
-
-/*
-   HAREKET AZALTMA TERCİHİ
-*/
+/* HAREKET AZALTMA TERCİHİ */
 
 @media (prefers-reduced-motion: reduce) {
   .enter-up,
@@ -275,4 +281,3 @@ body {
     animation-duration: 1ms;
   }
 }
-```
