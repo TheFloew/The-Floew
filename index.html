@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <link rel="manifest" href="site.webmanifest">
 
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=31.9.1">
 
 </head>
 
@@ -19,15 +19,15 @@
 <div id="loading-screen" aria-live="polite" aria-label="Yükleniyor">
   <div class="loading-stage" aria-hidden="true">
     <div class="loading-marquee">
-      <img class="loading-logo" src="logo.png" alt="">
-      <img class="loading-logo" src="logo.png" alt="">
-      <img class="loading-logo" src="logo.png" alt="">
+      <img class="loading-logo" src="logo.png?v=31.9.1" alt="">
+      <img class="loading-logo" src="logo.png?v=31.9.1" alt="">
+      <img class="loading-logo" src="logo.png?v=31.9.1" alt="">
     </div>
   </div>
 </div>
 
 <main id="wall">
-  <img id="logo" src="logo.png" alt="Flöw" draggable="false">
+  <img id="logo" src="logo.png?v=31.9.1" alt="Flöw" draggable="false">
 
   <button id="menu-button" type="button" aria-label="Tercihler" title="Tercihler">⚙</button>
   <button id="pip-button" type="button" aria-label="Picture-in-Picture" title="Köşeye indir">⧉</button>
@@ -177,190 +177,30 @@
   </div>
 </div>
 
-<script src="app.js"></script>
+<script>
+window.__floewBootFallback=setTimeout(function(){
+  var loader=document.getElementById("loading-screen");
+  if(loader)loader.remove();
 
+  var status=document.getElementById("status");
+  if(status && !window.__floewAppStarted){
+    status.innerHTML=
+      '<div class="status-band">'+
+      '<span class="status-message">Flöw uygulaması yüklenemedi. Sayfayı yenileyin.</span>'+
+      '<button class="status-close" type="button" aria-label="Uyarıyı kapat">×</button>'+
+      '</div>';
+    status.hidden=false;
 
+    var close=status.querySelector(".status-close");
+    if(close)close.onclick=function(){
+      status.hidden=true;
+      status.innerHTML="";
+    };
+  }
+},15000);
+</script>
 
-</body>
-</html>
-<!doctype html>
-<html lang="tr">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="dark">
-<title>Flöw | Dümdüz haberler...</title>
-<link rel="icon" href="favicon.ico" sizes="any">
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
-<link rel="manifest" href="site.webmanifest">
-
-<link rel="stylesheet" href="styles.css">
-
-</head>
-
-<body>
-<div id="loading-screen" aria-live="polite" aria-label="Yükleniyor">
-  <div class="loading-stage" aria-hidden="true">
-    <div class="loading-marquee">
-      <img class="loading-logo" src="logo.png" alt="">
-      <img class="loading-logo" src="logo.png" alt="">
-      <img class="loading-logo" src="logo.png" alt="">
-    </div>
-  </div>
-</div>
-
-<main id="wall">
-  <img id="logo" src="logo.png" alt="Flöw" draggable="false">
-
-  <button id="menu-button" type="button" aria-label="Tercihler" title="Tercihler">⚙</button>
-  <button id="pip-button" type="button" aria-label="Picture-in-Picture" title="Köşeye indir">⧉</button>
-  <button id="fullscreen-button" type="button" aria-label="Tam ekran" title="Tam ekran">⤢</button>
-
-  <div id="menu-overlay" aria-hidden="true">
-    <section id="settings-menu" role="dialog" aria-modal="true" aria-label="Haber ayarları">
-      <div class="menu-header">
-        <div>
-          <div class="menu-title">Tercihler</div>
-          <div class="menu-subtitle">Flöw'ü istediğiniz gibi kişiselleştirin...</div>
-        </div>
-        <button id="menu-close" type="button" aria-label="Menüyü kapat">×</button>
-      </div>
-
-      <div class="menu-tabs" role="tablist">
-        <button class="menu-tab active" data-tab="sources" type="button">Kaynaklar</button>
-        <button class="menu-tab" data-tab="categories" type="button">Kategoriler</button>
-        <button class="menu-tab" data-tab="motion" type="button">Görünüm</button>
-        <button class="menu-tab" data-tab="weather" type="button">Hava &amp; Su</button>
-      </div>
-
-      <div class="menu-panel active" id="sources-panel" data-panel="sources">
-        <div id="source-options" class="option-list"></div>
-      </div>
-
-      <div class="menu-panel" id="categories-panel" data-panel="categories">
-        <div id="category-options" class="option-list"></div>
-      </div>
-
-      <div class="menu-panel" id="motion-panel" data-panel="motion">
-        <div class="motion-label">Haberlerin kayma yönü</div>
-        <div class="direction-list">
-          <button class="direction-option" data-direction="up" type="button"><span>↑</span> Aşağıdan yukarı</button>
-          <button class="direction-option" data-direction="down" type="button"><span>↓</span> Yukarıdan aşağı</button>
-          <button class="direction-option" data-direction="left" type="button"><span>←</span> Sağdan sola</button>
-          <button class="direction-option" data-direction="right" type="button"><span>→</span> Soldan sağa</button>
-        </div>
-
-        <div class="duration-setting-group">
-          <div class="setting-copy">
-            <strong>Haber süresi</strong>
-            <small>Bir haberin ekranda kalacağı süre</small>
-          </div>
-          <div class="duration-control" role="group" aria-label="Haber süresi">
-            <button id="duration-minus" type="button" aria-label="Süreyi azalt">−</button>
-            <span id="duration-value">10 sn</span>
-            <button id="duration-plus" type="button" aria-label="Süreyi artır">+</button>
-          </div>
-        </div>
-
-        <div class="media-setting-group">
-          <button id="video-setting" class="media-setting" type="button" aria-pressed="true">
-            <span>
-              <strong>Haber videoları</strong>
-              <small>Varsa görsel yerine sessiz oynat</small>
-            </span>
-            <span class="media-setting-state">Açık</span>
-          </button>
-        </div>
-      </div>
-
-      <div class="menu-panel" id="weather-panel" data-panel="weather">
-        <div class="weather-settings">
-          <label class="weather-field" for="weather-city">
-            <span>Şehir</span>
-            <div class="weather-city-row">
-              <input id="weather-city" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="İstanbul">
-              <button id="weather-apply" type="button">Uygula</button>
-            </div>
-          </label>
-
-          <div class="weather-field">
-            <span>Sıcaklık birimi</span>
-            <div class="weather-unit-list" role="group" aria-label="Sıcaklık birimi">
-              <button class="weather-unit-option" data-unit="celsius" type="button">Selsiyus °C</button>
-              <button class="weather-unit-option" data-unit="fahrenheit" type="button">Fahrenayt °F</button>
-            </div>
-          </div>
-
-          <div id="weather-feedback" class="weather-feedback" aria-live="polite"></div>
-          <div class="weather-attribution">
-            Hava durumu verisi: <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a>
-          </div>
-        </div>
-      </div>
-
-      <div class="menu-footer">
-        <span id="filter-count"></span>
-      </div>
-    </section>
-  </div>
-
-  <div id="clock" aria-hidden="true">
-    <div id="weather-current" hidden>
-      <span id="weather-icon"></span>
-      <span id="weather-temp"></span>
-      <span id="weather-city-label"></span>
-    </div>
-    <div id="clock-time">00:00</div>
-    <div id="clock-date"></div>
-  </div>
-
-  <article class="slide active" id="a">
-    <img class="slide-image" alt="" draggable="false">
-    <video class="slide-video" muted autoplay playsinline preload="metadata" aria-hidden="true"></video>
-    <iframe class="slide-embed" title="Haber videosu" allow="autoplay; encrypted-media; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" aria-hidden="true"></iframe>
-    <div class="shade"></div>
-    <div class="headline">
-      <div class="source-line">
-        <div class="category"></div>
-        <img class="source-logo" alt="" draggable="false">
-        <div class="source"></div>
-      </div>
-      <h1></h1>
-      <div class="time"></div>
-      <a class="source-link" href="#" target="_blank" rel="noopener noreferrer" aria-label="Haber kaynağına git">⎋</a>
-    </div>
-  </article>
-
-  <article class="slide" id="b">
-    <img class="slide-image" alt="" draggable="false">
-    <video class="slide-video" muted autoplay playsinline preload="metadata" aria-hidden="true"></video>
-    <iframe class="slide-embed" title="Haber videosu" allow="autoplay; encrypted-media; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" aria-hidden="true"></iframe>
-    <div class="shade"></div>
-    <div class="headline">
-      <div class="source-line">
-        <div class="category"></div>
-        <img class="source-logo" alt="" draggable="false">
-        <div class="source"></div>
-      </div>
-      <h1></h1>
-      <div class="time"></div>
-      <a class="source-link" href="#" target="_blank" rel="noopener noreferrer" aria-label="Haber kaynağına git">⎋</a>
-    </div>
-  </article>
-</main>
-
-<div id="status" hidden></div>
-
-<div id="cookie-notice" hidden>
-  <div class="status-band">
-    <span class="status-message">Flöw, tercihlerinizi hatırlamak için çerezleri kullanır. Siteye girerek çerez kullanımına izin vermektesiniz.</span>
-    <button id="cookie-close" class="status-close" type="button" aria-label="Çerez uyarısını kapat">×</button>
-  </div>
-</div>
-
-<script src="app.js"></script>
+<script src="app.js?v=31.9.1"></script>
 
 
 
