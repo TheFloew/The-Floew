@@ -1,7 +1,8 @@
 Beta 4:
--Tarih ve saat sorunu giderildi.
--Haber kaynağı logolarının boyutları eşlendi.
--Tam ekran modu sorunu giderildi.
+- Tarih ve saat sorunu giderildi.
+- Haber kaynağı logolarının boyutları eşlendi.
+- Tam ekran modu sorunu giderildi.
+- Haber kaynakları rastgeleleştirildi. Artık arka arkaya geçilen haberler aynı kaynaktan gözükmüyor.
 
 Beta 3 Sürüm notları:
 - Tam ekran özelliği eklendi.
