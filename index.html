@@ -261,7 +261,9 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
   letter-spacing:-.025em;
 }
 
-.time{margin-top:15px;font-size:13px;line-height:1;opacity:.78}
+
+.meta-line{margin-top:15px;display:flex;align-items:center;justify-content:flex-end;gap:10px;pointer-events:auto}.source-link{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;color:#fff;text-decoration:none;font:400 20px/1 Arial,sans-serif;opacity:.82;text-shadow:0 1px 3px rgba(0,0,0,.65),0 2px 7px rgba(0,0,0,.42);pointer-events:auto;cursor:pointer;transition:opacity .2s ease,transform .2s ease}.source-link:hover{opacity:1;transform:scale(1.08)}
+.time{margin-top:0;font-size:13px;line-height:1;opacity:.78}
 
 #clock{
   position:fixed;
@@ -315,6 +317,8 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 body.no-news #menu-button,body.no-news #fullscreen-button{z-index:1000 !important;opacity:1 !important;visibility:visible !important;pointer-events:auto !important}
 body.no-news #status{z-index:50 !important;pointer-events:none !important}
 #status-message{max-width:min(680px,80vw);font:400 clamp(14px,1.3vw,19px)/1.6 "Comfortaa",sans-serif;opacity:.82}
+
+body.no-news #logo,body.no-news #clock,body.no-news #menu-button,body.no-news #fullscreen-button{z-index:1000 !important;opacity:1 !important;visibility:visible !important}body.no-news #menu-button,body.no-news #fullscreen-button{pointer-events:auto !important}body.no-news #status{z-index:40 !important;pointer-events:none !important}
 </style>
 </head>
 
@@ -375,7 +379,7 @@ body.no-news #status{z-index:50 !important;pointer-events:none !important}
         <div class="source"></div>
       </div>
       <h1></h1>
-      <div class="time"></div>
+      <div class="meta-line"><a class="source-link" href="#" target="_blank" rel="noopener noreferrer" aria-label="Habere git" title="Habere git">⎋</a><div class="time"></div></div>
     </div>
   </article>
 
@@ -389,7 +393,7 @@ body.no-news #status{z-index:50 !important;pointer-events:none !important}
         <div class="source"></div>
       </div>
       <h1></h1>
-      <div class="time"></div>
+      <div class="meta-line"><a class="source-link" href="#" target="_blank" rel="noopener noreferrer" aria-label="Habere git" title="Habere git">⎋</a><div class="time"></div></div>
     </div>
   </article>
 </main>
@@ -608,6 +612,8 @@ function fill(el,s){
   logo.onload=()=>{logo.style.visibility="visible"};
 
   el.querySelector(".source").textContent=s.source||"";
+  const sourceLink=el.querySelector(".source-link");
+  if(sourceLink){ sourceLink.href=s.link||"#"; sourceLink.style.visibility=s.link?"visible":"hidden"; }
   const category=el.querySelector(".category");
   if(category) category.textContent=s.flowCategory||"#Gündem";
   el.querySelector("h1").textContent=s.title||"";
@@ -1016,6 +1022,7 @@ window.addEventListener("wheel",e=>{
   if(e.target.closest && e.target.closest("#fullscreen-button"))return;
   if(e.target.closest && e.target.closest("#menu-button"))return;
   if(e.target.closest && e.target.closest("#menu-overlay"))return;
+  if(e.target.closest && e.target.closest(".source-link"))return;
   e.preventDefault();
   if(Math.abs(e.deltaY)>=5)move(e.deltaY>0?1:-1);
 },{passive:false});
@@ -1031,6 +1038,7 @@ window.addEventListener("pointerdown",e=>{
   if(e.target.closest && e.target.closest("#fullscreen-button"))return;
   if(e.target.closest && e.target.closest("#menu-button"))return;
   if(e.target.closest && e.target.closest("#menu-overlay"))return;
+  if(e.target.closest && e.target.closest(".source-link"))return;
   state.x=e.clientX;state.y=e.clientY;state.t=performance.now();
 });
 
@@ -1040,6 +1048,7 @@ window.addEventListener("pointerup",e=>{
   if(e.target.closest && e.target.closest("#fullscreen-button"))return;
   if(e.target.closest && e.target.closest("#menu-button"))return;
   if(e.target.closest && e.target.closest("#menu-overlay"))return;
+  if(e.target.closest && e.target.closest(".source-link"))return;
 
   const dx=e.clientX-state.x;
   const dy=e.clientY-state.y;
