@@ -590,6 +590,75 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 }
 .status-close:hover{opacity:1}
 
+
+/* --- V31.2: story video layer --- */
+.slide-video,
+.slide-embed{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  border:0;
+  object-fit:cover;
+  background:#000;
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  z-index:1;
+}
+.slide-video.media-visible,
+.slide-embed.media-visible{
+  opacity:1;
+  visibility:visible;
+}
+.slide-image{z-index:0}
+.shade{z-index:2}
+.headline{z-index:3}
+
+/* Video preference inside the existing Geçiş tab. */
+.media-setting-group{
+  margin-top:24px;
+  padding-top:12px;
+  border-top:1px solid rgba(255,255,255,.10);
+}
+.media-setting{
+  width:100%;
+  min-height:52px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  padding:9px 2px;
+  border:0;
+  background:transparent;
+  color:#fff;
+  cursor:pointer;
+  text-align:left;
+  font-family:"Comfortaa",sans-serif;
+}
+.media-setting strong{
+  display:block;
+  font-size:12px;
+  font-weight:700;
+}
+.media-setting small{
+  display:block;
+  margin-top:5px;
+  font-size:10px;
+  font-weight:400;
+  opacity:.46;
+}
+.media-setting-state{
+  flex:0 0 auto;
+  min-width:48px;
+  text-align:right;
+  font-size:11px;
+  opacity:.48;
+}
+.media-setting.active .media-setting-state{
+  opacity:1;
+}
+
 </style>
 </head>
 
@@ -633,6 +702,16 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
           <button class="direction-option" data-direction="left" type="button"><span>←</span> Sağdan sola</button>
           <button class="direction-option" data-direction="right" type="button"><span>→</span> Soldan sağa</button>
         </div>
+
+        <div class="media-setting-group">
+          <button id="video-setting" class="media-setting" type="button" aria-pressed="true">
+            <span>
+              <strong>Haber videoları</strong>
+              <small>Varsa görsel yerine sessiz oynat</small>
+            </span>
+            <span class="media-setting-state">Açık</span>
+          </button>
+        </div>
       </div>
 
       <div class="menu-footer">
@@ -648,6 +727,8 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 
   <article class="slide active" id="a">
     <img class="slide-image" alt="" draggable="false">
+    <video class="slide-video" muted autoplay playsinline preload="metadata" aria-hidden="true"></video>
+    <iframe class="slide-embed" title="Haber videosu" allow="autoplay; encrypted-media; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" aria-hidden="true"></iframe>
     <div class="shade"></div>
     <div class="headline">
       <div class="source-line">
@@ -663,6 +744,8 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 
   <article class="slide" id="b">
     <img class="slide-image" alt="" draggable="false">
+    <video class="slide-video" muted autoplay playsinline preload="metadata" aria-hidden="true"></video>
+    <iframe class="slide-embed" title="Haber videosu" allow="autoplay; encrypted-media; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" aria-hidden="true"></iframe>
     <div class="shade"></div>
     <div class="headline">
       <div class="source-line">
@@ -681,6 +764,7 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 
 <script>
 const API="https://thefloew.thefloewback.workers.dev/news";
+const VIDEO_API="https://thefloew.thefloewback.workers.dev/video";
 const NEWS_BATCH_COUNT=4;
 const SHOW_MS=10000;
 const REFRESH_MS=120000;
@@ -743,7 +827,7 @@ const NEW_SOURCES=["shiftdelete.net","onedio","beyazperde","motor1 türkiye","ev
 function loadPreferences(){
   try{
     const raw=localStorage.getItem(PREFS_KEY);
-    if(!raw)return {sources:null,categories:null,direction:"up"};
+    if(!raw)return {sources:null,categories:null,direction:"up",videoEnabled:true};
     const p=JSON.parse(raw)||{};
 
     let categories=Array.isArray(p.categories)?p.categories.filter(c=>c!=="#Gündem"):null;
@@ -756,16 +840,18 @@ function loadPreferences(){
     return {
       sources:Array.isArray(p.sources)?p.sources:null,
       categories,
-      direction:["up","down","left","right"].includes(p.direction)?p.direction:"up"
+      direction:["up","down","left","right"].includes(p.direction)?p.direction:"up",
+      videoEnabled:p.videoEnabled!==false
     };
   }catch(e){
     console.warn("Preferences:",e);
-    return {sources:null,categories:null,direction:"up"};
+    return {sources:null,categories:null,direction:"up",videoEnabled:true};
   }
 }
 
 const savedPreferences=loadPreferences();
 let transitionDirection=savedPreferences.direction||"up";
+let videoEnabled=savedPreferences.videoEnabled!==false;
 let sourcePreferencesApplied=false;
 
 function savePreferences(){
@@ -773,7 +859,8 @@ function savePreferences(){
     localStorage.setItem(PREFS_KEY,JSON.stringify({
       sources:[...filters.sources],
       categories:[...filters.categories],
-      direction:transitionDirection
+      direction:transitionDirection,
+      videoEnabled
     }));
   }catch(e){
     console.warn("Preferences:",e);
@@ -992,7 +1079,285 @@ function timeText(v){
   return d.toLocaleDateString("tr-TR",{day:"2-digit",month:"2-digit",year:"numeric"});
 }
 
+
+const storyMediaCache=new Map();
+
+function mediaKey(story){
+  return String(
+    story?.link ||
+    `${story?.source||""}|${story?.title||""}`
+  );
+}
+
+function resetSlideMedia(el){
+  el.dataset.mediaToken=String(
+    (Number(el.dataset.mediaToken)||0)+1
+  );
+
+  const image=el.querySelector(".slide-image");
+  const video=el.querySelector(".slide-video");
+  const embed=el.querySelector(".slide-embed");
+
+  if(image){
+    image.style.display="block";
+    image.style.visibility="visible";
+  }
+
+  if(video){
+    try{video.pause()}catch(e){}
+    video.removeAttribute("src");
+    video.load();
+    video.classList.remove("media-visible");
+    video.setAttribute("aria-hidden","true");
+  }
+
+  if(embed){
+    embed.src="about:blank";
+    embed.classList.remove("media-visible");
+    embed.setAttribute("aria-hidden","true");
+  }
+}
+
+function stopSlideMedia(el){
+  if(!el)return;
+  resetSlideMedia(el);
+}
+
+async function resolveStoryMedia(story){
+  if(!videoEnabled || !story)return null;
+
+  if(story.video){
+    return {
+      kind:"video",
+      url:story.video,
+      type:story.videoType||""
+    };
+  }
+
+  if(!story.link)return null;
+
+  const key=mediaKey(story);
+  if(storyMediaCache.has(key)){
+    return storyMediaCache.get(key);
+  }
+
+  const promise=(async()=>{
+    const controller=new AbortController();
+    const timeout=setTimeout(
+      ()=>controller.abort(),
+      8500
+    );
+
+    try{
+      const url=
+        `${VIDEO_API}?url=${encodeURIComponent(story.link)}`;
+
+      const r=await fetch(url,{
+        method:"GET",
+        mode:"cors",
+        credentials:"omit",
+        cache:"default",
+        signal:controller.signal,
+        headers:{
+          "Accept":"application/json"
+        }
+      });
+
+      if(!r.ok)return null;
+
+      const data=await r.json();
+      return data?.media||null;
+    }catch(err){
+      console.warn(
+        "Video resolve:",
+        story.link,
+        err
+      );
+      return null;
+    }finally{
+      clearTimeout(timeout);
+    }
+  })();
+
+  storyMediaCache.set(key,promise);
+  return promise;
+}
+
+function showDirectVideo(el,story,media,token){
+  const image=el.querySelector(".slide-image");
+  const video=el.querySelector(".slide-video");
+
+  if(!video || !media?.url)return;
+
+  video.muted=true;
+  video.defaultMuted=true;
+  video.volume=0;
+  video.autoplay=true;
+  video.playsInline=true;
+  video.controls=false;
+  video.poster=story.image||"";
+
+  let settled=false;
+
+  const fallback=()=>{
+    if(settled)return;
+    settled=true;
+
+    if(
+      token!==el.dataset.mediaToken ||
+      mediaKey(story)!==el.dataset.storyKey
+    ) return;
+
+    try{video.pause()}catch(e){}
+    video.removeAttribute("src");
+    video.load();
+    video.classList.remove("media-visible");
+    video.setAttribute("aria-hidden","true");
+
+    if(image)image.style.display="block";
+  };
+
+  const reveal=async()=>{
+    if(settled)return;
+
+    if(
+      !videoEnabled ||
+      token!==el.dataset.mediaToken ||
+      mediaKey(story)!==el.dataset.storyKey
+    ){
+      fallback();
+      return;
+    }
+
+    try{
+      await video.play();
+    }catch(e){
+      // Muted autoplay normally succeeds. If the browser blocks it,
+      // keep the still image instead of showing a broken player.
+      fallback();
+      return;
+    }
+
+    settled=true;
+    video.classList.add("media-visible");
+    video.setAttribute("aria-hidden","false");
+
+    if(image)image.style.display="none";
+  };
+
+  video.addEventListener(
+    "loadeddata",
+    reveal,
+    {once:true}
+  );
+  video.addEventListener(
+    "error",
+    fallback,
+    {once:true}
+  );
+
+  video.src=media.url;
+  video.load();
+}
+
+function showEmbedVideo(el,story,media,token){
+  const image=el.querySelector(".slide-image");
+  const embed=el.querySelector(".slide-embed");
+
+  if(!embed || !media?.url)return;
+
+  const reveal=()=>{
+    if(
+      !videoEnabled ||
+      token!==el.dataset.mediaToken ||
+      mediaKey(story)!==el.dataset.storyKey
+    ) return;
+
+    embed.classList.add("media-visible");
+    embed.setAttribute("aria-hidden","false");
+
+    if(image)image.style.display="none";
+  };
+
+  embed.addEventListener(
+    "load",
+    reveal,
+    {once:true}
+  );
+
+  embed.src=media.url;
+}
+
+async function prepareSlideMedia(el,story){
+  if(!videoEnabled || !story)return;
+
+  const token=el.dataset.mediaToken;
+  const media=await resolveStoryMedia(story);
+
+  if(
+    !videoEnabled ||
+    !media ||
+    token!==el.dataset.mediaToken ||
+    mediaKey(story)!==el.dataset.storyKey
+  ) return;
+
+  if(media.kind==="embed"){
+    showEmbedVideo(
+      el,
+      story,
+      media,
+      token
+    );
+  }else if(media.kind==="video"){
+    showDirectVideo(
+      el,
+      story,
+      media,
+      token
+    );
+  }
+}
+
+function renderVideoSetting(){
+  const btn=document.getElementById("video-setting");
+  if(!btn)return;
+
+  btn.classList.toggle("active",videoEnabled);
+  btn.setAttribute(
+    "aria-pressed",
+    videoEnabled?"true":"false"
+  );
+
+  const state=btn.querySelector(
+    ".media-setting-state"
+  );
+
+  if(state){
+    state.textContent=
+      videoEnabled?"Açık":"Kapalı";
+  }
+}
+
+function applyVideoSetting(){
+  renderVideoSetting();
+
+  for(const slide of slides){
+    stopSlideMedia(slide);
+  }
+
+  const story=state.stories[state.index];
+
+  if(videoEnabled && story){
+    const activeSlide=slides[state.active];
+    activeSlide.dataset.storyKey=mediaKey(story);
+    prepareSlideMedia(activeSlide,story);
+  }
+}
+
 function fill(el,s){
+  resetSlideMedia(el);
+  el.dataset.storyKey=mediaKey(s);
+
   el.querySelector(".slide-image").src=s.image;
   el.querySelector(".slide-image").alt=s.title||"";
 
@@ -1019,6 +1384,10 @@ function fill(el,s){
       sourceLink.setAttribute("aria-hidden","true");
       sourceLink.style.display="none";
     }
+  }
+
+  if(videoEnabled){
+    prepareSlideMedia(el,s);
   }
 }
 
@@ -1198,6 +1567,7 @@ async function transitionTo(nextIndex,fromHistory,dir){
     ()=>{
       nextSlide.className="slide active";
       currentSlide.className="slide";
+      stopSlideMedia(currentSlide);
 
       state.active=
         1-state.active;
@@ -1606,6 +1976,14 @@ document.querySelectorAll(".direction-option").forEach(btn=>{
 });
 
 renderDirectionOptions();
+renderVideoSetting();
+
+document.getElementById("video-setting")?.addEventListener("click",e=>{
+  e.stopPropagation();
+  videoEnabled=!videoEnabled;
+  savePreferences();
+  applyVideoSetting();
+});
 
 function openMenu(){
   const overlay=document.getElementById("menu-overlay");
