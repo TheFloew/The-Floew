@@ -983,3 +983,41 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
   }
 }
 
+
+
+/* --- V31.9: headline descriptions --- */
+.description{
+  display:-webkit-box;
+  margin-top:10px;
+  margin-left:auto;
+  max-width:min(68vw,1100px);
+  overflow:hidden;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:3;
+  line-clamp:3;
+  font-size:clamp(13px,1.05vw,18px);
+  line-height:1.42;
+  font-weight:400;
+  letter-spacing:-.01em;
+  opacity:.82;
+  text-wrap:pretty;
+}
+@media(max-width:900px){
+  .description{
+    max-width:100%;
+    margin-top:9px;
+    font-size:clamp(12px,2.5vw,16px);
+    -webkit-line-clamp:3;
+    line-clamp:3;
+  }
+}
+@media(max-width:520px){
+  .description{
+    margin-top:8px;
+    font-size:12px;
+    line-height:1.38;
+    -webkit-line-clamp:2;
+    line-clamp:2;
+  }
+}
+
