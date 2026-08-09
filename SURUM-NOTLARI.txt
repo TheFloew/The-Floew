@@ -1,3 +1,7 @@
+Versiyon 1.0.8
+-Haber kaynağı seçebilme menüsü.
+-Haberler kategorilere göre gösteriliyor ve kategoriler açılıp kapatılabiliyor.
+
 Beta 7:
 Gezinme yönü sorunu düzeltildi.
 
