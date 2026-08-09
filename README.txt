@@ -1,3 +1,8 @@
+Beta 4:
+-Tarih ve saat sorunu giderildi.
+-Haber kaynağı logolarının boyutları eşlendi.
+-Tam ekran modu sorunu giderildi.
+
 Beta 3 Sürüm notları:
 - Tam ekran özelliği eklendi.
 - Haber kaynakları artık kendi logolarıyla gösteriliyor.
