@@ -3,7 +3,7 @@ const VIDEO_API="https://thefloew.thefloewback.workers.dev/video";
 const META_API="https://thefloew.thefloewback.workers.dev/meta";
 const IMAGE_PROXY_API="https://thefloew.thefloewback.workers.dev/image";
 const NEWS_BATCH_COUNT=4;
-const SHOW_MS=10000;
+const DEFAULT_SHOW_SECONDS=10;
 const REFRESH_MS=120000;
 const SWIPE=70;
 
@@ -64,7 +64,7 @@ const NEW_SOURCES=["shiftdelete.net","onedio","beyazperde","motor1 türkiye","ev
 function loadPreferences(){
   try{
     const raw=localStorage.getItem(PREFS_KEY);
-    if(!raw)return {sources:null,categories:null,direction:"up",videoEnabled:true};
+    if(!raw)return {sources:null,categories:null,direction:"up",videoEnabled:true,showSeconds:10,weatherCity:"İstanbul",weatherUnit:"celsius",weatherLat:null,weatherLon:null,weatherLabel:"İstanbul"};
     const p=JSON.parse(raw)||{};
 
     let categories=Array.isArray(p.categories)?p.categories.filter(c=>c!=="#Gündem"):null;
@@ -78,17 +78,31 @@ function loadPreferences(){
       sources:Array.isArray(p.sources)?p.sources:null,
       categories,
       direction:["up","down","left","right"].includes(p.direction)?p.direction:"up",
-      videoEnabled:p.videoEnabled!==false
+      videoEnabled:p.videoEnabled!==false,
+      showSeconds:Number.isFinite(Number(p.showSeconds))
+        ? Math.min(60,Math.max(5,Math.round(Number(p.showSeconds))))
+        : 10,
+      weatherCity:String(p.weatherCity||"İstanbul"),
+      weatherUnit:p.weatherUnit==="fahrenheit"?"fahrenheit":"celsius",
+      weatherLat:Number.isFinite(Number(p.weatherLat))?Number(p.weatherLat):null,
+      weatherLon:Number.isFinite(Number(p.weatherLon))?Number(p.weatherLon):null,
+      weatherLabel:String(p.weatherLabel||p.weatherCity||"İstanbul")
     };
   }catch(e){
     console.warn("Preferences:",e);
-    return {sources:null,categories:null,direction:"up",videoEnabled:true};
+    return {sources:null,categories:null,direction:"up",videoEnabled:true,showSeconds:10,weatherCity:"İstanbul",weatherUnit:"celsius",weatherLat:null,weatherLon:null,weatherLabel:"İstanbul"};
   }
 }
 
 const savedPreferences=loadPreferences();
 let transitionDirection=savedPreferences.direction||"up";
 let videoEnabled=savedPreferences.videoEnabled!==false;
+let showDurationSeconds=savedPreferences.showSeconds||DEFAULT_SHOW_SECONDS;
+let weatherCity=savedPreferences.weatherCity||"İstanbul";
+let weatherUnit=savedPreferences.weatherUnit||"celsius";
+let weatherLat=savedPreferences.weatherLat;
+let weatherLon=savedPreferences.weatherLon;
+let weatherLabel=savedPreferences.weatherLabel||weatherCity;
 let sourcePreferencesApplied=false;
 
 function savePreferences(){
@@ -97,7 +111,13 @@ function savePreferences(){
       sources:[...filters.sources],
       categories:[...filters.categories],
       direction:transitionDirection,
-      videoEnabled
+      videoEnabled,
+      showSeconds:showDurationSeconds,
+      weatherCity,
+      weatherUnit,
+      weatherLat,
+      weatherLon,
+      weatherLabel
     }));
   }catch(e){
     console.warn("Preferences:",e);
@@ -283,10 +303,14 @@ function finishInitialLoading(forceImmediate=false){
   }
 
   const screen=document.getElementById("loading-screen");
-  if(!screen)return;
+  if(!screen){
+    showCookieNoticeIfNeeded();
+    return;
+  }
 
   const remove=()=>{
     if(screen.isConnected)screen.remove();
+    showCookieNoticeIfNeeded();
   };
 
   if(forceImmediate){
@@ -694,7 +718,10 @@ function fill(el,s){
 
 function timer(){
   clearTimeout(state.timer);
-  state.timer=setTimeout(()=>move(1),SHOW_MS);
+  state.timer=setTimeout(
+    ()=>move(1),
+    Math.max(5,showDurationSeconds)*1000
+  );
 }
 
 /*
@@ -1652,6 +1679,308 @@ async function togglePiP(){
 }
 
 
+
+function renderDurationSetting(){
+  const value=document.getElementById("duration-value");
+  const minus=document.getElementById("duration-minus");
+  const plus=document.getElementById("duration-plus");
+
+  if(value)value.textContent=`${showDurationSeconds} sn`;
+  if(minus)minus.disabled=showDurationSeconds<=5;
+  if(plus)plus.disabled=showDurationSeconds>=60;
+}
+
+function setShowDuration(next){
+  const normalized=Math.min(
+    60,
+    Math.max(5,Math.round(Number(next)||DEFAULT_SHOW_SECONDS))
+  );
+
+  if(normalized===showDurationSeconds)return;
+
+  showDurationSeconds=normalized;
+  savePreferences();
+  renderDurationSetting();
+
+  if(state.stories.length){
+    timer();
+  }
+}
+
+document.getElementById("duration-minus")?.addEventListener("click",e=>{
+  e.stopPropagation();
+  setShowDuration(showDurationSeconds-1);
+});
+
+document.getElementById("duration-plus")?.addEventListener("click",e=>{
+  e.stopPropagation();
+  setShowDuration(showDurationSeconds+1);
+});
+
+renderDurationSetting();
+
+
+const COOKIE_NOTICE_KEY="thefloew.cookieNotice.v1";
+
+function showCookieNoticeIfNeeded(){
+  try{
+    if(localStorage.getItem(COOKIE_NOTICE_KEY)==="dismissed")return;
+  }catch(e){}
+
+  const notice=document.getElementById("cookie-notice");
+  if(notice)notice.hidden=false;
+}
+
+function dismissCookieNotice(){
+  const notice=document.getElementById("cookie-notice");
+  if(notice)notice.hidden=true;
+
+  try{
+    localStorage.setItem(COOKIE_NOTICE_KEY,"dismissed");
+  }catch(e){}
+}
+
+document.getElementById("cookie-close")?.addEventListener("pointerdown",e=>e.stopPropagation());
+document.getElementById("cookie-close")?.addEventListener("pointerup",e=>e.stopPropagation());
+document.getElementById("cookie-close")?.addEventListener("click",e=>{
+  e.stopPropagation();
+  dismissCookieNotice();
+});
+
+
+const WEATHER_GEOCODING_API="https://geocoding-api.open-meteo.com/v1/search";
+const WEATHER_FORECAST_API="https://api.open-meteo.com/v1/forecast";
+const WEATHER_REFRESH_MS=15*60*1000;
+
+function weatherSymbol(code,isDay=true){
+  const c=Number(code);
+
+  if(c===0)return isDay?"☀":"☾";
+  if(c===1||c===2)return isDay?"◐":"☁";
+  if(c===3)return "☁";
+  if(c===45||c===48)return "≋";
+  if([51,53,55,56,57].includes(c))return "☂";
+  if([61,63,65,66,67,80,81,82].includes(c))return "☂";
+  if([71,73,75,77,85,86].includes(c))return "❄";
+  if([95,96,99].includes(c))return "⚡";
+  return "◌";
+}
+
+function renderWeatherUnitOptions(){
+  document.querySelectorAll(".weather-unit-option").forEach(btn=>{
+    const active=btn.dataset.unit===weatherUnit;
+    btn.classList.toggle("active",active);
+    btn.setAttribute("aria-pressed",active?"true":"false");
+  });
+}
+
+function setWeatherFeedback(message="",stateName=""){
+  const el=document.getElementById("weather-feedback");
+  if(!el)return;
+  el.textContent=message;
+  el.dataset.state=stateName;
+}
+
+function renderWeatherInput(){
+  const input=document.getElementById("weather-city");
+  if(input)input.value=weatherCity||weatherLabel||"İstanbul";
+  renderWeatherUnitOptions();
+}
+
+async function geocodeWeatherCity(city){
+  const q=String(city||"").trim();
+  if(!q)throw new Error("Şehir adı girin.");
+
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),8000);
+
+  try{
+    const url=
+      `${WEATHER_GEOCODING_API}?name=${encodeURIComponent(q)}&count=5&language=tr&format=json`;
+
+    const r=await fetch(url,{
+      method:"GET",
+      mode:"cors",
+      credentials:"omit",
+      cache:"default",
+      signal:controller.signal,
+      headers:{"Accept":"application/json"}
+    });
+
+    if(!r.ok)throw new Error(`Konum HTTP ${r.status}`);
+
+    const data=await r.json();
+    const results=Array.isArray(data?.results)?data.results:[];
+
+    if(!results.length){
+      throw new Error("Şehir bulunamadı.");
+    }
+
+    // Nüfusu en yüksek eşleşme genellikle beklenen şehir sonucudur.
+    results.sort(
+      (a,b)=>(Number(b.population)||0)-(Number(a.population)||0)
+    );
+
+    const place=results[0];
+    const label=[
+      place.name,
+      place.admin1 && place.admin1!==place.name ? place.admin1 : ""
+    ].filter(Boolean).join(", ");
+
+    return {
+      city:place.name||q,
+      label:label||place.name||q,
+      lat:Number(place.latitude),
+      lon:Number(place.longitude)
+    };
+  }finally{
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchCurrentWeather(){
+  if(!Number.isFinite(Number(weatherLat)) || !Number.isFinite(Number(weatherLon))){
+    const place=await geocodeWeatherCity(weatherCity||"İstanbul");
+    weatherCity=place.city;
+    weatherLabel=place.label;
+    weatherLat=place.lat;
+    weatherLon=place.lon;
+    savePreferences();
+    renderWeatherInput();
+  }
+
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),8000);
+
+  try{
+    const params=new URLSearchParams({
+      latitude:String(weatherLat),
+      longitude:String(weatherLon),
+      current:"temperature_2m,weather_code,is_day",
+      temperature_unit:weatherUnit,
+      timezone:"auto"
+    });
+
+    const r=await fetch(
+      `${WEATHER_FORECAST_API}?${params.toString()}`,
+      {
+        method:"GET",
+        mode:"cors",
+        credentials:"omit",
+        cache:"no-store",
+        signal:controller.signal,
+        headers:{"Accept":"application/json"}
+      }
+    );
+
+    if(!r.ok)throw new Error(`Hava HTTP ${r.status}`);
+
+    const data=await r.json();
+    const current=data?.current;
+
+    if(!current || !Number.isFinite(Number(current.temperature_2m))){
+      throw new Error("Hava durumu alınamadı.");
+    }
+
+    const weather=document.getElementById("weather-current");
+    const icon=document.getElementById("weather-icon");
+    const temp=document.getElementById("weather-temp");
+    const city=document.getElementById("weather-city-label");
+
+    if(icon){
+      icon.textContent=weatherSymbol(
+        current.weather_code,
+        Number(current.is_day)!==0
+      );
+    }
+
+    if(temp){
+      const unit=weatherUnit==="fahrenheit"?"°F":"°C";
+      temp.textContent=`${Math.round(Number(current.temperature_2m))}${unit}`;
+    }
+
+    if(city)city.textContent=weatherLabel||weatherCity;
+    if(weather)weather.hidden=false;
+
+    setWeatherFeedback(
+      `${weatherLabel||weatherCity} için hava durumu güncellendi.`,
+      "ok"
+    );
+  }catch(err){
+    console.warn("Weather:",err);
+    setWeatherFeedback(
+      err?.name==="AbortError"
+        ? "Hava durumu isteği zaman aşımına uğradı."
+        : (err?.message||"Hava durumu alınamadı."),
+      "error"
+    );
+  }finally{
+    clearTimeout(timeout);
+  }
+}
+
+async function applyWeatherCity(){
+  const input=document.getElementById("weather-city");
+  const query=String(input?.value||"").trim();
+
+  if(!query){
+    setWeatherFeedback("Şehir adı girin.","error");
+    return;
+  }
+
+  setWeatherFeedback("Şehir aranıyor...","loading");
+
+  try{
+    const place=await geocodeWeatherCity(query);
+    weatherCity=place.city;
+    weatherLabel=place.label;
+    weatherLat=place.lat;
+    weatherLon=place.lon;
+    savePreferences();
+    renderWeatherInput();
+    await fetchCurrentWeather();
+  }catch(err){
+    setWeatherFeedback(
+      err?.name==="AbortError"
+        ? "Şehir araması zaman aşımına uğradı."
+        : (err?.message||"Şehir bulunamadı."),
+      "error"
+    );
+  }
+}
+
+document.getElementById("weather-apply")?.addEventListener("click",e=>{
+  e.stopPropagation();
+  applyWeatherCity();
+});
+
+document.getElementById("weather-city")?.addEventListener("keydown",e=>{
+  if(e.key==="Enter"){
+    e.preventDefault();
+    e.stopPropagation();
+    applyWeatherCity();
+  }
+});
+
+document.querySelectorAll(".weather-unit-option").forEach(btn=>{
+  btn.addEventListener("click",async e=>{
+    e.stopPropagation();
+
+    const unit=btn.dataset.unit==="fahrenheit"
+      ? "fahrenheit"
+      : "celsius";
+
+    if(unit===weatherUnit)return;
+
+    weatherUnit=unit;
+    savePreferences();
+    renderWeatherUnitOptions();
+    await fetchCurrentWeather();
+  });
+});
+
+renderWeatherInput();
+
 function renderDirectionOptions(){
   document.querySelectorAll(".direction-option").forEach(btn=>{
     const active=btn.dataset.direction===transitionDirection;
@@ -1798,6 +2127,8 @@ if(new URLSearchParams(location.search).get("pip")==="1"){
   document.body.classList.add("pip-mode");
 }
 setFullscreenIcon();
+fetchCurrentWeather();
+setInterval(fetchCurrentWeather,WEATHER_REFRESH_MS);
 load();
 setInterval(load,REFRESH_MS);
 
