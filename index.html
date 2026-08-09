@@ -485,14 +485,32 @@ function categoryForStory(story){
 }
 
 function enrichStories(list){
-  return list.map(s=>({...s,flowCategory:categoryForStory(s)}));
+  return list.map(s => ({
+    ...s,
+    flowCategory: CATEGORIES.includes(s.category)
+      ? s.category
+      : "#Gündem",
+    isBreaking:
+      s.breaking === true ||
+      s.breaking === "true"
+  }));
 }
 
 function activeStories(){
-  return rawStories.filter(s=>
-    filters.sources.has(sourceKey(s.source)) &&
-    filters.categories.has(s.flowCategory)
-  );
+  return rawStories.filter(story => {
+    if(!filters.sources.has(sourceKey(story.source))){
+      return false;
+    }
+
+    if(
+      filters.categories.has("#SonDakika") &&
+      story.isBreaking
+    ){
+      return true;
+    }
+
+    return filters.categories.has(story.flowCategory);
+  });
 }
 
 function renderOptions(){
@@ -618,7 +636,7 @@ function fill(el,s){
 
   el.querySelector(".source").textContent=s.source||"";
   const category=el.querySelector(".category");
-  if(category) category.textContent=s.flowCategory||"#Gündem";
+  if(category) category.textContent=s.isBreaking ? "#SonDakika" : (s.flowCategory || "#Gündem");
   el.querySelector("h1").textContent=s.title||"";
   el.querySelector(".time").textContent=timeText(s.published);
 }
