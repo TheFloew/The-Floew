@@ -1,3 +1,10 @@
+Beta 5:
+- Tam ekran butonu artık sadece ⤢ karakteri. Fare hareket ettiğinde görünür. Fare 2 saniye hareketsiz kalırsa kaybolur. Tam ekranda da normal ekranda da aynı şekilde çalışır. F tuşu da çalışmaya devam ediyor.
+- Kaynak ikonları önceki 50 px'den 25 px'e indirildi. Kaynak adının tam başında kalıyor. Tüm ikonlar standart 25×25 alanında.
+- The Flöw logosunun gölgesi belirgin şekilde yumuşatıldı. Saat/tarih gölgesi azaltıldı. Kaynak ikonlarının gölgesi azaltıldı. Manşet metninin gölgesi de daha kısa yarıçaplı ve daha transparan hale getirildi.
+- Manşet artık ekranın yaklaşık %75'ine kadar yayılabiliyor.
+- Logo bir miktar büyütüldü. Yeni genişlik yaklaşık %5, maksimum 105 px.
+
 Beta 4:
 - Tarih ve saat sorunu giderildi.
 - Haber kaynağı logolarının boyutları eşlendi.
