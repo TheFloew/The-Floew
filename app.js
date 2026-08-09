@@ -1,18 +1,10 @@
-/*
-  News Wall frontend
-  - 10 seconds per story
-  - wheel / drag / arrow-key navigation
-  - vertical slide transitions
-  - no clickable UI
-*/
+```javascript
+const API_URL =
+  "https://thefloew.thefloewback.workers.dev/news";
 
-const CONFIG = {
-  // Replace this with your deployed Cloudflare Worker URL.
-  API_URL: "https://thefloew.thefloewback.workers.dev/news",
-  DISPLAY_MS: 10000,
-  SWIPE_THRESHOLD: 70,
-  POLL_MS: 120000
-};
+const DISPLAY_TIME = 10000;
+const REFRESH_TIME = 120000;
+const SWIPE_DISTANCE = 70;
 
 const slides = [
   document.getElementById("slide-a"),
@@ -23,217 +15,618 @@ const state = {
   stories: [],
   index: 0,
   activeSlide: 0,
+
   timer: null,
-  isAnimating: false,
-  startX: 0,
-  startY: 0,
-  startTime: 0,
-  initialized: false
+
+  animating: false,
+
+  pointerStartX: 0,
+  pointerStartY: 0,
+  pointerStartTime: 0
 };
 
-function formatTime(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
 
-  const diff = Math.max(0, Date.now() - date.getTime());
-  const minutes = Math.floor(diff / 60000);
-
-  if (minutes < 1) return "az önce";
-  if (minutes < 60) return `${minutes} dakika önce`;
-
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} saat önce`;
-
-  return date.toLocaleDateString("tr-TR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric"
-  });
-}
-
-function cleanStory(item) {
-  return {
-    title: String(item.title || "").trim(),
-    source: String(item.source || "").trim(),
-    image: String(item.image || "").trim(),
-    link: String(item.link || "").trim(),
-    published: item.published || ""
-  };
-}
-
-function validStory(item) {
-  return item.title && item.image;
-}
-
-function fillSlide(slide, story) {
-  const img = slide.querySelector(".slide-image");
-  const source = slide.querySelector(".source");
-  const title = slide.querySelector("h1");
-  const time = slide.querySelector(".time");
-
-  img.src = story.image;
-  img.alt = story.title;
-  source.textContent = story.source;
-  title.textContent = story.title;
-  time.textContent = formatTime(story.published);
-}
-
-function resetTimer() {
-  clearTimeout(state.timer);
-  state.timer = setTimeout(() => goTo(1), CONFIG.DISPLAY_MS);
-}
-
-function goTo(direction) {
-  if (!state.stories.length || state.isAnimating) return;
-  if (state.stories.length === 1) return;
-
-  state.isAnimating = true;
-  clearTimeout(state.timer);
-
-  const nextIndex =
-    (state.index + direction + state.stories.length) %
-    state.stories.length;
-
-  const current = slides[state.activeSlide];
-  const next = slides[1 - state.activeSlide];
-
-  fillSlide(next, state.stories[nextIndex]);
-
-  current.classList.remove(
-    "active", "enter-up", "exit-up", "enter-down", "exit-down"
-  );
-  next.classList.remove(
-    "active", "enter-up", "exit-up", "enter-down", "exit-down"
-  );
-
-  // Force a style/layout read so a new animation always starts cleanly.
-  void next.offsetWidth;
-
-  if (direction > 0) {
-    next.classList.add("enter-up");
-    current.classList.add("exit-up");
-  } else {
-    next.classList.add("enter-down");
-    current.classList.add("exit-down");
-  }
-
-  const finish = () => {
-    next.classList.remove(
-      "enter-up", "enter-down", "exit-up", "exit-down"
-    );
-    next.classList.add("active");
-    current.classList.remove(
-      "active", "enter-up", "enter-down", "exit-up", "exit-down"
-    );
-
-    state.activeSlide = 1 - state.activeSlide;
-    state.index = nextIndex;
-    state.isAnimating = false;
-    resetTimer();
-  };
-
-  next.addEventListener("animationend", finish, { once: true });
-}
-
-function start() {
-  clearTimeout(state.timer);
-  state.timer = setTimeout(() => goTo(1), CONFIG.DISPLAY_MS);
-}
-
-async function fetchStories() {
-  if (CONFIG.API_URL.includes("YOUR-WORKER")) {
-    showStatus(
-      "Cloudflare Worker adresini app.js içindeki API_URL alanına ekleyin."
-    );
-    return;
-  }
-
-  try {
-    const response = await fetch(CONFIG.API_URL, {
-      cache: "no-store"
-    });
-
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-    const data = await response.json();
-    const stories = Array.isArray(data)
-      ? data.map(cleanStory).filter(validStory)
-      : [];
-
-    if (!stories.length) throw new Error("Görselli haber bulunamadı.");
-
-    const previousLink = state.stories[state.index]?.link;
-
-    state.stories = stories;
-
-    if (!state.initialized) {
-      state.index = 0;
-      fillSlide(slides[0], state.stories[0]);
-      slides[0].classList.add("active");
-      state.initialized = true;
-      hideStatus();
-      start();
-      return;
-    }
-
-    // Preserve the currently displayed story after a refresh if possible.
-    if (previousLink) {
-      const found = state.stories.findIndex(s => s.link === previousLink);
-      if (found >= 0) state.index = found;
-    }
-
-    hideStatus();
-  } catch (error) {
-    console.error(error);
-    if (!state.initialized) {
-      showStatus("Haberler alınamadı. Worker adresini ve RSS kaynaklarını kontrol edin.");
-    }
-  }
-}
+/*
+   DURUM / HATA
+*/
 
 function showStatus(message) {
   const status = document.getElementById("status");
+
   status.textContent = message;
   status.hidden = false;
 }
 
+
 function hideStatus() {
-  document.getElementById("status").hidden = true;
+  const status = document.getElementById("status");
+
+  status.hidden = true;
 }
 
-window.addEventListener("wheel", event => {
-  event.preventDefault();
-  if (Math.abs(event.deltaY) < 5) return;
-  goTo(event.deltaY > 0 ? 1 : -1);
-}, { passive: false });
 
-window.addEventListener("keydown", event => {
-  if (event.key === "ArrowDown" || event.key === "PageDown") {
-    event.preventDefault();
-    goTo(1);
-  } else if (event.key === "ArrowUp" || event.key === "PageUp") {
-    event.preventDefault();
-    goTo(-1);
+/*
+   TARİH
+
+   RSS tarihini:
+   "5 dakika önce"
+   "2 saat önce"
+   şeklinde gösterir.
+*/
+
+function formatTime(value) {
+  if (!value) {
+    return "";
   }
-});
 
-window.addEventListener("pointerdown", event => {
-  state.startX = event.clientX;
-  state.startY = event.clientY;
-  state.startTime = performance.now();
-});
+  const date = new Date(value);
 
-window.addEventListener("pointerup", event => {
-  const dy = event.clientY - state.startY;
-  const dx = event.clientX - state.startX;
-  const elapsed = performance.now() - state.startTime;
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
 
-  if (elapsed > 1000) return;
-  if (Math.abs(dy) < CONFIG.SWIPE_THRESHOLD) return;
-  if (Math.abs(dy) < Math.abs(dx)) return;
+  const difference =
+    Math.max(0, Date.now() - date.getTime());
 
-  goTo(dy < 0 ? 1 : -1);
-});
+  const minutes =
+    Math.floor(difference / 60000);
 
-fetchStories();
-setInterval(fetchStories, CONFIG.POLL_MS);
+
+  if (minutes < 1) {
+    return "az önce";
+  }
+
+
+  if (minutes < 60) {
+    return `${minutes} dakika önce`;
+  }
+
+
+  const hours =
+    Math.floor(minutes / 60);
+
+
+  if (hours < 24) {
+    return `${hours} saat önce`;
+  }
+
+
+  return date.toLocaleDateString(
+    "tr-TR",
+    {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric"
+    }
+  );
+}
+
+
+/*
+   HABERİ SLIDE'A YERLEŞTİR
+*/
+
+function fillSlide(slide, story) {
+
+  const image =
+    slide.querySelector(".slide-image");
+
+  const source =
+    slide.querySelector(".source");
+
+  const title =
+    slide.querySelector("h1");
+
+  const time =
+    slide.querySelector(".time");
+
+
+  image.src = story.image;
+
+  image.alt = story.title || "";
+
+  source.textContent =
+    story.source || "";
+
+  title.textContent =
+    story.title || "";
+
+  time.textContent =
+    formatTime(story.published);
+}
+
+
+/*
+   OTOMATİK SAYACI BAŞLAT
+*/
+
+function restartTimer() {
+
+  clearTimeout(state.timer);
+
+  state.timer =
+    setTimeout(
+      () => {
+        move(1);
+      },
+      DISPLAY_TIME
+    );
+}
+
+
+/*
+   HABER DEĞİŞTİR
+*/
+
+function move(direction) {
+
+  if (state.animating) {
+    return;
+  }
+
+
+  if (state.stories.length < 2) {
+    return;
+  }
+
+
+  state.animating = true;
+
+  clearTimeout(state.timer);
+
+
+  /*
+     Yeni haberin index'i
+  */
+
+  const nextIndex =
+    (
+      state.index +
+      direction +
+      state.stories.length
+    ) %
+    state.stories.length;
+
+
+  const currentSlide =
+    slides[state.activeSlide];
+
+  const nextSlide =
+    slides[1 - state.activeSlide];
+
+
+  /*
+     Yeni haberi diğer slide'a koy
+  */
+
+  fillSlide(
+    nextSlide,
+    state.stories[nextIndex]
+  );
+
+
+  /*
+     Animasyon sınıflarını temizle
+  */
+
+  currentSlide.className = "slide";
+
+  nextSlide.className = "slide";
+
+
+  /*
+     Browser'ın değişiklikleri uygulamasını bekle
+  */
+
+  void nextSlide.offsetWidth;
+
+
+  /*
+     İLERİ
+  */
+
+  if (direction > 0) {
+
+    nextSlide.classList.add(
+      "enter-up"
+    );
+
+    currentSlide.classList.add(
+      "exit-up"
+    );
+
+  }
+
+
+  /*
+     GERİ
+  */
+
+  else {
+
+    nextSlide.classList.add(
+      "enter-down"
+    );
+
+    currentSlide.classList.add(
+      "exit-down"
+    );
+  }
+
+
+  /*
+     Animasyon tamamlandı
+  */
+
+  nextSlide.addEventListener(
+    "animationend",
+    () => {
+
+      nextSlide.className =
+        "slide active";
+
+      currentSlide.className =
+        "slide";
+
+
+      state.activeSlide =
+        1 - state.activeSlide;
+
+
+      state.index =
+        nextIndex;
+
+
+      state.animating =
+        false;
+
+
+      restartTimer();
+
+    },
+    {
+      once: true
+    }
+  );
+}
+
+
+/*
+   HABERLERİ WORKER'DAN AL
+*/
+
+async function loadNews() {
+
+  try {
+
+    const response =
+      await fetch(
+        API_URL,
+        {
+          cache: "no-store"
+        }
+      );
+
+
+    /*
+       HTTP hatası
+    */
+
+    if (!response.ok) {
+
+      throw new Error(
+        `Worker HTTP ${response.status}`
+      );
+    }
+
+
+    /*
+       JSON
+    */
+
+    const data =
+      await response.json();
+
+
+    /*
+       Sadece geçerli ve görselli
+       haberleri kullan
+    */
+
+    const stories =
+      Array.isArray(data)
+        ? data.filter(
+            story =>
+              story &&
+              story.title &&
+              story.image
+          )
+        : [];
+
+
+    if (!stories.length) {
+
+      throw new Error(
+        "Worker görselli haber döndürmedi."
+      );
+    }
+
+
+    /*
+       İlk yükleme
+    */
+
+    if (!state.stories.length) {
+
+      state.stories =
+        stories;
+
+      state.index = 0;
+
+      fillSlide(
+        slides[0],
+        state.stories[0]
+      );
+
+
+      slides[0].className =
+        "slide active";
+
+
+      hideStatus();
+
+      restartTimer();
+
+      return;
+    }
+
+
+    /*
+       Hali hazırda gösterilen haberi
+       mümkünse koru.
+    */
+
+    const currentLink =
+      state.stories[state.index]?.link;
+
+
+    state.stories =
+      stories;
+
+
+    if (currentLink) {
+
+      const sameStory =
+        state.stories.findIndex(
+          story =>
+            story.link === currentLink
+        );
+
+
+      if (sameStory >= 0) {
+
+        state.index =
+          sameStory;
+      }
+    }
+
+
+    hideStatus();
+
+  }
+
+  catch (error) {
+
+    console.error(
+      "NEWS WALL ERROR:",
+      error
+    );
+
+
+    /*
+       İlk yüklemede hata varsa
+       artık siyah ekran bırakmıyoruz.
+    */
+
+    if (!state.stories.length) {
+
+      showStatus(
+        "Haberler alınamadı. " +
+        "Cloudflare Worker bağlantısını kontrol edin."
+      );
+    }
+  }
+}
+
+
+/*
+   MOUSE TEKERLEĞİ
+*/
+
+window.addEventListener(
+  "wheel",
+  event => {
+
+    event.preventDefault();
+
+
+    if (
+      Math.abs(event.deltaY) < 5
+    ) {
+      return;
+    }
+
+
+    if (event.deltaY > 0) {
+
+      move(1);
+
+    }
+
+    else {
+
+      move(-1);
+
+    }
+
+  },
+  {
+    passive: false
+  }
+);
+
+
+/*
+   KLAVYE
+*/
+
+window.addEventListener(
+  "keydown",
+  event => {
+
+    if (
+      event.key === "ArrowDown" ||
+      event.key === "PageDown"
+    ) {
+
+      event.preventDefault();
+
+      move(1);
+
+      return;
+    }
+
+
+    if (
+      event.key === "ArrowUp" ||
+      event.key === "PageUp"
+    ) {
+
+      event.preventDefault();
+
+      move(-1);
+
+    }
+
+  }
+);
+
+
+/*
+   MOUSE / TOUCH SÜRÜKLEME
+*/
+
+window.addEventListener(
+  "pointerdown",
+  event => {
+
+    state.pointerStartX =
+      event.clientX;
+
+    state.pointerStartY =
+      event.clientY;
+
+    state.pointerStartTime =
+      performance.now();
+
+  }
+);
+
+
+window.addEventListener(
+  "pointerup",
+  event => {
+
+    const deltaY =
+      event.clientY -
+      state.pointerStartY;
+
+
+    const deltaX =
+      event.clientX -
+      state.pointerStartX;
+
+
+    const duration =
+      performance.now() -
+      state.pointerStartTime;
+
+
+    /*
+       Çok uzun basılı tutulduysa
+       swipe kabul etme.
+    */
+
+    if (duration > 1000) {
+      return;
+    }
+
+
+    /*
+       Yeterince hareket yok
+    */
+
+    if (
+      Math.abs(deltaY) <
+      SWIPE_DISTANCE
+    ) {
+      return;
+    }
+
+
+    /*
+       Yatay hareket daha fazlaysa
+       ignore et.
+    */
+
+    if (
+      Math.abs(deltaY) <
+      Math.abs(deltaX)
+    ) {
+      return;
+    }
+
+
+    /*
+       Yukarı sürükleme:
+       sonraki haber
+    */
+
+    if (deltaY < 0) {
+
+      move(1);
+
+    }
+
+    /*
+       Aşağı sürükleme:
+       önceki haber
+    */
+
+    else {
+
+      move(-1);
+
+    }
+
+  }
+);
+
+
+/*
+   İLK YÜKLEME
+*/
+
+loadNews();
+
+
+/*
+   2 dakikada bir haber listesini
+   arka planda yenile.
+*/
+
+setInterval(
+  loadNews,
+  REFRESH_TIME
+);
+```
