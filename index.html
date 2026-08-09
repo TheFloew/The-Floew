@@ -458,37 +458,43 @@ const CATEGORIES=[
   "#Sinema","#Otomotiv","#Edebiyat","#Müzik","#Televizyon","#Spor"
 ];
 
-const filters={
-  sources:new Set(),
-  categories:new Set(CATEGORIES)
-};
+const PREFS_KEY = "thefloew.preferences.v2";
 
-const PREFS_KEY="thefloew.preferences.v1";
-let savedPreferences={sources:{},categories:{}};
-try{
-  const raw=localStorage.getItem(PREFS_KEY);
-  if(raw){
-    const parsed=JSON.parse(raw);
-    savedPreferences={
-      sources:parsed?.sources||{},
-      categories:parsed?.categories||{}
+function loadPreferences(){
+  try{
+    const raw=localStorage.getItem(PREFS_KEY);
+    if(!raw)return {sources:null,categories:null};
+    const saved=JSON.parse(raw);
+    return {
+      sources: saved && saved.sources ? saved.sources : null,
+      categories: saved && saved.categories ? saved.categories : null
     };
+  }catch(e){
+    console.warn("The Flöw preferences could not be loaded:",e);
+    return {sources:null,categories:null};
   }
-}catch(err){
-  console.warn("The Flöw preferences could not be loaded:",err);
 }
 
 function savePreferences(){
   try{
     localStorage.setItem(PREFS_KEY,JSON.stringify({
-      sources:Object.fromEntries([...filters.sources].map(k=>[k,true])),
-      categories:Object.fromEntries([...filters.categories].map(k=>[k,true]))
+      sources:[...filters.sources],
+      categories:[...filters.categories]
     }));
-  }catch(err){
-    console.warn("The Flöw preferences could not be saved:",err);
+  }catch(e){
+    console.warn("The Flöw preferences could not be saved:",e);
   }
 }
 
+const savedPreferences=loadPreferences();
+
+const filters={
+  sources:new Set(),
+  categories:
+    Array.isArray(savedPreferences.categories)
+      ? new Set(savedPreferences.categories.filter(x=>CATEGORIES.includes(x)))
+      : new Set(CATEGORIES)
+};
 
 let knownSources=[];
 let rawStories=[];
@@ -575,17 +581,29 @@ function updateFilterCount(){
 function toggleSource(key){
   if(filters.sources.has(key)) filters.sources.delete(key);
   else filters.sources.add(key);
-  savePreferences();
   applyFilters();
+
+  savePreferences();
 }
 
 function toggleCategory(cat){
   if(filters.categories.has(cat)) filters.categories.delete(cat);
   else filters.categories.add(cat);
-  savePreferences();
   applyFilters();
+
+  savePreferences();
 }
 
+function setAllSources(on){
+  filters.sources=on?new Set(knownSources.map(sourceKey)):new Set();
+  applyFilters();
+  savePreferences();
+}
+function setAllCategories(on){
+  filters.categories=on?new Set(CATEGORIES):new Set();
+  applyFilters();
+  savePreferences();
+}
 
 function applyFilters(){
   const currentLink=state.stories[state.index]?.link;
@@ -862,17 +880,22 @@ async function load(){
     ).values()];
 
     if(!state.stories.length){
-      if(Object.keys(savedPreferences.sources).length){
-        filters.sources=new Set(knownSources.map(sourceKey).filter(key=>savedPreferences.sources[key]===true));
+      if(Array.isArray(savedPreferences.sources)){
+        const available=new Set(knownSources.map(sourceKey));
+        filters.sources=new Set(
+          savedPreferences.sources.filter(key=>available.has(key))
+        );
       }else{
         filters.sources=new Set(knownSources.map(sourceKey));
       }
-
-      if(Object.keys(savedPreferences.categories).length){
-        filters.categories=new Set(CATEGORIES.filter(cat=>savedPreferences.categories[cat]===true));
-      }
-    }else if(filters.sources.size===0){
-      filters.sources=new Set(knownSources.map(sourceKey));
+    }else{
+      // Keep the user's existing source selection, while adding no new
+      // source automatically after a refresh.
+      filters.sources=new Set(
+        [...filters.sources].filter(key=>
+          knownSources.some(source=>sourceKey(source)===key)
+        )
+      );
     }
 
     renderOptions();
@@ -1022,8 +1045,8 @@ document.querySelectorAll(".menu-tab").forEach(tab=>{
   });
 });
 
-document.getElementById("sources-all").addEventListener("click",()=>{filters.sources=new Set(knownSources.map(sourceKey));savePreferences();applyFilters();});
-document.getElementById("categories-all").addEventListener("click",()=>{filters.categories=new Set(CATEGORIES);savePreferences();applyFilters();});
+document.getElementById("sources-all").addEventListener("click",()=>setAllSources(true));
+document.getElementById("categories-all").addEventListener("click",()=>setAllCategories(true));
 
 document.addEventListener("keydown",e=>{
   if(e.key==="Escape")closeMenu();
@@ -1091,6 +1114,7 @@ setInterval(updateClock,1000);
 setFullscreenIcon();
 load();
 setInterval(load,REFRESH_MS);
+window.addEventListener("beforeunload", savePreferences);
 </script>
 </body>
 </html>
