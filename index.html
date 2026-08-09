@@ -458,7 +458,7 @@ const CATEGORIES=[
   "#Sinema","#Otomotiv","#Edebiyat","#Müzik","#Televizyon","#Spor"
 ];
 
-const PREFS_KEY = "thefloew.preferences.v2";
+const PREFS_KEY = "thefloew.preferences.v3";
 
 function loadPreferences(){
   try{
@@ -491,7 +491,7 @@ const savedPreferences=loadPreferences();
 const filters={
   sources:new Set(),
   categories:
-    Array.isArray(savedPreferences.categories)
+    Array.isArray(savedPreferences.categories) && savedPreferences.categories.length
       ? new Set(savedPreferences.categories.filter(x=>CATEGORIES.includes(x)))
       : new Set(CATEGORIES)
 };
@@ -880,12 +880,20 @@ async function load(){
     ).values()];
 
     if(!state.stories.length){
-      if(Array.isArray(savedPreferences.sources)){
+      if(Array.isArray(savedPreferences.sources) && savedPreferences.sources.length){
         const available=new Set(knownSources.map(sourceKey));
-        filters.sources=new Set(
+        const restored=new Set(
           savedPreferences.sources.filter(key=>available.has(key))
         );
+
+        // If an old/invalid preference leaves us with zero sources,
+        // recover gracefully by enabling all currently available sources.
+        filters.sources=restored.size
+          ? restored
+          : new Set(knownSources.map(sourceKey));
       }else{
+        // No saved source selection (or an old empty selection):
+        // start with all available sources enabled.
         filters.sources=new Set(knownSources.map(sourceKey));
       }
     }else{
