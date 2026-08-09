@@ -32,7 +32,7 @@
 *{box-sizing:border-box}
 html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#000;color:#fff}
 body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
-#wall{position:fixed;z-index:0;inset:0;overflow:hidden;background:#000}
+#wall{position:fixed;inset:0;overflow:hidden;background:#000}
 .slide{position:absolute;inset:0;overflow:hidden;background:#000;transform:translateY(100%);will-change:transform}
 .slide.active{transform:translateY(0)}
 .slide-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#111;pointer-events:none;user-select:none;-webkit-user-drag:none}
@@ -93,139 +93,82 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
   align-items:center;
   justify-content:center;
   padding:5vh 5vw;
-  background:rgba(0,0,0,.62);
+  background:rgba(0,0,0,.52);
   opacity:0;
   visibility:hidden;
   pointer-events:none;
-  transition:opacity .38s ease,visibility 0s linear .38s;
+  transition:opacity .32s ease,visibility 0s linear .32s;
+  backdrop-filter:blur(3px);
+  -webkit-backdrop-filter:blur(3px);
 }
 #menu-overlay.open{
   opacity:1;
   visibility:visible;
   pointer-events:auto;
-  transition:opacity .38s ease,visibility 0s linear 0s;
+  transition:opacity .32s ease,visibility 0s linear 0s;
 }
 #settings-menu{
-  width:min(560px,88vw);
-  max-height:min(720px,84vh);
+  width:min(620px,88vw);
+  max-height:min(760px,86vh);
   overflow:auto;
-  padding:24px 24px 20px;
-  border:1px solid rgba(255,255,255,.16);
-  border-radius:12px;
-  background:rgba(8,8,8,.92);
-  box-shadow:0 12px 45px rgba(0,0,0,.42);
+  padding:26px 28px 22px;
+  border:1px solid rgba(255,255,255,.15);
+  border-radius:18px;
+  background:rgba(18,18,18,.96);
+  box-shadow:0 18px 70px rgba(0,0,0,.65);
   color:#fff;
-  font-family:"Comfortaa",sans-serif;
-  transform:translateY(7px);
-  transition:transform .38s cubic-bezier(.22,.61,.36,1);
+  transform:translateY(8px) scale(.985);
+  transition:transform .32s cubic-bezier(.22,.61,.36,1);
 }
-#menu-overlay.open #settings-menu{transform:translateY(0)}
-.menu-header{display:flex;align-items:center;justify-content:space-between;gap:18px}
-.menu-title{font-size:20px;font-weight:700;line-height:1.1;letter-spacing:-.02em}
-.menu-subtitle{margin-top:5px;font-size:10px;opacity:.52}
+#menu-overlay.open #settings-menu{transform:translateY(0) scale(1)}
+.menu-header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}
+.menu-title{font-size:25px;font-weight:700;line-height:1.1}
+.menu-subtitle{margin-top:7px;font-size:12px;opacity:.62}
 #menu-close{
-  width:34px;height:34px;border:0;border-radius:50%;
-  background:transparent;color:#fff;cursor:pointer;
-  font:300 27px/32px Arial,sans-serif;opacity:.7;
+  width:36px;height:36px;border:0;border-radius:50%;
+  background:rgba(255,255,255,.08);color:#fff;cursor:pointer;
+  font:300 28px/34px Arial,sans-serif;
 }
-#menu-close:hover{opacity:1;background:rgba(255,255,255,.07)}
-.menu-tabs{display:flex;gap:18px;margin:22px 0 15px;border-bottom:1px solid rgba(255,255,255,.10)}
+#menu-close:hover{background:rgba(255,255,255,.15)}
+.menu-tabs{display:flex;gap:6px;margin:24px 0 18px;border-bottom:1px solid rgba(255,255,255,.1)}
 .menu-tab{
-  border:0;background:transparent;color:rgba(255,255,255,.45);
-  padding:8px 0 10px;margin-bottom:-1px;cursor:pointer;
-  font:700 11px "Comfortaa",sans-serif;
-  letter-spacing:.04em;
-  border-bottom:1px solid transparent;
+  border:0;background:transparent;color:rgba(255,255,255,.55);
+  padding:10px 14px;margin-bottom:-1px;cursor:pointer;
+  font:700 13px "Comfortaa",sans-serif;
+  border-bottom:2px solid transparent;
 }
 .menu-tab.active{color:#fff;border-bottom-color:#fff}
-.menu-panel{display:none}.menu-panel.active{display:block}
-.menu-actions{display:flex;gap:7px;margin-bottom:11px}
+.menu-panel{display:none}
+.menu-panel.active{display:block}
+.menu-actions{display:flex;gap:8px;margin-bottom:14px}
 .menu-actions button{
-  border:1px solid rgba(255,255,255,.11);
-  background:transparent;color:rgba(255,255,255,.68);
-  padding:7px 10px;border-radius:6px;cursor:pointer;
-  font:400 10px "Comfortaa",sans-serif;
+  border:1px solid rgba(255,255,255,.12);
+  background:rgba(255,255,255,.06);color:#fff;
+  padding:8px 11px;border-radius:7px;cursor:pointer;
+  font:400 11px "Comfortaa",sans-serif;
 }
-.menu-actions button:hover{background:rgba(255,255,255,.07);color:#fff}
-.option-list{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.menu-actions button:hover{background:rgba(255,255,255,.12)}
+.option-list{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .option{
   display:flex;align-items:center;justify-content:space-between;gap:10px;
-  min-height:42px;padding:8px 10px;
-  border:1px solid rgba(255,255,255,.07);
-  border-radius:7px;background:rgba(255,255,255,.025);
+  min-height:48px;padding:9px 11px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:9px;background:rgba(255,255,255,.035);
   cursor:pointer;
 }
-.option:hover{background:rgba(255,255,255,.06)}
-.option-name{font-size:10px;font-weight:700}
+.option:hover{background:rgba(255,255,255,.07)}
+.option-name{font-size:12px;font-weight:700}
 .option-check{
-  flex:0 0 16px;width:16px;height:16px;border-radius:4px;
-  border:1px solid rgba(255,255,255,.28);
-  display:grid;place-items:center;font:700 10px/16px Arial,sans-serif;
+  flex:0 0 18px;width:18px;height:18px;border-radius:5px;
+  border:1px solid rgba(255,255,255,.35);
+  display:grid;place-items:center;font:700 12px/18px Arial,sans-serif;
 }
 .option.on .option-check{background:#fff;color:#111;border-color:#fff}
-.menu-footer{margin-top:15px;padding-top:10px;border-top:1px solid rgba(255,255,255,.08);font-size:9px;opacity:.45}
+.menu-footer{margin-top:18px;padding-top:12px;border-top:1px solid rgba(255,255,255,.1);font-size:11px;opacity:.55}
 @media(max-width:700px){
   .option-list{grid-template-columns:1fr}
-  #settings-menu{padding:20px 18px}
+  #settings-menu{padding:22px 20px}
 }
-
-.empty-state{
-  position:fixed;
-  z-index:20;
-  inset:0;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding:10vw;
-  background:#0b0b0b;
-  color:#fff;
-  text-align:center;
-  pointer-events:none !important;
-}
-.empty-state[hidden]{display:none}
-.empty-state-message{
-  max-width:min(680px,78vw);
-  font-family:"Comfortaa",sans-serif;
-  text-shadow:0 1px 3px rgba(0,0,0,.35);
-}
-.empty-state-title{
-  font-size:clamp(24px,3vw,42px);
-  font-weight:700;
-  letter-spacing:-.025em;
-}
-.empty-state-subtitle{
-  margin-top:12px;
-  font-size:clamp(13px,1.1vw,17px);
-  line-height:1.5;
-  opacity:.72;
-}
-.empty-state-hint{
-  margin-top:22px;
-  font-size:clamp(10px,.8vw,13px);
-  opacity:.42;
-}
-
-
-body.empty-state-active #logo,
-body.empty-state-active #menu-button,
-body.empty-state-active 
-body.empty-state-active #logo,
-body.empty-state-active #clock,
-body.empty-state-active #menu-button,
-body.empty-state-active #fullscreen-button{
-  z-index:300 !important;
-}
-
-#fullscreen-button{
-  opacity:1;
-  visibility:visible;
-  pointer-events:auto;
-}
-body.empty-state-active #clock{
-  opacity:1;
-  visibility:visible;
-}
-
 #fullscreen-button{
   position:fixed;
   z-index:300;
@@ -318,27 +261,7 @@ body.empty-state-active #clock{
   letter-spacing:-.025em;
 }
 
-.meta-line{
-  margin-top:15px;
-  display:flex;
-  justify-content:flex-end;
-  align-items:center;
-  gap:9px;
-  min-height:16px;
-}
-.source-link{
-  color:#fff;
-  text-decoration:none;
-  font-family:Arial,Helvetica,sans-serif;
-  font-size:18px;
-  line-height:1;
-  opacity:.78;
-  pointer-events:auto;
-  text-shadow:0 1px 3px rgba(0,0,0,.52);
-  transition:opacity .18s ease,transform .18s ease;
-}
-.source-link:hover{opacity:1;transform:translateY(-1px)}
-.time{margin-top:0;font-size:13px;line-height:1;opacity:.78}
+.time{margin-top:15px;font-size:13px;line-height:1;opacity:.78}
 
 #clock{
   position:fixed;
@@ -376,7 +299,7 @@ body.empty-state-active #clock{
 @keyframes enterDown{from{transform:translateY(-100%)}to{transform:translateY(0)}}
 @keyframes exitDown{from{transform:translateY(0)}to{transform:translateY(100%)}}
 
-#status{position:fixed;z-index:1;inset:0;display:grid;place-items:center;padding:40px;background:#000;color:#fff;text-align:center;font-size:18px;line-height:1.5;pointer-events:none !important}
+#status{position:fixed;z-index:50;inset:0;display:grid;place-items:center;padding:40px;background:#000;color:#fff;text-align:center;font-size:18px;line-height:1.5;pointer-events:none}
 #status[hidden]{display:none}
 
 @media(max-width:900px){
@@ -389,59 +312,9 @@ body.empty-state-active #clock{
 @media(prefers-reduced-motion:reduce){
   .enter-up,.exit-up,.enter-down,.exit-down{animation-duration:1ms}
 }
-
-/* EMPTY-STATE CONTROLS: must sit above the no-news overlay and remain usable. */
-body.empty-state-active #logo,
-body.empty-state-active #clock,
-body.empty-state-active #menu-button,
-body.empty-state-active #fullscreen-button {
-  z-index: 1000 !important;
-  opacity: 1 !important;
-  visibility: visible !important;
-}
-
-body.empty-state-active #menu-button,
-body.empty-state-active #fullscreen-button {
-  pointer-events: auto !important;
-}
-
-body.empty-state-active #logo,
-body.empty-state-active #clock {
-  pointer-events: none !important;
-}
-
-body.empty-state-active #status {
-  z-index: 10 !important;
-  pointer-events: none !important;
-}
-
-
-/* V17: empty/error state is background-only; UI controls stay on top. */
-body.empty-state-active #logo,
-body.empty-state-active #clock,
-body.empty-state-active #menu-button,
-body.empty-state-active #fullscreen-button{
-  position:fixed !important;
-  z-index:10000 !important;
-  opacity:1 !important;
-  visibility:visible !important;
-}
-
-body.empty-state-active #menu-button,
-body.empty-state-active #fullscreen-button{
-  pointer-events:auto !important;
-  display:grid !important;
-}
-
-body.empty-state-active #status{
-  z-index:1 !important;
-  pointer-events:none !important;
-}
-
-body.empty-state-active #menu-overlay{
-  z-index:11000 !important;
-}
-
+body.no-news #menu-button,body.no-news #fullscreen-button{z-index:1000 !important;opacity:1 !important;visibility:visible !important;pointer-events:auto !important}
+body.no-news #status{z-index:50 !important;pointer-events:none !important}
+#status-message{max-width:min(680px,80vw);font:400 clamp(14px,1.3vw,19px)/1.6 "Comfortaa",sans-serif;opacity:.82}
 </style>
 </head>
 
@@ -470,16 +343,14 @@ body.empty-state-active #menu-overlay{
       <div class="menu-panel active" id="sources-panel" data-panel="sources">
         <div class="menu-actions">
           <button id="sources-all" type="button">Tümünü aç</button>
-          
-        </div>
+          </div>
         <div id="source-options" class="option-list"></div>
       </div>
 
       <div class="menu-panel" id="categories-panel" data-panel="categories">
         <div class="menu-actions">
           <button id="categories-all" type="button">Tümünü aç</button>
-          
-        </div>
+          </div>
         <div id="category-options" class="option-list"></div>
       </div>
 
@@ -504,10 +375,7 @@ body.empty-state-active #menu-overlay{
         <div class="source"></div>
       </div>
       <h1></h1>
-      <div class="meta-line">
-        <a class="source-link" href="#" target="_blank" rel="noopener noreferrer" aria-label="Habere git" title="Habere git">⎋</a>
-        <div class="time"></div>
-      </div>
+      <div class="time"></div>
     </div>
   </article>
 
@@ -521,21 +389,12 @@ body.empty-state-active #menu-overlay{
         <div class="source"></div>
       </div>
       <h1></h1>
-      <div class="meta-line">
-        <a class="source-link" href="#" target="_blank" rel="noopener noreferrer" aria-label="Habere git" title="Habere git">⎋</a>
-        <div class="time"></div>
-      </div>
+      <div class="time"></div>
     </div>
   </article>
 </main>
 
-<div id="status" class="empty-state" hidden>
-  <div class="empty-state-message">
-    <div class="empty-state-title">Haber bulunamadı.</div>
-    <div class="empty-state-subtitle">Seçtiğiniz kaynak ve kategorilerde haber bulunmuyor.</div>
-    <div class="empty-state-hint">☰ menüden kaynak veya kategori seçimini değiştirebilirsiniz.</div>
-  </div>
-</div>
+<div id="status" hidden><div id="status-message"></div></div>
 
 <script>
 const API="https://thefloew.thefloewback.workers.dev/news";
@@ -570,48 +429,19 @@ const state={
   historyPos:0
 };
 const CATEGORIES=[
-  "#SonDakika","#Yaşam","#Türkiye","#Dünya","#Siyaset",
-  "#Ekonomi","#Magazin","#Teknoloji","#Kültür-Sanat",
-  "#Sinema","#Otomotiv","#Edebiyat","#Müzik","#Televizyon","#Spor"
+  "#SonDakika","#Yaşam","#Türkiye","#Dünya","#Siyaset","#Ekonomi",
+  "#Magazin","#Teknoloji","#Kültür-Sanat","#Sinema","#Otomotiv",
+  "#Edebiyat","#Müzik","#Televizyon","#Spor"
 ];
-
-const PREFS_KEY = "thefloew.preferences.v3";
-
-function loadPreferences(){
-  try{
-    const raw=localStorage.getItem(PREFS_KEY);
-    if(!raw)return {sources:null,categories:null};
-    const saved=JSON.parse(raw);
-    return {
-      sources: saved && saved.sources ? saved.sources : null,
-      categories: saved && saved.categories ? saved.categories : null
-    };
-  }catch(e){
-    console.warn("The Flöw preferences could not be loaded:",e);
-    return {sources:null,categories:null};
-  }
-}
-
-function savePreferences(){
-  try{
-    localStorage.setItem(PREFS_KEY,JSON.stringify({
-      sources:[...filters.sources],
-      categories:[...filters.categories]
-    }));
-  }catch(e){
-    console.warn("The Flöw preferences could not be saved:",e);
-  }
-}
-
-const savedPreferences=loadPreferences();
 
 const filters={
   sources:new Set(),
-  categories:
-    Array.isArray(savedPreferences.categories) && savedPreferences.categories.length
-      ? new Set(savedPreferences.categories.filter(x=>CATEGORIES.includes(x)))
-      : new Set(CATEGORIES)
+  categories:new Set(CATEGORIES)
 };
+const PREFS_KEY="thefloew.preferences.v4";
+let savedPreferences={sources:null,categories:null};
+try{const saved=JSON.parse(localStorage.getItem(PREFS_KEY)||"null");if(saved){savedPreferences.sources=Array.isArray(saved.sources)?saved.sources:null;savedPreferences.categories=Array.isArray(saved.categories)?saved.categories:null;}}catch(err){}
+function savePreferences(){try{localStorage.setItem(PREFS_KEY,JSON.stringify({sources:[...filters.sources],categories:[...filters.categories]}));}catch(err){}}
 
 let knownSources=[];
 let rawStories=[];
@@ -624,38 +454,19 @@ function normalizeText(v){
 }
 
 function categoryForStory(story){
-  return CATEGORIES.includes(story.category)
-    ? story.category
-    : "#Yaşam";
+  const explicit=story.category || story.flowCategory;
+  return CATEGORIES.includes(explicit) ? explicit : "#Yaşam";
 }
 
 function enrichStories(list){
-  return list.map(s => ({
-    ...s,
-    flowCategory: CATEGORIES.includes(s.category)
-      ? s.category
-      : "#Yaşam",
-    isBreaking:
-      s.breaking === true ||
-      s.breaking === "true"
-  }));
+  return list.map(s=>({...s,flowCategory:categoryForStory(s)}));
 }
 
 function activeStories(){
-  return rawStories.filter(story => {
-    if(!filters.sources.has(sourceKey(story.source))){
-      return false;
-    }
-
-    if(
-      filters.categories.has("#SonDakika") &&
-      story.isBreaking
-    ){
-      return true;
-    }
-
-    return filters.categories.has(story.flowCategory);
-  });
+  return rawStories.filter(s=>
+    filters.sources.has(sourceKey(s.source)) &&
+    filters.categories.has(s.flowCategory)
+  );
 }
 
 function renderOptions(){
@@ -698,28 +509,26 @@ function updateFilterCount(){
 function toggleSource(key){
   if(filters.sources.has(key)) filters.sources.delete(key);
   else filters.sources.add(key);
-  applyFilters();
-
   savePreferences();
+  applyFilters();
 }
 
 function toggleCategory(cat){
   if(filters.categories.has(cat)) filters.categories.delete(cat);
   else filters.categories.add(cat);
-  applyFilters();
-
   savePreferences();
+  applyFilters();
 }
 
 function setAllSources(on){
   filters.sources=on?new Set(knownSources.map(sourceKey)):new Set();
-  applyFilters();
   savePreferences();
+  applyFilters();
 }
 function setAllCategories(on){
   filters.categories=on?new Set(CATEGORIES):new Set();
-  applyFilters();
   savePreferences();
+  applyFilters();
 }
 
 function applyFilters(){
@@ -729,9 +538,9 @@ function applyFilters(){
   renderOptions();
 
   if(!list.length){
-    slides.forEach(slide => slide.className="slide");
-    status("Seçtiğiniz kaynak ve kategorilerde haber bulunamadı.");
+    slides.forEach(slide=>slide.className="slide");
     clearTimeout(state.timer);
+    status("Seçtiğiniz kaynak ve kategorilerde haber bulunamadı.");
     return;
   }
 
@@ -756,47 +565,8 @@ function applyFilters(){
 }
 
 
-function status(msg){
-  const e=document.getElementById("status");
-  const subtitle=e.querySelector(".empty-state-subtitle");
-  const title=e.querySelector(".empty-state-title");
-
-  if(msg.includes("Cloudflare Worker")){
-    if(title) title.textContent="Haberler alınamadı.";
-    if(subtitle) subtitle.textContent="Cloudflare Worker bağlantısını kontrol edin.";
-  }else{
-    if(title) title.textContent="Haber bulunamadı.";
-    if(subtitle) subtitle.textContent="Seçtiğiniz kaynak ve kategorilerde haber bulunmuyor.";
-  }
-
-  e.hidden=false;
-  document.body.classList.add("empty-state-active");
-
-  // Do not depend on the normal 2-second cursor timer in an empty/error state.
-  const fs=document.getElementById("fullscreen-button");
-  const menu=document.getElementById("menu-button");
-  fs.classList.add("is-visible");
-  menu.classList.add("is-visible");
-  fs.style.opacity="1";
-  fs.style.visibility="visible";
-  fs.style.pointerEvents="auto";
-  menu.style.opacity="1";
-  menu.style.visibility="visible";
-  menu.style.pointerEvents="auto";
-}
-function clearStatus(){
-  document.getElementById("status").hidden=true;
-  document.body.classList.remove("empty-state-active");
-
-  const fs=document.getElementById("fullscreen-button");
-  const menu=document.getElementById("menu-button");
-  fs.style.opacity="";
-  fs.style.visibility="";
-  fs.style.pointerEvents="";
-  menu.style.opacity="";
-  menu.style.visibility="";
-  menu.style.pointerEvents="";
-}
+function status(msg){const e=document.getElementById("status");document.getElementById("status-message").textContent=msg;e.hidden=false;document.body.classList.add("no-news");clearTimeout(cursorHideTimer)}
+function clearStatus(){document.getElementById("status").hidden=true;document.body.classList.remove("no-news")}
 
 function sourceKey(source){return String(source||"").trim().toLocaleLowerCase("tr-TR")}
 
@@ -828,11 +598,8 @@ function fill(el,s){
 
   el.querySelector(".source").textContent=s.source||"";
   const category=el.querySelector(".category");
-  if(category) category.textContent=s.isBreaking ? "#SonDakika" : (s.flowCategory || "#Yaşam");
+  if(category) category.textContent=s.flowCategory||"#Gündem";
   el.querySelector("h1").textContent=s.title||"";
-  const sourceLink=el.querySelector(".source-link");
-  sourceLink.href=s.link||"#";
-  sourceLink.setAttribute("aria-label",s.source ? `${s.source} kaynağına git` : "Habere git");
   el.querySelector(".time").textContent=timeText(s.published);
 }
 
@@ -1024,14 +791,13 @@ async function transitionTo(nextIndex,fromHistory,dir){
 }
 
 async function load(){
-  let workerFetchCompleted=false;
+  let r;
+  try{r=await fetch(API,{cache:"no-store"});}catch(err){console.error("WORKER FETCH:",err);if(!state.stories.length)status("Haberler alınamadı. Cloudflare Worker bağlantısını kontrol edin.");return;}
   try{
-    const r=await fetch(API,{cache:"no-store"});
     if(!r.ok)throw new Error("HTTP "+r.status);
     const data=await r.json();
-    workerFetchCompleted=true;
     const incoming=Array.isArray(data)?data.filter(x=>x&&x.title&&x.image):[];
-    if(!incoming.length)throw new Error("Görselli haber yok");
+    if(!incoming.length)throw new Error("Worker boş haber listesi döndürdü");
 
     rawStories=enrichStories(incoming);
 
@@ -1040,30 +806,9 @@ async function load(){
     ).values()];
 
     if(!state.stories.length){
-      if(Array.isArray(savedPreferences.sources) && savedPreferences.sources.length){
-        const available=new Set(knownSources.map(sourceKey));
-        const restored=new Set(
-          savedPreferences.sources.filter(key=>available.has(key))
-        );
-
-        // If an old/invalid preference leaves us with zero sources,
-        // recover gracefully by enabling all currently available sources.
-        filters.sources=restored.size
-          ? restored
-          : new Set(knownSources.map(sourceKey));
-      }else{
-        // No saved source selection (or an old empty selection):
-        // start with all available sources enabled.
-        filters.sources=new Set(knownSources.map(sourceKey));
-      }
-    }else{
-      // Keep the user's existing source selection, while adding no new
-      // source automatically after a refresh.
-      filters.sources=new Set(
-        [...filters.sources].filter(key=>
-          knownSources.some(source=>sourceKey(source)===key)
-        )
-      );
+      const available=new Set(knownSources.map(sourceKey));
+      if(Array.isArray(savedPreferences.sources) && savedPreferences.sources.length){const restored=new Set(savedPreferences.sources.filter(k=>available.has(k)));filters.sources=restored.size?restored:new Set(available);}else filters.sources=new Set(available);
+      if(Array.isArray(savedPreferences.categories) && savedPreferences.categories.length){const restoredCategories=new Set(savedPreferences.categories.filter(c=>CATEGORIES.includes(c)));filters.categories=restoredCategories.size?restoredCategories:new Set(CATEGORIES);}else filters.categories=new Set(CATEGORIES);
     }
 
     renderOptions();
@@ -1122,13 +867,7 @@ async function load(){
     clearStatus();
   }catch(err){
     console.error("NEWS WALL:",err);
-    if(!state.stories.length){
-      if(workerFetchCompleted){
-        status("Haberler yüklenirken bir arayüz hatası oluştu.");
-      }else{
-        status("Haberler alınamadı. Cloudflare Worker bağlantısını kontrol edin.");
-      }
-    }
+    if(!state.stories.length)status("Haber verisi işlenemedi. Konsolu kontrol edin.");
   }
 }
 
@@ -1242,7 +981,6 @@ window.addEventListener("wheel",e=>{
   if(e.target.closest && e.target.closest("#fullscreen-button"))return;
   if(e.target.closest && e.target.closest("#menu-button"))return;
   if(e.target.closest && e.target.closest("#menu-overlay"))return;
-  if(e.target.closest && e.target.closest(".source-link"))return;
   e.preventDefault();
   if(Math.abs(e.deltaY)>=5)move(e.deltaY>0?1:-1);
 },{passive:false});
@@ -1258,7 +996,6 @@ window.addEventListener("pointerdown",e=>{
   if(e.target.closest && e.target.closest("#fullscreen-button"))return;
   if(e.target.closest && e.target.closest("#menu-button"))return;
   if(e.target.closest && e.target.closest("#menu-overlay"))return;
-  if(e.target.closest && e.target.closest(".source-link"))return;
   state.x=e.clientX;state.y=e.clientY;state.t=performance.now();
 });
 
@@ -1268,7 +1005,6 @@ window.addEventListener("pointerup",e=>{
   if(e.target.closest && e.target.closest("#fullscreen-button"))return;
   if(e.target.closest && e.target.closest("#menu-button"))return;
   if(e.target.closest && e.target.closest("#menu-overlay"))return;
-  if(e.target.closest && e.target.closest(".source-link"))return;
 
   const dx=e.clientX-state.x;
   const dy=e.clientY-state.y;
@@ -1288,7 +1024,6 @@ setInterval(updateClock,1000);
 setFullscreenIcon();
 load();
 setInterval(load,REFRESH_MS);
-window.addEventListener("beforeunload", savePreferences);
 </script>
 </body>
 </html>
