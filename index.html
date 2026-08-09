@@ -359,7 +359,7 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
       <div class="menu-panel active" id="sources-panel" data-panel="sources">
         <div class="menu-actions">
           <button id="sources-all" type="button">Tümünü aç</button>
-          <button id="sources-none" type="button">Tümünü kapat</button>
+          
         </div>
         <div id="source-options" class="option-list"></div>
       </div>
@@ -367,7 +367,7 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
       <div class="menu-panel" id="categories-panel" data-panel="categories">
         <div class="menu-actions">
           <button id="categories-all" type="button">Tümünü aç</button>
-          <button id="categories-none" type="button">Tümünü kapat</button>
+          
         </div>
         <div id="category-options" class="option-list"></div>
       </div>
@@ -457,6 +457,61 @@ const CATEGORIES=[
   "#Ekonomi","#Magazin","#Teknoloji","#Kültür-Sanat",
   "#Sinema","#Otomotiv","#Edebiyat","#Müzik","#Televizyon","#Spor"
 ];
+
+const PREFS_KEY = "thefloew.preferences.v1";
+
+function loadPreferences() {
+  const defaults = {
+    sources: {},
+    categories: {}
+  };
+
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    if (!raw) return defaults;
+
+    const saved = JSON.parse(raw);
+    return {
+      sources: saved && saved.sources ? saved.sources : {},
+      categories: saved && saved.categories ? saved.categories : {}
+    };
+  } catch (e) {
+    console.warn("The Flöw preferences could not be loaded:", e);
+    return defaults;
+  }
+}
+
+function savePreferences() {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify({
+      sources: Object.fromEntries(
+        Object.entries(sourceEnabled || {}).map(([key, value]) => [key, !!value])
+      ),
+      categories: Object.fromEntries(
+        Object.entries(categoryEnabled || {}).map(([key, value]) => [key, !!value])
+      )
+    }));
+  } catch (e) {
+    console.warn("The Flöw preferences could not be saved:", e);
+  }
+}
+
+function applySavedPreferences() {
+  for (const key of Object.keys(sourceEnabled || {})) {
+    if (Object.prototype.hasOwnProperty.call(savedPreferences.sources, key)) {
+      sourceEnabled[key] = !!savedPreferences.sources[key];
+    }
+  }
+  for (const key of Object.keys(categoryEnabled || {})) {
+    if (Object.prototype.hasOwnProperty.call(savedPreferences.categories, key)) {
+      categoryEnabled[key] = !!savedPreferences.categories[key];
+    }
+  }
+}
+
+
+const savedPreferences = loadPreferences();
+
 
 const filters={
   sources:new Set(),
@@ -549,12 +604,16 @@ function toggleSource(key){
   if(filters.sources.has(key)) filters.sources.delete(key);
   else filters.sources.add(key);
   applyFilters();
+
+  savePreferences();
 }
 
 function toggleCategory(cat){
   if(filters.categories.has(cat)) filters.categories.delete(cat);
   else filters.categories.add(cat);
   applyFilters();
+
+  savePreferences();
 }
 
 function setAllSources(on){
@@ -1067,6 +1126,7 @@ setInterval(updateClock,1000);
 setFullscreenIcon();
 load();
 setInterval(load,REFRESH_MS);
+window.addEventListener("beforeunload", savePreferences);
 </script>
 </body>
 </html>
