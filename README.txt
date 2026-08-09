@@ -1,3 +1,9 @@
+Beta 3 Sürüm notları:
+- Tam ekran özelliği eklendi.
+- Haber kaynakları artık kendi logolarıyla gösteriliyor.
+- Sayfanın sol altına saat ve tarih eklendi.
+- Comfortaa fontuna geçildi.
+
 Beta 2 Sürüm notları:
 - Sayfanın herhangi bir yerine sol tıklama = sonraki haber
 - Yukarı sürükleme = sonraki haber
