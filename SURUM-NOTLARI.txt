@@ -1,3 +1,9 @@
+Versiyon 1.1.0
+- Kategoriler algısal hale geldi.
+- Yeni kategoriler eklendi.
+- Menü arayüzünde değişiklikler.
+- Haberlere "Kaynağa git" butonu ekledi.
+
 Versiyon 1.0.9
 - Artık akış: RSS kaynakları > Cloudflare Worker > category: "#Spor" breaking: true > GitHub Pages > doğrudan bu bilgiyi kullanıyor. Frontend artık haberi tekrar tahmin etmiyor.
 - #SonDakika ayrı çalışıyor. Örneğin Worker: #Türkiye kategorisiyle beraber son dakika bilgisi de gönderirse haber hem #Türkiye filtresinde hem de #SonDakika filtresinde görünür. Manşette kategori olarak #SonDakika gösterilir.
