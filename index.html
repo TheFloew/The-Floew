@@ -301,7 +301,7 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 @keyframes enterDown{from{transform:translateY(-100%)}to{transform:translateY(0)}}
 @keyframes exitDown{from{transform:translateY(0)}to{transform:translateY(100%)}}
 
-#status{position:fixed;z-index:50;inset:0;display:grid;place-items:center;padding:40px;background:#000;color:#fff;text-align:center;font-size:18px;line-height:1.5;pointer-events:none}
+#status{position:fixed;z-index:50;inset:0;display:grid;place-items:center;padding:40px;background:transparent;color:#fff;text-align:center;font-size:18px;line-height:1.5;pointer-events:none}
 #status[hidden]{display:none}
 
 @media(max-width:900px){
@@ -319,6 +319,14 @@ body.no-news #status{z-index:50 !important;pointer-events:none !important}
 #status-message{max-width:min(680px,80vw);font:400 clamp(14px,1.3vw,19px)/1.6 "Comfortaa",sans-serif;opacity:.82}
 
 body.no-news #logo,body.no-news #clock,body.no-news #menu-button,body.no-news #fullscreen-button{z-index:1000 !important;opacity:1 !important;visibility:visible !important}body.no-news #menu-button,body.no-news #fullscreen-button{pointer-events:auto !important}body.no-news #status{z-index:40 !important;pointer-events:none !important}
+
+/* No-news screen: transparent so logo, clock and controls remain visible. */
+#status,
+#status.empty-state,
+body.empty-state-active #status {
+  background: transparent !important;
+}
+
 </style>
 </head>
 
