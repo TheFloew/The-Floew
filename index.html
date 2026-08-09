@@ -4,14 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <title>News Wall</title>
-  <link rel="stylesheet" href="style.css">
+  <title>The Floew News Wall</title>
+  <link rel="stylesheet" href="./style.css">
 </head>
+
 <body>
-  <main id="news-wall" aria-live="polite">
+  <main id="news-wall">
+
     <article class="slide active" id="slide-a">
       <img class="slide-image" alt="">
       <div class="shade"></div>
+
       <div class="headline">
         <div class="source"></div>
         <h1></h1>
@@ -22,15 +25,18 @@
     <article class="slide" id="slide-b">
       <img class="slide-image" alt="">
       <div class="shade"></div>
+
       <div class="headline">
         <div class="source"></div>
         <h1></h1>
         <div class="time"></div>
       </div>
     </article>
+
   </main>
 
   <div id="status" hidden></div>
-  <script src="app.js"></script>
+
+  <script src="./app.js"></script>
 </body>
 </html>
