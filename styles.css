@@ -759,3 +759,227 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
   .loading-marquee{gap:14px}
 }
 
+
+
+/* --- V31.8: duration, cookies and weather --- */
+
+#menu-button{
+  font-size:30px;
+  padding-bottom:1px;
+}
+
+.duration-setting-group{
+  margin-top:24px;
+  padding-top:12px;
+  border-top:1px solid rgba(255,255,255,.10);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:22px;
+}
+.setting-copy strong{
+  display:block;
+  font-size:12px;
+  font-weight:700;
+}
+.setting-copy small{
+  display:block;
+  margin-top:5px;
+  font-size:10px;
+  opacity:.46;
+}
+.duration-control{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex:0 0 auto;
+}
+.duration-control button{
+  width:32px;
+  height:32px;
+  padding:0;
+  border:1px solid rgba(255,255,255,.18);
+  border-radius:50%;
+  background:transparent;
+  color:#fff;
+  cursor:pointer;
+  font:300 20px/30px Arial,sans-serif;
+}
+.duration-control button:hover:not(:disabled){
+  border-color:rgba(255,255,255,.52);
+}
+.duration-control button:disabled{
+  opacity:.24;
+  cursor:default;
+}
+#duration-value{
+  min-width:48px;
+  text-align:center;
+  font-size:12px;
+  font-weight:700;
+}
+
+#cookie-notice{
+  position:fixed;
+  z-index:1180;
+  left:0;
+  right:0;
+  bottom:5vh;
+  display:flex;
+  justify-content:center;
+  padding:0 18px;
+  pointer-events:none;
+}
+#cookie-notice[hidden]{
+  display:none;
+}
+#cookie-notice .status-band{
+  pointer-events:auto;
+}
+
+/* Keep a simultaneous runtime warning readable below/away from cookie notice. */
+#status:not([hidden]) ~ #cookie-notice:not([hidden]){
+  bottom:calc(5vh + 72px);
+}
+
+#weather-current{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  margin-bottom:10px;
+  font-size:clamp(11px,.9vw,14px);
+  line-height:1;
+  font-weight:700;
+  letter-spacing:.02em;
+  opacity:.94;
+  white-space:nowrap;
+}
+#weather-current[hidden]{
+  display:none;
+}
+#weather-icon{
+  width:18px;
+  text-align:center;
+  font:400 17px/1 Arial,sans-serif;
+}
+#weather-city-label{
+  max-width:150px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  opacity:.72;
+  font-weight:400;
+}
+
+.weather-settings{
+  max-width:560px;
+  margin:0 auto;
+}
+.weather-field{
+  display:block;
+  margin-bottom:26px;
+}
+.weather-field > span{
+  display:block;
+  margin-bottom:10px;
+  font-size:11px;
+  font-weight:700;
+  opacity:.58;
+}
+.weather-city-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+#weather-city{
+  flex:1 1 auto;
+  min-width:0;
+  height:42px;
+  padding:0 2px;
+  border:0;
+  border-bottom:1px solid rgba(255,255,255,.18);
+  outline:0;
+  background:transparent;
+  color:#fff;
+  font:400 13px "Comfortaa",sans-serif;
+}
+#weather-city:focus{
+  border-bottom-color:rgba(255,255,255,.72);
+}
+#weather-city::placeholder{
+  color:rgba(255,255,255,.28);
+}
+#weather-apply{
+  height:36px;
+  padding:0 12px;
+  border:1px solid rgba(255,255,255,.18);
+  border-radius:18px;
+  background:transparent;
+  color:#fff;
+  cursor:pointer;
+  font:700 10px "Comfortaa",sans-serif;
+}
+#weather-apply:hover{
+  border-color:rgba(255,255,255,.52);
+}
+.weather-unit-list{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+}
+.weather-unit-option{
+  min-height:42px;
+  border:0;
+  border-bottom:1px solid rgba(255,255,255,.12);
+  background:transparent;
+  color:rgba(255,255,255,.48);
+  text-align:left;
+  cursor:pointer;
+  font:400 12px "Comfortaa",sans-serif;
+}
+.weather-unit-option.active{
+  color:#fff;
+  border-bottom-color:#fff;
+  font-weight:700;
+}
+.weather-feedback{
+  min-height:18px;
+  margin-top:2px;
+  text-align:center;
+  font-size:10px;
+  line-height:1.5;
+  opacity:.54;
+}
+.weather-feedback[data-state="error"]{
+  opacity:.86;
+}
+.weather-attribution{
+  margin-top:14px;
+  text-align:center;
+  font-size:9px;
+  opacity:.32;
+}
+.weather-attribution a{
+  color:inherit;
+  text-decoration:none;
+}
+.weather-attribution a:hover{
+  opacity:1;
+  text-decoration:underline;
+}
+
+@media(max-width:700px){
+  .duration-setting-group{
+    align-items:flex-start;
+  }
+  .weather-unit-list{
+    grid-template-columns:1fr;
+  }
+  #weather-current{
+    margin-bottom:8px;
+    font-size:11px;
+  }
+  #weather-city-label{
+    max-width:105px;
+  }
+}
+
