@@ -801,27 +801,49 @@ async function transitionTo(nextIndex,fromHistory,dir){
   );
 }
 
+function loadJSONP(){
+  return new Promise((resolve,reject)=>{
+    const callbackName="__theFloewJSONP_"+Date.now()+"_"+Math.random().toString(36).slice(2);
+    const script=document.createElement("script");
+    const cleanup=()=>{
+      delete window[callbackName];
+      script.remove();
+    };
+    const timeout=setTimeout(()=>{
+      cleanup();
+      reject(new Error("Worker JSONP timeout"));
+    },15000);
+
+    window[callbackName]=(data)=>{
+      clearTimeout(timeout);
+      cleanup();
+      resolve(data);
+    };
+
+    script.onerror=()=>{
+      clearTimeout(timeout);
+      cleanup();
+      reject(new Error("Worker JSONP request failed"));
+    };
+
+    script.src=API+"?callback="+encodeURIComponent(callbackName)+"&_="+Date.now();
+    document.head.appendChild(script);
+  });
+}
+
 async function load(){
-  let r;
+  let data;
   try{
-    const endpoint = API + (API.includes("?") ? "&" : "?") + "_=" + Date.now();
-    r = await fetch(endpoint,{
-      method:"GET",
-      mode:"cors",
-      cache:"no-store",
-      credentials:"omit",
-      headers:{Accept:"application/json"}
-    });
+    data=await loadJSONP();
   }catch(err){
-    console.error("WORKER FETCH:",err);
+    console.error("WORKER JSONP:",err);
     if(!state.stories.length){
-      status("Haberler alınamadı. Worker isteği tarayıcı tarafından engellendi veya Worker'a ulaşılamadı.");
+      status("Haberler alınamadı. Worker'a ulaşılamadı.");
     }
     return;
   }
+
   try{
-    if(!r.ok)throw new Error("HTTP "+r.status);
-    const data=await r.json();
     const incoming=Array.isArray(data)?data.filter(x=>x&&x.title&&x.image):[];
     if(!incoming.length)throw new Error("Worker boş haber listesi döndürdü");
 
@@ -857,31 +879,18 @@ async function load(){
       return;
     }
 
-    const currentStory=
-      state.stories[state.index];
-
+    const currentStory=state.stories[state.index];
     const link=currentStory?.link;
     const oldSource=sourceKey(currentStory?.source);
-
     state.stories=list;
 
     if(link){
       const i=list.findIndex(x=>x.link===link);
-
       if(i>=0){
         state.index=i;
-
-        /*
-          Keep history pointing at the same currently visible story.
-        */
-        if(state.history.length){
-          state.history[state.historyPos]=i;
-        }
+        if(state.history.length)state.history[state.historyPos]=i;
       }else{
-        const i2=list.findIndex(
-          x=>sourceKey(x.source)!==oldSource
-        );
-
+        const i2=list.findIndex(x=>sourceKey(x.source)!==oldSource);
         if(i2>=0){
           state.index=i2;
           state.history=[i2];
