@@ -696,6 +696,17 @@ function fill(el,s){
   const category=el.querySelector(".category");
   if(category) category.textContent=s.flowCategory||"#Yaşam";
   el.querySelector("h1").textContent=s.title||"";
+
+  const description=el.querySelector(".description");
+  if(description){
+    const text=String(s.description||s.summary||"")
+      .replace(/\s+/g," ")
+      .trim();
+
+    description.textContent=text;
+    description.style.display=text?"-webkit-box":"none";
+  }
+
   el.querySelector(".time").textContent=timeText(s.published);
 
   const sourceLink=el.querySelector(".source-link");
