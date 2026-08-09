@@ -331,6 +331,14 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 @keyframes exitUp{from{transform:translateY(0)}to{transform:translateY(-100%)}}
 @keyframes enterDown{from{transform:translateY(-100%)}to{transform:translateY(0)}}
 @keyframes exitDown{from{transform:translateY(0)}to{transform:translateY(100%)}}
+.enter-left{animation:enterLeft .7s cubic-bezier(.22,.61,.36,1) forwards}
+.exit-left{animation:exitLeft .7s cubic-bezier(.22,.61,.36,1) forwards}
+.enter-right{animation:enterRight .7s cubic-bezier(.22,.61,.36,1) forwards}
+.exit-right{animation:exitRight .7s cubic-bezier(.22,.61,.36,1) forwards}
+@keyframes enterLeft{from{transform:translateX(100%)}to{transform:translateX(0)}}
+@keyframes exitLeft{from{transform:translateX(0)}to{transform:translateX(-100%)}}
+@keyframes enterRight{from{transform:translateX(-100%)}to{transform:translateX(0)}}
+@keyframes exitRight{from{transform:translateX(0)}to{transform:translateX(100%)}}
 
 #status{
   position:fixed;
@@ -362,9 +370,8 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 }
 
 @media(prefers-reduced-motion:reduce){
-  .enter-up,.exit-up,.enter-down,.exit-down{animation-duration:1ms}
+  .enter-up,.exit-up,.enter-down,.exit-down,.enter-left,.exit-left,.enter-right,.exit-right{animation-duration:1ms}
 }
-body.pip-mode #pip-button{display:none!important}
 
 /* V27 — transparent background + bottom black message band + close button */
 #status{
@@ -432,6 +439,157 @@ body.pip-mode #pip-button{display:none!important}
 .source-link:hover{opacity:1}
 .source-link[aria-hidden="true"]{display:none}
 
+
+/* --- V30: responsive logo --- */
+#logo{
+  width:clamp(72px,5vw,105px) !important;
+}
+@media(max-width:900px){
+  #logo{width:clamp(64px,12vw,88px) !important}
+}
+@media(max-width:480px){
+  #logo{width:clamp(58px,18vw,76px) !important}
+}
+
+/* --- V30: simpler, darker menu without a card --- */
+#menu-overlay{
+  background:rgba(0,0,0,.80) !important;
+  backdrop-filter:blur(5px) !important;
+  -webkit-backdrop-filter:blur(5px) !important;
+}
+#settings-menu{
+  width:min(760px,88vw) !important;
+  max-height:84vh !important;
+  padding:0 !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  box-shadow:none !important;
+}
+.menu-header{
+  align-items:center !important;
+  padding:0 2px 12px !important;
+}
+.menu-title{font-size:20px !important}
+.menu-subtitle{font-size:11px !important;opacity:.48 !important}
+#menu-close{
+  background:transparent !important;
+  border-radius:0 !important;
+  opacity:.68;
+}
+#menu-close:hover{background:transparent !important;opacity:1}
+.menu-tabs{
+  justify-content:center;
+  gap:16px !important;
+  margin:12px 0 22px !important;
+  border:0 !important;
+}
+.menu-tab{
+  padding:8px 2px !important;
+  font-size:12px !important;
+  opacity:.65;
+}
+.menu-tab.active{opacity:1}
+.option-list{
+  grid-template-columns:1fr 1fr;
+  gap:0 28px !important;
+}
+.option{
+  min-height:40px !important;
+  padding:8px 2px !important;
+  border:0 !important;
+  border-radius:0 !important;
+  border-bottom:1px solid rgba(255,255,255,.10) !important;
+  background:transparent !important;
+}
+.option:hover{background:transparent !important}
+.option-name{font-size:12px !important;font-weight:400 !important}
+.option-check{
+  width:15px !important;height:15px !important;flex-basis:15px !important;
+  border-radius:50% !important;
+  font-size:10px !important;line-height:15px !important;
+}
+.menu-footer{
+  margin-top:18px !important;
+  border:0 !important;
+  text-align:center;
+  opacity:.38 !important;
+}
+.motion-label{
+  margin:0 0 14px;
+  text-align:center;
+  font-size:11px;
+  opacity:.48;
+}
+.direction-list{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:0 28px;
+}
+.direction-option{
+  min-height:46px;
+  padding:9px 2px;
+  border:0;
+  border-bottom:1px solid rgba(255,255,255,.10);
+  background:transparent;
+  color:rgba(255,255,255,.58);
+  cursor:pointer;
+  text-align:left;
+  font:400 12px "Comfortaa",sans-serif;
+}
+.direction-option span{
+  display:inline-block;
+  width:28px;
+  color:#fff;
+  font:400 20px/1 Arial,sans-serif;
+  vertical-align:-2px;
+}
+.direction-option.active{color:#fff;font-weight:700}
+@media(max-width:700px){
+  #settings-menu{width:min(92vw,560px) !important}
+  .option-list,.direction-list{grid-template-columns:1fr !important}
+  .menu-tabs{gap:10px !important}
+}
+
+/* --- V30: all warnings are dismissible bottom bands --- */
+#status{
+  background:transparent !important;
+  pointer-events:none !important;
+  display:flex !important;
+  align-items:flex-end !important;
+  justify-content:center !important;
+  padding:0 18px 5vh !important;
+}
+.status-band{
+  position:relative;
+  display:flex;
+  align-items:center;
+  gap:14px;
+  width:max-content;
+  max-width:min(90vw,1000px);
+  padding:12px 12px 12px 18px;
+  background:rgba(0,0,0,.88);
+  color:#fff;
+  box-sizing:border-box;
+  pointer-events:auto;
+}
+.status-message{
+  display:block;
+  max-width:820px;
+  text-align:center;
+  font-size:13px;
+  line-height:1.4;
+}
+.status-close{
+  flex:0 0 28px;
+  width:28px;height:28px;
+  padding:0;border:0;background:transparent;color:#fff;
+  cursor:pointer;
+  opacity:.65;
+  font:300 24px/28px Arial,sans-serif;
+}
+.status-close:hover{opacity:1}
+
 </style>
 </head>
 
@@ -456,6 +614,7 @@ body.pip-mode #pip-button{display:none!important}
       <div class="menu-tabs" role="tablist">
         <button class="menu-tab active" data-tab="sources" type="button">Kaynaklar</button>
         <button class="menu-tab" data-tab="categories" type="button">Kategoriler</button>
+        <button class="menu-tab" data-tab="motion" type="button">Geçiş</button>
       </div>
 
       <div class="menu-panel active" id="sources-panel" data-panel="sources">
@@ -464,6 +623,16 @@ body.pip-mode #pip-button{display:none!important}
 
       <div class="menu-panel" id="categories-panel" data-panel="categories">
         <div id="category-options" class="option-list"></div>
+      </div>
+
+      <div class="menu-panel" id="motion-panel" data-panel="motion">
+        <div class="motion-label">Haberlerin kayma yönü</div>
+        <div class="direction-list">
+          <button class="direction-option" data-direction="up" type="button"><span>↑</span> Aşağıdan yukarı</button>
+          <button class="direction-option" data-direction="down" type="button"><span>↓</span> Yukarıdan aşağı</button>
+          <button class="direction-option" data-direction="left" type="button"><span>←</span> Sağdan sola</button>
+          <button class="direction-option" data-direction="right" type="button"><span>→</span> Soldan sağa</button>
+        </div>
       </div>
 
       <div class="menu-footer">
@@ -547,9 +716,46 @@ const CATEGORIES=[
   "#Ekonomi","#Magazin","#Teknoloji","#Kültür-Sanat","#Spor"
 ];
 
+const PREFS_KEY="thefloew.preferences.v5";
+
+function loadPreferences(){
+  try{
+    const raw=localStorage.getItem(PREFS_KEY);
+    if(!raw)return {sources:null,categories:null,direction:"up"};
+    const p=JSON.parse(raw)||{};
+    return {
+      sources:Array.isArray(p.sources)?p.sources:null,
+      categories:Array.isArray(p.categories)?p.categories:null,
+      direction:["up","down","left","right"].includes(p.direction)?p.direction:"up"
+    };
+  }catch(e){
+    console.warn("Preferences:",e);
+    return {sources:null,categories:null,direction:"up"};
+  }
+}
+
+const savedPreferences=loadPreferences();
+let transitionDirection=savedPreferences.direction||"up";
+let sourcePreferencesApplied=false;
+
+function savePreferences(){
+  try{
+    localStorage.setItem(PREFS_KEY,JSON.stringify({
+      sources:[...filters.sources],
+      categories:[...filters.categories],
+      direction:transitionDirection
+    }));
+  }catch(e){
+    console.warn("Preferences:",e);
+  }
+}
+
+
 const filters={
   sources:new Set(),
-  categories:new Set(CATEGORIES)
+  categories:Array.isArray(savedPreferences.categories)
+    ? new Set(savedPreferences.categories.filter(c=>CATEGORIES.includes(c)))
+    : new Set(CATEGORIES)
 };
 
 let knownSources=[];
@@ -650,12 +856,14 @@ function updateFilterCount(){
 function toggleSource(key){
   if(filters.sources.has(key)) filters.sources.delete(key);
   else filters.sources.add(key);
+  savePreferences();
   applyFilters();
 }
 
 function toggleCategory(cat){
   if(filters.categories.has(cat)) filters.categories.delete(cat);
   else filters.categories.add(cat);
+  savePreferences();
   applyFilters();
 }
 
@@ -718,8 +926,37 @@ function applyFilters(){
 }
 
 
-function status(msg){const e=document.getElementById("status");e.textContent=msg;e.hidden=false}
-function clearStatus(){document.getElementById("status").hidden=true}
+function status(msg){
+  const e=document.getElementById("status");
+  e.innerHTML="";
+  const band=document.createElement("div");
+  band.className="status-band";
+
+  const text=document.createElement("span");
+  text.className="status-message";
+  text.textContent=msg;
+
+  const close=document.createElement("button");
+  close.className="status-close";
+  close.type="button";
+  close.setAttribute("aria-label","Uyarıyı kapat");
+  close.textContent="×";
+  close.addEventListener("pointerdown",ev=>ev.stopPropagation());
+  close.addEventListener("pointerup",ev=>ev.stopPropagation());
+  close.addEventListener("click",ev=>{
+    ev.stopPropagation();
+    clearStatus();
+  });
+
+  band.append(text,close);
+  e.appendChild(band);
+  e.hidden=false;
+}
+function clearStatus(){
+  const e=document.getElementById("status");
+  e.hidden=true;
+  e.innerHTML="";
+}
 
 function sourceKey(source){return String(source||"").trim().toLocaleLowerCase("tr-TR")}
 
@@ -928,13 +1165,17 @@ async function transitionTo(nextIndex,fromHistory,dir){
     dir < 0 = önceki haber:
       yeni haber yukarıdan aşağı gelir.
   */
-  nextSlide.classList.add(
-    dir>0 ? "enter-up" : "enter-down"
-  );
+  const forward=dir>0;
+  const directionMap={
+    up:    forward ? ["enter-up","exit-up"]       : ["enter-down","exit-down"],
+    down:  forward ? ["enter-down","exit-down"]   : ["enter-up","exit-up"],
+    left:  forward ? ["enter-left","exit-left"]   : ["enter-right","exit-right"],
+    right: forward ? ["enter-right","exit-right"] : ["enter-left","exit-left"]
+  };
+  const [enterClass,exitClass]=directionMap[transitionDirection]||directionMap.up;
 
-  currentSlide.classList.add(
-    dir>0 ? "exit-up" : "exit-down"
-  );
+  nextSlide.classList.add(enterClass);
+  currentSlide.classList.add(exitClass);
 
   nextSlide.addEventListener(
     "animationend",
@@ -978,10 +1219,18 @@ async function load(){
       rawStories.map(s=>[sourceKey(s.source),s.source||"Bilinmeyen kaynak"])
     ).values()];
 
-    if(filters.sources.size===0 && !state.stories.length){
-      filters.sources = new Set(
-        rawStories.map(s=>sourceKey(s.source||"Bilinmeyen kaynak"))
-      );
+    if(!sourcePreferencesApplied){
+      const available=new Set(knownSources.map(sourceKey));
+
+      if(Array.isArray(savedPreferences.sources)){
+        filters.sources=new Set(
+          savedPreferences.sources.filter(key=>available.has(key))
+        );
+      }else{
+        filters.sources=new Set(available);
+      }
+
+      sourcePreferencesApplied=true;
     }
 
     renderOptions();
@@ -1104,74 +1353,188 @@ window.addEventListener("pointermove",handlePointerActivity,{passive:true});
 window.addEventListener("mousemove",showFullscreenButton,{passive:true});
 
 
-let pipWindow=null;
+let pipCanvas=null;
+let pipVideo=null;
+let pipTimer=null;
+const pipImageCache=new Map();
 
 function pipSupported(){
-  return !!(window.documentPictureInPicture &&
-    typeof window.documentPictureInPicture.requestWindow==="function");
+  return !!(
+    document.pictureInPictureEnabled &&
+    HTMLVideoElement.prototype.requestPictureInPicture &&
+    HTMLCanvasElement.prototype.captureStream
+  );
+}
+
+async function getPiPImage(url){
+  if(!url)return null;
+  if(pipImageCache.has(url))return pipImageCache.get(url);
+
+  const promise=(async()=>{
+    try{
+      const r=await fetch(url,{mode:"cors",credentials:"omit",cache:"force-cache"});
+      if(!r.ok)throw new Error("image "+r.status);
+      const blob=await r.blob();
+      return await createImageBitmap(blob);
+    }catch(e){
+      return null;
+    }
+  })();
+
+  pipImageCache.set(url,promise);
+  return promise;
+}
+
+function wrapCanvasText(ctx,text,maxWidth,maxLines=3){
+  const words=String(text||"").split(/\s+/);
+  const lines=[];
+  let line="";
+
+  for(const word of words){
+    const test=line ? line+" "+word : word;
+    if(ctx.measureText(test).width<=maxWidth){
+      line=test;
+    }else{
+      if(line)lines.push(line);
+      line=word;
+      if(lines.length===maxLines-1)break;
+    }
+  }
+  if(line && lines.length<maxLines)lines.push(line);
+
+  if(lines.length===maxLines && words.join(" ").length>lines.join(" ").length){
+    let last=lines[maxLines-1];
+    while(last.length>2 && ctx.measureText(last+"…").width>maxWidth){
+      last=last.slice(0,-1);
+    }
+    lines[maxLines-1]=last.trim()+"…";
+  }
+  return lines;
+}
+
+async function drawPiPFrame(){
+  if(!pipCanvas)return;
+
+  const ctx=pipCanvas.getContext("2d");
+  const W=pipCanvas.width;
+  const H=pipCanvas.height;
+  const story=state.stories[state.index];
+
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle="#090909";
+  ctx.fillRect(0,0,W,H);
+
+  if(story?.image){
+    const img=await getPiPImage(story.image);
+    if(img){
+      const scale=Math.max(W/img.width,H/img.height);
+      const dw=img.width*scale;
+      const dh=img.height*scale;
+      ctx.drawImage(img,(W-dw)/2,(H-dh)/2,dw,dh);
+    }
+  }
+
+  const grad=ctx.createLinearGradient(0,H*.35,0,H);
+  grad.addColorStop(0,"rgba(0,0,0,0)");
+  grad.addColorStop(1,"rgba(0,0,0,.92)");
+  ctx.fillStyle=grad;
+  ctx.fillRect(0,0,W,H);
+
+  ctx.textAlign="right";
+  ctx.textBaseline="alphabetic";
+  ctx.shadowColor="rgba(0,0,0,.65)";
+  ctx.shadowBlur=7;
+
+  ctx.font='700 18px "Comfortaa", Arial, sans-serif';
+  ctx.fillStyle="rgba(255,255,255,.88)";
+  ctx.fillText(story?.flowCategory||"",W-28,H-132);
+
+  ctx.font='700 20px "Comfortaa", Arial, sans-serif';
+  ctx.fillStyle="#fff";
+  ctx.fillText(story?.source||"",W-28,H-102);
+
+  ctx.font='700 34px "Comfortaa", Arial, sans-serif';
+  const lines=wrapCanvasText(ctx,story?.title||"The Flöw",W-56,2);
+  let y=H-58-(lines.length-1)*40;
+  for(const line of lines){
+    ctx.fillText(line,W-28,y);
+    y+=40;
+  }
+
+  ctx.shadowBlur=0;
 }
 
 async function togglePiP(){
   if(!pipSupported()){
-    status("Bu tarayıcı sayfa Picture-in-Picture özelliğini desteklemiyor.");
+    status("Bu tarayıcı klasik video Picture-in-Picture özelliğini desteklemiyor.");
     return;
   }
 
   try{
-    if(pipWindow && !pipWindow.closed){
-      pipWindow.close();
+    if(document.pictureInPictureElement){
+      await document.exitPictureInPicture();
       return;
     }
 
-    const currentUrl=new URL(window.location.href);
-    currentUrl.searchParams.set("pip","1");
+    if(!pipCanvas){
+      pipCanvas=document.createElement("canvas");
+      pipCanvas.width=960;
+      pipCanvas.height=540;
+    }
 
-    const width=Math.min(620,Math.max(360,Math.round(window.innerWidth*.42)));
-    const height=Math.min(420,Math.max(260,Math.round(window.innerHeight*.42)));
+    if(!pipVideo){
+      pipVideo=document.createElement("video");
+      pipVideo.muted=true;
+      pipVideo.playsInline=true;
+      pipVideo.setAttribute("aria-hidden","true");
+      pipVideo.style.position="fixed";
+      pipVideo.style.width="1px";
+      pipVideo.style.height="1px";
+      pipVideo.style.opacity="0";
+      pipVideo.style.pointerEvents="none";
+      pipVideo.style.left="-9999px";
+      document.body.appendChild(pipVideo);
 
-    pipWindow=await window.documentPictureInPicture.requestWindow({
-      width,
-      height,
-      disallowReturnToOpener:false,
-      preferInitialWindowPlacement:false
-    });
+      const stream=pipCanvas.captureStream(10);
+      pipVideo.srcObject=stream;
 
-    const doc=pipWindow.document;
+      pipVideo.addEventListener("leavepictureinpicture",()=>{
+        clearInterval(pipTimer);
+        pipTimer=null;
+      });
+    }
 
-    const style=document.createElement("style");
-    style.textContent=`
-      html,body{margin:0!important;padding:0!important;width:100%!important;height:100%!important;overflow:hidden!important;background:#000!important}
-      #pip-frame{display:block;width:100%;height:100%;border:0;background:#000}
-    `;
-    doc.head.appendChild(style);
+    await drawPiPFrame();
+    await pipVideo.play();
+    await pipVideo.requestPictureInPicture();
 
-    const frame=doc.createElement("iframe");
-    frame.id="pip-frame";
-    frame.src=currentUrl.href;
-    frame.allow="picture-in-picture";
-    frame.setAttribute("allowfullscreen","");
-    frame.referrerPolicy="same-origin";
-    doc.body.appendChild(frame);
-
-    pipWindow.addEventListener("pagehide",()=>{
-      pipWindow=null;
-    },{once:true});
-
-    frame.addEventListener("load",()=>{
-      try{
-        const pipDoc=frame.contentDocument;
-        if(pipDoc){
-          const pipButton=pipDoc.getElementById("pip-button");
-          if(pipButton)pipButton.style.display="none";
-        }
-      }catch(e){}
-    });
+    clearInterval(pipTimer);
+    pipTimer=setInterval(drawPiPFrame,1000);
   }catch(err){
-    console.error("Document PiP:",err);
-    pipWindow=null;
-    status("Picture-in-Picture açılamadı. Tarayıcı izinlerini kontrol edin.");
+    console.error("Video PiP:",err);
+    status("Picture-in-Picture açılamadı. Tarayıcının video PiP desteğini veya izinlerini kontrol edin.");
   }
 }
+
+
+function renderDirectionOptions(){
+  document.querySelectorAll(".direction-option").forEach(btn=>{
+    const active=btn.dataset.direction===transitionDirection;
+    btn.classList.toggle("active",active);
+    btn.setAttribute("aria-pressed",active?"true":"false");
+  });
+}
+
+document.querySelectorAll(".direction-option").forEach(btn=>{
+  btn.addEventListener("click",e=>{
+    e.stopPropagation();
+    transitionDirection=btn.dataset.direction||"up";
+    savePreferences();
+    renderDirectionOptions();
+  });
+});
+
+renderDirectionOptions();
 
 function openMenu(){
   const overlay=document.getElementById("menu-overlay");
@@ -1245,6 +1608,7 @@ document.addEventListener("fullscreenchange",setFullscreenIcon);
 window.addEventListener("wheel",e=>{
   if(e.target.closest && e.target.closest("#fullscreen-button"))return;
   if(e.target.closest && e.target.closest("#menu-button"))return;
+  if(e.target.closest && e.target.closest("#pip-button"))return;
   if(e.target.closest && e.target.closest("#menu-overlay"))return;
   e.preventDefault();
   if(Math.abs(e.deltaY)>=5)move(e.deltaY>0?1:-1);
