@@ -389,6 +389,32 @@ body.empty-state-active #clock{
 @media(prefers-reduced-motion:reduce){
   .enter-up,.exit-up,.enter-down,.exit-down{animation-duration:1ms}
 }
+
+/* EMPTY-STATE CONTROLS: must sit above the no-news overlay and remain usable. */
+body.empty-state-active #logo,
+body.empty-state-active #clock,
+body.empty-state-active #menu-button,
+body.empty-state-active #fullscreen-button {
+  z-index: 1000 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+body.empty-state-active #menu-button,
+body.empty-state-active #fullscreen-button {
+  pointer-events: auto !important;
+}
+
+body.empty-state-active #logo,
+body.empty-state-active #clock {
+  pointer-events: none !important;
+}
+
+body.empty-state-active #status {
+  z-index: 10 !important;
+  pointer-events: none !important;
+}
+
 </style>
 </head>
 
