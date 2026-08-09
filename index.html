@@ -378,7 +378,7 @@ async function move(dir){
     const target=
       state.history[state.historyPos-1];
 
-    await transitionTo(target,true);
+    await transitionTo(target,true,dir);
 
     state.historyPos--;
 
@@ -394,7 +394,7 @@ async function move(dir){
     const target=
       state.history[state.historyPos+1];
 
-    await transitionTo(target,true);
+    await transitionTo(target,true,dir);
 
     state.historyPos++;
 
@@ -405,13 +405,13 @@ async function move(dir){
 
   if(next<0)return;
 
-  await transitionTo(next,false);
+  await transitionTo(next,false,dir);
 
   state.history.push(next);
   state.historyPos=state.history.length-1;
 }
 
-async function transitionTo(nextIndex,fromHistory){
+async function transitionTo(nextIndex,fromHistory,dir){
   if(state.busy)return;
 
   state.busy=true;
@@ -427,18 +427,13 @@ async function transitionTo(nextIndex,fromHistory){
     state.stories[nextIndex];
 
   /*
-    KRİTİK NOKTA:
-    Yeni slide ekrana alınmadan önce görsel tamamen yükleniyor.
-    Böylece animasyon sırasında eski/boş görsel görünmüyor.
+    Yeni görsel tamamen hazır olmadan animasyonu başlatma.
+    Böylece geçiş sırasında alttaki/eski görsel görünmez.
   */
   await preloadImage(story.image);
 
   fill(nextSlide,story);
 
-  /*
-    Görselin DOM'a yerleşmesini ve decode edilmesini
-    mümkün olduğunca tamamla.
-  */
   const nextImage=
     nextSlide.querySelector(".slide-image");
 
@@ -453,12 +448,19 @@ async function transitionTo(nextIndex,fromHistory){
 
   void nextSlide.offsetWidth;
 
+  /*
+    dir > 0 = sonraki haber:
+      yeni haber aşağıdan yukarı gelir.
+
+    dir < 0 = önceki haber:
+      yeni haber yukarıdan aşağı gelir.
+  */
   nextSlide.classList.add(
-    "enter-up"
+    dir>0 ? "enter-up" : "enter-down"
   );
 
   currentSlide.classList.add(
-    "exit-up"
+    dir>0 ? "exit-up" : "exit-down"
   );
 
   nextSlide.addEventListener(
