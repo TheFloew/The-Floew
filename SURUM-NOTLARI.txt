@@ -1,3 +1,8 @@
+Beta 6:
+- Gezinmeyi artık bir haber geçmişi üzerinden yapıyoruz. Yani geri kaydırdığında sistem tekrar "farklı bir kaynak bulayım" diye yeni bir haber seçmeyecek; daha önce gördüğün gerçek habere dönecek. Ayrıca geri gelip tekrar ileri gidince de aynı gezinme geçmişini koruyor.
+- Yeni haberin görseli artık geçiş sırasında karışmıyor. Önceden yeni görsel henüz hazır değilse eski/boş görsel animasyonun altında görünebiliyordu. Şimdi görsel hazır olmadan haber kaymaya başlamıyor.
+- Tam ekran butonunun kaybolması yumuşatıldı
+
 Beta 5:
 - Tam ekran butonu artık sadece ⤢ karakteri. Fare hareket ettiğinde görünür. Fare 2 saniye hareketsiz kalırsa kaybolur. Tam ekranda da normal ekranda da aynı şekilde çalışır. F tuşu da çalışmaya devam ediyor.
 - Kaynak ikonları önceki 50 px'den 25 px'e indirildi. Kaynak adının tam başında kalıyor. Tüm ikonlar standart 25×25 alanında.
