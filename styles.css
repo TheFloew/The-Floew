@@ -666,3 +666,104 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
     width:clamp(92px,27vw,126px) !important;
   }
 }
+
+
+/* --- V31.6 loading screen --- */
+#loading-screen{
+  position:fixed;
+  inset:0;
+  z-index:1200;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:28px;
+  background:#000;
+  color:#fff;
+  opacity:1;
+  visibility:visible;
+  transition:opacity .42s ease, visibility .42s ease;
+  pointer-events:auto;
+}
+body.loading-complete #loading-screen{
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+}
+.loading-stage{
+  position:relative;
+  width:min(62vw,820px);
+  max-width:820px;
+  height:min(42vh,310px);
+  overflow:hidden;
+  display:grid;
+  place-items:center;
+}
+.loading-stage::before,
+.loading-stage::after{
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  height:22%;
+  z-index:2;
+  pointer-events:none;
+}
+.loading-stage::before{
+  top:0;
+  background:linear-gradient(to bottom,#000 18%,rgba(0,0,0,.86) 46%,rgba(0,0,0,0));
+}
+.loading-stage::after{
+  bottom:0;
+  background:linear-gradient(to top,#000 18%,rgba(0,0,0,.86) 46%,rgba(0,0,0,0));
+}
+.loading-marquee{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:34px;
+  animation:flowLoadingRise 2.4s linear infinite;
+  will-change:transform;
+}
+.loading-logo{
+  width:min(62vw,820px);
+  max-width:820px;
+  height:auto;
+  display:block;
+  opacity:.22;
+  filter:drop-shadow(0 0 10px rgba(255,255,255,.08));
+}
+.loading-logo:nth-child(2){
+  opacity:1;
+  filter:drop-shadow(0 0 18px rgba(255,255,255,.18));
+}
+.loading-text{
+  font:400 13px/1 "Comfortaa",sans-serif;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  opacity:.72;
+}
+@keyframes flowLoadingRise{
+  from{transform:translateY(33.333%)}
+  to{transform:translateY(-33.333%)}
+}
+@media (prefers-reduced-motion: reduce){
+  .loading-marquee{animation-duration:6s}
+}
+@media (max-width:900px){
+  .loading-stage{
+    width:min(76vw,560px);
+    height:min(30vh,220px);
+  }
+  .loading-logo{width:min(76vw,560px)}
+}
+@media (max-width:520px){
+  #loading-screen{gap:22px}
+  .loading-stage{
+    width:min(84vw,420px);
+    height:min(24vh,160px);
+  }
+  .loading-logo{width:min(84vw,420px)}
+  .loading-text{font-size:11px;letter-spacing:.06em}
+}
+
