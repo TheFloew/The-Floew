@@ -168,6 +168,56 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
   .option-list{grid-template-columns:1fr}
   #settings-menu{padding:20px 18px}
 }
+
+.empty-state{
+  position:fixed;
+  z-index:80;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:10vw;
+  background:#0b0b0b;
+  color:#fff;
+  text-align:center;
+  pointer-events:none;
+}
+.empty-state[hidden]{display:none}
+.empty-state-message{
+  max-width:min(680px,78vw);
+  font-family:"Comfortaa",sans-serif;
+  text-shadow:0 1px 3px rgba(0,0,0,.35);
+}
+.empty-state-title{
+  font-size:clamp(24px,3vw,42px);
+  font-weight:700;
+  letter-spacing:-.025em;
+}
+.empty-state-subtitle{
+  margin-top:12px;
+  font-size:clamp(13px,1.1vw,17px);
+  line-height:1.5;
+  opacity:.72;
+}
+.empty-state-hint{
+  margin-top:22px;
+  font-size:clamp(10px,.8vw,13px);
+  opacity:.42;
+}
+
+
+body.empty-state-active #logo,
+body.empty-state-active #menu-button,
+body.empty-state-active #fullscreen-button{
+  opacity:1;
+  visibility:visible;
+  pointer-events:auto;
+}
+body.empty-state-active #clock{
+  opacity:1;
+  visibility:visible;
+}
+
 #fullscreen-button{
   position:fixed;
   z-index:300;
@@ -418,7 +468,13 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
   </article>
 </main>
 
-<div id="status" hidden></div>
+<div id="status" class="empty-state" hidden>
+  <div class="empty-state-message">
+    <div class="empty-state-title">Haber bulunamadı.</div>
+    <div class="empty-state-subtitle">Seçtiğiniz kaynak ve kategorilerde haber bulunmuyor.</div>
+    <div class="empty-state-hint">☰ menüden kaynak veya kategori seçimini değiştirebilirsiniz.</div>
+  </div>
+</div>
 
 <script>
 const API="https://thefloew.thefloewback.workers.dev/news";
@@ -612,7 +668,9 @@ function applyFilters(){
   renderOptions();
 
   if(!list.length){
+    slides.forEach(slide => slide.className="slide");
     status("Seçtiğiniz kaynak ve kategorilerde haber bulunamadı.");
+    clearTimeout(state.timer);
     return;
   }
 
@@ -637,8 +695,17 @@ function applyFilters(){
 }
 
 
-function status(msg){const e=document.getElementById("status");e.textContent=msg;e.hidden=false}
-function clearStatus(){document.getElementById("status").hidden=true}
+function status(msg){
+  const e=document.getElementById("status");
+  const subtitle=e.querySelector(".empty-state-subtitle");
+  if(subtitle) subtitle.textContent=msg.replace(/^Haber bulunamadı\.\s*/,"");
+  e.hidden=false;
+  document.body.classList.add("empty-state-active");
+}
+function clearStatus(){
+  document.getElementById("status").hidden=true;
+  document.body.classList.remove("empty-state-active");
+}
 
 function sourceKey(source){return String(source||"").trim().toLocaleLowerCase("tr-TR")}
 
