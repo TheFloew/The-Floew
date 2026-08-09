@@ -4,6 +4,8 @@ Versiyon 1.2.0
 - Hava durumu eklendi.
 - Artık Tercihler'den haberlerin süresi ayarlanabiliyor.
 - Siteye ilk girişte çerez politikası uyarısı eklendi.
+- Haberlerin açıklamaları eklendi.
+- Bug düzeltmeleri.
 
 Versiyon 1.1.0
 - Kategoriler algısal hale geldi.
