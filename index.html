@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Flöw | Dümdüz haberler...</title>
+<link rel="icon" href="assets/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+
+<link rel="stylesheet" href="css/styles.css">
+
+</head>
+
+<body>
+<main id="wall">
+  <img id="logo" src="assets/logo.png" alt="Flöw" draggable="false">
+
+  <button id="menu-button" type="button" aria-label="Haber menüsü" title="Haber menüsü">☰</button>
+  <button id="pip-button" type="button" aria-label="Picture-in-Picture" title="Picture-in-Picture">⧉</button>
+  <button id="fullscreen-button" type="button" aria-label="Tam ekran" title="Tam ekran">⤢</button>
+
+  <div id="menu-overlay" aria-hidden="true">
+    <section id="settings-menu" role="dialog" aria-modal="true" aria-label="Haber ayarları">
+      <div class="menu-header">
+        <div>
+          <div class="menu-title">Haberler</div>
+          <div class="menu-subtitle">Kaynak ve kategori seçimi</div>
+        </div>
+        <button id="menu-close" type="button" aria-label="Menüyü kapat">×</button>
+      </div>
+
+      <div class="menu-tabs" role="tablist">
+        <button class="menu-tab active" data-tab="sources" type="button">Kaynaklar</button>
+        <button class="menu-tab" data-tab="categories" type="button">Kategoriler</button>
+        <button class="menu-tab" data-tab="motion" type="button">Geçiş</button>
+      </div>
+
+      <div class="menu-panel active" id="sources-panel" data-panel="sources">
+        <div id="source-options" class="option-list"></div>
+      </div>
+
+      <div class="menu-panel" id="categories-panel" data-panel="categories">
+        <div id="category-options" class="option-list"></div>
+      </div>
+
+      <div class="menu-panel" id="motion-panel" data-panel="motion">
+        <div class="motion-label">Haberlerin kayma yönü</div>
+        <div class="direction-list">
+          <button class="direction-option" data-direction="up" type="button"><span>↑</span> Aşağıdan yukarı</button>
+          <button class="direction-option" data-direction="down" type="button"><span>↓</span> Yukarıdan aşağı</button>
+          <button class="direction-option" data-direction="left" type="button"><span>←</span> Sağdan sola</button>
+          <button class="direction-option" data-direction="right" type="button"><span>→</span> Soldan sağa</button>
+        </div>
+
+        <div class="media-setting-group">
+          <button id="video-setting" class="media-setting" type="button" aria-pressed="true">
+            <span>
+              <strong>Haber videoları</strong>
+              <small>Varsa görsel yerine sessiz oynat</small>
+            </span>
+            <span class="media-setting-state">Açık</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="menu-footer">
+        <span id="filter-count"></span>
+      </div>
+    </section>
+  </div>
+
+  <div id="clock" aria-hidden="true">
+    <div id="clock-time">00:00</div>
+    <div id="clock-date"></div>
+  </div>
+
+  <article class="slide active" id="a">
+    <img class="slide-image" alt="" draggable="false">
+    <video class="slide-video" muted autoplay playsinline preload="metadata" aria-hidden="true"></video>
+    <iframe class="slide-embed" title="Haber videosu" allow="autoplay; encrypted-media; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" aria-hidden="true"></iframe>
+    <div class="shade"></div>
+    <div class="headline">
+      <div class="source-line">
+        <div class="category"></div>
+        <img class="source-logo" alt="" draggable="false">
+        <div class="source"></div>
+      </div>
+      <h1></h1>
+      <div class="time"></div>
+      <a class="source-link" href="#" target="_blank" rel="noopener noreferrer" aria-label="Haber kaynağına git">⎋</a>
+    </div>
+  </article>
+
+  <article class="slide" id="b">
+    <img class="slide-image" alt="" draggable="false">
+    <video class="slide-video" muted autoplay playsinline preload="metadata" aria-hidden="true"></video>
+    <iframe class="slide-embed" title="Haber videosu" allow="autoplay; encrypted-media; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" aria-hidden="true"></iframe>
+    <div class="shade"></div>
+    <div class="headline">
+      <div class="source-line">
+        <div class="category"></div>
+        <img class="source-logo" alt="" draggable="false">
+        <div class="source"></div>
+      </div>
+      <h1></h1>
+      <div class="time"></div>
+      <a class="source-link" href="#" target="_blank" rel="noopener noreferrer" aria-label="Haber kaynağına git">⎋</a>
+    </div>
+  </article>
+</main>
+
+<div id="status" hidden></div>
+
+<script src="js/app.js"></script>
+
+
+
+</body>
+</html>
