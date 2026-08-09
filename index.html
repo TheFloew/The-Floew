@@ -346,6 +346,52 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
   .enter-up,.exit-up,.enter-down,.exit-down{animation-duration:1ms}
 }
 body.pip-mode #pip-button{display:none!important}
+
+/* --- Transparent alert/status overlays --- */
+#status,
+#status.empty-state,
+body.empty-state-active #status,
+#menu-overlay[aria-hidden="false"] {
+  background: transparent !important;
+}
+
+/* Keep the menu itself readable; only the overlay backdrop is transparent. */
+#menu-overlay[aria-hidden="false"] #settings-menu {
+  background: rgba(8,8,8,.94);
+}
+
+/* All status / warning text: bottom-centered. */
+#status {
+  display: flex !important;
+  align-items: flex-end !important;
+  justify-content: center !important;
+  padding: 0 24px 7vh !important;
+  text-align: center !important;
+}
+
+#status .empty-state-message,
+#status > div {
+  width: min(80vw, 900px);
+  margin: 0 auto;
+  text-align: center;
+}
+
+#status .empty-state-title {
+  text-align: center;
+}
+
+#status .empty-state-subtitle,
+#status .empty-state-hint {
+  text-align: center;
+}
+
+/* Generic status text that isn't wrapped in .empty-state-message. */
+#status:not(:has(.empty-state-message)) {
+  align-items: flex-end !important;
+  justify-content: center !important;
+  padding-bottom: 7vh !important;
+}
+
 </style>
 </head>
 
