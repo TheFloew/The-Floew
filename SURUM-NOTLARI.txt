@@ -3,6 +3,7 @@ Versiyon 1.1.0
 - Yeni kategoriler eklendi.
 - Menü arayüzünde değişiklikler.
 - Haberlere "Kaynağa git" butonu ekledi.
+- Kaynak ve kategori tercihleri artık tarayıcı bazlı hatırlanıyor.
 
 Versiyon 1.0.9
 - Artık akış: RSS kaynakları > Cloudflare Worker > category: "#Spor" breaking: true > GitHub Pages > doğrudan bu bilgiyi kullanıyor. Frontend artık haberi tekrar tahmin etmiyor.
