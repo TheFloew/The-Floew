@@ -32,7 +32,7 @@
 *{box-sizing:border-box}
 html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#000;color:#fff}
 body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
-#wall{position:fixed;inset:0;overflow:hidden;background:#000}
+#wall{position:fixed;z-index:0;inset:0;overflow:hidden;background:#000}
 .slide{position:absolute;inset:0;overflow:hidden;background:#000;transform:translateY(100%);will-change:transform}
 .slide.active{transform:translateY(0)}
 .slide-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#111;pointer-events:none;user-select:none;-webkit-user-drag:none}
@@ -376,7 +376,7 @@ body.empty-state-active #clock{
 @keyframes enterDown{from{transform:translateY(-100%)}to{transform:translateY(0)}}
 @keyframes exitDown{from{transform:translateY(0)}to{transform:translateY(100%)}}
 
-#status{position:fixed;z-index:20;inset:0;display:grid;place-items:center;padding:40px;background:#000;color:#fff;text-align:center;font-size:18px;line-height:1.5;pointer-events:none !important}
+#status{position:fixed;z-index:1;inset:0;display:grid;place-items:center;padding:40px;background:#000;color:#fff;text-align:center;font-size:18px;line-height:1.5;pointer-events:none !important}
 #status[hidden]{display:none}
 
 @media(max-width:900px){
@@ -413,6 +413,33 @@ body.empty-state-active #clock {
 body.empty-state-active #status {
   z-index: 10 !important;
   pointer-events: none !important;
+}
+
+
+/* V17: empty/error state is background-only; UI controls stay on top. */
+body.empty-state-active #logo,
+body.empty-state-active #clock,
+body.empty-state-active #menu-button,
+body.empty-state-active #fullscreen-button{
+  position:fixed !important;
+  z-index:10000 !important;
+  opacity:1 !important;
+  visibility:visible !important;
+}
+
+body.empty-state-active #menu-button,
+body.empty-state-active #fullscreen-button{
+  pointer-events:auto !important;
+  display:grid !important;
+}
+
+body.empty-state-active #status{
+  z-index:1 !important;
+  pointer-events:none !important;
+}
+
+body.empty-state-active #menu-overlay{
+  z-index:11000 !important;
 }
 
 </style>
@@ -732,13 +759,43 @@ function applyFilters(){
 function status(msg){
   const e=document.getElementById("status");
   const subtitle=e.querySelector(".empty-state-subtitle");
-  if(subtitle) subtitle.textContent=msg.replace(/^Haber bulunamadı\.\s*/,"");
+  const title=e.querySelector(".empty-state-title");
+
+  if(msg.includes("Cloudflare Worker")){
+    if(title) title.textContent="Haberler alınamadı.";
+    if(subtitle) subtitle.textContent="Cloudflare Worker bağlantısını kontrol edin.";
+  }else{
+    if(title) title.textContent="Haber bulunamadı.";
+    if(subtitle) subtitle.textContent="Seçtiğiniz kaynak ve kategorilerde haber bulunmuyor.";
+  }
+
   e.hidden=false;
   document.body.classList.add("empty-state-active");
+
+  // Do not depend on the normal 2-second cursor timer in an empty/error state.
+  const fs=document.getElementById("fullscreen-button");
+  const menu=document.getElementById("menu-button");
+  fs.classList.add("is-visible");
+  menu.classList.add("is-visible");
+  fs.style.opacity="1";
+  fs.style.visibility="visible";
+  fs.style.pointerEvents="auto";
+  menu.style.opacity="1";
+  menu.style.visibility="visible";
+  menu.style.pointerEvents="auto";
 }
 function clearStatus(){
   document.getElementById("status").hidden=true;
   document.body.classList.remove("empty-state-active");
+
+  const fs=document.getElementById("fullscreen-button");
+  const menu=document.getElementById("menu-button");
+  fs.style.opacity="";
+  fs.style.visibility="";
+  fs.style.pointerEvents="";
+  menu.style.opacity="";
+  menu.style.visibility="";
+  menu.style.pointerEvents="";
 }
 
 function sourceKey(source){return String(source||"").trim().toLocaleLowerCase("tr-TR")}
@@ -967,10 +1024,12 @@ async function transitionTo(nextIndex,fromHistory,dir){
 }
 
 async function load(){
+  let workerFetchCompleted=false;
   try{
     const r=await fetch(API,{cache:"no-store"});
     if(!r.ok)throw new Error("HTTP "+r.status);
     const data=await r.json();
+    workerFetchCompleted=true;
     const incoming=Array.isArray(data)?data.filter(x=>x&&x.title&&x.image):[];
     if(!incoming.length)throw new Error("Görselli haber yok");
 
@@ -1063,7 +1122,13 @@ async function load(){
     clearStatus();
   }catch(err){
     console.error("NEWS WALL:",err);
-    if(!state.stories.length)status("Haberler alınamadı. Cloudflare Worker bağlantısını kontrol edin.");
+    if(!state.stories.length){
+      if(workerFetchCompleted){
+        status("Haberler yüklenirken bir arayüz hatası oluştu.");
+      }else{
+        status("Haberler alınamadı. Cloudflare Worker bağlantısını kontrol edin.");
+      }
+    }
   }
 }
 
