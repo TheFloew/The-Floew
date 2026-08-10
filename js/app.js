@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.10.1";
+window.__floewAppVersion="31.11.4";
 const API="https://thefloew.thefloewback.workers.dev/news";
 const VIDEO_API="https://thefloew.thefloewback.workers.dev/video";
 const META_API="https://thefloew.thefloewback.workers.dev/meta";
@@ -11,6 +11,18 @@ const WEATHER_PREFS_KEY="thefloew.weather.v1";
 const COOKIE_NOTICE_KEY="thefloew.cookieNotice.v1";
 const REFRESH_MS=120000;
 const SWIPE=70;
+
+const ADS_GITHUB_API="https://api.github.com/repos/TheFloew/The-Floew/contents/ads?ref=main";
+const ADS_GITHUB_TREE_API="https://api.github.com/repos/TheFloew/The-Floew/git/trees/main?recursive=1";
+const ADS_RAW_BASE="https://raw.githubusercontent.com/TheFloew/The-Floew/main/";
+const ADS_MANIFEST_FALLBACK="ads/manifest.json";
+const ADS_CACHE_KEY="thefloew.adsCatalog.v3";
+const ADS_TEST_MODE=new URLSearchParams(location.search).get("adtest")==="1";
+const ADS_INTERVAL_NEWS=ADS_TEST_MODE?1:10;
+const AD_IMAGE_MS=15000;
+const ADS_REFRESH_MS=10*60*1000;
+let adsCatalogPromise=null;
+
 
 
 function loadShowDuration(){
@@ -119,6 +131,17 @@ const SOURCE_LOGOS={
 };
 
 const slides=[document.getElementById("a"),document.getElementById("b")];
+
+const adOverlay=document.getElementById("ad-overlay");
+const adImage=document.getElementById("ad-image");
+const adVideo=document.getElementById("ad-video");
+
+let adCatalog=[];
+let adActive=false;
+let newsShownSinceAd=0;
+let lastAdSrc="";
+let adCatalogRefreshTimer=null;
+
 const state={
   stories:[],
   index:0,
@@ -800,6 +823,531 @@ function fill(el,s){
   }
 }
 
+
+function normalizeAdEntry(item){
+  if(!item)return null;
+
+  const rawSrc=
+    typeof item==="string"
+      ? item
+      : String(item.src||"");
+
+  const src=rawSrc.trim();
+  if(!src)return null;
+
+  const name=
+    typeof item==="object"
+      ? String(item.name||"")
+      : "";
+
+  const clean=(name||src)
+    .split("?")[0]
+    .split("#")[0]
+    .toLocaleLowerCase("en-US");
+
+  let type=
+    typeof item==="object" && item.type
+      ? String(item.type).toLocaleLowerCase("en-US")
+      : "";
+
+  if(!type){
+    if(clean.endsWith(".mp4"))type="video";
+    else if(clean.endsWith(".jpg")||clean.endsWith(".jpeg"))type="image";
+  }
+
+  if(type!=="video" && type!=="image")return null;
+
+  try{
+    return {
+      src:new URL(src,document.baseURI).href,
+      type,
+      name:name||clean.split("/").pop()||""
+    };
+  }catch(e){
+    return null;
+  }
+}
+
+function githubEntryToAd(item){
+  if(!item || item.type!=="file")return null;
+
+  const name=String(item.name||"").trim();
+  const lower=name.toLocaleLowerCase("en-US");
+
+  let type="";
+  if(lower.endsWith(".mp4"))type="video";
+  else if(lower.endsWith(".jpg")||lower.endsWith(".jpeg"))type="image";
+  else return null;
+
+  /*
+    download_url doğrudan raw.githubusercontent.com üzerindeki gerçek dosyayı
+    verir. Böylece reklam dosyasının GitHub Pages deploy'unu beklemesine gerek
+    kalmaz; ads/ klasörüne commit edildiği anda katalogdan kullanılabilir.
+  */
+  const src=String(item.download_url||"").trim();
+  if(!src)return null;
+
+  return normalizeAdEntry({
+    src,
+    type,
+    name
+  });
+}
+
+function loadCachedAdsCatalog(){
+  try{
+    const raw=localStorage.getItem(ADS_CACHE_KEY);
+    if(!raw)return [];
+
+    const data=JSON.parse(raw);
+    const list=Array.isArray(data?.ads)?data.ads:[];
+
+    return list
+      .map(normalizeAdEntry)
+      .filter(Boolean);
+  }catch(e){
+    return [];
+  }
+}
+
+function saveCachedAdsCatalog(list){
+  try{
+    localStorage.setItem(
+      ADS_CACHE_KEY,
+      JSON.stringify({
+        savedAt:Date.now(),
+        ads:list.map(item=>({
+          src:item.src,
+          type:item.type,
+          name:item.name||""
+        }))
+      })
+    );
+  }catch(e){}
+}
+
+function adFromPath(path){
+  const clean=String(path||"").trim();
+  const lower=clean.toLocaleLowerCase("en-US");
+
+  if(!lower.startsWith("ads/"))return null;
+
+  let type="";
+  if(lower.endsWith(".mp4"))type="video";
+  else if(lower.endsWith(".jpg")||lower.endsWith(".jpeg"))type="image";
+  else return null;
+
+  const encodedPath=clean
+    .split("/")
+    .map(part=>encodeURIComponent(part))
+    .join("/");
+
+  return normalizeAdEntry({
+    src:`${ADS_RAW_BASE}${encodedPath}`,
+    type,
+    name:clean.split("/").pop()||clean
+  });
+}
+
+async function fetchAdsFromContentsApi(){
+  const response=await fetch(ADS_GITHUB_API,{
+    method:"GET",
+    mode:"cors",
+    credentials:"omit",
+    cache:"no-store",
+    headers:{
+      "Accept":"application/vnd.github+json"
+    }
+  });
+
+  if(!response.ok){
+    throw new Error(`GitHub Contents HTTP ${response.status}`);
+  }
+
+  const data=await response.json();
+  const entries=Array.isArray(data)
+    ? data
+    : Array.isArray(data?.entries)
+      ? data.entries
+      : [];
+
+  return entries
+    .map(githubEntryToAd)
+    .filter(Boolean);
+}
+
+async function fetchAdsFromTreeApi(){
+  const response=await fetch(ADS_GITHUB_TREE_API,{
+    method:"GET",
+    mode:"cors",
+    credentials:"omit",
+    cache:"no-store",
+    headers:{
+      "Accept":"application/vnd.github+json"
+    }
+  });
+
+  if(!response.ok){
+    throw new Error(`GitHub Tree HTTP ${response.status}`);
+  }
+
+  const data=await response.json();
+  const tree=Array.isArray(data?.tree)?data.tree:[];
+
+  return tree
+    .filter(item=>item?.type==="blob")
+    .map(item=>adFromPath(item.path))
+    .filter(Boolean);
+}
+
+async function fetchAdsFromManifest(){
+  const url=
+    `${ADS_MANIFEST_FALLBACK}?t=${Date.now()}`;
+
+  const response=await fetch(url,{
+    method:"GET",
+    credentials:"same-origin",
+    cache:"no-store",
+    headers:{
+      "Accept":"application/json"
+    }
+  });
+
+  if(!response.ok){
+    throw new Error(`Ads manifest HTTP ${response.status}`);
+  }
+
+  const data=await response.json();
+  const list=Array.isArray(data)
+    ? data
+    : Array.isArray(data?.ads)
+      ? data.ads
+      : [];
+
+  return list
+    .map(normalizeAdEntry)
+    .filter(Boolean);
+}
+
+async function actuallyLoadAdsCatalog(){
+  const loaders=[
+    ["GitHub Tree",fetchAdsFromTreeApi],
+    ["GitHub Contents",fetchAdsFromContentsApi],
+    ["manifest",fetchAdsFromManifest]
+  ];
+
+  const errors=[];
+
+  for(const [label,loader] of loaders){
+    try{
+      const list=await loader();
+
+      if(list.length){
+        adCatalog=[...new Map(
+          list.map(item=>[item.src,item])
+        ).values()];
+
+        saveCachedAdsCatalog(adCatalog);
+
+        console.info(
+          `Flöw ads (${label}):`,
+          adCatalog.length,
+          "reklam bulundu:",
+          adCatalog.map(item=>item.name).join(", ")
+        );
+
+        return adCatalog;
+      }
+
+      errors.push(`${label}: 0 reklam`);
+    }catch(err){
+      errors.push(`${label}: ${err?.message||err}`);
+    }
+  }
+
+  /*
+    Canlı kaynakların tümü başarısızsa son başarılı katalog korunur.
+    Böylece geçici GitHub/API sorunları reklamları tamamen devre dışı bırakmaz.
+  */
+  if(!adCatalog.length){
+    adCatalog=loadCachedAdsCatalog();
+  }
+
+  console.warn(
+    "Flöw ads katalog alınamadı:",
+    errors.join(" | "),
+    "cache:",
+    adCatalog.length
+  );
+
+  return adCatalog;
+}
+
+function loadAdsCatalog(){
+  if(adsCatalogPromise)return adsCatalogPromise;
+
+  adsCatalogPromise=actuallyLoadAdsCatalog()
+    .finally(()=>{
+      adsCatalogPromise=null;
+    });
+
+  return adsCatalogPromise;
+}
+
+function startAdsCatalogRefresh(){
+  const cached=loadCachedAdsCatalog();
+
+  if(cached.length){
+    adCatalog=cached;
+  }
+
+  loadAdsCatalog();
+
+  if(adCatalogRefreshTimer){
+    clearInterval(adCatalogRefreshTimer);
+  }
+
+  adCatalogRefreshTimer=setInterval(
+    loadAdsCatalog,
+    ADS_REFRESH_MS
+  );
+}
+
+function chooseRandomAd(){
+  if(!adCatalog.length)return null;
+
+  const candidates=
+    adCatalog.length>1
+      ? adCatalog.filter(item=>item.src!==lastAdSrc)
+      : adCatalog;
+
+  const pool=candidates.length?candidates:adCatalog;
+  const chosen=pool[Math.floor(Math.random()*pool.length)]||null;
+
+  if(chosen)lastAdSrc=chosen.src;
+
+  return chosen;
+}
+
+function resetAdMedia(){
+  if(adImage){
+    adImage.hidden=true;
+    adImage.removeAttribute("src");
+  }
+
+  if(adVideo){
+    try{adVideo.pause()}catch(e){}
+    adVideo.hidden=true;
+    adVideo.removeAttribute("src");
+    adVideo.load();
+  }
+}
+
+function showAdOverlay(){
+  if(adOverlay){
+    adOverlay.hidden=false;
+    adOverlay.setAttribute("aria-hidden","false");
+  }
+}
+
+function hideAdOverlay(){
+  if(adOverlay){
+    adOverlay.hidden=true;
+    adOverlay.setAttribute("aria-hidden","true");
+  }
+
+  resetAdMedia();
+}
+
+function waitForImageAd(src){
+  return new Promise(resolve=>{
+    if(!adImage){
+      resolve();
+      return;
+    }
+
+    let finished=false;
+    let timerId=null;
+
+    const finish=()=>{
+      if(finished)return;
+      finished=true;
+      clearTimeout(timerId);
+      adImage.onload=null;
+      adImage.onerror=null;
+      resolve();
+    };
+
+    adImage.onload=()=>{
+      showAdOverlay();
+      timerId=setTimeout(finish,AD_IMAGE_MS);
+    };
+
+    adImage.onerror=()=>{
+      console.warn("Ad image could not load:",src);
+      finish();
+    };
+
+    adImage.hidden=false;
+    adImage.src=src;
+
+    // Ağdan yanıt hiç gelmezse reklam akışını kilitleme.
+    setTimeout(()=>{
+      if(finished)return;
+
+      if(!adImage.complete){
+        console.warn("Ad image load timeout:",src);
+        finish();
+      }
+    },8000);
+  });
+}
+
+function waitForVideoAd(src){
+  return new Promise(resolve=>{
+    if(!adVideo){
+      resolve();
+      return;
+    }
+
+    let finished=false;
+    let started=false;
+    let safetyTimer=null;
+    let loadTimer=null;
+
+    const cleanup=()=>{
+      clearTimeout(safetyTimer);
+      clearTimeout(loadTimer);
+
+      adVideo.onloadeddata=null;
+      adVideo.oncanplay=null;
+      adVideo.onended=null;
+      adVideo.onerror=null;
+      adVideo.onabort=null;
+    };
+
+    const finish=()=>{
+      if(finished)return;
+      finished=true;
+      cleanup();
+      resolve();
+    };
+
+    const start=async()=>{
+      if(started||finished)return;
+      started=true;
+
+      showAdOverlay();
+
+      try{
+        await adVideo.play();
+      }catch(err){
+        /*
+          Otomatik oynatma için video sessizdir. Buna rağmen tarayıcı
+          oynatmayı reddederse reklam akışını kilitlemeyiz.
+        */
+        console.warn("Ad video play:",err);
+        finish();
+        return;
+      }
+
+      /*
+        Normal durumda video 'ended' olayıyla kapanır.
+        Çok uzun/bozuk bir dosyanın siteyi sonsuza kadar kilitlememesi için
+        sadece güvenlik amaçlı yüksek bir üst sınır bırakılır.
+      */
+      safetyTimer=setTimeout(
+        finish,
+        30*60*1000
+      );
+    };
+
+    adVideo.muted=true;
+    adVideo.defaultMuted=true;
+    adVideo.volume=0;
+    adVideo.autoplay=true;
+    adVideo.playsInline=true;
+    adVideo.loop=false;
+    adVideo.preload="auto";
+    adVideo.hidden=false;
+
+    adVideo.onloadeddata=start;
+    adVideo.oncanplay=start;
+    adVideo.onended=finish;
+    adVideo.onerror=()=>{
+      console.warn("Ad video could not load:",src);
+      finish();
+    };
+    adVideo.onabort=finish;
+
+    adVideo.src=src;
+    adVideo.load();
+
+    loadTimer=setTimeout(()=>{
+      if(!started&&!finished){
+        console.warn("Ad video load timeout:",src);
+        finish();
+      }
+    },12000);
+  });
+}
+
+async function playAdBreak(){
+  if(adActive||!adCatalog.length)return false;
+
+  const ad=chooseRandomAd();
+  if(!ad)return false;
+
+  adActive=true;
+  clearTimeout(state.timer);
+  newsShownSinceAd=0;
+  resetAdMedia();
+
+  try{
+    if(ad.type==="video"){
+      await waitForVideoAd(ad.src);
+    }else{
+      await waitForImageAd(ad.src);
+    }
+  }catch(err){
+    console.warn("Ad playback:",err);
+  }finally{
+    hideAdOverlay();
+    adActive=false;
+  }
+
+  return true;
+}
+
+function adBreakDue(){
+  return (
+    !adActive &&
+    newsShownSinceAd>=ADS_INTERVAL_NEWS
+  );
+}
+
+async function tryPlayDueAd(){
+  if(!adBreakDue())return false;
+
+  /*
+    Önceki sürümde katalog ilk istekte boş kalırsa reklam arası sessizce
+    atlanıyordu ve bir sonraki katalog yenilemesine kadar bekliyordu.
+    Artık 10. haberden sonra katalog boşsa o anda yeniden yüklemeyi deniyoruz.
+  */
+  if(!adCatalog.length){
+    await loadAdsCatalog();
+  }
+
+  if(!adCatalog.length){
+    console.warn(
+      "Flöw ads: reklam sırası geldi ancak katalog hâlâ boş."
+    );
+    return false;
+  }
+
+  return playAdBreak();
+}
+
 function timer(){
   clearTimeout(state.timer);
   state.timer=setTimeout(
@@ -872,8 +1420,21 @@ function preloadImage(url){
   });
 }
 
-async function move(dir){
-  if(state.busy||state.stories.length<2)return;
+async function move(dir,options={}){
+  if(adActive||state.busy||state.stories.length<2)return;
+
+  if(
+    dir>0 &&
+    !options.skipAd &&
+    adBreakDue()
+  ){
+    const played=await tryPlayDueAd();
+
+    if(played){
+      await move(1,{skipAd:true});
+      return;
+    }
+  }
 
   /*
     GERİ:
@@ -992,6 +1553,10 @@ async function transitionTo(nextIndex,fromHistory,dir){
 
       state.index=
         nextIndex;
+
+      if(dir>0){
+        newsShownSinceAd++;
+      }
 
       state.busy=false;
 
@@ -1169,6 +1734,7 @@ async function load(){
       state.historyPos=0;
       fill(slides[0],list[0]);
       slides[0].className="slide active";
+      newsShownSinceAd=1;
       clearStatus();
       finishInitialLoading();
       timer();
@@ -2277,7 +2843,40 @@ setInterval(updateClock,1000);
 if(new URLSearchParams(location.search).get("pip")==="1"){
   document.body.classList.add("pip-mode");
 }
+window.FloewAds={
+  refresh:()=>loadAdsCatalog(),
+  status:()=>({
+    version:window.__floewAppVersion,
+    testMode:ADS_TEST_MODE,
+    interval:ADS_INTERVAL_NEWS,
+    newsShownSinceAd,
+    adActive,
+    catalog:adCatalog.map(item=>({
+      name:item.name,
+      type:item.type,
+      src:item.src
+    }))
+  }),
+  test:async()=>{
+    await loadAdsCatalog();
+    return playAdBreak();
+  }
+};
+
+if(ADS_TEST_MODE){
+  console.info(
+    "Flöw reklam test modu açık: ?adtest=1"
+  );
+
+  /*
+    Test modunda katalog hazır olduğunda ilk ileri harekette reklamı kesin
+    olarak denemek için sayacı eşik değerine getiriyoruz.
+  */
+  newsShownSinceAd=ADS_INTERVAL_NEWS;
+}
+
 setFullscreenIcon();
+startAdsCatalogRefresh();
 load();
 setInterval(load,REFRESH_MS);
 
