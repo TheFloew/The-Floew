@@ -78,7 +78,7 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 
 #menu-overlay{
   position:fixed;
-  z-index:500;
+  z-index:1400;
   inset:0;
   display:flex;
   align-items:center;
@@ -1050,20 +1050,44 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 .ad-badge{
   position:absolute;
   z-index:2;
-  top:max(18px,env(safe-area-inset-top));
-  right:max(20px,env(safe-area-inset-right));
-  left:auto;
+  top:max(2.2vh,env(safe-area-inset-top));
+  left:max(2.2vw,env(safe-area-inset-left));
+  right:auto;
   padding:0;
   border:0;
   background:transparent;
-  color:rgba(255,255,255,.72);
+  color:rgba(255,255,255,.78);
   font-family:"Comfortaa",sans-serif;
-  font-size:clamp(10px,.72vw,13px);
+  font-size:clamp(11px,.78vw,14px);
   line-height:1;
   font-weight:700;
-  letter-spacing:.06em;
+  letter-spacing:.04em;
   text-transform:none;
   text-shadow:0 1px 3px rgba(0,0,0,.7),0 2px 8px rgba(0,0,0,.45);
   pointer-events:none;
+}
+
+
+
+/*
+  Reklam sırasında logo ve saat geri çekilir.
+  Menü, PiP ve tam ekran düğmeleri reklam katmanının üstünde kalır,
+  sürekli görünür ve tıklanabilir olur.
+*/
+body.ad-mode #logo,
+body.ad-mode #clock{
+  opacity:0;
+  visibility:hidden;
+  transition:opacity .22s ease,visibility 0s linear .22s;
+}
+
+body.ad-mode #menu-button,
+body.ad-mode #pip-button,
+body.ad-mode #fullscreen-button{
+  z-index:1300;
+  opacity:1 !important;
+  visibility:visible !important;
+  pointer-events:auto !important;
+  transition:opacity .22s ease,visibility 0s linear 0s;
 }
 
