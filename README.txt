@@ -1,3 +1,8 @@
+Versiyon 1.2.5
+- Reklamlara merhaba diyin!
+- Reklamlarla ilgili minör düzeltmeler.
+- Backend izin değişiklikleri.
+
 Versiyon 1.2.0
 - Videolu haber özelliği kullanıma sunuldu. Eğer bir haberin sayfasında gömülü video ya da video bağlantısı varsa Flöw bunu o haberin süresi boyunca otomatik oynatıyor. Bu özellik Tercihler menüsünden kapatılabilir.
 - Uzun açılışlar için loading ekranı tasarlandı.
