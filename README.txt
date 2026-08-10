@@ -1,3 +1,7 @@
+Versiyon 1.2.6
+- Video içerikli haberlerle ilgili düzeltmeler.
+- Responsive tasarıma uygun yatay ve dikey reklam eşleşmesi.
+
 Versiyon 1.2.5
 - Reklamlara merhaba diyin!
 - Reklamlarla ilgili minör düzeltmeler.
