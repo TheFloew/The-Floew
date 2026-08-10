@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.12.7";
+window.__floewAppVersion="31.12.8";
 const API="https://thefloew.thefloewback.workers.dev/news";
 const VIDEO_API="https://thefloew.thefloewback.workers.dev/video";
 const META_API="https://thefloew.thefloewback.workers.dev/meta";
@@ -13,12 +13,15 @@ const REFRESH_MS=120000;
 const SWIPE=70;
 
 const ADS_API="https://thefloew.thefloewback.workers.dev/ads";
-const ADS_CACHE_KEY="thefloew.adsCatalog.v4";
+const ADS_CACHE_KEY="thefloew.adsCatalog.v5";
 const ADS_TEST_MODE=new URLSearchParams(location.search).get("adtest")==="1";
 const ADS_INTERVAL_NEWS=10;
 const AD_IMAGE_MS=15000;
 const ADS_REFRESH_MS=5*60*1000;
 let adsCatalogPromise=null;
+let adsCatalogPromiseLayout="";
+let adCatalogLayout="";
+let adLayoutRefreshTimer=null;
 let adTestRan=false;
 
 function loadShowDuration(){
@@ -135,7 +138,7 @@ const adVideo=document.getElementById("ad-video");
 let adCatalog=[];
 let adActive=false;
 let newsShownSinceAd=0;
-let lastAdSrc="";
+let lastAdName="";
 let adCatalogRefreshTimer=null;
 let adPlaybackFinish=null;
 let adHasEntered=false;
@@ -902,6 +905,38 @@ function fill(el,s){
 }
 
 
+
+function isMobileAdDevice(){
+  try{
+    if(navigator.userAgentData?.mobile===true)return true;
+  }catch(e){}
+
+  return /Android|iPhone|iPod|IEMobile|Opera Mini|Mobile/i.test(
+    navigator.userAgent||""
+  );
+}
+
+function getAdsLayout(){
+  const portrait=
+    window.innerHeight>window.innerWidth ||
+    (
+      window.matchMedia &&
+      window.matchMedia("(orientation: portrait)").matches
+    );
+
+  /*
+    Telefonda yatay tutulsa bile mobil kreatifi kullan.
+    Masaüstünde ise pencere dikey oranlara çekildiğinde ver'e geç.
+  */
+  return portrait || isMobileAdDevice()
+    ? "ver"
+    : "hor";
+}
+
+function adsCacheKey(layout=getAdsLayout()){
+  return `${ADS_CACHE_KEY}.${layout}`;
+}
+
 function normalizeAdEntry(item){
   if(!item)return null;
 
@@ -916,6 +951,12 @@ function normalizeAdEntry(item){
   const name=
     typeof item==="object"
       ? String(item.name||"")
+      : "";
+
+  const layout=
+    typeof item==="object" &&
+    (item.layout==="ver" || item.layout==="hor")
+      ? item.layout
       : "";
 
   const clean=(name||src)
@@ -939,16 +980,20 @@ function normalizeAdEntry(item){
     return {
       src:new URL(src,document.baseURI).href,
       type,
-      name:name||clean.split("/").pop()||""
+      name:name||clean.split("/").pop()||"",
+      layout
     };
   }catch(e){
     return null;
   }
 }
 
-function loadCachedAdsCatalog(){
+function loadCachedAdsCatalog(layout=getAdsLayout()){
   try{
-    const raw=localStorage.getItem(ADS_CACHE_KEY);
+    const raw=localStorage.getItem(
+      adsCacheKey(layout)
+    );
+
     if(!raw)return [];
 
     const data=JSON.parse(raw);
@@ -962,23 +1007,25 @@ function loadCachedAdsCatalog(){
   }
 }
 
-function saveCachedAdsCatalog(list){
+function saveCachedAdsCatalog(list,layout=getAdsLayout()){
   try{
     localStorage.setItem(
-      ADS_CACHE_KEY,
+      adsCacheKey(layout),
       JSON.stringify({
         savedAt:Date.now(),
+        layout,
         ads:list.map(item=>({
           src:item.src,
           type:item.type,
-          name:item.name||""
+          name:item.name||"",
+          layout:item.layout||layout
         }))
       })
     );
   }catch(e){}
 }
 
-async function actuallyLoadAdsCatalog(){
+async function actuallyLoadAdsCatalog(layout=getAdsLayout()){
   const controller=new AbortController();
   const timeout=setTimeout(
     ()=>controller.abort(),
@@ -988,7 +1035,7 @@ async function actuallyLoadAdsCatalog(){
   try{
     const separator=ADS_API.includes("?")?"&":"?";
     const response=await fetch(
-      `${ADS_API}${separator}t=${Date.now()}`,
+      `${ADS_API}${separator}layout=${encodeURIComponent(layout)}&t=${Date.now()}`,
       {
         method:"GET",
         mode:"cors",
@@ -1013,26 +1060,32 @@ async function actuallyLoadAdsCatalog(){
         : [];
 
     const normalized=list
-      .map(normalizeAdEntry)
+      .map(item=>normalizeAdEntry({
+        ...(typeof item==="object" ? item : {url:item}),
+        layout:
+          typeof item==="object" && item?.layout
+            ? item.layout
+            : layout
+      }))
       .filter(Boolean);
 
-    if(normalized.length){
-      adCatalog=[...new Map(
-        normalized.map(item=>[item.src,item])
-      ).values()];
-
-      saveCachedAdsCatalog(adCatalog);
-    }else{
-      /*
-        Worker gerçekten boş katalog döndürdüyse eski reklamı yanlışlıkla
-        göstermeyelim. Sadece ağ hatalarında cache fallback kullanılır.
-      */
-      adCatalog=[];
-      saveCachedAdsCatalog([]);
+    /*
+      Pencere katalog isteği sürerken başka orana döndüyse eski isteğin
+      sonucu yeni yönü ezmesin.
+    */
+    if(layout!==getAdsLayout()){
+      return adCatalog;
     }
 
+    adCatalog=[...new Map(
+      normalized.map(item=>[item.name||item.src,item])
+    ).values()];
+
+    adCatalogLayout=layout;
+    saveCachedAdsCatalog(adCatalog,layout);
+
     console.info(
-      "Flöw ads (Worker):",
+      `Flöw ads (${layout}):`,
       adCatalog.length,
       "reklam bulundu:",
       adCatalog.map(item=>item.name).join(", ")
@@ -1040,10 +1093,15 @@ async function actuallyLoadAdsCatalog(){
 
     return adCatalog;
   }catch(err){
-    console.warn("Flöw ads Worker:",err);
+    console.warn(`Flöw ads Worker (${layout}):`,err);
 
-    if(!adCatalog.length){
-      adCatalog=loadCachedAdsCatalog();
+    if(layout===getAdsLayout()){
+      const cached=loadCachedAdsCatalog(layout);
+
+      if(cached.length || !adCatalog.length){
+        adCatalog=cached;
+        adCatalogLayout=layout;
+      }
     }
 
     return adCatalog;
@@ -1052,34 +1110,76 @@ async function actuallyLoadAdsCatalog(){
   }
 }
 
-function loadAdsCatalog(){
-  if(adsCatalogPromise)return adsCatalogPromise;
+function loadAdsCatalog(layout=getAdsLayout()){
+  if(adsCatalogPromise){
+    if(adsCatalogPromiseLayout===layout){
+      return adsCatalogPromise;
+    }
 
-  adsCatalogPromise=actuallyLoadAdsCatalog()
+    /*
+      Bir önceki yönün isteği bitince yeni yönü hemen çek.
+    */
+    return adsCatalogPromise.finally(
+      ()=>loadAdsCatalog(layout)
+    );
+  }
+
+  adsCatalogPromiseLayout=layout;
+
+  adsCatalogPromise=actuallyLoadAdsCatalog(layout)
     .finally(()=>{
       adsCatalogPromise=null;
+      adsCatalogPromiseLayout="";
     });
 
   return adsCatalogPromise;
 }
 
 function startAdsCatalogRefresh(){
-  const cached=loadCachedAdsCatalog();
+  const layout=getAdsLayout();
+  const cached=loadCachedAdsCatalog(layout);
+
+  adCatalogLayout=layout;
 
   if(cached.length){
     adCatalog=cached;
   }
 
-  loadAdsCatalog();
+  loadAdsCatalog(layout);
 
   if(adCatalogRefreshTimer){
     clearInterval(adCatalogRefreshTimer);
   }
 
   adCatalogRefreshTimer=setInterval(
-    loadAdsCatalog,
+    ()=>loadAdsCatalog(getAdsLayout()),
     ADS_REFRESH_MS
   );
+}
+
+function refreshAdsLayoutIfNeeded(){
+  const layout=getAdsLayout();
+
+  if(layout===adCatalogLayout)return;
+
+  clearTimeout(adLayoutRefreshTimer);
+
+  adLayoutRefreshTimer=setTimeout(()=>{
+    const current=getAdsLayout();
+
+    if(current===adCatalogLayout)return;
+
+    const cached=loadCachedAdsCatalog(current);
+
+    /*
+      Yeni oranın cache'i varsa anında kullan; ardından Worker'dan tazele.
+      Cache yoksa eski oranın reklamını yeni bir reklam arası için kullanmayız.
+    */
+    adCatalog=cached;
+    adCatalogLayout=current;
+
+    loadAdsCatalog(current);
+  },180);
 }
 
 function chooseRandomAd(){
@@ -1087,13 +1187,17 @@ function chooseRandomAd(){
 
   const candidates=
     adCatalog.length>1
-      ? adCatalog.filter(item=>item.src!==lastAdSrc)
+      ? adCatalog.filter(
+          item=>(item.name||item.src)!==lastAdName
+        )
       : adCatalog;
 
   const pool=candidates.length?candidates:adCatalog;
   const chosen=pool[Math.floor(Math.random()*pool.length)]||null;
 
-  if(chosen)lastAdSrc=chosen.src;
+  if(chosen){
+    lastAdName=chosen.name||chosen.src;
+  }
 
   return chosen;
 }
@@ -1636,8 +1740,18 @@ async function enterSkippedAdHistory(entryDir){
     entryDir:entryDir<0?-1:1
   };
 
+  await loadAdsCatalog(getAdsLayout());
+
+  const layoutAd=
+    adCatalog.find(
+      item=>
+        item.name &&
+        item.name===context.ad?.name
+    ) ||
+    context.ad;
+
   const result=await playAdBreak({
-    ad:context.ad,
+    ad:layoutAd,
     entryDir:context.entryDir,
     historyContext:context
   });
@@ -3453,6 +3567,18 @@ window.addEventListener("pointerup",e=>{
 
 window.addEventListener("dragstart",e=>e.preventDefault());
 
+window.addEventListener(
+  "resize",
+  refreshAdsLayoutIfNeeded,
+  {passive:true}
+);
+
+window.addEventListener(
+  "orientationchange",
+  refreshAdsLayoutIfNeeded,
+  {passive:true}
+);
+
 updateClock();
 setInterval(updateClock,1000);
 
@@ -3467,6 +3593,8 @@ window.FloewAds={
     interval:ADS_INTERVAL_NEWS,
     newsShownSinceAd,
     adActive,
+    layout:getAdsLayout(),
+    catalogLayout:adCatalogLayout,
     catalog:adCatalog.map(item=>({
       name:item.name,
       type:item.type,
