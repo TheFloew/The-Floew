@@ -1097,3 +1097,48 @@ body.ad-mode #fullscreen-button{
   transition:opacity .22s ease,visibility 0s linear 0s;
 }
 
+
+
+/* --- V31.12.7: clean external video embeds --- */
+/*
+  Harici iframe oynatıcıları kullanıcı girdisi alamaz. YouTube/Vimeo URL
+  parametreleri mümkün olan kontrolleri kapatır. Dailymotion 2026'dan beri
+  playback-control görünümünü yalnızca Player configuration üzerinden
+  yönettiği için, yayıncıya ait player chrome'unu görünümün dışına taşımak
+  adına hafif bir overscan uygulanır.
+*/
+.slide-embed{
+  pointer-events:none !important;
+  user-select:none;
+  -webkit-user-select:none;
+}
+
+/* YouTube başlık/logo/alt bar kalıntılarını kenarların dışına al. */
+.slide-embed[data-provider="youtube"]{
+  width:108%;
+  height:108%;
+  left:-4%;
+  top:-4%;
+  right:auto;
+  bottom:auto;
+}
+
+/* Vimeo background modu zaten arayüzü büyük ölçüde kaldırır. */
+.slide-embed[data-provider="vimeo"]{
+  width:104%;
+  height:104%;
+  left:-2%;
+  top:-2%;
+  right:auto;
+  bottom:auto;
+}
+
+/* Dailymotion yeni Player UI'sini Flöw kadrajının dışına kırp. */
+.slide-embed[data-provider="dailymotion"]{
+  width:112%;
+  height:112%;
+  left:-6%;
+  top:-6%;
+  right:auto;
+  bottom:auto;
+}
