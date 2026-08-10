@@ -1031,6 +1031,7 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
   user-select:none;
   -webkit-user-select:none;
   touch-action:none;
+  will-change:transform;
 }
 #ad-overlay[hidden]{
   display:none;
@@ -1049,14 +1050,20 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 .ad-badge{
   position:absolute;
   z-index:2;
-  top:max(16px,env(safe-area-inset-top));
-  left:max(18px,env(safe-area-inset-left));
-  padding:6px 8px 5px;
-  border:1px solid rgba(255,255,255,.20);
-  background:rgba(0,0,0,.52);
+  top:max(18px,env(safe-area-inset-top));
+  right:max(20px,env(safe-area-inset-right));
+  left:auto;
+  padding:0;
+  border:0;
+  background:transparent;
   color:rgba(255,255,255,.72);
-  font:700 8px/1 "Comfortaa",sans-serif;
-  letter-spacing:.14em;
+  font-family:"Comfortaa",sans-serif;
+  font-size:clamp(10px,.72vw,13px);
+  line-height:1;
+  font-weight:700;
+  letter-spacing:.06em;
+  text-transform:none;
+  text-shadow:0 1px 3px rgba(0,0,0,.7),0 2px 8px rgba(0,0,0,.45);
   pointer-events:none;
 }
 
