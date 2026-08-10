@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.12.2";
+window.__floewAppVersion="31.12.3";
 const API="https://thefloew.thefloewback.workers.dev/news";
 const VIDEO_API="https://thefloew.thefloewback.workers.dev/video";
 const META_API="https://thefloew.thefloewback.workers.dev/meta";
@@ -137,6 +137,9 @@ let adActive=false;
 let newsShownSinceAd=0;
 let lastAdSrc="";
 let adCatalogRefreshTimer=null;
+let adPlaybackFinish=null;
+let adHasEntered=false;
+let adSkipRequestedDirection=0;
 
 const state={
   stories:[],
@@ -1016,6 +1019,89 @@ function chooseRandomAd(){
   return chosen;
 }
 
+const FLOW_TRANSITION_CLASSES=[
+  "enter-up","exit-up","enter-down","exit-down",
+  "enter-left","exit-left","enter-right","exit-right"
+];
+
+function transitionPair(dir=1){
+  const forward=dir>0;
+  const directionMap={
+    up:    forward ? ["enter-up","exit-up"]       : ["enter-down","exit-down"],
+    down:  forward ? ["enter-down","exit-down"]   : ["enter-up","exit-up"],
+    left:  forward ? ["enter-left","exit-left"]   : ["enter-right","exit-right"],
+    right: forward ? ["enter-right","exit-right"] : ["enter-left","exit-left"]
+  };
+
+  return directionMap[transitionDirection]||directionMap.up;
+}
+
+function clearFlowTransitionClasses(el){
+  if(!el)return;
+  el.classList.remove(...FLOW_TRANSITION_CLASSES);
+}
+
+function waitForFlowAnimation(el,timeoutMs=900){
+  return new Promise(resolve=>{
+    if(!el){resolve();return;}
+
+    let done=false;
+    let timerId=null;
+
+    const finish=()=>{
+      if(done)return;
+      done=true;
+      clearTimeout(timerId);
+      el.removeEventListener("animationend",onEnd);
+      resolve();
+    };
+
+    const onEnd=e=>{
+      if(e.target===el)finish();
+    };
+
+    el.addEventListener("animationend",onEnd);
+    timerId=setTimeout(finish,timeoutMs);
+  });
+}
+
+async function transitionAdIn(){
+  if(!adOverlay)return false;
+  if(adHasEntered)return true;
+
+  const currentSlide=slides[state.active];
+  const [enterClass,exitClass]=transitionPair(1);
+
+  showAdOverlay();
+  clearFlowTransitionClasses(adOverlay);
+  currentSlide.className="slide";
+
+  void adOverlay.offsetWidth;
+
+  adOverlay.classList.add(enterClass);
+  currentSlide.classList.add(exitClass);
+
+  await waitForFlowAnimation(adOverlay);
+
+  clearFlowTransitionClasses(adOverlay);
+  stopSlideMedia(currentSlide);
+  adHasEntered=true;
+
+  return true;
+}
+
+function requestAdSkip(dir=1){
+  if(!adActive)return false;
+
+  adSkipRequestedDirection=dir<0?-1:1;
+
+  if(adPlaybackFinish && adHasEntered){
+    adPlaybackFinish(adSkipRequestedDirection);
+  }
+
+  return true;
+}
+
 function resetAdMedia(){
   if(adImage){
     adImage.hidden=true;
@@ -1049,7 +1135,7 @@ function hideAdOverlay(){
 function waitForImageAd(src){
   return new Promise(resolve=>{
     if(!adImage){
-      resolve(false);
+      resolve({shown:false,direction:1});
       return;
     }
 
@@ -1057,32 +1143,57 @@ function waitForImageAd(src){
     let timerId=null;
     let loadTimer=null;
 
-    const finish=(shown)=>{
+    const finish=(shown,direction=1)=>{
       if(finished)return;
       finished=true;
       clearTimeout(timerId);
       clearTimeout(loadTimer);
       adImage.onload=null;
       adImage.onerror=null;
-      resolve(Boolean(shown));
+
+      if(adPlaybackFinish===skip){
+        adPlaybackFinish=null;
+      }
+
+      resolve({
+        shown:Boolean(shown),
+        direction:direction<0?-1:1
+      });
     };
 
-    adImage.onload=()=>{
-      showAdOverlay();
+    const skip=direction=>{
+      finish(adHasEntered,direction);
+    };
+
+    adPlaybackFinish=skip;
+
+    adImage.onload=async()=>{
+      const entered=await transitionAdIn();
+
+      if(!entered){
+        finish(false,1);
+        return;
+      }
+
+      if(adSkipRequestedDirection){
+        finish(true,adSkipRequestedDirection);
+        return;
+      }
 
       /*
         Görsel reklam kullanıcı haber süresinden bağımsızdır:
-        tam 15 saniye görünür.
+        15 saniye kalır; fakat kullanıcı haberlerdeki gibi kaydırarak,
+        tekerlek/ok tuşuyla veya tıklayarak reklamı geçebilir.
       */
       timerId=setTimeout(
-        ()=>finish(true),
+        ()=>finish(true,1),
         AD_IMAGE_MS
       );
     };
 
     adImage.onerror=()=>{
       console.warn("Ad image could not load:",src);
-      finish(false);
+      finish(false,1);
     };
 
     adImage.hidden=false;
@@ -1091,7 +1202,7 @@ function waitForImageAd(src){
     loadTimer=setTimeout(()=>{
       if(!finished && !adImage.complete){
         console.warn("Ad image load timeout:",src);
-        finish(false);
+        finish(false,1);
       }
     },10000);
   });
@@ -1100,7 +1211,7 @@ function waitForImageAd(src){
 function waitForVideoAd(src){
   return new Promise(resolve=>{
     if(!adVideo){
-      resolve(false);
+      resolve({shown:false,direction:1});
       return;
     }
 
@@ -1120,32 +1231,60 @@ function waitForVideoAd(src){
       adVideo.onabort=null;
     };
 
-    const finish=(shown)=>{
+    const finish=(shown,direction=1)=>{
       if(finished)return;
       finished=true;
       cleanup();
-      resolve(Boolean(shown));
+
+      if(adPlaybackFinish===skip){
+        adPlaybackFinish=null;
+      }
+
+      resolve({
+        shown:Boolean(shown),
+        direction:direction<0?-1:1
+      });
     };
+
+    const skip=direction=>{
+      finish(adHasEntered,direction);
+    };
+
+    adPlaybackFinish=skip;
 
     const start=async()=>{
       if(started||finished)return;
       started=true;
 
+      const entered=await transitionAdIn();
+
+      if(!entered){
+        finish(false,1);
+        return;
+      }
+
+      if(adSkipRequestedDirection){
+        finish(true,adSkipRequestedDirection);
+        return;
+      }
+
       try{
         await adVideo.play();
-        showAdOverlay();
+        if(finished)return;
       }catch(err){
         console.warn("Ad video play:",err);
-        finish(false);
+        // Reklam ekrana kaydıysa boş ekranda bırakma; sonraki habere geç.
+        finish(true,1);
         return;
       }
 
       /*
-        Normal durumda video sonuna kadar oynar. Bu yalnızca bozuk/sonsuz
-        medya yüzünden sitenin kilitlenmesini engelleyen güvenlik sınırıdır.
+        Video normalde sonuna kadar oynar, ancak reklam zorunlu değildir:
+        kullanıcı istediği anda aynı gezinme hareketleriyle geçebilir.
+        Bu süre yalnızca bozuk/sonsuz medya için güvenlik sınırıdır.
       */
       safetyTimer=setTimeout(
-        ()=>finish(false),
+        ()=>finish(true,1),
         30*60*1000
       );
     };
@@ -1161,12 +1300,12 @@ function waitForVideoAd(src){
 
     adVideo.onloadeddata=start;
     adVideo.oncanplay=start;
-    adVideo.onended=()=>finish(true);
+    adVideo.onended=()=>finish(true,1);
     adVideo.onerror=()=>{
       console.warn("Ad video could not load:",src);
-      finish(false);
+      finish(adHasEntered,1);
     };
-    adVideo.onabort=()=>finish(false);
+    adVideo.onabort=()=>finish(adHasEntered,1);
 
     adVideo.src=src;
     adVideo.load();
@@ -1174,7 +1313,7 @@ function waitForVideoAd(src){
     loadTimer=setTimeout(()=>{
       if(!started&&!finished){
         console.warn("Ad video load timeout:",src);
-        finish(false);
+        finish(false,1);
       }
     },15000);
   });
@@ -1187,33 +1326,45 @@ async function playAdBreak(){
   if(!ad)return false;
 
   adActive=true;
+  adHasEntered=false;
+  adSkipRequestedDirection=0;
+  adPlaybackFinish=null;
   clearTimeout(state.timer);
   resetAdMedia();
 
-  let shown=false;
+  let result={shown:false,direction:1};
 
   try{
-    shown=
+    result=
       ad.type==="video"
         ? await waitForVideoAd(ad.src)
         : await waitForImageAd(ad.src);
   }catch(err){
     console.warn("Ad playback:",err);
-    shown=false;
-  }finally{
+    result={shown:false,direction:1};
+  }
+
+  if(!result?.shown){
     hideAdOverlay();
     adActive=false;
+    adHasEntered=false;
+    adSkipRequestedDirection=0;
+    adPlaybackFinish=null;
+    slides[state.active].className="slide active";
+    return false;
   }
 
   /*
-    Sayaç yalnızca reklam gerçekten gösterildiyse sıfırlanır.
-    Dosya yüklenemezse bir sonraki ileri harekette tekrar denenir.
+    Reklam gerçekten ekrana geldiyse 10-haber sayacı sıfırlanır.
+    Reklam bittikten ya da kullanıcı geçtikten sonra overlay, bir sonraki
+    kayma geçişinin çıkış katmanı olarak ekranda tutulur.
   */
-  if(shown){
-    newsShownSinceAd=0;
-  }
+  newsShownSinceAd=0;
 
-  return shown;
+  return {
+    shown:true,
+    direction:result.direction<0?-1:1
+  };
 }
 
 function adBreakDue(){
@@ -1318,17 +1469,34 @@ function preloadImage(url){
 }
 
 async function move(dir,options={}){
-  if(adActive||state.busy||state.stories.length<2)return;
+  /*
+    Reklam ekrandayken normal gezinme kilitlenmez. Aynı hareketler reklamı
+    atlama isteğine dönüşür. Geri hareket reklamdan mevcut habere döner;
+    ileri hareket reklamı geçip sonraki habere gider.
+  */
+  if(adActive && !options.fromAd){
+    requestAdSkip(dir);
+    return;
+  }
+
+  if(state.busy||state.stories.length<2)return;
 
   if(
     dir>0 &&
     !options.skipAd &&
     adBreakDue()
   ){
-    const played=await tryPlayDueAd();
+    const adResult=await tryPlayDueAd();
 
-    if(played){
-      await move(1,{skipAd:true});
+    if(adResult?.shown){
+      if(adResult.direction<0){
+        await transitionAdBackToCurrent(-1);
+      }else{
+        await move(1,{
+          skipAd:true,
+          fromAd:true
+        });
+      }
       return;
     }
   }
@@ -1359,7 +1527,11 @@ async function move(dir,options={}){
     const target=
       state.history[state.historyPos+1];
 
-    await transitionTo(target,true,dir);
+    if(options.fromAd){
+      await transitionFromAdTo(target,true,dir);
+    }else{
+      await transitionTo(target,true,dir);
+    }
 
     state.historyPos++;
 
@@ -1370,10 +1542,104 @@ async function move(dir,options={}){
 
   if(next<0)return;
 
-  await transitionTo(next,false,dir);
+  if(options.fromAd){
+    await transitionFromAdTo(next,false,dir);
+  }else{
+    await transitionTo(next,false,dir);
+  }
 
   state.history.push(next);
   state.historyPos=state.history.length-1;
+}
+
+async function transitionFromAdTo(nextIndex,fromHistory,dir=1){
+  if(state.busy)return;
+
+  state.busy=true;
+  clearTimeout(state.timer);
+
+  const previousSlide=slides[state.active];
+  const nextSlide=slides[1-state.active];
+  const story=state.stories[nextIndex];
+
+  await preloadImage(story.image);
+  fill(nextSlide,story);
+
+  const nextImage=nextSlide.querySelector(".slide-image");
+  if(nextImage?.decode){
+    try{await nextImage.decode();}catch(e){}
+  }
+
+  nextSlide.className="slide";
+  clearFlowTransitionClasses(adOverlay);
+
+  void nextSlide.offsetWidth;
+
+  const [enterClass,exitClass]=transitionPair(dir);
+
+  startPiPTransition(
+    state.stories[state.index],
+    story,
+    dir
+  );
+
+  nextSlide.classList.add(enterClass);
+  adOverlay.classList.add(exitClass);
+
+  await waitForFlowAnimation(nextSlide);
+
+  nextSlide.className="slide active";
+  previousSlide.className="slide";
+  stopSlideMedia(previousSlide);
+
+  state.active=1-state.active;
+  state.index=nextIndex;
+
+  if(dir>0){
+    newsShownSinceAd++;
+  }
+
+  clearFlowTransitionClasses(adOverlay);
+  hideAdOverlay();
+  adActive=false;
+  adHasEntered=false;
+  adSkipRequestedDirection=0;
+  adPlaybackFinish=null;
+  state.busy=false;
+
+  timer();
+}
+
+async function transitionAdBackToCurrent(dir=-1){
+  if(state.busy)return;
+
+  state.busy=true;
+  clearTimeout(state.timer);
+
+  const currentSlide=slides[state.active];
+  const [enterClass,exitClass]=transitionPair(dir);
+
+  clearFlowTransitionClasses(adOverlay);
+  currentSlide.className="slide";
+
+  void currentSlide.offsetWidth;
+
+  currentSlide.classList.add(enterClass);
+  adOverlay.classList.add(exitClass);
+
+  await waitForFlowAnimation(currentSlide);
+
+  currentSlide.className="slide active";
+  clearFlowTransitionClasses(adOverlay);
+  hideAdOverlay();
+
+  adActive=false;
+  adHasEntered=false;
+  adSkipRequestedDirection=0;
+  adPlaybackFinish=null;
+  state.busy=false;
+
+  timer();
 }
 
 async function transitionTo(nextIndex,fromHistory,dir){
@@ -1420,14 +1686,7 @@ async function transitionTo(nextIndex,fromHistory,dir){
     dir < 0 = önceki haber:
       yeni haber yukarıdan aşağı gelir.
   */
-  const forward=dir>0;
-  const directionMap={
-    up:    forward ? ["enter-up","exit-up"]       : ["enter-down","exit-down"],
-    down:  forward ? ["enter-down","exit-down"]   : ["enter-up","exit-up"],
-    left:  forward ? ["enter-left","exit-left"]   : ["enter-right","exit-right"],
-    right: forward ? ["enter-right","exit-right"] : ["enter-left","exit-left"]
-  };
-  const [enterClass,exitClass]=directionMap[transitionDirection]||directionMap.up;
+  const [enterClass,exitClass]=transitionPair(dir);
 
   startPiPTransition(
     state.stories[state.index],
@@ -2761,7 +3020,17 @@ window.FloewAds={
   }),
   test:async()=>{
     await loadAdsCatalog();
-    return playAdBreak();
+    const result=await playAdBreak();
+
+    if(!result?.shown)return false;
+
+    if(result.direction<0){
+      await transitionAdBackToCurrent(-1);
+    }else{
+      await move(1,{skipAd:true,fromAd:true});
+    }
+
+    return true;
   }
 };
 
@@ -2789,15 +3058,21 @@ async function runAdTestOnce(){
   await new Promise(resolve=>setTimeout(resolve,700));
   clearStatus();
 
-  const shown=await playAdBreak();
+  const result=await playAdBreak();
 
-  if(!shown){
+  if(!result?.shown){
     status(
       "Reklam testi: dosya listelendi ancak medya yüklenemedi."
     );
+    timer();
+    return;
   }
 
-  timer();
+  if(result.direction<0){
+    await transitionAdBackToCurrent(-1);
+  }else{
+    await move(1,{skipAd:true,fromAd:true});
+  }
 }
 
 setFullscreenIcon();
