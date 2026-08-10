@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.11.4";
+window.__floewAppVersion="31.12.2";
 const API="https://thefloew.thefloewback.workers.dev/news";
 const VIDEO_API="https://thefloew.thefloewback.workers.dev/video";
 const META_API="https://thefloew.thefloewback.workers.dev/meta";
@@ -12,18 +12,14 @@ const COOKIE_NOTICE_KEY="thefloew.cookieNotice.v1";
 const REFRESH_MS=120000;
 const SWIPE=70;
 
-const ADS_GITHUB_API="https://api.github.com/repos/TheFloew/The-Floew/contents/ads?ref=main";
-const ADS_GITHUB_TREE_API="https://api.github.com/repos/TheFloew/The-Floew/git/trees/main?recursive=1";
-const ADS_RAW_BASE="https://raw.githubusercontent.com/TheFloew/The-Floew/main/";
-const ADS_MANIFEST_FALLBACK="ads/manifest.json";
-const ADS_CACHE_KEY="thefloew.adsCatalog.v3";
+const ADS_API="https://thefloew.thefloewback.workers.dev/ads";
+const ADS_CACHE_KEY="thefloew.adsCatalog.v4";
 const ADS_TEST_MODE=new URLSearchParams(location.search).get("adtest")==="1";
-const ADS_INTERVAL_NEWS=ADS_TEST_MODE?1:10;
+const ADS_INTERVAL_NEWS=10;
 const AD_IMAGE_MS=15000;
-const ADS_REFRESH_MS=10*60*1000;
+const ADS_REFRESH_MS=5*60*1000;
 let adsCatalogPromise=null;
-
-
+let adTestRan=false;
 
 function loadShowDuration(){
   try{
@@ -830,7 +826,7 @@ function normalizeAdEntry(item){
   const rawSrc=
     typeof item==="string"
       ? item
-      : String(item.src||"");
+      : String(item.url||item.src||"");
 
   const src=rawSrc.trim();
   if(!src)return null;
@@ -868,32 +864,6 @@ function normalizeAdEntry(item){
   }
 }
 
-function githubEntryToAd(item){
-  if(!item || item.type!=="file")return null;
-
-  const name=String(item.name||"").trim();
-  const lower=name.toLocaleLowerCase("en-US");
-
-  let type="";
-  if(lower.endsWith(".mp4"))type="video";
-  else if(lower.endsWith(".jpg")||lower.endsWith(".jpeg"))type="image";
-  else return null;
-
-  /*
-    download_url doğrudan raw.githubusercontent.com üzerindeki gerçek dosyayı
-    verir. Böylece reklam dosyasının GitHub Pages deploy'unu beklemesine gerek
-    kalmaz; ads/ klasörüne commit edildiği anda katalogdan kullanılabilir.
-  */
-  const src=String(item.download_url||"").trim();
-  if(!src)return null;
-
-  return normalizeAdEntry({
-    src,
-    type,
-    name
-  });
-}
-
 function loadCachedAdsCatalog(){
   try{
     const raw=localStorage.getItem(ADS_CACHE_KEY);
@@ -926,161 +896,78 @@ function saveCachedAdsCatalog(list){
   }catch(e){}
 }
 
-function adFromPath(path){
-  const clean=String(path||"").trim();
-  const lower=clean.toLocaleLowerCase("en-US");
-
-  if(!lower.startsWith("ads/"))return null;
-
-  let type="";
-  if(lower.endsWith(".mp4"))type="video";
-  else if(lower.endsWith(".jpg")||lower.endsWith(".jpeg"))type="image";
-  else return null;
-
-  const encodedPath=clean
-    .split("/")
-    .map(part=>encodeURIComponent(part))
-    .join("/");
-
-  return normalizeAdEntry({
-    src:`${ADS_RAW_BASE}${encodedPath}`,
-    type,
-    name:clean.split("/").pop()||clean
-  });
-}
-
-async function fetchAdsFromContentsApi(){
-  const response=await fetch(ADS_GITHUB_API,{
-    method:"GET",
-    mode:"cors",
-    credentials:"omit",
-    cache:"no-store",
-    headers:{
-      "Accept":"application/vnd.github+json"
-    }
-  });
-
-  if(!response.ok){
-    throw new Error(`GitHub Contents HTTP ${response.status}`);
-  }
-
-  const data=await response.json();
-  const entries=Array.isArray(data)
-    ? data
-    : Array.isArray(data?.entries)
-      ? data.entries
-      : [];
-
-  return entries
-    .map(githubEntryToAd)
-    .filter(Boolean);
-}
-
-async function fetchAdsFromTreeApi(){
-  const response=await fetch(ADS_GITHUB_TREE_API,{
-    method:"GET",
-    mode:"cors",
-    credentials:"omit",
-    cache:"no-store",
-    headers:{
-      "Accept":"application/vnd.github+json"
-    }
-  });
-
-  if(!response.ok){
-    throw new Error(`GitHub Tree HTTP ${response.status}`);
-  }
-
-  const data=await response.json();
-  const tree=Array.isArray(data?.tree)?data.tree:[];
-
-  return tree
-    .filter(item=>item?.type==="blob")
-    .map(item=>adFromPath(item.path))
-    .filter(Boolean);
-}
-
-async function fetchAdsFromManifest(){
-  const url=
-    `${ADS_MANIFEST_FALLBACK}?t=${Date.now()}`;
-
-  const response=await fetch(url,{
-    method:"GET",
-    credentials:"same-origin",
-    cache:"no-store",
-    headers:{
-      "Accept":"application/json"
-    }
-  });
-
-  if(!response.ok){
-    throw new Error(`Ads manifest HTTP ${response.status}`);
-  }
-
-  const data=await response.json();
-  const list=Array.isArray(data)
-    ? data
-    : Array.isArray(data?.ads)
-      ? data.ads
-      : [];
-
-  return list
-    .map(normalizeAdEntry)
-    .filter(Boolean);
-}
-
 async function actuallyLoadAdsCatalog(){
-  const loaders=[
-    ["GitHub Tree",fetchAdsFromTreeApi],
-    ["GitHub Contents",fetchAdsFromContentsApi],
-    ["manifest",fetchAdsFromManifest]
-  ];
-
-  const errors=[];
-
-  for(const [label,loader] of loaders){
-    try{
-      const list=await loader();
-
-      if(list.length){
-        adCatalog=[...new Map(
-          list.map(item=>[item.src,item])
-        ).values()];
-
-        saveCachedAdsCatalog(adCatalog);
-
-        console.info(
-          `Flöw ads (${label}):`,
-          adCatalog.length,
-          "reklam bulundu:",
-          adCatalog.map(item=>item.name).join(", ")
-        );
-
-        return adCatalog;
-      }
-
-      errors.push(`${label}: 0 reklam`);
-    }catch(err){
-      errors.push(`${label}: ${err?.message||err}`);
-    }
-  }
-
-  /*
-    Canlı kaynakların tümü başarısızsa son başarılı katalog korunur.
-    Böylece geçici GitHub/API sorunları reklamları tamamen devre dışı bırakmaz.
-  */
-  if(!adCatalog.length){
-    adCatalog=loadCachedAdsCatalog();
-  }
-
-  console.warn(
-    "Flöw ads katalog alınamadı:",
-    errors.join(" | "),
-    "cache:",
-    adCatalog.length
+  const controller=new AbortController();
+  const timeout=setTimeout(
+    ()=>controller.abort(),
+    10000
   );
 
-  return adCatalog;
+  try{
+    const separator=ADS_API.includes("?")?"&":"?";
+    const response=await fetch(
+      `${ADS_API}${separator}t=${Date.now()}`,
+      {
+        method:"GET",
+        mode:"cors",
+        credentials:"omit",
+        cache:"no-store",
+        signal:controller.signal,
+        headers:{
+          "Accept":"application/json"
+        }
+      }
+    );
+
+    if(!response.ok){
+      throw new Error(`Ads HTTP ${response.status}`);
+    }
+
+    const data=await response.json();
+    const list=Array.isArray(data)
+      ? data
+      : Array.isArray(data?.ads)
+        ? data.ads
+        : [];
+
+    const normalized=list
+      .map(normalizeAdEntry)
+      .filter(Boolean);
+
+    if(normalized.length){
+      adCatalog=[...new Map(
+        normalized.map(item=>[item.src,item])
+      ).values()];
+
+      saveCachedAdsCatalog(adCatalog);
+    }else{
+      /*
+        Worker gerçekten boş katalog döndürdüyse eski reklamı yanlışlıkla
+        göstermeyelim. Sadece ağ hatalarında cache fallback kullanılır.
+      */
+      adCatalog=[];
+      saveCachedAdsCatalog([]);
+    }
+
+    console.info(
+      "Flöw ads (Worker):",
+      adCatalog.length,
+      "reklam bulundu:",
+      adCatalog.map(item=>item.name).join(", ")
+    );
+
+    return adCatalog;
+  }catch(err){
+    console.warn("Flöw ads Worker:",err);
+
+    if(!adCatalog.length){
+      adCatalog=loadCachedAdsCatalog();
+    }
+
+    return adCatalog;
+  }finally{
+    clearTimeout(timeout);
+  }
 }
 
 function loadAdsCatalog(){
@@ -1162,51 +1049,58 @@ function hideAdOverlay(){
 function waitForImageAd(src){
   return new Promise(resolve=>{
     if(!adImage){
-      resolve();
+      resolve(false);
       return;
     }
 
     let finished=false;
     let timerId=null;
+    let loadTimer=null;
 
-    const finish=()=>{
+    const finish=(shown)=>{
       if(finished)return;
       finished=true;
       clearTimeout(timerId);
+      clearTimeout(loadTimer);
       adImage.onload=null;
       adImage.onerror=null;
-      resolve();
+      resolve(Boolean(shown));
     };
 
     adImage.onload=()=>{
       showAdOverlay();
-      timerId=setTimeout(finish,AD_IMAGE_MS);
+
+      /*
+        Görsel reklam kullanıcı haber süresinden bağımsızdır:
+        tam 15 saniye görünür.
+      */
+      timerId=setTimeout(
+        ()=>finish(true),
+        AD_IMAGE_MS
+      );
     };
 
     adImage.onerror=()=>{
       console.warn("Ad image could not load:",src);
-      finish();
+      finish(false);
     };
 
     adImage.hidden=false;
     adImage.src=src;
 
-    // Ağdan yanıt hiç gelmezse reklam akışını kilitleme.
-    setTimeout(()=>{
-      if(finished)return;
-
-      if(!adImage.complete){
+    loadTimer=setTimeout(()=>{
+      if(!finished && !adImage.complete){
         console.warn("Ad image load timeout:",src);
-        finish();
+        finish(false);
       }
-    },8000);
+    },10000);
   });
 }
 
 function waitForVideoAd(src){
   return new Promise(resolve=>{
     if(!adVideo){
-      resolve();
+      resolve(false);
       return;
     }
 
@@ -1226,38 +1120,32 @@ function waitForVideoAd(src){
       adVideo.onabort=null;
     };
 
-    const finish=()=>{
+    const finish=(shown)=>{
       if(finished)return;
       finished=true;
       cleanup();
-      resolve();
+      resolve(Boolean(shown));
     };
 
     const start=async()=>{
       if(started||finished)return;
       started=true;
 
-      showAdOverlay();
-
       try{
         await adVideo.play();
+        showAdOverlay();
       }catch(err){
-        /*
-          Otomatik oynatma için video sessizdir. Buna rağmen tarayıcı
-          oynatmayı reddederse reklam akışını kilitlemeyiz.
-        */
         console.warn("Ad video play:",err);
-        finish();
+        finish(false);
         return;
       }
 
       /*
-        Normal durumda video 'ended' olayıyla kapanır.
-        Çok uzun/bozuk bir dosyanın siteyi sonsuza kadar kilitlememesi için
-        sadece güvenlik amaçlı yüksek bir üst sınır bırakılır.
+        Normal durumda video sonuna kadar oynar. Bu yalnızca bozuk/sonsuz
+        medya yüzünden sitenin kilitlenmesini engelleyen güvenlik sınırıdır.
       */
       safetyTimer=setTimeout(
-        finish,
+        ()=>finish(false),
         30*60*1000
       );
     };
@@ -1273,12 +1161,12 @@ function waitForVideoAd(src){
 
     adVideo.onloadeddata=start;
     adVideo.oncanplay=start;
-    adVideo.onended=finish;
+    adVideo.onended=()=>finish(true);
     adVideo.onerror=()=>{
       console.warn("Ad video could not load:",src);
-      finish();
+      finish(false);
     };
-    adVideo.onabort=finish;
+    adVideo.onabort=()=>finish(false);
 
     adVideo.src=src;
     adVideo.load();
@@ -1286,9 +1174,9 @@ function waitForVideoAd(src){
     loadTimer=setTimeout(()=>{
       if(!started&&!finished){
         console.warn("Ad video load timeout:",src);
-        finish();
+        finish(false);
       }
-    },12000);
+    },15000);
   });
 }
 
@@ -1300,23 +1188,32 @@ async function playAdBreak(){
 
   adActive=true;
   clearTimeout(state.timer);
-  newsShownSinceAd=0;
   resetAdMedia();
 
+  let shown=false;
+
   try{
-    if(ad.type==="video"){
-      await waitForVideoAd(ad.src);
-    }else{
-      await waitForImageAd(ad.src);
-    }
+    shown=
+      ad.type==="video"
+        ? await waitForVideoAd(ad.src)
+        : await waitForImageAd(ad.src);
   }catch(err){
     console.warn("Ad playback:",err);
+    shown=false;
   }finally{
     hideAdOverlay();
     adActive=false;
   }
 
-  return true;
+  /*
+    Sayaç yalnızca reklam gerçekten gösterildiyse sıfırlanır.
+    Dosya yüklenemezse bir sonraki ileri harekette tekrar denenir.
+  */
+  if(shown){
+    newsShownSinceAd=0;
+  }
+
+  return shown;
 }
 
 function adBreakDue(){
@@ -1738,6 +1635,11 @@ async function load(){
       clearStatus();
       finishInitialLoading();
       timer();
+
+      if(ADS_TEST_MODE){
+        setTimeout(runAdTestOnce,900);
+      }
+
       return;
     }
 
@@ -2863,16 +2765,39 @@ window.FloewAds={
   }
 };
 
-if(ADS_TEST_MODE){
-  console.info(
-    "Flöw reklam test modu açık: ?adtest=1"
+async function runAdTestOnce(){
+  if(!ADS_TEST_MODE || adTestRan)return;
+  if(!state.stories.length)return;
+
+  adTestRan=true;
+  clearTimeout(state.timer);
+
+  await loadAdsCatalog();
+
+  if(!adCatalog.length){
+    status(
+      "Reklam testi: Worker ads/ dizininde desteklenen reklam bulamadı."
+    );
+    timer();
+    return;
+  }
+
+  status(
+    `Reklam testi: ${adCatalog.length} dosya bulundu. Reklam oynatılıyor...`
   );
 
-  /*
-    Test modunda katalog hazır olduğunda ilk ileri harekette reklamı kesin
-    olarak denemek için sayacı eşik değerine getiriyoruz.
-  */
-  newsShownSinceAd=ADS_INTERVAL_NEWS;
+  await new Promise(resolve=>setTimeout(resolve,700));
+  clearStatus();
+
+  const shown=await playAdBreak();
+
+  if(!shown){
+    status(
+      "Reklam testi: dosya listelendi ancak medya yüklenemedi."
+    );
+  }
+
+  timer();
 }
 
 setFullscreenIcon();
