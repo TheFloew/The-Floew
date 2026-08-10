@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.10.1";
+window.__floewAppVersion="31.11";
 const API="https://thefloew.thefloewback.workers.dev/news";
 const VIDEO_API="https://thefloew.thefloewback.workers.dev/video";
 const META_API="https://thefloew.thefloewback.workers.dev/meta";
@@ -11,6 +11,12 @@ const WEATHER_PREFS_KEY="thefloew.weather.v1";
 const COOKIE_NOTICE_KEY="thefloew.cookieNotice.v1";
 const REFRESH_MS=120000;
 const SWIPE=70;
+
+const ADS_MANIFEST_URL="ads/manifest.json";
+const ADS_INTERVAL_NEWS=10;
+const AD_IMAGE_MS=15000;
+const ADS_REFRESH_MS=5*60*1000;
+
 
 
 function loadShowDuration(){
@@ -119,6 +125,17 @@ const SOURCE_LOGOS={
 };
 
 const slides=[document.getElementById("a"),document.getElementById("b")];
+
+const adOverlay=document.getElementById("ad-overlay");
+const adImage=document.getElementById("ad-image");
+const adVideo=document.getElementById("ad-video");
+
+let adCatalog=[];
+let adActive=false;
+let newsShownSinceAd=0;
+let lastAdSrc="";
+let adCatalogRefreshTimer=null;
+
 const state={
   stories:[],
   index:0,
@@ -800,6 +817,313 @@ function fill(el,s){
   }
 }
 
+
+function normalizeAdEntry(item){
+  if(!item)return null;
+
+  const rawSrc=
+    typeof item==="string"
+      ? item
+      : String(item.src||"");
+
+  const src=rawSrc.trim();
+  if(!src)return null;
+
+  const clean=src.split("?")[0].split("#")[0].toLocaleLowerCase("en-US");
+
+  let type=
+    typeof item==="object" && item.type
+      ? String(item.type).toLocaleLowerCase("en-US")
+      : "";
+
+  if(!type){
+    if(clean.endsWith(".mp4"))type="video";
+    else if(clean.endsWith(".jpg")||clean.endsWith(".jpeg"))type="image";
+  }
+
+  if(type!=="video" && type!=="image")return null;
+
+  try{
+    return {
+      src:new URL(src,document.baseURI).href,
+      type
+    };
+  }catch(e){
+    return null;
+  }
+}
+
+async function loadAdsManifest(){
+  try{
+    const separator=ADS_MANIFEST_URL.includes("?")?"&":"?";
+    const url=
+      `${ADS_MANIFEST_URL}${separator}t=${Date.now()}`;
+
+    const response=await fetch(url,{
+      method:"GET",
+      cache:"no-store",
+      credentials:"same-origin",
+      headers:{"Accept":"application/json"}
+    });
+
+    if(!response.ok){
+      if(response.status!==404){
+        console.warn("Ads manifest HTTP:",response.status);
+      }
+      adCatalog=[];
+      return adCatalog;
+    }
+
+    const data=await response.json();
+    const list=Array.isArray(data)
+      ? data
+      : Array.isArray(data?.ads)
+        ? data.ads
+        : [];
+
+    const normalized=list
+      .map(normalizeAdEntry)
+      .filter(Boolean);
+
+    adCatalog=[...new Map(
+      normalized.map(item=>[item.src,item])
+    ).values()];
+
+    return adCatalog;
+  }catch(err){
+    console.warn("Ads manifest:",err);
+    adCatalog=[];
+    return adCatalog;
+  }
+}
+
+function startAdsManifestRefresh(){
+  loadAdsManifest();
+
+  if(adCatalogRefreshTimer){
+    clearInterval(adCatalogRefreshTimer);
+  }
+
+  adCatalogRefreshTimer=setInterval(
+    loadAdsManifest,
+    ADS_REFRESH_MS
+  );
+}
+
+function chooseRandomAd(){
+  if(!adCatalog.length)return null;
+
+  const candidates=
+    adCatalog.length>1
+      ? adCatalog.filter(item=>item.src!==lastAdSrc)
+      : adCatalog;
+
+  const pool=candidates.length?candidates:adCatalog;
+  const chosen=pool[Math.floor(Math.random()*pool.length)]||null;
+
+  if(chosen)lastAdSrc=chosen.src;
+
+  return chosen;
+}
+
+function resetAdMedia(){
+  if(adImage){
+    adImage.hidden=true;
+    adImage.removeAttribute("src");
+  }
+
+  if(adVideo){
+    try{adVideo.pause()}catch(e){}
+    adVideo.hidden=true;
+    adVideo.removeAttribute("src");
+    adVideo.load();
+  }
+}
+
+function showAdOverlay(){
+  if(adOverlay){
+    adOverlay.hidden=false;
+    adOverlay.setAttribute("aria-hidden","false");
+  }
+}
+
+function hideAdOverlay(){
+  if(adOverlay){
+    adOverlay.hidden=true;
+    adOverlay.setAttribute("aria-hidden","true");
+  }
+
+  resetAdMedia();
+}
+
+function waitForImageAd(src){
+  return new Promise(resolve=>{
+    if(!adImage){
+      resolve();
+      return;
+    }
+
+    let finished=false;
+    let timerId=null;
+
+    const finish=()=>{
+      if(finished)return;
+      finished=true;
+      clearTimeout(timerId);
+      adImage.onload=null;
+      adImage.onerror=null;
+      resolve();
+    };
+
+    adImage.onload=()=>{
+      showAdOverlay();
+      timerId=setTimeout(finish,AD_IMAGE_MS);
+    };
+
+    adImage.onerror=()=>{
+      console.warn("Ad image could not load:",src);
+      finish();
+    };
+
+    adImage.hidden=false;
+    adImage.src=src;
+
+    // Ağdan yanıt hiç gelmezse reklam akışını kilitleme.
+    setTimeout(()=>{
+      if(finished)return;
+
+      if(!adImage.complete){
+        console.warn("Ad image load timeout:",src);
+        finish();
+      }
+    },8000);
+  });
+}
+
+function waitForVideoAd(src){
+  return new Promise(resolve=>{
+    if(!adVideo){
+      resolve();
+      return;
+    }
+
+    let finished=false;
+    let started=false;
+    let safetyTimer=null;
+    let loadTimer=null;
+
+    const cleanup=()=>{
+      clearTimeout(safetyTimer);
+      clearTimeout(loadTimer);
+
+      adVideo.onloadeddata=null;
+      adVideo.oncanplay=null;
+      adVideo.onended=null;
+      adVideo.onerror=null;
+      adVideo.onabort=null;
+    };
+
+    const finish=()=>{
+      if(finished)return;
+      finished=true;
+      cleanup();
+      resolve();
+    };
+
+    const start=async()=>{
+      if(started||finished)return;
+      started=true;
+
+      showAdOverlay();
+
+      try{
+        await adVideo.play();
+      }catch(err){
+        /*
+          Otomatik oynatma için video sessizdir. Buna rağmen tarayıcı
+          oynatmayı reddederse reklam akışını kilitlemeyiz.
+        */
+        console.warn("Ad video play:",err);
+        finish();
+        return;
+      }
+
+      /*
+        Normal durumda video 'ended' olayıyla kapanır.
+        Çok uzun/bozuk bir dosyanın siteyi sonsuza kadar kilitlememesi için
+        sadece güvenlik amaçlı yüksek bir üst sınır bırakılır.
+      */
+      safetyTimer=setTimeout(
+        finish,
+        30*60*1000
+      );
+    };
+
+    adVideo.muted=true;
+    adVideo.defaultMuted=true;
+    adVideo.volume=0;
+    adVideo.autoplay=true;
+    adVideo.playsInline=true;
+    adVideo.loop=false;
+    adVideo.preload="auto";
+    adVideo.hidden=false;
+
+    adVideo.onloadeddata=start;
+    adVideo.oncanplay=start;
+    adVideo.onended=finish;
+    adVideo.onerror=()=>{
+      console.warn("Ad video could not load:",src);
+      finish();
+    };
+    adVideo.onabort=finish;
+
+    adVideo.src=src;
+    adVideo.load();
+
+    loadTimer=setTimeout(()=>{
+      if(!started&&!finished){
+        console.warn("Ad video load timeout:",src);
+        finish();
+      }
+    },12000);
+  });
+}
+
+async function playAdBreak(){
+  if(adActive||!adCatalog.length)return false;
+
+  const ad=chooseRandomAd();
+  if(!ad)return false;
+
+  adActive=true;
+  clearTimeout(state.timer);
+  newsShownSinceAd=0;
+  resetAdMedia();
+
+  try{
+    if(ad.type==="video"){
+      await waitForVideoAd(ad.src);
+    }else{
+      await waitForImageAd(ad.src);
+    }
+  }catch(err){
+    console.warn("Ad playback:",err);
+  }finally{
+    hideAdOverlay();
+    adActive=false;
+  }
+
+  return true;
+}
+
+function adBreakDue(){
+  return (
+    !adActive &&
+    adCatalog.length>0 &&
+    newsShownSinceAd>=ADS_INTERVAL_NEWS
+  );
+}
+
 function timer(){
   clearTimeout(state.timer);
   state.timer=setTimeout(
@@ -872,8 +1196,21 @@ function preloadImage(url){
   });
 }
 
-async function move(dir){
-  if(state.busy||state.stories.length<2)return;
+async function move(dir,options={}){
+  if(adActive||state.busy||state.stories.length<2)return;
+
+  if(
+    dir>0 &&
+    !options.skipAd &&
+    adBreakDue()
+  ){
+    const played=await playAdBreak();
+
+    if(played){
+      await move(1,{skipAd:true});
+      return;
+    }
+  }
 
   /*
     GERİ:
@@ -992,6 +1329,10 @@ async function transitionTo(nextIndex,fromHistory,dir){
 
       state.index=
         nextIndex;
+
+      if(dir>0){
+        newsShownSinceAd++;
+      }
 
       state.busy=false;
 
@@ -1169,6 +1510,7 @@ async function load(){
       state.historyPos=0;
       fill(slides[0],list[0]);
       slides[0].className="slide active";
+      newsShownSinceAd=1;
       clearStatus();
       finishInitialLoading();
       timer();
@@ -2278,6 +2620,7 @@ if(new URLSearchParams(location.search).get("pip")==="1"){
   document.body.classList.add("pip-mode");
 }
 setFullscreenIcon();
+startAdsManifestRefresh();
 load();
 setInterval(load,REFRESH_MS);
 
