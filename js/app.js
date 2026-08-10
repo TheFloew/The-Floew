@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.12.6";
+window.__floewAppVersion="31.12.7";
 const API="https://thefloew.thefloewback.workers.dev/news";
 const VIDEO_API="https://thefloew.thefloewback.workers.dev/video";
 const META_API="https://thefloew.thefloewback.workers.dev/meta";
@@ -530,6 +530,7 @@ function resetSlideMedia(el){
     embed.src="about:blank";
     embed.classList.remove("media-visible");
     embed.setAttribute("aria-hidden","true");
+    embed.removeAttribute("data-provider");
   }
 }
 
@@ -689,11 +690,73 @@ function showDirectVideo(el,story,media,token){
   video.load();
 }
 
+
+function cleanEmbedUrl(media){
+  if(!media?.url)return "";
+
+  try{
+    const u=new URL(media.url);
+    const provider=String(media.provider||"").toLowerCase();
+
+    if(provider==="youtube"){
+      u.searchParams.set("autoplay","1");
+      u.searchParams.set("mute","1");
+      u.searchParams.set("controls","0");
+      u.searchParams.set("disablekb","1");
+      u.searchParams.set("fs","0");
+      u.searchParams.set("playsinline","1");
+      u.searchParams.set("iv_load_policy","3");
+      u.searchParams.set("cc_load_policy","0");
+      u.searchParams.set("rel","0");
+    }else if(provider==="vimeo"){
+      u.searchParams.set("autoplay","1");
+      u.searchParams.set("muted","1");
+      u.searchParams.set("background","1");
+      u.searchParams.set("loop","1");
+      u.searchParams.set("controls","0");
+      u.searchParams.set("title","0");
+      u.searchParams.set("byline","0");
+      u.searchParams.set("portrait","0");
+      u.searchParams.set("keyboard","0");
+      u.searchParams.set("dnt","1");
+    }else if(provider==="dailymotion"){
+      /*
+        Dailymotion'un 2026 embed endpoint'inde eski UI query parametrelerinin
+        çoğu artık geçerli değil. mute/loop destekleniyor; kalan arayüzü
+        CSS tarafında ekranın dışına kırpıyoruz.
+      */
+      u.searchParams.set("mute","true");
+      u.searchParams.set("loop","true");
+    }
+
+    return u.href;
+  }catch{
+    return String(media.url||"");
+  }
+}
+
 function showEmbedVideo(el,story,media,token){
   const image=el.querySelector(".slide-image");
   const embed=el.querySelector(".slide-embed");
 
   if(!embed || !media?.url)return;
+
+  const provider=String(media.provider||"generic").toLowerCase();
+  const cleanUrl=cleanEmbedUrl(media);
+
+  if(!cleanUrl)return;
+
+  embed.dataset.provider=provider;
+  embed.tabIndex=-1;
+
+  /*
+    Harici oynatıcılar mouse/touch/keyboard girdisi almasın.
+    Flöw'ün kaydırma/tıklama navigasyonu kesintisiz kalsın.
+  */
+  embed.setAttribute(
+    "allow",
+    "autoplay; encrypted-media; picture-in-picture"
+  );
 
   const reveal=()=>{
     if(
@@ -714,7 +777,7 @@ function showEmbedVideo(el,story,media,token){
     {once:true}
   );
 
-  embed.src=media.url;
+  embed.src=cleanUrl;
 }
 
 async function prepareSlideMedia(el,story){
