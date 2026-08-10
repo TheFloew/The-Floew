@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <link rel="manifest" href="site.webmanifest">
 
-<link rel="stylesheet" href="styles-v31.11.3.css">
+<link rel="stylesheet" href="css/styles.css?v=31.11.4">
 
 </head>
 
@@ -240,12 +240,12 @@
 })();
 </script>
 
-<script src="app-v31.11.3.js" onerror="
+<script src="js/app.js?v=31.11.4" onerror="
   var loader=document.getElementById('loading-screen');
   if(loader)loader.remove();
   var status=document.getElementById('status');
   if(status){
-    status.innerHTML='<div class=&quot;status-band&quot;><span class=&quot;status-message&quot;>app.js dosyası yüklenemedi. GitHub dosya yollarını kontrol edin.</span><button class=&quot;status-close&quot; type=&quot;button&quot; aria-label=&quot;Uyarıyı kapat&quot;>×</button></div>';
+    status.innerHTML='<div class=&quot;status-band&quot;><span class=&quot;status-message&quot;>js/app.js yüklenemedi. GitHub dosya yollarını kontrol edin.</span><button class=&quot;status-close&quot; type=&quot;button&quot; aria-label=&quot;Uyarıyı kapat&quot;>×</button></div>';
     status.hidden=false;
     var close=status.querySelector('.status-close');
     if(close)close.onclick=function(){status.hidden=true;status.innerHTML='';};
