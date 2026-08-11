@@ -1144,18 +1144,224 @@ body.ad-mode #fullscreen-button{
 }
 
 
-/* --- V31.13.0: canonical Flöw logo size --- */
+/* --- V31.13.1: canonical Flöw logo size --- */
 #logo{
-  width:clamp(138px,9vw,184px) !important;
+  width:clamp(190px,12vw,250px) !important;
   height:auto !important;
 }
 @media(max-width:900px){
   #logo{
-    width:clamp(118px,22vw,164px) !important;
+    width:clamp(155px,30vw,210px) !important;
   }
 }
 @media(max-width:480px){
   #logo{
-    width:clamp(108px,30vw,148px) !important;
+    width:clamp(145px,38vw,185px) !important;
+  }
+}
+
+
+/* --- V31.13.1: loading animation guard --- */
+#loading-screen{
+  display:grid !important;
+}
+#loading-screen.is-done{
+  display:grid !important;
+}
+.loading-marquee{
+  animation:flowLoadingRise 2.15s linear infinite !important;
+}
+
+
+/* --- V31.13.2: stacked top-right controls + time-range filter --- */
+
+#menu-button,
+#time-range-button,
+#pip-button,
+#fullscreen-button{
+  right:max(2.2vw,env(safe-area-inset-right)) !important;
+  width:42px;
+  height:42px;
+}
+
+#menu-button{
+  top:max(2.2vh,env(safe-area-inset-top)) !important;
+}
+
+#time-range-button{
+  position:fixed;
+  z-index:300;
+  top:calc(max(2.2vh,env(safe-area-inset-top)) + 50px);
+  display:grid;
+  place-items:center;
+  padding:0 0 2px 0;
+  border:0;
+  background:transparent;
+  color:#fff;
+  cursor:pointer;
+  font-family:Arial,Helvetica,sans-serif;
+  font-size:30px;
+  line-height:42px;
+  font-weight:300;
+  text-shadow:0 1px 3px rgba(0,0,0,.65),0 2px 7px rgba(0,0,0,.42);
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  transition:
+    opacity .55s cubic-bezier(.22,.61,.36,1),
+    visibility 0s linear .55s,
+    transform .16s ease;
+}
+
+#time-range-button.is-visible{
+  opacity:1;
+  visibility:visible;
+  pointer-events:auto;
+  transition:
+    opacity .55s cubic-bezier(.22,.61,.36,1),
+    visibility 0s linear 0s,
+    transform .16s ease;
+}
+
+#time-range-button:hover{transform:scale(1.03)}
+#time-range-button:active{transform:scale(.95)}
+
+#pip-button{
+  top:calc(max(2.2vh,env(safe-area-inset-top)) + 100px) !important;
+}
+
+#fullscreen-button{
+  top:calc(max(2.2vh,env(safe-area-inset-top)) + 150px) !important;
+}
+
+/*
+  Tercihler panelinin görsel diliyle aynı, ancak ekranı kapatmayan kompakt
+  zaman filtresi. Seçenekler tek bir yatay çubukta kaydırılabilir.
+*/
+#time-range-panel{
+  position:fixed;
+  z-index:1400;
+  top:max(2.2vh,env(safe-area-inset-top));
+  right:calc(max(2.2vw,env(safe-area-inset-right)) + 56px);
+  width:min(790px,calc(100vw - 100px));
+  padding:14px 16px 15px;
+  border:1px solid rgba(255,255,255,.15);
+  border-radius:14px;
+  background:rgba(18,18,18,.94);
+  box-shadow:0 16px 55px rgba(0,0,0,.52);
+  backdrop-filter:blur(5px);
+  -webkit-backdrop-filter:blur(5px);
+  color:#fff;
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  transform:translateX(8px) scale(.988);
+  transform-origin:top right;
+  transition:
+    opacity .24s ease,
+    transform .24s cubic-bezier(.22,.61,.36,1),
+    visibility 0s linear .24s;
+}
+
+#time-range-panel.open{
+  opacity:1;
+  visibility:visible;
+  pointer-events:auto;
+  transform:translateX(0) scale(1);
+  transition:
+    opacity .24s ease,
+    transform .24s cubic-bezier(.22,.61,.36,1),
+    visibility 0s linear 0s;
+}
+
+.time-range-heading{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  margin-bottom:11px;
+  font-family:"Comfortaa",sans-serif;
+}
+
+.time-range-heading strong{
+  font-size:12px;
+  font-weight:700;
+}
+
+#time-range-current{
+  font-size:10px;
+  font-weight:700;
+  opacity:.55;
+  white-space:nowrap;
+}
+
+.time-range-strip{
+  display:flex;
+  align-items:stretch;
+  gap:0;
+  overflow-x:auto;
+  scrollbar-width:none;
+  overscroll-behavior:contain;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:9px;
+  background:rgba(255,255,255,.025);
+}
+
+.time-range-strip::-webkit-scrollbar{
+  display:none;
+}
+
+.time-range-option{
+  flex:1 0 auto;
+  min-width:82px;
+  height:38px;
+  padding:0 12px;
+  border:0;
+  border-right:1px solid rgba(255,255,255,.09);
+  background:transparent;
+  color:rgba(255,255,255,.56);
+  cursor:pointer;
+  font:700 10px/38px "Comfortaa",sans-serif;
+  white-space:nowrap;
+  transition:background .16s ease,color .16s ease;
+}
+
+.time-range-option:last-child{
+  border-right:0;
+  min-width:116px;
+}
+
+.time-range-option:hover{
+  color:#fff;
+  background:rgba(255,255,255,.06);
+}
+
+.time-range-option.active{
+  color:#111;
+  background:#fff;
+}
+
+body.ad-mode #time-range-button{
+  z-index:1300;
+  opacity:1 !important;
+  visibility:visible !important;
+  pointer-events:auto !important;
+  transition:opacity .22s ease,visibility 0s linear 0s;
+}
+
+@media(max-width:700px){
+  #time-range-panel{
+    right:calc(max(2.2vw,env(safe-area-inset-right)) + 52px);
+    width:calc(100vw - 76px);
+    padding:12px 12px 13px;
+  }
+
+  .time-range-option{
+    min-width:76px;
+    padding:0 10px;
+  }
+
+  .time-range-option:last-child{
+    min-width:112px;
   }
 }
