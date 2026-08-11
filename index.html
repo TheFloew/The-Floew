@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
 <meta charset="utf-8">
-<meta name="floew-version" content="31.15.2">
+<meta name="floew-version" content="31.15.4">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -15,7 +15,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
 <link rel="manifest" href="site.webmanifest">
 
-<link rel="stylesheet" href="css/styles-31.15.2.css">
+<link rel="stylesheet" href="css/styles-31.15.4.css">
 
 <style id="boot-black-style">
   html,body{background:#000}
@@ -91,6 +91,8 @@
       <input id="keyword-filter-input" class="keyword-tool-input" type="text"
         autocomplete="off" spellcheck="false"
         placeholder="Anahtar kelimeler: ör. yapay zeka, İstanbul">
+      <button id="keyword-filter-clear" class="keyword-tool-clear" type="button"
+        aria-label="Anahtar kelime filtresini temizle" title="Temizle">×</button>
       <button id="keyword-filter-show" class="keyword-tool-action" type="button">Göster</button>
       <button id="keyword-filter-hide" class="keyword-tool-action" type="button">Gizle</button>
     </div>
@@ -101,6 +103,8 @@
       <input id="keyword-watch-input" class="keyword-tool-input" type="text"
         autocomplete="off" spellcheck="false"
         placeholder="Takip edilecek kelimeler: ör. deprem, seçim">
+      <button id="keyword-watch-clear" class="keyword-tool-clear" type="button"
+        aria-label="Anahtar kelime takibini temizle" title="Temizle">×</button>
       <button id="keyword-watch-apply" class="keyword-tool-action" type="button">Uyar</button>
     </div>
   </div>
@@ -296,12 +300,12 @@
 })();
 </script>
 
-<script src="js/app-31.15.2.js" onerror="
+<script src="js/app-31.15.4.js" onerror="
   var loader=document.getElementById('loading-screen');
   if(loader)loader.remove();
   var status=document.getElementById('status');
   if(status){
-    status.innerHTML='<div class=&quot;status-band&quot;><span class=&quot;status-message&quot;>js/app-31.15.2.js yüklenemedi. GitHub dosya yollarını kontrol edin.</span><button class=&quot;status-close&quot; type=&quot;button&quot; aria-label=&quot;Uyarıyı kapat&quot;>×</button></div>';
+    status.innerHTML='<div class=&quot;status-band&quot;><span class=&quot;status-message&quot;>js/app-31.15.4.js yüklenemedi. GitHub dosya yollarını kontrol edin.</span><button class=&quot;status-close&quot; type=&quot;button&quot; aria-label=&quot;Uyarıyı kapat&quot;>×</button></div>';
     status.hidden=false;
     var close=status.querySelector('.status-close');
     if(close)close.onclick=function(){status.hidden=true;status.innerHTML='';};
