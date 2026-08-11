@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.14.0";
+window.__floewAppVersion="31.14.1";
 const API="https://thefloew.thefloewback.workers.dev/news";
 const VIDEO_API="https://thefloew.thefloewback.workers.dev/video";
 const META_API="https://thefloew.thefloewback.workers.dev/meta";
@@ -397,8 +397,18 @@ function storyInTimeRange(story){
   return ageMs<=limitMs;
 }
 
+const BREAKING_EXTRA_CATEGORIES=new Set([
+  "#Türkiye",
+  "#Dünya",
+  "#Siyaset"
+]);
+
 function storyInBreakingWindow(story){
-  if(!story?.flowBreaking)return false;
+  const isBreakingFeedStory=Boolean(story?.flowBreaking);
+  const isPriorityCategory=
+    BREAKING_EXTRA_CATEGORIES.has(story?.flowCategory);
+
+  if(!isBreakingFeedStory && !isPriorityCategory)return false;
 
   const publishedAt=new Date(story?.published).getTime();
   if(!Number.isFinite(publishedAt))return false;
@@ -436,7 +446,7 @@ function activeStories(){
 
 function emptyStoriesMessage(){
   return feedMode==="breaking"
-    ? "Son 10 dakikada son dakika haberi bulunamadı."
+    ? "Son 10 dakikada Son dakika, Türkiye, Dünya veya Siyaset haberi bulunamadı."
     : "Seçtiğiniz kaynak, kategori ve zaman aralığında haber bulunamadı.";
 }
 
