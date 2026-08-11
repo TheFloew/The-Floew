@@ -1,5 +1,6 @@
 Versiyon 1.3.0
-- Haber akışında zaman aralığı seçme fonksiyonu
+- Son dakika ve Gündem sekmeleri
+- Gündem akışında zaman aralığı seçme fonksiyonu
 - Anahtar kelime filtreleyerek haber gösterme ya da gizleme
 - Anahtar kelime bazlı haber takip mekanizması
 - Hata düzeltmeleri
