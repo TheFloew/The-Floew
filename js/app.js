@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.12.8";
+window.__floewAppVersion="31.12.9";
 const API="https://thefloew.thefloewback.workers.dev/news";
 const VIDEO_API="https://thefloew.thefloewback.workers.dev/video";
 const META_API="https://thefloew.thefloewback.workers.dev/meta";
@@ -143,6 +143,15 @@ let adCatalogRefreshTimer=null;
 let adPlaybackFinish=null;
 let adHasEntered=false;
 let adSkipRequestedDirection=0;
+
+/*
+  Reklamı açan wheel/swipe hareketinin kalan momentum event'leri reklamı
+  yanlışlıkla hemen atlamasın. Reklam tamamen girdikten kısa süre sonra
+  kullanıcı skip hareketlerini kabul etmeye başlarız.
+*/
+let adSkipEnabledAt=0;
+const AD_SKIP_GRACE_MS=450;
+
 let currentAd=null;
 let adEntryDirection=1;
 
@@ -1279,6 +1288,7 @@ async function transitionAdIn(dir=adEntryDirection){
   clearFlowTransitionClasses(adOverlay);
   stopSlideMedia(currentSlide);
   adHasEntered=true;
+  adSkipEnabledAt=performance.now()+AD_SKIP_GRACE_MS;
 
   return true;
 }
@@ -1286,9 +1296,27 @@ async function transitionAdIn(dir=adEntryDirection){
 function requestAdSkip(dir=1){
   if(!adActive)return false;
 
+  /*
+    Kritik düzeltme:
+    Reklamı tetikleyen trackpad/mouse-wheel gesture'ı birden fazla wheel
+    olayı üretir. Eski davranışta ilk olay reklamı açıyor, hemen arkasından
+    gelen momentum olayları ise reklam henüz giriş animasyonundayken
+    adSkipRequestedDirection değerini set ediyordu. Giriş animasyonu
+    tamamlanınca reklam yaklaşık 1 saniyede "skip" edilmiş görünüyordu.
+
+    Reklam tamamen görünür olmadan ve kısa grace süresi dolmadan skip
+    isteğini kaydetmiyoruz.
+  */
+  if(
+    !adHasEntered ||
+    performance.now()<adSkipEnabledAt
+  ){
+    return false;
+  }
+
   adSkipRequestedDirection=dir<0?-1:1;
 
-  if(adPlaybackFinish && adHasEntered){
+  if(adPlaybackFinish){
     adPlaybackFinish(adSkipRequestedDirection);
   }
 
@@ -1559,6 +1587,7 @@ async function playAdBreak(options={}){
   adActive=true;
   adHasEntered=false;
   adSkipRequestedDirection=0;
+  adSkipEnabledAt=0;
   adPlaybackFinish=null;
   clearTimeout(state.timer);
   resetAdMedia();
@@ -1588,6 +1617,7 @@ async function playAdBreak(options={}){
     adActive=false;
     adHasEntered=false;
     adSkipRequestedDirection=0;
+    adSkipEnabledAt=0;
     adPlaybackFinish=null;
     currentAd=null;
     historicalAdContext=null;
@@ -1964,6 +1994,7 @@ async function transitionFromAdTo(nextIndex,fromHistory,dir=1){
   adActive=false;
   adHasEntered=false;
   adSkipRequestedDirection=0;
+  adSkipEnabledAt=0;
   adPlaybackFinish=null;
   currentAd=null;
   historicalAdContext=null;
@@ -2008,6 +2039,7 @@ async function transitionAdBackToCurrent(dir=-1){
   adActive=false;
   adHasEntered=false;
   adSkipRequestedDirection=0;
+  adSkipEnabledAt=0;
   adPlaybackFinish=null;
   currentAd=null;
   historicalAdContext=null;
