@@ -1,3 +1,0 @@
-Flöw frontend v31.11
-Adds automatic interstitial ads from /ads via generated manifest.
-Every 10 news: random ad. JPEG/JPG = 15s, MP4 = plays to end (muted autoplay).
