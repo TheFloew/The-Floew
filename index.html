@@ -2,20 +2,20 @@
 <html lang="tr">
 <head>
 <meta charset="utf-8">
-<meta name="floew-version" content="31.13.3">
+<meta name="floew-version" content="31.14.0">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark">
 <title>Flöw | Dümdüz haberler...</title>
-<link rel="icon" href="assets/favicon.ico" sizes="any">
-<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png">
-<link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <link rel="manifest" href="site.webmanifest">
 
-<link rel="stylesheet" href="css/styles.css?v=31.13.3">
+<link rel="stylesheet" href="css/styles.css?v=31.14.0">
 
 </head>
 
@@ -23,15 +23,20 @@
 <div id="loading-screen" aria-live="polite" aria-label="Yükleniyor">
   <div class="loading-stage" aria-hidden="true">
     <div class="loading-marquee">
-      <img class="loading-logo" src="assets/logo.png" alt="">
-      <img class="loading-logo" src="assets/logo.png" alt="">
-      <img class="loading-logo" src="assets/logo.png" alt="">
+      <img class="loading-logo" src="logo.png?v=31.14.0" alt="">
+      <img class="loading-logo" src="logo.png?v=31.14.0" alt="">
+      <img class="loading-logo" src="logo.png?v=31.14.0" alt="">
     </div>
   </div>
 </div>
 
 <main id="wall">
-  <img id="logo" src="assets/logo.png" alt="Flöw" draggable="false">
+  <img id="logo" src="logo.png?v=31.14.0" alt="Flöw" draggable="false">
+
+  <nav id="feed-tabs" aria-label="Haber akışı">
+    <button class="feed-tab" data-feed-mode="breaking" type="button">Son dakika</button>
+    <button class="feed-tab active" data-feed-mode="agenda" type="button">Gündem</button>
+  </nav>
 
   <button id="fullscreen-button" type="button" aria-label="Tam ekran" title="Tam ekran">⤢</button>
   <button id="pip-button" type="button" aria-label="Picture-in-Picture" title="Köşeye indir">⧉</button>
@@ -245,7 +250,7 @@
 })();
 </script>
 
-<script src="js/app.js?v=31.13.3" onerror="
+<script src="js/app.js?v=31.14.0" onerror="
   var loader=document.getElementById('loading-screen');
   if(loader)loader.remove();
   var status=document.getElementById('status');
