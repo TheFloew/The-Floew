@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.13.0";
+window.__floewAppVersion="31.13.2";
 const API="https://thefloew.thefloewback.workers.dev/news";
 const VIDEO_API="https://thefloew.thefloewback.workers.dev/video";
 const META_API="https://thefloew.thefloewback.workers.dev/meta";
@@ -7,6 +7,7 @@ const IMAGE_PROXY_API="https://thefloew.thefloewback.workers.dev/image";
 const NEWS_BATCH_COUNT=12;
 const DEFAULT_SHOW_SECONDS=10;
 const SHOW_SECONDS_KEY="thefloew.showSeconds.v1";
+const TIME_RANGE_KEY="thefloew.timeRange.v1";
 const WEATHER_PREFS_KEY="thefloew.weather.v1";
 const COOKIE_NOTICE_KEY="thefloew.cookieNotice.v1";
 const REFRESH_MS=120000;
@@ -35,6 +36,51 @@ function loadShowDuration(){
 }
 
 let showDurationSeconds=loadShowDuration();
+
+const TIME_RANGE_OPTIONS=[
+  {value:"1",hours:1,label:"1 saat"},
+  {value:"2",hours:2,label:"2 saat"},
+  {value:"4",hours:4,label:"4 saat"},
+  {value:"8",hours:8,label:"8 saat"},
+  {value:"16",hours:16,label:"16 saat"},
+  {value:"24",hours:24,label:"1 gün"},
+  {value:"120",hours:120,label:"5 gün"},
+  {value:"all",hours:Infinity,label:"Tüm zamanlar"}
+];
+
+function normalizeTimeRangeValue(value){
+  const raw=String(value??"all");
+  return TIME_RANGE_OPTIONS.some(option=>option.value===raw)
+    ? raw
+    : "all";
+}
+
+function loadTimeRange(){
+  try{
+    return normalizeTimeRangeValue(
+      localStorage.getItem(TIME_RANGE_KEY)
+    );
+  }catch(e){
+    return "all";
+  }
+}
+
+let timeRangeValue=loadTimeRange();
+
+function saveTimeRange(){
+  try{
+    localStorage.setItem(
+      TIME_RANGE_KEY,
+      timeRangeValue
+    );
+  }catch(e){}
+}
+
+function currentTimeRangeOption(){
+  return TIME_RANGE_OPTIONS.find(
+    option=>option.value===timeRangeValue
+  ) || TIME_RANGE_OPTIONS[TIME_RANGE_OPTIONS.length-1];
+}
 
 function saveShowDuration(){
   try{
@@ -313,8 +359,36 @@ function enrichStories(list){
   }));
 }
 
+function storyInTimeRange(story){
+  const option=currentTimeRangeOption();
+
+  if(!Number.isFinite(option.hours)){
+    return true;
+  }
+
+  const publishedAt=new Date(story?.published).getTime();
+
+  /*
+    Zamanı bilinmeyen bir haber sonlu aralıkta güvenle sınıflandırılamaz.
+    "Tüm zamanlar" seçildiğinde ise bu haberler yine gösterilir.
+  */
+  if(!Number.isFinite(publishedAt)){
+    return false;
+  }
+
+  const ageMs=Date.now()-publishedAt;
+  const limitMs=option.hours*60*60*1000;
+
+  /*
+    Kaynak saatindeki küçük ileri sapmalar yeni haberi yanlışlıkla elemesin.
+    Negatif yaş doğal olarak limitin altında kalır ve gösterilir.
+  */
+  return ageMs<=limitMs;
+}
+
 function activeStories(){
   return rawStories.filter(s=>{
+    if(!storyInTimeRange(s))return false;
     if(!filters.sources.has(sourceKey(s.source)))return false;
 
     /*
@@ -454,7 +528,7 @@ function applyFilters(){
 }
 
 
-const INITIAL_LOADING_MIN_MS=550;
+const INITIAL_LOADING_MIN_MS=1200;
 const INITIAL_LOADING_MAX_MS=12000;
 const initialLoadingStartedAt=Date.now();
 let initialLoadFinished=false;
@@ -2489,14 +2563,27 @@ function showFullscreenButton(){
   const fs=document.getElementById("fullscreen-button");
   const pip=document.getElementById("pip-button");
   const menu=document.getElementById("menu-button");
+  const time=document.getElementById("time-range-button");
+
   fs.classList.add("is-visible");
   pip.classList.add("is-visible");
   menu.classList.add("is-visible");
+  time?.classList.add("is-visible");
+
   clearTimeout(cursorHideTimer);
   cursorHideTimer=setTimeout(()=>{
+    const timePanelOpen=
+      document.getElementById("time-range-panel")?.classList.contains("open");
+
+    const menuOpen=
+      document.getElementById("menu-overlay")?.classList.contains("open");
+
+    if(timePanelOpen || menuOpen)return;
+
     fs.classList.remove("is-visible");
     pip.classList.remove("is-visible");
     menu.classList.remove("is-visible");
+    time?.classList.remove("is-visible");
   },2000);
 }
 
@@ -3202,6 +3289,41 @@ async function togglePiP(){
 
 
 
+function renderTimeRangeControl(){
+  const option=currentTimeRangeOption();
+  const current=document.getElementById("time-range-current");
+  const trigger=document.getElementById("time-range-button");
+
+  if(current)current.textContent=option.label;
+
+  if(trigger){
+    trigger.title=`Zaman aralığı: ${option.label}`;
+    trigger.setAttribute("aria-label",trigger.title);
+  }
+
+  document.querySelectorAll(".time-range-option").forEach(button=>{
+    const active=button.dataset.hours===option.value;
+    button.classList.toggle("active",active);
+    button.setAttribute("aria-pressed",active?"true":"false");
+  });
+}
+
+function setTimeRange(value){
+  const next=normalizeTimeRangeValue(value);
+  if(next===timeRangeValue)return;
+
+  timeRangeValue=next;
+  saveTimeRange();
+  renderTimeRangeControl();
+
+  /*
+    Kaynak/kategori filtrelerinde olduğu gibi applyFilters kullanılır.
+    Böylece dar bir zaman aralığı yüzünden kaybolan mevcut haber, aralık
+    yeniden genişletildiğinde kullanıcı başka habere geçmediyse geri gelir.
+  */
+  applyFilters();
+}
+
 function renderDurationSetting(){
   const value=document.getElementById("duration-value");
   const minus=document.getElementById("duration-minus");
@@ -3240,6 +3362,16 @@ document.getElementById("duration-plus")?.addEventListener("click",e=>{
 });
 
 renderDurationSetting();
+renderTimeRangeControl();
+
+document.querySelectorAll(".time-range-option").forEach(button=>{
+  button.addEventListener("pointerdown",e=>e.stopPropagation());
+  button.addEventListener("pointerup",e=>e.stopPropagation());
+  button.addEventListener("click",e=>{
+    e.stopPropagation();
+    setTimeRange(button.dataset.hours||"all");
+  });
+});
 
 
 function showCookieNoticeIfNeeded(){
@@ -3597,7 +3729,37 @@ document.getElementById("video-setting")?.addEventListener("click",e=>{
   applyVideoSetting();
 });
 
+function openTimeRangePanel(){
+  closeMenu();
+
+  const panel=document.getElementById("time-range-panel");
+  panel?.classList.add("open");
+  panel?.setAttribute("aria-hidden","false");
+
+  renderTimeRangeControl();
+  showFullscreenButton();
+}
+
+function closeTimeRangePanel(){
+  const panel=document.getElementById("time-range-panel");
+  panel?.classList.remove("open");
+  panel?.setAttribute("aria-hidden","true");
+}
+
+function toggleTimeRangePanel(){
+  const panel=document.getElementById("time-range-panel");
+  if(!panel)return;
+
+  if(panel.classList.contains("open")){
+    closeTimeRangePanel();
+  }else{
+    openTimeRangePanel();
+  }
+}
+
 function openMenu(){
+  closeTimeRangePanel();
+
   const overlay=document.getElementById("menu-overlay");
   overlay.classList.add("open");
   overlay.setAttribute("aria-hidden","false");
@@ -3616,6 +3778,17 @@ document.getElementById("menu-button").addEventListener("click",e=>{
   e.stopPropagation();
   openMenu();
 });
+
+document.getElementById("time-range-button")?.addEventListener("pointerdown",e=>e.stopPropagation());
+document.getElementById("time-range-button")?.addEventListener("pointerup",e=>e.stopPropagation());
+document.getElementById("time-range-button")?.addEventListener("click",e=>{
+  e.stopPropagation();
+  toggleTimeRangePanel();
+});
+
+document.getElementById("time-range-panel")?.addEventListener("pointerdown",e=>e.stopPropagation());
+document.getElementById("time-range-panel")?.addEventListener("pointerup",e=>e.stopPropagation());
+document.getElementById("time-range-panel")?.addEventListener("click",e=>e.stopPropagation());
 
 document.getElementById("menu-close").addEventListener("click",closeMenu);
 
@@ -3640,7 +3813,10 @@ document.querySelectorAll(".source-link").forEach(link=>{
 });
 
 document.addEventListener("keydown",e=>{
-  if(e.key==="Escape")closeMenu();
+  if(e.key==="Escape"){
+    closeMenu();
+    closeTimeRangePanel();
+  }
 });
 
 document.getElementById("pip-button").addEventListener("pointerdown",e=>{
@@ -3669,6 +3845,8 @@ document.addEventListener("fullscreenchange",setFullscreenIcon);
 window.addEventListener("wheel",e=>{
   if(e.target.closest && e.target.closest("#fullscreen-button"))return;
   if(e.target.closest && e.target.closest("#menu-button"))return;
+  if(e.target.closest && e.target.closest("#time-range-button"))return;
+  if(e.target.closest && e.target.closest("#time-range-panel"))return;
   if(e.target.closest && e.target.closest("#pip-button"))return;
   if(e.target.closest && e.target.closest("#menu-overlay"))return;
   e.preventDefault();
@@ -3676,6 +3854,14 @@ window.addEventListener("wheel",e=>{
 },{passive:false});
 
 window.addEventListener("keydown",e=>{
+  const menuOpen=
+    document.getElementById("menu-overlay")?.classList.contains("open");
+
+  const timeOpen=
+    document.getElementById("time-range-panel")?.classList.contains("open");
+
+  if(menuOpen || timeOpen)return;
+
   if(e.key==="ArrowDown"||e.key==="PageDown"){e.preventDefault();move(1)}
   else if(e.key==="ArrowUp"||e.key==="PageUp"){e.preventDefault();move(-1)}
   else if(e.key==="f"||e.key==="F"){toggleFullscreen()}
@@ -3685,6 +3871,9 @@ window.addEventListener("pointerdown",e=>{
   if(e.button!==0)return;
   if(e.target.closest && e.target.closest("#fullscreen-button"))return;
   if(e.target.closest && e.target.closest("#menu-button"))return;
+  if(e.target.closest && e.target.closest("#time-range-button"))return;
+  if(e.target.closest && e.target.closest("#time-range-panel"))return;
+  if(e.target.closest && e.target.closest("#pip-button"))return;
   if(e.target.closest && e.target.closest("#menu-overlay"))return;
   state.x=e.clientX;state.y=e.clientY;state.t=performance.now();
 });
@@ -3694,7 +3883,16 @@ window.addEventListener("pointerup",e=>{
   if(document.getElementById("menu-overlay").classList.contains("open"))return;
   if(e.target.closest && e.target.closest("#fullscreen-button"))return;
   if(e.target.closest && e.target.closest("#menu-button"))return;
+  if(e.target.closest && e.target.closest("#time-range-button"))return;
+  if(e.target.closest && e.target.closest("#time-range-panel"))return;
+  if(e.target.closest && e.target.closest("#pip-button"))return;
   if(e.target.closest && e.target.closest("#menu-overlay"))return;
+
+  const timePanel=document.getElementById("time-range-panel");
+  if(timePanel?.classList.contains("open")){
+    closeTimeRangePanel();
+    return;
+  }
 
   const dx=e.clientX-state.x;
   const dy=e.clientY-state.y;
