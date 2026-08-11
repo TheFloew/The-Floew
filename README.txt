@@ -1,3 +1,9 @@
+Versiyon 1.3.0
+- Haber akışında zaman aralığı seçme fonksiyonu
+- Anahtar kelime filtreleyerek haber gösterme ya da gizleme
+- Anahtar kelime bazlı haber takip mekanizması
+- Hata düzeltmeleri
+
 Versiyon 1.2.6
 - Video içerikli haberlerle ilgili düzeltmeler.
 - Responsive tasarıma uygun yatay ve dikey reklam eşleşmesi.
