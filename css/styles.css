@@ -1142,3 +1142,20 @@ body.ad-mode #fullscreen-button{
   right:auto;
   bottom:auto;
 }
+
+
+/* --- V31.13.0: canonical Flöw logo size --- */
+#logo{
+  width:clamp(138px,9vw,184px) !important;
+  height:auto !important;
+}
+@media(max-width:900px){
+  #logo{
+    width:clamp(118px,22vw,164px) !important;
+  }
+}
+@media(max-width:480px){
+  #logo{
+    width:clamp(108px,30vw,148px) !important;
+  }
+}
