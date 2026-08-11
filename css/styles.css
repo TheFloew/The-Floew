@@ -1365,3 +1365,45 @@ body.ad-mode #time-range-button{
     min-width:112px;
   }
 }
+
+
+/* --- V31.13.3: final control order + logo size --- */
+
+/* Sağ üst sıra: Tam ekran -> Köşeye indir -> Zaman aralığı -> Tercihler */
+#fullscreen-button{
+  top:max(2.2vh,env(safe-area-inset-top)) !important;
+}
+
+#pip-button{
+  top:calc(max(2.2vh,env(safe-area-inset-top)) + 50px) !important;
+}
+
+#time-range-button{
+  top:calc(max(2.2vh,env(safe-area-inset-top)) + 100px) !important;
+}
+
+#menu-button{
+  top:calc(max(2.2vh,env(safe-area-inset-top)) + 150px) !important;
+}
+
+/*
+  V31.13.2'deki logonun yaklaşık üçte ikisi.
+  Önceki final clamp değerleri:
+  190–250 / 155–210 / 145–185 px
+*/
+#logo{
+  width:clamp(127px,8vw,167px) !important;
+  height:auto !important;
+}
+
+@media(max-width:900px){
+  #logo{
+    width:clamp(103px,20vw,140px) !important;
+  }
+}
+
+@media(max-width:480px){
+  #logo{
+    width:clamp(97px,25.3vw,123px) !important;
+  }
+}
