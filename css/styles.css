@@ -1407,3 +1407,97 @@ body.ad-mode #time-range-button{
     width:clamp(97px,25.3vw,123px) !important;
   }
 }
+
+
+/* --- V31.14.0: Gündem / Son dakika top-level feeds --- */
+
+#feed-tabs{
+  position:fixed;
+  z-index:350;
+  top:max(2.2vh,env(safe-area-inset-top));
+  left:50%;
+  display:flex;
+  align-items:center;
+  overflow:hidden;
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:10px;
+  background:rgba(18,18,18,.58);
+  box-shadow:0 8px 28px rgba(0,0,0,.24);
+  backdrop-filter:blur(5px);
+  -webkit-backdrop-filter:blur(5px);
+  transform:translateX(-50%);
+}
+
+.feed-tab{
+  min-width:112px;
+  height:36px;
+  padding:0 17px;
+  border:0;
+  border-right:1px solid rgba(255,255,255,.1);
+  background:transparent;
+  color:rgba(255,255,255,.58);
+  cursor:pointer;
+  font:700 11px/36px "Comfortaa",sans-serif;
+  white-space:nowrap;
+  transition:
+    color .18s ease,
+    background .18s ease,
+    opacity .18s ease;
+}
+
+.feed-tab:last-child{
+  border-right:0;
+}
+
+.feed-tab:hover{
+  color:#fff;
+  background:rgba(255,255,255,.06);
+}
+
+.feed-tab.active{
+  color:#111;
+  background:#fff;
+}
+
+/*
+  Son dakika sekmesinde zaman aralığı sabit 10 dakikadır.
+  Bu nedenle kullanıcıya ait zaman filtresi gizlenir ve Tercihler üçüncü
+  sıraya çıkar; boş bir buton yeri bırakılmaz.
+*/
+body.breaking-mode #time-range-button{
+  opacity:0 !important;
+  visibility:hidden !important;
+  pointer-events:none !important;
+}
+
+body.breaking-mode #menu-button{
+  top:calc(max(2.2vh,env(safe-area-inset-top)) + 100px) !important;
+}
+
+body.breaking-mode #time-range-panel{
+  opacity:0 !important;
+  visibility:hidden !important;
+  pointer-events:none !important;
+}
+
+/* Reklam sırasında akış sekmesi dikkat dağıtmasın ve mod değişmesin. */
+body.ad-mode #feed-tabs{
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  transition:opacity .2s ease,visibility 0s linear .2s;
+}
+
+@media(max-width:700px){
+  #feed-tabs{
+    top:max(1.7vh,env(safe-area-inset-top));
+  }
+
+  .feed-tab{
+    min-width:96px;
+    height:34px;
+    padding:0 13px;
+    font-size:10px;
+    line-height:34px;
+  }
+}
