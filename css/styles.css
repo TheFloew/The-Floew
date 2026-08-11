@@ -1418,45 +1418,42 @@ body.ad-mode #time-range-button{
   left:50%;
   display:flex;
   align-items:center;
-  overflow:hidden;
-  border:1px solid rgba(255,255,255,.14);
-  border-radius:10px;
-  background:rgba(18,18,18,.58);
-  box-shadow:0 8px 28px rgba(0,0,0,.24);
-  backdrop-filter:blur(5px);
-  -webkit-backdrop-filter:blur(5px);
+  gap:24px;
+  overflow:visible;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
   transform:translateX(-50%);
 }
 
 .feed-tab{
-  min-width:112px;
-  height:36px;
-  padding:0 17px;
+  min-width:0;
+  height:auto;
+  padding:6px 0;
   border:0;
-  border-right:1px solid rgba(255,255,255,.1);
-  background:transparent;
-  color:rgba(255,255,255,.58);
+  background:transparent !important;
+  color:rgba(255,255,255,.38);
   cursor:pointer;
-  font:700 11px/36px "Comfortaa",sans-serif;
+  font:700 11px/1.2 "Comfortaa",sans-serif;
+  letter-spacing:.01em;
   white-space:nowrap;
+  text-shadow:0 1px 3px rgba(0,0,0,.5);
   transition:
-    color .18s ease,
-    background .18s ease,
-    opacity .18s ease;
-}
-
-.feed-tab:last-child{
-  border-right:0;
+    color .2s ease,
+    opacity .2s ease;
 }
 
 .feed-tab:hover{
-  color:#fff;
-  background:rgba(255,255,255,.06);
+  color:rgba(255,255,255,.72);
 }
 
 .feed-tab.active{
-  color:#111;
-  background:#fff;
+  color:#fff;
+  opacity:1;
+  background:transparent !important;
 }
 
 /*
@@ -1494,10 +1491,10 @@ body.ad-mode #feed-tabs{
   }
 
   .feed-tab{
-    min-width:96px;
-    height:34px;
-    padding:0 13px;
+    min-width:0;
+    height:auto;
+    padding:5px 0;
     font-size:10px;
-    line-height:34px;
+    line-height:1.2;
   }
 }
