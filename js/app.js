@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.12.9";
+window.__floewAppVersion="31.13.0";
 const API="https://thefloew.thefloewback.workers.dev/news";
 const VIDEO_API="https://thefloew.thefloewback.workers.dev/video";
 const META_API="https://thefloew.thefloewback.workers.dev/meta";
@@ -242,11 +242,25 @@ const filters={
 let knownSources=[];
 let rawStories=[];
 
+/*
+  Bir kaynak/kategori geçici olarak kapatıldığı için ekrandaki haber
+  filtre dışına çıkarsa, kullanıcının geri açması halinde aynı haberi
+  geri getirmek için link tabanlı bir dönüş noktası tutuyoruz.
+  Normal gezinme başladığında bu dönüş noktası bırakılır.
+*/
+let filterReturnStoryKey="";
+
 function normalizeText(v){
   return String(v||"")
     .toLocaleLowerCase("tr-TR")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g,"");
+}
+
+function storyIdentity(story){
+  if(!story)return "";
+  if(story.link)return String(story.link);
+  return `${String(story.source||"").trim().toLocaleLowerCase("tr-TR")}|${String(story.title||"").trim()}`;
 }
 
 function categoryForStory(story){
@@ -300,13 +314,27 @@ function enrichStories(list){
 }
 
 function activeStories(){
-  return rawStories.filter(s=>
-    filters.sources.has(sourceKey(s.source)) &&
-    (
-      filters.categories.has(s.flowCategory) ||
-      (s.flowBreaking && filters.categories.has("#SonDakika"))
-    )
-  );
+  return rawStories.filter(s=>{
+    if(!filters.sources.has(sourceKey(s.source)))return false;
+
+    /*
+      Normal kategori her zaman açık olmalı.
+      Böylece #Spor kapalıyken "son dakika" etiketi taşıyan bir spor haberi
+      #SonDakika üzerinden filtreyi delip ekrana gelemez.
+    */
+    if(!filters.categories.has(s.flowCategory))return false;
+
+    /*
+      breaking:true normal kategoriyi değiştirmez; ek bir etikettir.
+      #SonDakika kapalıysa breaking haberler de gizlenir.
+    */
+    if(
+      s.flowBreaking &&
+      !filters.categories.has("#SonDakika")
+    ) return false;
+
+    return true;
+  });
 }
 
 function renderOptions(){
@@ -362,12 +390,17 @@ function toggleCategory(cat){
 
 
 function applyFilters(){
-  const currentLink=state.stories[state.index]?.link;
+  const previousStory=state.stories[state.index]||null;
+  const previousKey=storyIdentity(previousStory);
   const list=activeStories();
 
   renderOptions();
 
   if(!list.length){
+    if(!filterReturnStoryKey && previousKey){
+      filterReturnStoryKey=previousKey;
+    }
+
     status("Seçtiğiniz kaynak ve kategorilerde haber bulunamadı.");
     return;
   }
@@ -375,25 +408,50 @@ function applyFilters(){
   clearStatus();
   state.stories=list;
 
-  let idx=currentLink ? list.findIndex(x=>x.link===currentLink) : -1;
+  const preferredKey=
+    filterReturnStoryKey ||
+    previousKey;
+
+  let idx=
+    preferredKey
+      ? list.findIndex(x=>storyIdentity(x)===preferredKey)
+      : -1;
+
   if(idx<0){
+    if(!filterReturnStoryKey && previousKey){
+      filterReturnStoryKey=previousKey;
+    }
+
     idx=0;
-    state.index=0;
-    state.history=[0];
-    state.historyPos=0;
-    skippedAdHistory=null;
-    historicalAdContext=null;
-    fill(slides[state.active],list[0]);
+  }
+
+  const targetStory=list[idx];
+  const targetKey=storyIdentity(targetStory);
+
+  state.index=idx;
+  state.history=[idx];
+  state.historyPos=0;
+  skippedAdHistory=null;
+  historicalAdContext=null;
+
+  /*
+    Eski kod state'i geri taşıyıp ekrandaki slide'ı değiştirmeyebiliyordu.
+    Hedef haber farklıysa görünür slide da aynı anda güncellenir.
+  */
+  if(targetKey!==previousKey){
+    fill(slides[state.active],targetStory);
     slides[state.active].className="slide active";
-  }else{
-    state.index=idx;
-    state.history=[idx];
-    state.historyPos=0;
+  }
+
+  if(
+    filterReturnStoryKey &&
+    targetKey===filterReturnStoryKey
+  ){
+    filterReturnStoryKey="";
   }
 
   timer();
 }
-
 
 
 const INITIAL_LOADING_MIN_MS=550;
@@ -1826,6 +1884,14 @@ async function enterSkippedAdHistory(entryDir){
 }
 
 async function move(dir,options={}){
+  if(
+    filterReturnStoryKey &&
+    !options.fromAd &&
+    !options.preserveFilterReturn
+  ){
+    filterReturnStoryKey="";
+  }
+
   /*
     Reklam ekrandayken normal gezinme reklamı atlama isteğine dönüşür.
   */
@@ -2242,10 +2308,45 @@ async function load(){
     }
 
     const unique=new Map();
+
+    function mergeDuplicateStory(existing,candidate){
+      if(!existing)return candidate;
+
+      const oldPriority=Number(existing.categoryPriority)||0;
+      const newPriority=Number(candidate.categoryPriority)||0;
+
+      let preferred=
+        newPriority>oldPriority
+          ? candidate
+          : existing;
+
+      const other=
+        preferred===candidate
+          ? existing
+          : candidate;
+
+      return {
+        ...preferred,
+        breaking:Boolean(existing.breaking||candidate.breaking),
+        video:preferred.video||other.video||"",
+        videoType:preferred.videoType||other.videoType||""
+      };
+    }
+
     for(const item of successful){
       if(!item||!item.title||!item.image)continue;
-      const key=item.link||`${item.source||""}|${item.title}`;
-      if(!unique.has(key))unique.set(key,item);
+
+      const key=
+        item.link ||
+        `${item.source||""}|${item.title}`;
+
+      unique.set(
+        key,
+        mergeDuplicateStory(
+          unique.get(key),
+          item
+        )
+      );
     }
 
     const incoming=[...unique.values()];
@@ -2256,6 +2357,15 @@ async function load(){
     }
 
     rawStories=enrichStories(incoming);
+
+    if(
+      filterReturnStoryKey &&
+      !rawStories.some(
+        story=>storyIdentity(story)===filterReturnStoryKey
+      )
+    ){
+      filterReturnStoryKey="";
+    }
 
     if(!knownSources.length){
       knownSources=[...new Map(
