@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
 <meta charset="utf-8">
-<meta name="floew-version" content="31.14.0">
+<meta name="floew-version" content="31.14.1">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -15,11 +15,35 @@
 <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
 <link rel="manifest" href="site.webmanifest">
 
-<link rel="stylesheet" href="css/styles.css?v=31.14.0">
+<link rel="stylesheet" href="css/styles.css?v=31.14.1">
+
+<style id="boot-black-style">
+  html,body{background:#000}
+  #boot-black{
+    position:fixed;
+    inset:0;
+    z-index:2147483647;
+    background:#000;
+    pointer-events:none;
+  }
+</style>
 
 </head>
 
 <body>
+<div id="boot-black" aria-hidden="true"></div>
+<script>
+(function(){
+  setTimeout(function(){
+    var cover=document.getElementById("boot-black");
+    if(cover)cover.remove();
+
+    var style=document.getElementById("boot-black-style");
+    if(style)style.remove();
+  },10);
+})();
+</script>
+
 <div id="loading-screen" aria-live="polite" aria-label="Yükleniyor">
   <div class="loading-stage" aria-hidden="true">
     <div class="loading-marquee">
@@ -250,7 +274,7 @@
 })();
 </script>
 
-<script src="js/app.js?v=31.14.0" onerror="
+<script src="js/app.js?v=31.14.1" onerror="
   var loader=document.getElementById('loading-screen');
   if(loader)loader.remove();
   var status=document.getElementById('status');
