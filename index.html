@@ -2,20 +2,20 @@
 <html lang="tr">
 <head>
 <meta charset="utf-8">
-<meta name="floew-version" content="31.13.0">
+<meta name="floew-version" content="31.13.2">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark">
 <title>Flöw | Dümdüz haberler...</title>
-<link rel="icon" href="assets/favicon.ico" sizes="any">
-<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png">
-<link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <link rel="manifest" href="site.webmanifest">
 
-<link rel="stylesheet" href="css/styles.css?v=31.13.0">
+<link rel="stylesheet" href="css/styles.css?v=31.13.2">
 
 </head>
 
@@ -23,19 +23,37 @@
 <div id="loading-screen" aria-live="polite" aria-label="Yükleniyor">
   <div class="loading-stage" aria-hidden="true">
     <div class="loading-marquee">
-      <img class="loading-logo" src="assets/logo.png" alt="">
-      <img class="loading-logo" src="assets/logo.png" alt="">
-      <img class="loading-logo" src="assets/logo.png" alt="">
+      <img class="loading-logo" src="logo.png?v=31.13.2" alt="">
+      <img class="loading-logo" src="logo.png?v=31.13.2" alt="">
+      <img class="loading-logo" src="logo.png?v=31.13.2" alt="">
     </div>
   </div>
 </div>
 
 <main id="wall">
-  <img id="logo" src="assets/logo.png" alt="Flöw" draggable="false">
+  <img id="logo" src="logo.png?v=31.13.2" alt="Flöw" draggable="false">
 
   <button id="menu-button" type="button" aria-label="Tercihler" title="Tercihler">⚙</button>
+  <button id="time-range-button" type="button" aria-label="Haber zaman aralığı" title="Haber zaman aralığı">⏲</button>
   <button id="pip-button" type="button" aria-label="Picture-in-Picture" title="Köşeye indir">⧉</button>
   <button id="fullscreen-button" type="button" aria-label="Tam ekran" title="Tam ekran">⤢</button>
+
+  <div id="time-range-panel" aria-hidden="true">
+    <div class="time-range-heading">
+      <strong>Zaman aralığı</strong>
+      <span id="time-range-current">Tüm zamanlar</span>
+    </div>
+    <div class="time-range-strip" role="group" aria-label="Gösterilecek haberlerin zaman aralığı">
+      <button class="time-range-option" data-hours="1" type="button">1 saat</button>
+      <button class="time-range-option" data-hours="2" type="button">2 saat</button>
+      <button class="time-range-option" data-hours="4" type="button">4 saat</button>
+      <button class="time-range-option" data-hours="8" type="button">8 saat</button>
+      <button class="time-range-option" data-hours="16" type="button">16 saat</button>
+      <button class="time-range-option" data-hours="24" type="button">1 gün</button>
+      <button class="time-range-option" data-hours="120" type="button">5 gün</button>
+      <button class="time-range-option" data-hours="all" type="button">Tüm zamanlar</button>
+    </div>
+  </div>
 
   <div id="menu-overlay" aria-hidden="true">
     <section id="settings-menu" role="dialog" aria-modal="true" aria-label="Haber ayarları">
@@ -224,24 +242,10 @@
       showBootError();
     }
   },FAILSAFE_MS);
-
-  window.addEventListener("error",function(){
-    if(document.getElementById("loading-screen")){
-      hideLoader();
-      showBootError();
-    }
-  });
-
-  window.addEventListener("unhandledrejection",function(){
-    if(document.getElementById("loading-screen")){
-      hideLoader();
-      showBootError();
-    }
-  });
 })();
 </script>
 
-<script src="js/app.js?v=31.13.0" onerror="
+<script src="js/app.js?v=31.13.2" onerror="
   var loader=document.getElementById('loading-screen');
   if(loader)loader.remove();
   var status=document.getElementById('status');
