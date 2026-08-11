@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.14.1";
+window.__floewAppVersion="31.14.2";
 const API="https://thefloew.thefloewback.workers.dev/news";
 const VIDEO_API="https://thefloew.thefloewback.workers.dev/video";
 const META_API="https://thefloew.thefloewback.workers.dev/meta";
@@ -297,7 +297,7 @@ const feedModeStoryKeys={
   agenda:"",
   breaking:""
 };
-const BREAKING_WINDOW_MS=10*60*1000;
+const BREAKING_WINDOW_MS=20*60*1000;
 
 /*
   Bir kaynak/kategori geçici olarak kapatıldığı için ekrandaki haber
@@ -446,7 +446,7 @@ function activeStories(){
 
 function emptyStoriesMessage(){
   return feedMode==="breaking"
-    ? "Son 10 dakikada Son dakika, Türkiye, Dünya veya Siyaset haberi bulunamadı."
+    ? "Son 20 dakikada Son dakika, Türkiye, Dünya veya Siyaset haberi bulunamadı."
     : "Seçtiğiniz kaynak, kategori ve zaman aralığında haber bulunamadı.";
 }
 
@@ -488,6 +488,7 @@ function switchFeedMode(nextMode){
   filterReturnStoryKey="";
   closeTimeRangePanel();
   renderFeedMode();
+  showFullscreenButton();
 
   const list=activeStories();
   renderOptions();
@@ -2694,11 +2695,13 @@ function showFullscreenButton(){
   const pip=document.getElementById("pip-button");
   const menu=document.getElementById("menu-button");
   const time=document.getElementById("time-range-button");
+  const feedTabs=document.getElementById("feed-tabs");
 
   fs.classList.add("is-visible");
   pip.classList.add("is-visible");
   menu.classList.add("is-visible");
   time?.classList.add("is-visible");
+  feedTabs?.classList.add("is-visible");
 
   clearTimeout(cursorHideTimer);
   cursorHideTimer=setTimeout(()=>{
@@ -2714,6 +2717,7 @@ function showFullscreenButton(){
     pip.classList.remove("is-visible");
     menu.classList.remove("is-visible");
     time?.classList.remove("is-visible");
+    feedTabs?.classList.remove("is-visible");
   },2000);
 }
 
