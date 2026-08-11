@@ -10,10 +10,10 @@
 <meta name="color-scheme" content="dark">
 <title>Flöw | Dümdüz haberler...</title>
 <link rel="icon" href="favicon.ico" sizes="any">
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
-<link rel="manifest" href="site.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="fav/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="fav/favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="fav/apple-touch-icon.png">
+<link rel="manifest" href="fav/site.webmanifest">
 
 <link rel="stylesheet" href="css/styles.css?v=31.12.8">
 
@@ -23,15 +23,15 @@
 <div id="loading-screen" aria-live="polite" aria-label="Yükleniyor">
   <div class="loading-stage" aria-hidden="true">
     <div class="loading-marquee">
-      <img class="loading-logo" src="logo.png?v=31.10" alt="">
-      <img class="loading-logo" src="logo.png?v=31.10" alt="">
-      <img class="loading-logo" src="logo.png?v=31.10" alt="">
+      <img class="loading-logo" src="assets/logo.png" alt="">
+      <img class="loading-logo" src="assets/logo.png" alt="">
+      <img class="loading-logo" src="assets/logo.png" alt="">
     </div>
   </div>
 </div>
 
 <main id="wall">
-  <img id="logo" src="logo.png?v=31.10" alt="Flöw" draggable="false">
+  <img id="logo" src="assets/logo.png" alt="Flöw" draggable="false">
 
   <button id="menu-button" type="button" aria-label="Tercihler" title="Tercihler">⚙</button>
   <button id="pip-button" type="button" aria-label="Picture-in-Picture" title="Köşeye indir">⧉</button>
@@ -246,7 +246,7 @@
   if(loader)loader.remove();
   var status=document.getElementById('status');
   if(status){
-    status.innerHTML='<div class=&quot;status-band&quot;><span class=&quot;status-message&quot;>js/app.js yüklenemedi. GitHub dosya yollarını kontrol edin.</span><button class=&quot;status-close&quot; type=&quot;button&quot; aria-label=&quot;Uyarıyı kapat&quot;>×</button></div>';
+    status.innerHTML='<div class=&quot;status-band&quot;><span class=&quot;status-message&quot;>Flöw yüklenirken bir hata oluştu. Sayfayı yenileyin.</span><button class=&quot;status-close&quot; type=&quot;button&quot; aria-label=&quot;Uyarıyı kapat&quot;>×</button></div>';
     status.hidden=false;
     var close=status.querySelector('.status-close');
     if(close)close.onclick=function(){status.hidden=true;status.innerHTML='';};
