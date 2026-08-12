@@ -4,6 +4,7 @@ const API="https://thefloew.thefloewback.workers.dev/news";
 const VIDEO_API="https://thefloew.thefloewback.workers.dev/video";
 const META_API="https://thefloew.thefloewback.workers.dev/meta";
 const IMAGE_PROXY_API="https://thefloew.thefloewback.workers.dev/image";
+const FLORA_SCORES_API="https://thefloew.thefloewback.workers.dev/stats/flora-scores";
 const NEWS_REQUEST_SESSION=
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`;
 const NEWS_BATCH_CACHE_PREFIX="thefloew.newsBatchCache.v1.";
@@ -387,6 +388,164 @@ function storyIdentity(story){
   if(!story)return "";
   if(story.link)return String(story.link);
   return `${String(story.source||"").trim().toLocaleLowerCase("tr-TR")}|${String(story.title||"").trim()}`;
+}
+
+const floraScoreMap=new Map();
+let floraScoresLoading=false;
+let floraScoresLoadedAt=0;
+const FLORA_SCORES_REFRESH_MS=5*60*1000;
+
+function formatInlineFloraScore(value){
+  const number=Number(value);
+  return Number.isFinite(number)
+    ? number.toFixed(1)
+    : "—";
+}
+
+function setSlideFloraScore(el,story){
+  if(!el)return;
+
+  const scoreEl=el.querySelector(".flora-inline");
+  const valueEl=el.querySelector(".flora-inline-value");
+
+  if(!scoreEl || !valueEl)return;
+
+  const key=storyIdentity(story);
+  const score=key
+    ? floraScoreMap.get(key)
+    : undefined;
+
+  valueEl.textContent=formatInlineFloraScore(score);
+
+  const hasScore=Number.isFinite(Number(score));
+
+  scoreEl.classList.toggle(
+    "has-score",
+    hasScore
+  );
+
+  scoreEl.title=hasScore
+    ? `Flöra: ${Number(score).toFixed(1)}/100`
+    : "Flöra puanı henüz oluşmadı";
+
+  scoreEl.setAttribute(
+    "aria-label",
+    scoreEl.title
+  );
+}
+
+function refreshVisibleFloraScores(){
+  const current=state.stories[state.index]||null;
+
+  if(activeSlide){
+    setSlideFloraScore(
+      activeSlide,
+      current
+    );
+  }
+
+  if(inactiveSlide){
+    const key=inactiveSlide.dataset.storyKey||"";
+    const story=state.stories.find(
+      item=>storyIdentity(item)===key
+    );
+
+    if(story){
+      setSlideFloraScore(
+        inactiveSlide,
+        story
+      );
+    }
+  }
+}
+
+async function loadInlineFloraScores(force=false){
+  if(floraScoresLoading)return;
+
+  if(
+    !force &&
+    floraScoresLoadedAt &&
+    Date.now()-floraScoresLoadedAt<FLORA_SCORES_REFRESH_MS
+  ){
+    return;
+  }
+
+  floraScoresLoading=true;
+
+  try{
+    const streams=["main","foreign"];
+
+    const payloads=await Promise.all(
+      streams.map(async stream=>{
+        const url=new URL(FLORA_SCORES_API);
+        url.searchParams.set("range","7d");
+        url.searchParams.set("stream",stream);
+        url.searchParams.set(
+          "_floew",
+          `${NEWS_REQUEST_SESSION}-flora-${stream}-${Date.now().toString(36)}`
+        );
+
+        const response=await fetch(url.href,{
+          method:"GET",
+          mode:"cors",
+          credentials:"omit",
+          cache:"no-store",
+          headers:{
+            "Accept":"application/json"
+          }
+        });
+
+        if(!response.ok){
+          throw new Error(
+            `Flöra ${stream}: HTTP ${response.status}`
+          );
+        }
+
+        const data=await response.json();
+
+        if(!data?.ok){
+          throw new Error(
+            data?.error||
+            `Flöra ${stream} yanıtı okunamadı`
+          );
+        }
+
+        return data;
+      })
+    );
+
+    floraScoreMap.clear();
+
+    for(const data of payloads){
+      for(const row of data?.scores||[]){
+        const key=String(
+          row?.story_key||""
+        ).trim();
+
+        const score=Number(row?.flora);
+
+        if(
+          key &&
+          Number.isFinite(score)
+        ){
+          floraScoreMap.set(
+            key,
+            score
+          );
+        }
+      }
+    }
+
+    floraScoresLoadedAt=Date.now();
+    refreshVisibleFloraScores();
+  }catch(error){
+    console.warn(
+      "Inline Flöra scores:",
+      error
+    );
+  }finally{
+    floraScoresLoading=false;
+  }
 }
 
 function parseKeywordList(value){
@@ -1649,6 +1808,8 @@ function fill(el,s){
   }
 
   el.querySelector(".time").textContent=timeText(s.published);
+
+  setSlideFloraScore(el,s);
 
   const sourceLink=el.querySelector(".source-link");
   if(sourceLink){
@@ -6526,7 +6687,12 @@ window.FloewAnalytics={
 setFullscreenIcon();
 startAdsCatalogRefresh();
 load();
+loadInlineFloraScores();
 setInterval(load,REFRESH_MS);
+setInterval(
+  ()=>loadInlineFloraScores(true),
+  FLORA_SCORES_REFRESH_MS
+);
 
 if(window.__floewInitialReady){
   showCookieNoticeIfNeeded();
