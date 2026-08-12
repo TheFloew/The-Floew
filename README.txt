@@ -1,3 +1,7 @@
+Beta Versiyon 1.5.0
+- Yabancı haberler sekmesi eklendi.
+- Haber metinleri artık kesilmiyor.
+
 Beta Versiyon 1.4.4
 - Mobil sitede "Son dakika / Gündem" sekmeleri kaybolmuyor.
 - Mobilde dokunarak haber geçme özelliği istenmeyen kaydırmaların önüne geçmek için kalktı.
@@ -53,34 +57,34 @@ Beta Versiyon 1.0.8
 -Haber kaynağı seçebilme menüsü.
 -Haberler kategorilere göre gösteriliyor ve kategoriler açılıp kapatılabiliyor.
 
-Alpha 7:
+Beta 7:
 Gezinme yönü sorunu düzeltildi.
 
-Alpha 6:
+Beta 6:
 - Gezinmeyi artık bir haber geçmişi üzerinden yapıyoruz. Yani geri kaydırdığında sistem tekrar "farklı bir kaynak bulayım" diye yeni bir haber seçmeyecek; daha önce gördüğün gerçek habere dönecek. Ayrıca geri gelip tekrar ileri gidince de aynı gezinme geçmişini koruyor.
 - Yeni haberin görseli artık geçiş sırasında karışmıyor. Önceden yeni görsel henüz hazır değilse eski/boş görsel animasyonun altında görünebiliyordu. Şimdi görsel hazır olmadan haber kaymaya başlamıyor.
 - Tam ekran butonunun kaybolması yumuşatıldı
 
-Alpha 5:
+Beta 5:
 - Tam ekran butonu artık sadece ⤢ karakteri. Fare hareket ettiğinde görünür. Fare 2 saniye hareketsiz kalırsa kaybolur. Tam ekranda da normal ekranda da aynı şekilde çalışır. F tuşu da çalışmaya devam ediyor.
 - Kaynak ikonları önceki 50 px'den 25 px'e indirildi. Kaynak adının tam başında kalıyor. Tüm ikonlar standart 25×25 alanında.
 - The Flöw logosunun gölgesi belirgin şekilde yumuşatıldı. Saat/tarih gölgesi azaltıldı. Kaynak ikonlarının gölgesi azaltıldı. Manşet metninin gölgesi de daha kısa yarıçaplı ve daha transparan hale getirildi.
 - Manşet artık ekranın yaklaşık %75'ine kadar yayılabiliyor.
 - Logo bir miktar büyütüldü. Yeni genişlik yaklaşık %5, maksimum 105 px.
 
-Alpha 4:
+Beta 4:
 - Tarih ve saat sorunu giderildi.
 - Haber kaynağı logolarının boyutları eşlendi.
 - Tam ekran modu sorunu giderildi.
 - Haber kaynakları rastgeleleştirildi. Artık arka arkaya geçilen haberler aynı kaynaktan gözükmüyor.
 
-Alpha 3 Sürüm notları:
+Beta 3 Sürüm notları:
 - Tam ekran özelliği eklendi.
 - Haber kaynakları artık kendi logolarıyla gösteriliyor.
 - Sayfanın sol altına saat ve tarih eklendi.
 - Comfortaa fontuna geçildi.
 
-Alpha 2 Sürüm notları:
+Beta 2 Sürüm notları:
 - Sayfanın herhangi bir yerine sol tıklama = sonraki haber
 - Yukarı sürükleme = sonraki haber
 - Aşağı sürükleme = önceki haber
