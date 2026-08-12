@@ -1,3 +1,10 @@
+Beta Versiyon 1.4.4
+- Mobil sitede "Son dakika / Gündem" sekmeleri kaybolmuyor.
+- Mobilde dokunarak haber geçme özelliği istenmeyen kaydırmaların önüne geçmek için kalktı.
+- Public Flöw statistics overlay is now frameless and matches Preferences.
+- Ana sayfadaki butonlar menüleştirildi.
+- "Son dakika / Gündem" sekmeleri arasındaki geçişe kayma animasyonu eklendi.
+
 Beta Versiyon 1.4.3
 - İstatistikler ve kullanıcı hareketlerini depolayan veritabanı geldi.
 - Kullanıcı arayüzünden bağımsız olarak raporlama için Flöw Analytics arayüzü eklendi.
