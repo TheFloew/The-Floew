@@ -424,8 +424,10 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 .headline-actions{
   display:flex;
   align-items:center;
-  gap:10px;
+  justify-content:flex-end;
+  gap:17px;
   margin-top:10px;
+  width:100%;
 }
 
 .flora-inline{
@@ -449,6 +451,11 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
   font-size:18px;
   font-weight:400;
   line-height:.8;
+}
+
+.flora-inline-value{
+  font-size:13px;
+  line-height:1;
 }
 
 .flora-inline.has-score .flora-inline-value{
@@ -2929,12 +2936,16 @@ body.foreign-mode #time-range-button{
 
 @media(max-width:520px){
   .headline-actions{
-    gap:9px;
+    gap:15px;
     margin-top:9px;
   }
 
   .flora-inline{
     font-size:10px;
+  }
+
+  .flora-inline-value{
+    font-size:12px;
   }
 
   .flora-inline-mark{
