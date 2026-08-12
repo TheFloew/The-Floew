@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
 <meta charset="utf-8">
-<meta name="floew-version" content="31.17.3">
+<meta name="floew-version" content="31.18.0">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -15,7 +15,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
 <link rel="manifest" href="site.webmanifest">
 
-<link rel="stylesheet" href="css/styles-31.17.3.css">
+<link rel="stylesheet" href="css/styles-31.18.0.css">
 
 <style id="boot-black-style">
   html,body{background:#000}
@@ -60,6 +60,7 @@
   <nav id="feed-tabs" aria-label="Haber akışı">
     <button class="feed-tab" data-feed-mode="breaking" type="button">Son dakika</button>
     <button class="feed-tab active" data-feed-mode="agenda" type="button">Gündem</button>
+    <button class="feed-tab" data-feed-mode="foreign" type="button">Yabancı</button>
   </nav>
 
   <button id="fullscreen-button" type="button" aria-label="Tam ekran" title="Tam ekran">⤢</button>
@@ -118,8 +119,8 @@
     <section id="public-stats-panel" role="dialog" aria-modal="true" aria-label="Flöw istatistikleri">
       <div class="menu-header">
         <div>
-          <div class="menu-title">Flöw İstatistikleri</div>
-          <div class="menu-subtitle">Flöw'de son dönemde neler ilgi görüyor?</div>
+          <div id="public-stats-title" class="menu-title">Flöw İstatistikleri</div>
+          <div id="public-stats-subtitle" class="menu-subtitle">Flöw'de son dönemde neler ilgi görüyor?</div>
         </div>
         <button id="stats-close" type="button" aria-label="İstatistikleri kapat">×</button>
       </div>
@@ -138,14 +139,14 @@
         </section>
 
         <section class="public-stats-section">
-          <div class="public-stats-heading">En çok ilgi gören kategoriler</div>
+          <div id="public-stats-secondary-heading" class="public-stats-heading">En çok ilgi gören kategoriler</div>
           <div id="public-stats-categories" class="public-stats-list compact"></div>
         </section>
       </div>
 
       <div class="public-stats-footer">
         <span id="public-stats-status">İstatistikler hazırlanıyor...</span>
-        <a href="flora.html" target="_blank" rel="noopener noreferrer">Flöra'yı ayrıntılı gör →</a>
+        <a id="public-stats-detail-link" href="flora.html" target="_blank" rel="noopener noreferrer">Flöra'yı ayrıntılı gör →</a>
       </div>
     </section>
   </div>
@@ -342,12 +343,12 @@
 })();
 </script>
 
-<script src="js/app-31.17.3.js" onerror="
+<script src="js/app-31.18.0.js" onerror="
   var loader=document.getElementById('loading-screen');
   if(loader)loader.remove();
   var status=document.getElementById('status');
   if(status){
-    status.innerHTML='<div class=&quot;status-band&quot;><span class=&quot;status-message&quot;>js/app-31.17.3.js yüklenemedi. GitHub dosya yollarını kontrol edin.</span><button class=&quot;status-close&quot; type=&quot;button&quot; aria-label=&quot;Uyarıyı kapat&quot;>×</button></div>';
+    status.innerHTML='<div class=&quot;status-band&quot;><span class=&quot;status-message&quot;>js/app-31.18.0.js yüklenemedi. GitHub dosya yollarını kontrol edin.</span><button class=&quot;status-close&quot; type=&quot;button&quot; aria-label=&quot;Uyarıyı kapat&quot;>×</button></div>';
     status.hidden=false;
     var close=status.querySelector('.status-close');
     if(close)close.onclick=function(){status.hidden=true;status.innerHTML='';};
