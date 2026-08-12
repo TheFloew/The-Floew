@@ -11,6 +11,16 @@ const NEWS_BATCH_CACHE_PREFIX="thefloew.newsBatchCache.v1.";
 const NEWS_BATCH_CACHE_MAX_AGE_MS=20*60*1000;
 
 const NEWS_BATCH_COUNT=12;
+
+/*
+  12 Worker batch'ini aynı anda ateşlemek özellikle mobil tarayıcılarda
+  bağlantı havuzunu ve Worker tarafındaki RSS isteklerini gereksiz biçimde
+  sıkıştırabiliyor. Küçük bir kuyruk daha kararlı davranıyor.
+*/
+const NEWS_BATCH_CONCURRENCY=3;
+const NEWS_FETCH_TIMEOUT_MS=22000;
+const NEWS_JSONP_TIMEOUT_MS=22000;
+const NEWS_BATCH_STALE_CACHE_MAX_AGE_MS=24*60*60*1000;
 const DEFAULT_SHOW_SECONDS=10;
 const SHOW_SECONDS_KEY="thefloew.showSeconds.v1";
 const TIME_RANGE_KEY="thefloew.timeRange.v1";
@@ -3251,21 +3261,40 @@ function saveNewsBatchCache(batch,data){
   }
 }
 
-function loadNewsBatchCache(batch){
+function loadNewsBatchCache(
+  batch,
+  {allowStale=false}={}
+){
   try{
-    const raw=localStorage.getItem(newsBatchCacheKey(batch));
+    const raw=localStorage.getItem(
+      newsBatchCacheKey(batch)
+    );
     if(!raw)return null;
 
     const parsed=JSON.parse(raw);
     const savedAt=Number(parsed?.savedAt)||0;
-    const data=Array.isArray(parsed?.data)?parsed.data:null;
+    const data=Array.isArray(parsed?.data)
+      ? parsed.data
+      : null;
 
-    if(
-      !data ||
-      !savedAt ||
-      Date.now()-savedAt>NEWS_BATCH_CACHE_MAX_AGE_MS
-    ){
-      localStorage.removeItem(newsBatchCacheKey(batch));
+    if(!data || !savedAt){
+      localStorage.removeItem(
+        newsBatchCacheKey(batch)
+      );
+      return null;
+    }
+
+    const age=Date.now()-savedAt;
+    const maxAge=allowStale
+      ? NEWS_BATCH_STALE_CACHE_MAX_AGE_MS
+      : NEWS_BATCH_CACHE_MAX_AGE_MS;
+
+    if(age>maxAge){
+      if(allowStale){
+        localStorage.removeItem(
+          newsBatchCacheKey(batch)
+        );
+      }
       return null;
     }
 
@@ -3291,7 +3320,7 @@ function buildNewsBatchUrl(batch,transport="fetch",attempt=0){
 
 async function fetchNewsBatchHttp(batch,attempt=0){
   const controller=new AbortController();
-  const timeout=setTimeout(()=>controller.abort(),16000);
+  const timeout=setTimeout(()=>controller.abort(),NEWS_FETCH_TIMEOUT_MS);
 
   try{
     const url=buildNewsBatchUrl(batch,"fetch",attempt);
@@ -3381,60 +3410,145 @@ function fetchNewsBatchJsonp(batch){
         reject,
         new Error(`Batch ${batch}: JSONP zaman aşımı`)
       );
-    },16000);
+    },NEWS_JSONP_TIMEOUT_MS);
 
     document.head.appendChild(script);
   });
 }
 
 async function fetchNewsBatch(batch){
-  let firstError=null;
+  let firstHttpError=null;
+  let jsonpError=null;
 
-  for(let attempt=0;attempt<2;attempt++){
-    try{
-      return await fetchNewsBatchHttp(batch,attempt);
-    }catch(err){
-      if(!firstError)firstError=err;
+  /*
+    İlk normal CORS isteği. Başarısızsa aynı hatayı iki kez üst üste
+    üretmek yerine hemen JSONP'ye geç.
+  */
+  try{
+    return await fetchNewsBatchHttp(
+      batch,
+      0
+    );
+  }catch(err){
+    firstHttpError=err;
 
-      console.warn(
-        `NEWS WALL batch ${batch} fetch attempt ${attempt+1}:`,
-        err
-      );
-
-      if(attempt===0){
-        await waitForNewsRetry(300);
-      }
-    }
+    console.warn(
+      `NEWS WALL batch ${batch} fetch:`,
+      err
+    );
   }
 
   /*
-    Normal reload sırasında Firefox/Safari tarafında cross-origin fetch
-    geçici olarak NetworkError'a düşerse, tüm sayfayı hard refresh'e
-    zorlamak yerine Worker'ın mevcut JSONP desteğini otomatik kullan.
+    JSONP, fetch/CORS katmanından bağımsız ikinci taşıma yolu.
   */
   try{
     return await fetchNewsBatchJsonp(batch);
-  }catch(jsonpError){
+  }catch(err){
+    jsonpError=err;
+
     console.warn(
       `NEWS WALL batch ${batch} JSONP fallback:`,
-      jsonpError
+      err
+    );
+  }
+
+  /*
+    Son bir kısa HTTP denemesi; radyo/Wi-Fi geçişinde bağlantı geri geldiyse
+    toparlanır. Kuyruk sayesinde 12 batch aynı anda retry fırtınası oluşturmaz.
+  */
+  await waitForNewsRetry(450);
+
+  try{
+    return await fetchNewsBatchHttp(
+      batch,
+      1
+    );
+  }catch(finalHttpError){
+    console.warn(
+      `NEWS WALL batch ${batch} final fetch:`,
+      finalHttpError
     );
 
-    /*
-      Son çare: kısa süre önce başarıyla alınmış batch'i göster.
-      Normal periyodik yenileme daha sonra canlı veriyi yeniden dener.
-    */
-    const cached=loadNewsBatchCache(batch);
+    const cached=
+      loadNewsBatchCache(batch) ||
+      loadNewsBatchCache(
+        batch,
+        {allowStale:true}
+      );
 
     if(cached){
       console.warn(
-        `NEWS WALL batch ${batch}: kısa süreli yerel haber önbelleği kullanılıyor.`
+        `NEWS WALL batch ${batch}: yerel haber önbelleği kullanılıyor.`
       );
       return cached;
     }
 
-    throw firstError||jsonpError;
+    const detail=[
+      firstHttpError?.message,
+      jsonpError?.message,
+      finalHttpError?.message
+    ]
+      .filter(Boolean)
+      .join(" / ");
+
+    throw new Error(
+      detail
+        ? `Batch ${batch}: bağlantı kurulamadı (${detail})`
+        : `Batch ${batch}: bağlantı kurulamadı`
+    );
   }
+}
+
+async function settleNewsBatches(
+  batchCount=NEWS_BATCH_COUNT,
+  concurrency=NEWS_BATCH_CONCURRENCY
+){
+  const results=
+    Array.from(
+      {length:batchCount},
+      ()=>null
+    );
+
+  let nextBatch=0;
+
+  async function runner(){
+    while(true){
+      const batch=nextBatch++;
+
+      if(batch>=batchCount){
+        return;
+      }
+
+      try{
+        results[batch]={
+          status:"fulfilled",
+          value:await fetchNewsBatch(batch)
+        };
+      }catch(reason){
+        results[batch]={
+          status:"rejected",
+          reason
+        };
+      }
+    }
+  }
+
+  const runnerCount=Math.max(
+    1,
+    Math.min(
+      concurrency,
+      batchCount
+    )
+  );
+
+  await Promise.all(
+    Array.from(
+      {length:runnerCount},
+      ()=>runner()
+    )
+  );
+
+  return results;
 }
 
 let initialNewsRetryCount=0;
@@ -3464,7 +3578,9 @@ function scheduleInitialNewsRetry(){
   return true;
 }
 
-async function load(){
+let newsLoadInFlight=null;
+
+async function performNewsLoad(){
   try{
     /*
       Worker kaynakları dört ayrı çağrıya böler. Böylece tek Worker
@@ -3477,8 +3593,9 @@ async function load(){
         ? Promise.resolve(knownSources)
         : fetchSourceCatalog();
 
-    const settled=await Promise.allSettled(
-      Array.from({length:NEWS_BATCH_COUNT},(_,batch)=>fetchNewsBatch(batch))
+    const settled=await settleNewsBatches(
+      NEWS_BATCH_COUNT,
+      NEWS_BATCH_CONCURRENCY
     );
 
     await catalogPromise;
@@ -3708,6 +3825,21 @@ async function load(){
     }
   }
 }
+
+
+function load(){
+  if(newsLoadInFlight){
+    return newsLoadInFlight;
+  }
+
+  newsLoadInFlight=performNewsLoad()
+    .finally(()=>{
+      newsLoadInFlight=null;
+    });
+
+  return newsLoadInFlight;
+}
+
 
 function updateClock(){
   const now=new Date();
@@ -6689,6 +6821,33 @@ startAdsCatalogRefresh();
 load();
 loadInlineFloraScores();
 setInterval(load,REFRESH_MS);
+
+/*
+  Mobil tarayıcı arka plandan dönerken veya Wi-Fi/hücresel ağ değiştirirken
+  ilk istek browser tarafından iptal edilmiş olabilir. Akış boşsa bağlantı
+  geri geldiğinde otomatik olarak yeniden dene.
+*/
+window.addEventListener("online",()=>{
+  if(!state.stories.length){
+    resetInitialNewsRetry();
+    load();
+  }
+});
+
+window.addEventListener("pageshow",()=>{
+  if(!state.stories.length){
+    load();
+  }
+});
+
+document.addEventListener("visibilitychange",()=>{
+  if(
+    document.visibilityState==="visible" &&
+    !state.stories.length
+  ){
+    load();
+  }
+});
 setInterval(
   ()=>loadInlineFloraScores(true),
   FLORA_SCORES_REFRESH_MS
