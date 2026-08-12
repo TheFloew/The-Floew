@@ -1,0 +1,6059 @@
+window.__floewAppStarted=true;
+window.__floewAppVersion="31.18.0";
+const API="https://thefloew.thefloewback.workers.dev/news";
+const VIDEO_API="https://thefloew.thefloewback.workers.dev/video";
+const META_API="https://thefloew.thefloewback.workers.dev/meta";
+const IMAGE_PROXY_API="https://thefloew.thefloewback.workers.dev/image";
+const NEWS_BATCH_COUNT=12;
+const DEFAULT_SHOW_SECONDS=10;
+const SHOW_SECONDS_KEY="thefloew.showSeconds.v1";
+const TIME_RANGE_KEY="thefloew.timeRange.v1";
+const KEYWORD_FILTER_KEY="thefloew.keywordFilter.v1";
+const KEYWORD_WATCH_KEY="thefloew.keywordWatch.v1";
+const WEATHER_PREFS_KEY="thefloew.weather.v1";
+const COOKIE_NOTICE_KEY="thefloew.cookieNotice.v1";
+const REFRESH_MS=120000;
+const SWIPE=70;
+
+const ADS_API="https://thefloew.thefloewback.workers.dev/ads";
+const ADS_CACHE_KEY="thefloew.adsCatalog.v5";
+const ADS_TEST_MODE=new URLSearchParams(location.search).get("adtest")==="1";
+const ADS_INTERVAL_NEWS=10;
+const AD_IMAGE_MS=15000;
+const ADS_REFRESH_MS=5*60*1000;
+let adsCatalogPromise=null;
+let adsCatalogPromiseLayout="";
+let adCatalogLayout="";
+let adLayoutRefreshTimer=null;
+let adTestRan=false;
+
+function loadShowDuration(){
+  try{
+    const saved=Number(localStorage.getItem(SHOW_SECONDS_KEY));
+    if(Number.isFinite(saved)){
+      return Math.min(60,Math.max(5,Math.round(saved)));
+    }
+  }catch(e){}
+  return DEFAULT_SHOW_SECONDS;
+}
+
+let showDurationSeconds=loadShowDuration();
+
+const TIME_RANGE_OPTIONS=[
+  {value:"1",hours:1,label:"1 saat"},
+  {value:"2",hours:2,label:"2 saat"},
+  {value:"4",hours:4,label:"4 saat"},
+  {value:"8",hours:8,label:"8 saat"},
+  {value:"16",hours:16,label:"16 saat"},
+  {value:"24",hours:24,label:"1 gün"},
+  {value:"120",hours:120,label:"5 gün"},
+  {value:"all",hours:Infinity,label:"Tüm zamanlar"}
+];
+
+function normalizeTimeRangeValue(value){
+  const raw=String(value??"all");
+  return TIME_RANGE_OPTIONS.some(option=>option.value===raw)
+    ? raw
+    : "all";
+}
+
+function loadTimeRange(){
+  try{
+    return normalizeTimeRangeValue(
+      localStorage.getItem(TIME_RANGE_KEY)
+    );
+  }catch(e){
+    return "all";
+  }
+}
+
+let timeRangeValue=loadTimeRange();
+
+function saveTimeRange(){
+  try{
+    localStorage.setItem(
+      TIME_RANGE_KEY,
+      timeRangeValue
+    );
+  }catch(e){}
+}
+
+function currentTimeRangeOption(){
+  return TIME_RANGE_OPTIONS.find(
+    option=>option.value===timeRangeValue
+  ) || TIME_RANGE_OPTIONS[TIME_RANGE_OPTIONS.length-1];
+}
+
+function saveShowDuration(){
+  try{
+    localStorage.setItem(
+      SHOW_SECONDS_KEY,
+      String(showDurationSeconds)
+    );
+  }catch(e){}
+}
+
+function loadWeatherPreferences(){
+  try{
+    const raw=localStorage.getItem(WEATHER_PREFS_KEY);
+    if(!raw){
+      return {
+        city:"İstanbul",
+        label:"İstanbul",
+        unit:"celsius",
+        lat:null,
+        lon:null
+      };
+    }
+
+    const p=JSON.parse(raw)||{};
+
+    return {
+      city:String(p.city||"İstanbul"),
+      label:String(p.label||p.city||"İstanbul"),
+      unit:p.unit==="fahrenheit"?"fahrenheit":"celsius",
+      lat:Number.isFinite(p.lat)?p.lat:null,
+      lon:Number.isFinite(p.lon)?p.lon:null
+    };
+  }catch(e){
+    return {
+      city:"İstanbul",
+      label:"İstanbul",
+      unit:"celsius",
+      lat:null,
+      lon:null
+    };
+  }
+}
+
+let weatherPreferences=loadWeatherPreferences();
+
+function saveWeatherPreferences(){
+  try{
+    localStorage.setItem(
+      WEATHER_PREFS_KEY,
+      JSON.stringify(weatherPreferences)
+    );
+  }catch(e){}
+}
+
+const SOURCE_LOGOS={
+  "cnn türk":"https://icons.duckduckgo.com/ip3/cnnturk.com.ico",
+  "cnn turk":"https://icons.duckduckgo.com/ip3/cnnturk.com.ico",
+  "sözcü":"https://icons.duckduckgo.com/ip3/sozcu.com.tr.ico",
+  "sozcu":"https://icons.duckduckgo.com/ip3/sozcu.com.tr.ico",
+  "anadolu ajansı":"https://icons.duckduckgo.com/ip3/aa.com.tr.ico",
+  "aa":"https://icons.duckduckgo.com/ip3/aa.com.tr.ico",
+  "trt haber":"https://icons.duckduckgo.com/ip3/trthaber.com.ico",
+  "ntv":"https://icons.duckduckgo.com/ip3/ntv.com.tr.ico",
+  "habertürk":"https://icons.duckduckgo.com/ip3/haberturk.com.ico",
+  "haberturk":"https://icons.duckduckgo.com/ip3/haberturk.com.ico",
+  "hürriyet":"https://icons.duckduckgo.com/ip3/hurriyet.com.tr.ico",
+  "hurriyet":"https://icons.duckduckgo.com/ip3/hurriyet.com.tr.ico",
+  "cumhuriyet":"https://icons.duckduckgo.com/ip3/cumhuriyet.com.tr.ico",
+  "milliyet":"https://icons.duckduckgo.com/ip3/milliyet.com.tr.ico",
+  "bbc türkçe":"https://icons.duckduckgo.com/ip3/bbc.com.ico",
+  "dw türkçe":"https://icons.duckduckgo.com/ip3/dw.com.ico",
+  "mynet":"https://icons.duckduckgo.com/ip3/mynet.com.ico",
+  "sputnik türkiye":"https://icons.duckduckgo.com/ip3/sputniknews.com.ico",
+  "bigpara":"https://icons.duckduckgo.com/ip3/bigpara.hurriyet.com.tr.ico",
+  "ekoseyir":"https://icons.duckduckgo.com/ip3/ekoseyir.com.ico",
+
+  "shiftdelete.net":"https://icons.duckduckgo.com/ip3/shiftdelete.net.ico",
+  "onedio":"https://icons.duckduckgo.com/ip3/onedio.com.ico",
+  "beyazperde":"https://icons.duckduckgo.com/ip3/beyazperde.com.ico",
+  "motor1 türkiye":"https://icons.duckduckgo.com/ip3/tr.motor1.com.ico",
+  "evrim ağacı":"https://icons.duckduckgo.com/ip3/evrimagaci.org.ico",
+  "bant mag.":"https://icons.duckduckgo.com/ip3/bantmag.com.ico",
+  "bir baba indie":"https://icons.duckduckgo.com/ip3/birbabaindie.com.ico",
+  "edebiyat haber":"https://icons.duckduckgo.com/ip3/edebiyathaber.net.ico",
+  "elle türkiye":"https://icons.duckduckgo.com/ip3/elle.com.tr.ico",
+  "marie claire türkiye":"https://icons.duckduckgo.com/ip3/marieclaire.com.tr.ico",
+  "istanbul life":"https://icons.duckduckgo.com/ip3/istanbullife.com.tr.ico",
+  "live to bloom":"https://icons.duckduckgo.com/ip3/livetobloom.com.ico",
+  "elele":"https://icons.duckduckgo.com/ip3/elele.com.tr.ico",
+  "arkeofili":"https://icons.duckduckgo.com/ip3/arkeofili.com.ico",
+  "işin detayı":"https://icons.duckduckgo.com/ip3/isindetayi.com.ico",
+  "al jazeera":"https://icons.duckduckgo.com/ip3/aljazeera.com.ico",
+  "dw":"https://icons.duckduckgo.com/ip3/dw.com.ico",
+  "france 24":"https://icons.duckduckgo.com/ip3/france24.com.ico",
+  "euronews":"https://icons.duckduckgo.com/ip3/euronews.com.ico",
+  "sky news":"https://icons.duckduckgo.com/ip3/news.sky.com.ico",
+  "bbc news":"https://icons.duckduckgo.com/ip3/bbc.com.ico",
+  "the new york times":"https://icons.duckduckgo.com/ip3/nytimes.com.ico",
+  "npr":"https://icons.duckduckgo.com/ip3/npr.org.ico",
+  "nbc news":"https://icons.duckduckgo.com/ip3/nbcnews.com.ico",
+  "los angeles times":"https://icons.duckduckgo.com/ip3/latimes.com.ico",
+  "the guardian":"https://icons.duckduckgo.com/ip3/theguardian.com.ico",
+  "the independent":"https://icons.duckduckgo.com/ip3/independent.co.uk.ico",
+  "financial times":"https://icons.duckduckgo.com/ip3/ft.com.ico",
+  "the sun":"https://icons.duckduckgo.com/ip3/thesun.co.uk.ico",
+  "the mirror":"https://icons.duckduckgo.com/ip3/mirror.co.uk.ico",
+  "le monde":"https://icons.duckduckgo.com/ip3/lemonde.fr.ico",
+  "global news":"https://icons.duckduckgo.com/ip3/globalnews.ca.ico",
+  "south china morning post":"https://icons.duckduckgo.com/ip3/scmp.com.ico",
+  "the sydney morning herald":"https://icons.duckduckgo.com/ip3/smh.com.au.ico",
+  "the japan times":"https://icons.duckduckgo.com/ip3/japantimes.co.jp.ico",
+  "cnbc":"https://icons.duckduckgo.com/ip3/cnbc.com.ico",
+  "the wall street journal":"https://icons.duckduckgo.com/ip3/wsj.com.ico",
+  "the verge":"https://icons.duckduckgo.com/ip3/theverge.com.ico",
+  "techcrunch":"https://icons.duckduckgo.com/ip3/techcrunch.com.ico",
+  "wired":"https://icons.duckduckgo.com/ip3/wired.com.ico",
+  "vox":"https://icons.duckduckgo.com/ip3/vox.com.ico",
+  "rt":"https://icons.duckduckgo.com/ip3/rt.com.ico",
+  "sputnik":"https://icons.duckduckgo.com/ip3/sputnikglobe.com.ico"
+
+};
+
+const slides=[document.getElementById("a"),document.getElementById("b")];
+
+const adOverlay=document.getElementById("ad-overlay");
+const adImage=document.getElementById("ad-image");
+const adVideo=document.getElementById("ad-video");
+
+let adCatalog=[];
+let adActive=false;
+let newsShownSinceAd=0;
+let lastAdName="";
+let adCatalogRefreshTimer=null;
+let adPlaybackFinish=null;
+let adHasEntered=false;
+let adSkipRequestedDirection=0;
+
+/*
+  Reklamı açan wheel/swipe hareketinin kalan momentum event'leri reklamı
+  yanlışlıkla hemen atlamasın. Reklam tamamen girdikten kısa süre sonra
+  kullanıcı skip hareketlerini kabul etmeye başlarız.
+*/
+let adSkipEnabledAt=0;
+const AD_SKIP_GRACE_MS=450;
+
+let currentAd=null;
+let adEntryDirection=1;
+
+/*
+  Haber history dizisini bozmadan reklamı gerçek bir gezinme durağı gibi
+  davranacak şekilde araya yerleştiriyoruz.
+
+  skippedAdHistory yalnızca kullanıcı reklamı bitmeden ileri geçtiğinde kurulur.
+  Böylece:
+    haber A -> reklam -> haber B
+  dizisinde B'den geri gidildiğinde reklama, reklamdan da A'ya dönülebilir.
+*/
+let skippedAdHistory=null;
+let historicalAdContext=null;
+
+const state={
+  stories:[],
+  index:0,
+  active:0,
+  busy:false,
+  timer:null,
+  x:0,y:0,t:0,
+  history:[],
+  historyPos:0
+};
+const CATEGORIES=[
+  "#SonDakika","#Yaşam","#Türkiye","#Dünya","#Siyaset",
+  "#Ekonomi","#Magazin","#Teknoloji","#Kültür-Sanat","#Sinema",
+  "#Otomotiv","#Edebiyat","#Müzik","#Televizyon","#Spor",
+  "#Sağlık","#Bilim","#Moda","#Tarih","#Gezi"
+];
+
+const PREFS_KEY="thefloew.preferences.v5";
+const FOREIGN_SOURCE_PREFS_KEY="thefloew.foreignSources.v1";
+const FOREIGN_CATEGORY="#Yabancı";
+const FEED_MODE_ORDER=["breaking","agenda","foreign"];
+
+const NEW_CATEGORIES=["#Yaşam","#Sağlık","#Otomotiv","#Sinema","#Müzik","#Edebiyat","#Televizyon","#Bilim","#Moda","#Tarih","#Gezi"];
+const NEW_SOURCES=["shiftdelete.net","onedio","beyazperde","motor1 türkiye","evrim ağacı","bant mag.","bir baba indie","edebiyat haber","elle türkiye","marie claire türkiye","istanbul life","live to bloom","elele","arkeofili","işin detayı"];
+
+function loadPreferences(){
+  try{
+    const raw=localStorage.getItem(PREFS_KEY);
+    if(!raw)return {sources:null,categories:null,direction:"up",videoEnabled:true};
+    const p=JSON.parse(raw)||{};
+
+    let categories=Array.isArray(p.categories)?p.categories.filter(c=>c!=="#Gündem"):null;
+    if(categories){
+      for(const cat of NEW_CATEGORIES){
+        if(!categories.includes(cat))categories.push(cat);
+      }
+    }
+
+    return {
+      sources:Array.isArray(p.sources)?p.sources:null,
+      categories,
+      direction:["up","down","left","right"].includes(p.direction)?p.direction:"up",
+      videoEnabled:p.videoEnabled!==false
+    };
+  }catch(e){
+    console.warn("Preferences:",e);
+    return {sources:null,categories:null,direction:"up",videoEnabled:true};
+  }
+}
+
+const savedPreferences=loadPreferences();
+let transitionDirection=savedPreferences.direction||"up";
+let videoEnabled=savedPreferences.videoEnabled!==false;
+let sourcePreferencesApplied=false;
+
+function savePreferences(){
+  try{
+    localStorage.setItem(PREFS_KEY,JSON.stringify({
+      sources:[...filters.sources],
+      categories:[...filters.categories],
+      direction:transitionDirection,
+      videoEnabled
+    }));
+  }catch(e){
+    console.warn("Preferences:",e);
+  }
+}
+
+function loadForeignSourcePreferences(){
+  try{
+    const raw=localStorage.getItem(FOREIGN_SOURCE_PREFS_KEY);
+    if(!raw)return null;
+    const parsed=JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.map(sourceKey).filter(Boolean)
+      : null;
+  }catch(e){
+    console.warn("Foreign source preferences:",e);
+    return null;
+  }
+}
+
+function saveForeignSourcePreferences(){
+  try{
+    localStorage.setItem(
+      FOREIGN_SOURCE_PREFS_KEY,
+      JSON.stringify([...foreignSourceFilters])
+    );
+  }catch(e){
+    console.warn("Foreign source preferences:",e);
+  }
+}
+
+const filters={
+  sources:new Set(),
+  categories:Array.isArray(savedPreferences.categories)
+    ? new Set(savedPreferences.categories.filter(c=>CATEGORIES.includes(c)))
+    : new Set(CATEGORIES)
+};
+
+let knownSources=[];
+let knownForeignSources=[];
+let foreignSourceFilters=new Set();
+let foreignSourcePreferencesApplied=false;
+const savedForeignSources=loadForeignSourcePreferences();
+
+let rawStories=[];
+
+/*
+  Üst sekme her yeni sayfa yüklemesinde bilinçli olarak Gündem'den başlar.
+  Bu değer localStorage'a yazılmaz.
+*/
+let feedMode="agenda";
+const feedModeStoryKeys={
+  agenda:"",
+  breaking:"",
+  foreign:""
+};
+const BREAKING_WINDOW_MS=20*60*1000;
+
+/*
+  Bir kaynak/kategori geçici olarak kapatıldığı için ekrandaki haber
+  filtre dışına çıkarsa, kullanıcının geri açması halinde aynı haberi
+  geri getirmek için link tabanlı bir dönüş noktası tutuyoruz.
+  Normal gezinme başladığında bu dönüş noktası bırakılır.
+*/
+let filterReturnStoryKey="";
+
+function normalizeText(v){
+  return String(v||"")
+    .toLocaleLowerCase("tr-TR")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g,"");
+}
+
+function storyIdentity(story){
+  if(!story)return "";
+  if(story.link)return String(story.link);
+  return `${String(story.source||"").trim().toLocaleLowerCase("tr-TR")}|${String(story.title||"").trim()}`;
+}
+
+function parseKeywordList(value){
+  return [...new Set(
+    String(value||"")
+      .split(",")
+      .map(part=>normalizeText(part).trim())
+      .filter(Boolean)
+  )];
+}
+
+function loadKeywordFilterState(){
+  try{
+    const saved=JSON.parse(
+      localStorage.getItem(KEYWORD_FILTER_KEY)||"{}"
+    );
+
+    const mode=
+      saved?.mode==="show" || saved?.mode==="hide"
+        ? saved.mode
+        : "off";
+
+    return {
+      text:String(saved?.text||""),
+      mode
+    };
+  }catch(e){
+    return {text:"",mode:"off"};
+  }
+}
+
+function saveKeywordFilterState(){
+  try{
+    localStorage.setItem(
+      KEYWORD_FILTER_KEY,
+      JSON.stringify(keywordFilterState)
+    );
+  }catch(e){}
+}
+
+function loadKeywordWatchText(){
+  try{
+    return String(
+      localStorage.getItem(KEYWORD_WATCH_KEY)||""
+    );
+  }catch(e){
+    return "";
+  }
+}
+
+function saveKeywordWatchText(){
+  try{
+    localStorage.setItem(
+      KEYWORD_WATCH_KEY,
+      keywordWatchText
+    );
+  }catch(e){}
+}
+
+let keywordFilterState=loadKeywordFilterState();
+let keywordWatchText=loadKeywordWatchText();
+
+function storyKeywordText(story){
+  return normalizeText([
+    story?.title,
+    story?.description,
+    story?.summary,
+    story?.content
+  ].filter(Boolean).join(" "));
+}
+
+function storyMatchesKeywords(story,keywords){
+  if(!keywords?.length)return false;
+
+  const text=storyKeywordText(story);
+  if(!text)return false;
+
+  return keywords.some(keyword=>
+    keyword && text.includes(keyword)
+  );
+}
+
+function passesKeywordFilter(story){
+  const keywords=parseKeywordList(
+    keywordFilterState.text
+  );
+
+  if(
+    keywordFilterState.mode==="off" ||
+    !keywords.length
+  ){
+    return true;
+  }
+
+  const matched=storyMatchesKeywords(
+    story,
+    keywords
+  );
+
+  return keywordFilterState.mode==="show"
+    ? matched
+    : !matched;
+}
+
+function currentKeywordWatchKeywords(){
+  return parseKeywordList(keywordWatchText);
+}
+
+function updateKeywordAlert(story){
+  const frame=
+    document.getElementById("keyword-alert-frame");
+
+  if(!frame)return;
+
+  const keywords=currentKeywordWatchKeywords();
+  const matched=
+    keywords.length &&
+    storyMatchesKeywords(story,keywords);
+
+  frame.classList.toggle(
+    "active",
+    Boolean(matched)
+  );
+
+  if(matched){
+    const text=storyKeywordText(story);
+    frame.dataset.matches=
+      keywords.filter(keyword=>text.includes(keyword)).join(",");
+  }else{
+    delete frame.dataset.matches;
+  }
+}
+
+function categoryForStory(story){
+  // Worker kategorisi birincil kaynaktır. Frontend sınıflandırması yalnızca
+  // eski/eksik cevaplar için güvenli geri dönüş olarak kalır.
+  const explicit=story.category || story.categories || story.section || story.topic;
+  const explicitText=normalizeText(Array.isArray(explicit)?explicit.join(" "):explicit);
+
+  if(
+    Boolean(story?.foreign) ||
+    explicitText.includes(normalizeText(FOREIGN_CATEGORY))
+  ){
+    return FOREIGN_CATEGORY;
+  }
+
+  for(const cat of CATEGORIES){
+    if(cat==="#SonDakika")continue;
+    const key=normalizeText(cat.replace("#",""));
+    if(explicitText.includes(key)) return cat;
+  }
+
+  const text=normalizeText([story.title,story.description,story.summary,story.content].join(" "));
+  const rules=[
+    ["#Sağlık",["sağlık","hastalık","tedavi","doktor","hekim","aşı","kanser","ruh sağlığı"]],
+    ["#Bilim",["bilim","bilimsel","fizik","kimya","biyoloji","astronomi","uzay","nasa","evrim","genetik"]],
+    ["#Otomotiv",["otomobil","otomotiv","elektrikli araç","suv","sedan","togg","tesla","volkswagen","bmw","mercedes"]],
+    ["#Sinema",["sinema","film","vizyon","yönetmen","fragman","box office","oscar","cannes"]],
+    ["#Televizyon",["televizyon","dizi","sezon","bölüm","netflix dizisi","show tv","kanal d","star tv","trt 1"]],
+    ["#Müzik",["müzik","albüm","single","şarkı","müzisyen","konser","spotify","plak","turne","indie"]],
+    ["#Edebiyat",["edebiyat","kitap","roman","öykü","şiir","yazar","şair","yayınevi"]],
+    ["#Moda",["moda","fashion","defile","koleksiyon","tasarımcı","giyim","stil","moda haftası","vogue"]],
+    ["#Tarih",["tarih","tarihi","osmanlı","bizans","antik","arkeoloji","imparatorluk","medeniyet"]],
+    ["#Gezi",["seyahat","gezi","gezilecek","rota","tatil","turizm","otel","seyahat rehberi"]],
+    ["#Spor",["futbol","basketbol","voleybol","tenis","formula 1","şampiyon","lig","maç","transfer","gol"]],
+    ["#Teknoloji",["teknoloji","yapay zeka","iphone","android","google","apple","microsoft","siber","yazılım","çip","robot"]],
+    ["#Magazin",["magazin","ünlü","evlilik","boşanma","kırmızı halı","influencer"]],
+    ["#Kültür-Sanat",["kültür","sanat","sergi","müze","tiyatro","opera","bale","bienal"]],
+    ["#Ekonomi",["ekonomi","borsa","dolar","euro","altın","faiz","enflasyon","merkez bankası","vergi"]],
+    ["#Siyaset",["siyaset","hükümet","bakan","milletvekili","meclis","parti","seçim","cumhurbaşkanı","tbmm"]],
+    ["#Dünya",["abd","amerika","avrupa","rusya","ukrayna","israil","filistin","iran","suriye","almanya","fransa","çin","nato"]],
+    ["#Türkiye",["türkiye","istanbul","ankara","izmir","deprem","belediye","valilik","jandarma","emniyet","yangın"]],
+    ["#Yaşam",["yaşam","hayat","dekorasyon","gastronomi","yemek","ilişki","aile","wellness"]]
+  ];
+
+  for(const [cat,words] of rules){
+    if(words.some(w=>text.includes(normalizeText(w)))) return cat;
+  }
+
+  return "#Yaşam";
+}
+
+function enrichStories(list){
+  return list.map(s=>{
+    const flowCategory=categoryForStory(s);
+    const flowForeign=
+      Boolean(s?.foreign) ||
+      flowCategory===FOREIGN_CATEGORY;
+
+    return {
+      ...s,
+      flowCategory,
+      flowForeign,
+      flowBreaking:
+        !flowForeign &&
+        (Boolean(s.breaking) || normalizeText(s.category).includes("sondakika"))
+    };
+  });
+}
+
+function storyInTimeRange(story){
+  const option=currentTimeRangeOption();
+
+  if(!Number.isFinite(option.hours)){
+    return true;
+  }
+
+  const publishedAt=new Date(story?.published).getTime();
+
+  /*
+    Zamanı bilinmeyen bir haber sonlu aralıkta güvenle sınıflandırılamaz.
+    "Tüm zamanlar" seçildiğinde ise bu haberler yine gösterilir.
+  */
+  if(!Number.isFinite(publishedAt)){
+    return false;
+  }
+
+  const ageMs=Date.now()-publishedAt;
+  const limitMs=option.hours*60*60*1000;
+
+  /*
+    Kaynak saatindeki küçük ileri sapmalar yeni haberi yanlışlıkla elemesin.
+    Negatif yaş doğal olarak limitin altında kalır ve gösterilir.
+  */
+  return ageMs<=limitMs;
+}
+
+const BREAKING_EXTRA_CATEGORIES=new Set([
+  "#Türkiye",
+  "#Dünya",
+  "#Siyaset"
+]);
+
+function storyInBreakingWindow(story){
+  const isBreakingFeedStory=Boolean(story?.flowBreaking);
+  const isPriorityCategory=
+    BREAKING_EXTRA_CATEGORIES.has(story?.flowCategory);
+
+  if(!isBreakingFeedStory && !isPriorityCategory)return false;
+
+  const publishedAt=new Date(story?.published).getTime();
+  if(!Number.isFinite(publishedAt))return false;
+
+  return (Date.now()-publishedAt)<=BREAKING_WINDOW_MS;
+}
+
+function storiesForFeedMode(mode){
+  if(mode==="foreign"){
+    return rawStories.filter(s=>{
+      if(!s.flowForeign)return false;
+      if(!storyInTimeRange(s))return false;
+      if(!foreignSourceFilters.has(sourceKey(s.source)))return false;
+      if(!passesKeywordFilter(s))return false;
+      return true;
+    });
+  }
+
+  if(mode==="breaking"){
+    return rawStories.filter(s=>{
+      if(s.flowForeign)return false;
+      if(!storyInBreakingWindow(s))return false;
+      if(!filters.sources.has(sourceKey(s.source)))return false;
+      if(!passesKeywordFilter(s))return false;
+      return true;
+    });
+  }
+
+  return rawStories.filter(s=>{
+    /*
+      #Yabancı hiçbir koşulda Gündem havuzuna giremez.
+    */
+    if(s.flowForeign)return false;
+
+    if(!storyInTimeRange(s))return false;
+    if(!filters.sources.has(sourceKey(s.source)))return false;
+    if(!passesKeywordFilter(s))return false;
+
+    /*
+      Gündem sekmesi mevcut Flöw davranışını aynen korur:
+      normal kategori açık olmalı; breaking etiketi normal kategoriyi delemez.
+    */
+    if(!filters.categories.has(s.flowCategory))return false;
+
+    if(
+      s.flowBreaking &&
+      !filters.categories.has("#SonDakika")
+    ) return false;
+
+    return true;
+  });
+}
+
+function activeStories(){
+  return storiesForFeedMode(feedMode);
+}
+
+function emptyStoriesMessage(){
+  const keywordCount=
+    parseKeywordList(keywordFilterState.text).length;
+
+  if(keywordCount && keywordFilterState.mode==="show"){
+    return "Anahtar kelime filtresine uyan haber bulunamadı.";
+  }
+
+  if(keywordCount && keywordFilterState.mode==="hide"){
+    return "Anahtar kelime filtresi sonrası gösterilecek haber kalmadı.";
+  }
+
+  if(feedMode==="breaking"){
+    return "Son 20 dakikada Son dakika, Türkiye, Dünya veya Siyaset haberi bulunamadı.";
+  }
+
+  if(feedMode==="foreign"){
+    return "Seçtiğiniz yabancı kaynak ve zaman aralığında haber bulunamadı.";
+  }
+
+  return "Seçtiğiniz kaynak, kategori ve zaman aralığında haber bulunamadı.";
+}
+
+function setStoryStageVisible(visible){
+  slides.forEach(slide=>{
+    slide.style.visibility=visible?"visible":"hidden";
+  });
+}
+
+function renderFeedMode(){
+  document.body.classList.toggle(
+    "breaking-mode",
+    feedMode==="breaking"
+  );
+  document.body.classList.toggle(
+    "foreign-mode",
+    feedMode==="foreign"
+  );
+
+  document.querySelectorAll(".feed-tab").forEach(button=>{
+    const active=button.dataset.feedMode===feedMode;
+    button.classList.toggle("active",active);
+    button.setAttribute("aria-pressed",active?"true":"false");
+  });
+
+  if(feedMode==="breaking"){
+    closeTimeRangePanel();
+  }
+}
+
+function switchFeedMode(nextMode){
+  const next=
+    FEED_MODE_ORDER.includes(nextMode)
+      ? nextMode
+      : "agenda";
+
+  if(next===feedMode || state.busy || adActive)return;
+
+  /*
+    Son dakika boşsa sekmeye hiç geçmiyoruz.
+    Böylece Gündem'in seçili butonu, mevcut haber, history ve timer durumu
+    aynen kalıyor.
+  */
+  const previewList=storiesForFeedMode(next);
+
+  if(next==="breaking" && !previewList.length){
+    closeQuickPanels();
+    showFullscreenButton();
+    status("Son 20 dakikada Son dakika, Türkiye, Dünya veya Siyaset haberi bulunamadı.");
+    return;
+  }
+
+  const previousMode=feedMode;
+  const currentStory=state.stories[state.index]||null;
+  feedModeStoryKeys[feedMode]=storyIdentity(currentStory);
+
+  feedMode=next;
+  filterReturnStoryKey="";
+  closeQuickPanels();
+  renderFeedMode();
+  showFullscreenButton();
+
+  const list=previewList;
+  renderOptions();
+
+  if(!list.length){
+    state.stories=[];
+    state.index=0;
+    state.history=[];
+    state.historyPos=0;
+    skippedAdHistory=null;
+    historicalAdContext=null;
+    clearTimeout(state.timer);
+    setStoryStageVisible(false);
+    status(emptyStoriesMessage());
+    return;
+  }
+
+  clearStatus();
+  setStoryStageVisible(true);
+
+  const preferredKey=feedModeStoryKeys[feedMode];
+  let idx=
+    preferredKey
+      ? list.findIndex(story=>storyIdentity(story)===preferredKey)
+      : -1;
+
+  if(idx<0)idx=0;
+
+  const currentSlide=slides[state.active];
+  const nextSlide=slides[1-state.active];
+  const nextStory=list[idx];
+
+  /*
+    Sekmeler soldan sağa:
+      Son dakika | Gündem | Yabancı
+
+    Soldaki bir sekmeye geçiliyorsa yeni içerik soldan,
+    sağdaki bir sekmeye geçiliyorsa sağdan gelir.
+  */
+  const previousModeIndex=FEED_MODE_ORDER.indexOf(previousMode);
+  const nextModeIndex=FEED_MODE_ORDER.indexOf(next);
+  const movingRight=nextModeIndex>previousModeIndex;
+  const enterClass=movingRight ? "enter-left" : "enter-right";
+  const exitClass=movingRight ? "exit-left" : "exit-right";
+
+  state.busy=true;
+  clearTimeout(state.timer);
+
+  preloadImage(nextStory.image);
+  fill(nextSlide,nextStory);
+
+  currentSlide.className="slide";
+  nextSlide.className="slide";
+
+  void nextSlide.offsetWidth;
+
+  nextSlide.classList.add(enterClass);
+  currentSlide.classList.add(exitClass);
+
+  state.stories=list;
+  state.index=idx;
+  state.history=[idx];
+  state.historyPos=0;
+  skippedAdHistory=null;
+  historicalAdContext=null;
+  state.active=1-state.active;
+
+  updateKeywordAlert(nextStory);
+
+  const finish=()=>{
+    nextSlide.className="slide active";
+    currentSlide.className="slide";
+    stopSlideMedia(currentSlide);
+    state.busy=false;
+    timer();
+  };
+
+  nextSlide.addEventListener("animationend",finish,{once:true});
+  setTimeout(()=>{
+    if(state.busy && feedMode===next){
+      finish();
+    }
+  },900);
+}
+
+
+function renderOptions(){
+  const sourceBox=document.getElementById("source-options");
+  const categoryBox=document.getElementById("category-options");
+
+  sourceBox.innerHTML="";
+  categoryBox.innerHTML="";
+
+  const foreignMode=feedMode==="foreign";
+  const visibleSources=
+    foreignMode
+      ? knownForeignSources
+      : knownSources;
+  const visibleSourceSet=
+    foreignMode
+      ? foreignSourceFilters
+      : filters.sources;
+
+  for(const source of visibleSources){
+    const key=sourceKey(source);
+    const on=visibleSourceSet.has(key);
+    const el=document.createElement("div");
+    el.className="option"+(on?" on":"");
+    el.dataset.key=key;
+    el.innerHTML=`<span class="option-name">${source}</span><span class="option-check">${on?"✓":""}</span>`;
+    el.addEventListener("click",()=>toggleSource(key));
+    sourceBox.appendChild(el);
+  }
+
+  if(foreignMode){
+    const el=document.createElement("div");
+    el.className="option on foreign-category-option";
+    el.dataset.key=FOREIGN_CATEGORY;
+    el.innerHTML=`<span class="option-name">${FOREIGN_CATEGORY}</span><span class="option-check">✓</span>`;
+    categoryBox.appendChild(el);
+  }else{
+    for(const category of CATEGORIES){
+      const on=filters.categories.has(category);
+      const el=document.createElement("div");
+      el.className="option"+(on?" on":"");
+      el.dataset.key=category;
+      el.innerHTML=`<span class="option-name">${category}</span><span class="option-check">${on?"✓":""}</span>`;
+      el.addEventListener("click",()=>toggleCategory(category));
+      categoryBox.appendChild(el);
+    }
+  }
+
+  updateFilterCount();
+}
+
+function updateFilterCount(){
+  const count=document.getElementById("filter-count");
+
+  if(feedMode==="foreign"){
+    count.textContent=
+      `${foreignSourceFilters.size}/${knownForeignSources.length} yabancı kaynak · ${FOREIGN_CATEGORY}`;
+    return;
+  }
+
+  const totalSources=knownSources.length;
+  count.textContent=`${filters.sources.size}/${totalSources} kaynak · ${filters.categories.size}/${CATEGORIES.length} kategori açık`;
+}
+
+function toggleSource(key){
+  if(feedMode==="foreign"){
+    if(foreignSourceFilters.has(key)) foreignSourceFilters.delete(key);
+    else foreignSourceFilters.add(key);
+    saveForeignSourcePreferences();
+  }else{
+    if(filters.sources.has(key)) filters.sources.delete(key);
+    else filters.sources.add(key);
+    savePreferences();
+  }
+
+  applyFilters();
+}
+
+function toggleCategory(cat){
+  if(filters.categories.has(cat)) filters.categories.delete(cat);
+  else filters.categories.add(cat);
+  savePreferences();
+  applyFilters();
+}
+
+
+function applyFilters(){
+  const previousStory=state.stories[state.index]||null;
+  const previousKey=storyIdentity(previousStory);
+  const list=activeStories();
+
+  renderOptions();
+
+  if(!list.length){
+    if(!filterReturnStoryKey && previousKey){
+      filterReturnStoryKey=previousKey;
+    }
+
+    status(emptyStoriesMessage());
+    return;
+  }
+
+  clearStatus();
+  setStoryStageVisible(true);
+  state.stories=list;
+
+  const preferredKey=
+    filterReturnStoryKey ||
+    previousKey;
+
+  let idx=
+    preferredKey
+      ? list.findIndex(x=>storyIdentity(x)===preferredKey)
+      : -1;
+
+  if(idx<0){
+    if(!filterReturnStoryKey && previousKey){
+      filterReturnStoryKey=previousKey;
+    }
+
+    idx=0;
+  }
+
+  const targetStory=list[idx];
+  const targetKey=storyIdentity(targetStory);
+
+  state.index=idx;
+  state.history=[idx];
+  state.historyPos=0;
+  skippedAdHistory=null;
+  historicalAdContext=null;
+
+  /*
+    Eski kod state'i geri taşıyıp ekrandaki slide'ı değiştirmeyebiliyordu.
+    Hedef haber farklıysa görünür slide da aynı anda güncellenir.
+  */
+  if(targetKey!==previousKey){
+    fill(slides[state.active],targetStory);
+    slides[state.active].className="slide active";
+  }
+
+  if(
+    filterReturnStoryKey &&
+    targetKey===filterReturnStoryKey
+  ){
+    filterReturnStoryKey="";
+  }
+
+  updateKeywordAlert(targetStory);
+  timer();
+}
+
+
+const INITIAL_LOADING_MIN_MS=1200;
+const INITIAL_LOADING_MAX_MS=12000;
+const initialLoadingStartedAt=Date.now();
+let initialLoadFinished=false;
+let initialLoadingWatchdog=null;
+
+function finishInitialLoading(forceImmediate=false){
+  if(initialLoadFinished)return;
+  initialLoadFinished=true;
+
+  if(initialLoadingWatchdog){
+    clearTimeout(initialLoadingWatchdog);
+    initialLoadingWatchdog=null;
+  }
+
+  const screen=document.getElementById("loading-screen");
+  if(!screen){
+    if(!window.__floewInitialReady){
+      window.__floewInitialReady=true;
+      window.dispatchEvent(new Event("floew:ready"));
+    }
+    return;
+  }
+
+  const remove=()=>{
+    if(screen.isConnected)screen.remove();
+
+    if(!window.__floewInitialReady){
+      window.__floewInitialReady=true;
+      window.dispatchEvent(new Event("floew:ready"));
+    }
+  };
+
+  if(forceImmediate){
+    remove();
+    return;
+  }
+
+  const elapsed=Date.now()-initialLoadingStartedAt;
+  const wait=Math.max(0,INITIAL_LOADING_MIN_MS-elapsed);
+
+  setTimeout(()=>{
+    requestAnimationFrame(()=>{
+      screen.classList.add("is-done");
+      screen.addEventListener("transitionend",remove,{once:true});
+      // Güvenlik: transitionend herhangi bir nedenle gelmezse overlay kalmasın.
+      setTimeout(remove,700);
+    });
+  },wait);
+}
+
+/*
+  Worker cevapları uzarsa loading katmanının sayfayı sonsuza kadar
+  kilitlemesine izin verme. Haberler daha sonra gelirse normal akış devam eder.
+*/
+initialLoadingWatchdog=setTimeout(
+  ()=>finishInitialLoading(true),
+  INITIAL_LOADING_MAX_MS
+);
+
+function status(msg){
+  const e=document.getElementById("status");
+  e.innerHTML="";
+  const band=document.createElement("div");
+  band.className="status-band";
+
+  const text=document.createElement("span");
+  text.className="status-message";
+  text.textContent=msg;
+
+  const close=document.createElement("button");
+  close.className="status-close";
+  close.type="button";
+  close.setAttribute("aria-label","Uyarıyı kapat");
+  close.textContent="×";
+  close.addEventListener("pointerdown",ev=>ev.stopPropagation());
+  close.addEventListener("pointerup",ev=>ev.stopPropagation());
+  close.addEventListener("click",ev=>{
+    ev.stopPropagation();
+    clearStatus();
+  });
+
+  band.append(text,close);
+  e.appendChild(band);
+  e.hidden=false;
+}
+function clearStatus(){
+  const e=document.getElementById("status");
+  e.hidden=true;
+  e.innerHTML="";
+}
+
+function sourceKey(source){return String(source||"").trim().toLocaleLowerCase("tr-TR")}
+
+function sourceLogo(source){
+  const key=sourceKey(source);
+  return SOURCE_LOGOS[key] || "https://icons.duckduckgo.com/ip3/news.google.com.ico";
+}
+
+function timeText(v){
+  const d=new Date(v);
+  if(!v||Number.isNaN(d.getTime()))return "";
+  const m=Math.max(0,Math.floor((Date.now()-d.getTime())/60000));
+  if(m<1)return "az önce";
+  if(m<60)return m+" dakika önce";
+  const h=Math.floor(m/60);
+  if(h<24)return h+" saat önce";
+  return d.toLocaleDateString("tr-TR",{day:"2-digit",month:"2-digit",year:"numeric"});
+}
+
+
+const storyMediaCache=new Map();
+
+function mediaKey(story){
+  return String(
+    story?.link ||
+    `${story?.source||""}|${story?.title||""}`
+  );
+}
+
+function resetSlideMedia(el){
+  el.dataset.mediaToken=String(
+    (Number(el.dataset.mediaToken)||0)+1
+  );
+
+  const image=el.querySelector(".slide-image");
+  const video=el.querySelector(".slide-video");
+  const embed=el.querySelector(".slide-embed");
+
+  if(image){
+    image.style.display="block";
+    image.style.visibility="visible";
+  }
+
+  if(video){
+    try{video.pause()}catch(e){}
+    video.removeAttribute("src");
+    video.load();
+    video.classList.remove("media-visible");
+    video.setAttribute("aria-hidden","true");
+  }
+
+  if(embed){
+    embed.src="about:blank";
+    embed.classList.remove("media-visible");
+    embed.setAttribute("aria-hidden","true");
+    embed.removeAttribute("data-provider");
+  }
+}
+
+function stopSlideMedia(el){
+  if(!el)return;
+  resetSlideMedia(el);
+}
+
+async function resolveStoryMedia(story){
+  if(!videoEnabled || !story)return null;
+
+  if(story.video){
+    return {
+      kind:"video",
+      url:story.video,
+      type:story.videoType||""
+    };
+  }
+
+  if(!story.link)return null;
+
+  const key=mediaKey(story);
+  if(storyMediaCache.has(key)){
+    return storyMediaCache.get(key);
+  }
+
+  const promise=(async()=>{
+    const controller=new AbortController();
+    const timeout=setTimeout(
+      ()=>controller.abort(),
+      8500
+    );
+
+    try{
+      const url=
+        `${VIDEO_API}?url=${encodeURIComponent(story.link)}`;
+
+      const r=await fetch(url,{
+        method:"GET",
+        mode:"cors",
+        credentials:"omit",
+        cache:"no-store",
+        signal:controller.signal,
+        headers:{
+          "Accept":"application/json"
+        }
+      });
+
+      if(!r.ok)return null;
+
+      const data=await r.json();
+      return data?.media||null;
+    }catch(err){
+      console.warn(
+        "Video resolve:",
+        story.link,
+        err
+      );
+      return null;
+    }finally{
+      clearTimeout(timeout);
+    }
+  })();
+
+  storyMediaCache.set(key,promise);
+  return promise;
+}
+
+function showDirectVideo(el,story,media,token){
+  const image=el.querySelector(".slide-image");
+  const video=el.querySelector(".slide-video");
+
+  if(!video || !media?.url)return;
+
+  video.muted=true;
+  video.defaultMuted=true;
+  video.volume=0;
+  video.autoplay=true;
+  video.playsInline=true;
+  video.controls=false;
+  video.poster=story.image||"";
+
+  let settled=false;
+
+  const fallback=()=>{
+    if(settled)return;
+    settled=true;
+
+    if(
+      token!==el.dataset.mediaToken ||
+      mediaKey(story)!==el.dataset.storyKey
+    ) return;
+
+    try{video.pause()}catch(e){}
+    video.removeAttribute("src");
+    video.load();
+    video.classList.remove("media-visible");
+    video.setAttribute("aria-hidden","true");
+
+    if(image)image.style.display="block";
+  };
+
+  const reveal=async()=>{
+    if(settled)return;
+
+    if(
+      !videoEnabled ||
+      token!==el.dataset.mediaToken ||
+      mediaKey(story)!==el.dataset.storyKey
+    ){
+      fallback();
+      return;
+    }
+
+    try{
+      await video.play();
+    }catch(e){
+      // Muted autoplay normally succeeds. If the browser blocks it,
+      // keep the still image instead of showing a broken player.
+      fallback();
+      return;
+    }
+
+    settled=true;
+    video.classList.add("media-visible");
+    video.setAttribute("aria-hidden","false");
+
+    if(image)image.style.display="none";
+  };
+
+  video.addEventListener(
+    "loadeddata",
+    reveal,
+    {once:true}
+  );
+  video.addEventListener(
+    "error",
+    fallback,
+    {once:true}
+  );
+
+  const type=String(media.type||"").toLowerCase();
+  const isHls=
+    type.includes("mpegurl") ||
+    /\.m3u8(?:[?#]|$)/i.test(media.url);
+
+  if(
+    isHls &&
+    !video.canPlayType("application/vnd.apple.mpegurl") &&
+    !video.canPlayType("application/x-mpegURL")
+  ){
+    fallback();
+    return;
+  }
+
+  video.src=media.url;
+  video.load();
+}
+
+
+function cleanEmbedUrl(media){
+  if(!media?.url)return "";
+
+  try{
+    const u=new URL(media.url);
+    const provider=String(media.provider||"").toLowerCase();
+
+    if(provider==="youtube"){
+      u.searchParams.set("autoplay","1");
+      u.searchParams.set("mute","1");
+      u.searchParams.set("controls","0");
+      u.searchParams.set("disablekb","1");
+      u.searchParams.set("fs","0");
+      u.searchParams.set("playsinline","1");
+      u.searchParams.set("iv_load_policy","3");
+      u.searchParams.set("cc_load_policy","0");
+      u.searchParams.set("rel","0");
+    }else if(provider==="vimeo"){
+      u.searchParams.set("autoplay","1");
+      u.searchParams.set("muted","1");
+      u.searchParams.set("background","1");
+      u.searchParams.set("loop","1");
+      u.searchParams.set("controls","0");
+      u.searchParams.set("title","0");
+      u.searchParams.set("byline","0");
+      u.searchParams.set("portrait","0");
+      u.searchParams.set("keyboard","0");
+      u.searchParams.set("dnt","1");
+    }else if(provider==="dailymotion"){
+      /*
+        Dailymotion'un 2026 embed endpoint'inde eski UI query parametrelerinin
+        çoğu artık geçerli değil. mute/loop destekleniyor; kalan arayüzü
+        CSS tarafında ekranın dışına kırpıyoruz.
+      */
+      u.searchParams.set("mute","true");
+      u.searchParams.set("loop","true");
+    }
+
+    return u.href;
+  }catch{
+    return String(media.url||"");
+  }
+}
+
+function showEmbedVideo(el,story,media,token){
+  const image=el.querySelector(".slide-image");
+  const embed=el.querySelector(".slide-embed");
+
+  if(!embed || !media?.url)return;
+
+  const provider=String(media.provider||"generic").toLowerCase();
+  const cleanUrl=cleanEmbedUrl(media);
+
+  if(!cleanUrl)return;
+
+  embed.dataset.provider=provider;
+  embed.tabIndex=-1;
+
+  /*
+    Harici oynatıcılar mouse/touch/keyboard girdisi almasın.
+    Flöw'ün kaydırma/tıklama navigasyonu kesintisiz kalsın.
+  */
+  embed.setAttribute(
+    "allow",
+    "autoplay; encrypted-media; picture-in-picture"
+  );
+
+  const reveal=()=>{
+    if(
+      !videoEnabled ||
+      token!==el.dataset.mediaToken ||
+      mediaKey(story)!==el.dataset.storyKey
+    ) return;
+
+    embed.classList.add("media-visible");
+    embed.setAttribute("aria-hidden","false");
+
+    if(image)image.style.display="none";
+  };
+
+  embed.addEventListener(
+    "load",
+    reveal,
+    {once:true}
+  );
+
+  embed.src=cleanUrl;
+}
+
+async function prepareSlideMedia(el,story){
+  if(!videoEnabled || !story)return;
+
+  const token=el.dataset.mediaToken;
+  const media=await resolveStoryMedia(story);
+
+  if(
+    !videoEnabled ||
+    !media ||
+    token!==el.dataset.mediaToken ||
+    mediaKey(story)!==el.dataset.storyKey
+  ) return;
+
+  if(media.kind==="embed"){
+    showEmbedVideo(
+      el,
+      story,
+      media,
+      token
+    );
+  }else if(media.kind==="video"){
+    showDirectVideo(
+      el,
+      story,
+      media,
+      token
+    );
+  }
+}
+
+function renderVideoSetting(){
+  const btn=document.getElementById("video-setting");
+  if(!btn)return;
+
+  btn.classList.toggle("active",videoEnabled);
+  btn.setAttribute(
+    "aria-pressed",
+    videoEnabled?"true":"false"
+  );
+
+  const state=btn.querySelector(
+    ".media-setting-state"
+  );
+
+  if(state){
+    state.textContent=
+      videoEnabled?"Açık":"Kapalı";
+  }
+}
+
+function applyVideoSetting(){
+  renderVideoSetting();
+
+  for(const slide of slides){
+    stopSlideMedia(slide);
+  }
+
+  const story=state.stories[state.index];
+
+  if(videoEnabled && story){
+    const activeSlide=slides[state.active];
+    activeSlide.dataset.storyKey=mediaKey(story);
+    prepareSlideMedia(activeSlide,story);
+  }
+}
+
+function fill(el,s){
+  resetSlideMedia(el);
+  el.dataset.storyKey=mediaKey(s);
+
+  el.querySelector(".slide-image").src=s.image;
+  el.querySelector(".slide-image").alt=s.title||"";
+
+  const logo=el.querySelector(".source-logo");
+  logo.src=sourceLogo(s.source);
+  logo.alt=s.source||"";
+  logo.onerror=()=>{logo.style.visibility="hidden"};
+  logo.onload=()=>{logo.style.visibility="visible"};
+
+  el.querySelector(".source").textContent=s.source||"";
+  const category=el.querySelector(".category");
+  if(category) category.textContent=s.flowCategory||"#Yaşam";
+  el.querySelector("h1").textContent=s.title||"";
+
+  const description=el.querySelector(".description");
+  if(description){
+    let text=String(s.description||s.summary||"").trim();
+
+    if(text){
+      try{
+        const doc=new DOMParser().parseFromString(text,"text/html");
+        text=(doc.body?.textContent||text).replace(/\s+/g," ").trim();
+      }catch(e){
+        text=text.replace(/\s+/g," ").trim();
+      }
+    }
+
+    description.textContent=text;
+    description.hidden=!text;
+  }
+
+  el.querySelector(".time").textContent=timeText(s.published);
+
+  const sourceLink=el.querySelector(".source-link");
+  if(sourceLink){
+    if(s.link){
+      sourceLink.href=s.link;
+      sourceLink.removeAttribute("aria-hidden");
+      sourceLink.style.display="inline-block";
+    }else{
+      sourceLink.removeAttribute("href");
+      sourceLink.setAttribute("aria-hidden","true");
+      sourceLink.style.display="none";
+    }
+  }
+
+  if(videoEnabled){
+    prepareSlideMedia(el,s);
+  }
+}
+
+
+
+function isMobileAdDevice(){
+  try{
+    if(navigator.userAgentData?.mobile===true)return true;
+  }catch(e){}
+
+  return /Android|iPhone|iPod|IEMobile|Opera Mini|Mobile/i.test(
+    navigator.userAgent||""
+  );
+}
+
+function getAdsLayout(){
+  const portrait=
+    window.innerHeight>window.innerWidth ||
+    (
+      window.matchMedia &&
+      window.matchMedia("(orientation: portrait)").matches
+    );
+
+  /*
+    Telefonda yatay tutulsa bile mobil kreatifi kullan.
+    Masaüstünde ise pencere dikey oranlara çekildiğinde ver'e geç.
+  */
+  return portrait || isMobileAdDevice()
+    ? "ver"
+    : "hor";
+}
+
+function adsCacheKey(layout=getAdsLayout()){
+  return `${ADS_CACHE_KEY}.${layout}`;
+}
+
+function normalizeAdEntry(item){
+  if(!item)return null;
+
+  const rawSrc=
+    typeof item==="string"
+      ? item
+      : String(item.url||item.src||"");
+
+  const src=rawSrc.trim();
+  if(!src)return null;
+
+  const name=
+    typeof item==="object"
+      ? String(item.name||"")
+      : "";
+
+  const layout=
+    typeof item==="object" &&
+    (item.layout==="ver" || item.layout==="hor")
+      ? item.layout
+      : "";
+
+  const clean=(name||src)
+    .split("?")[0]
+    .split("#")[0]
+    .toLocaleLowerCase("en-US");
+
+  let type=
+    typeof item==="object" && item.type
+      ? String(item.type).toLocaleLowerCase("en-US")
+      : "";
+
+  if(!type){
+    if(clean.endsWith(".mp4"))type="video";
+    else if(clean.endsWith(".jpg")||clean.endsWith(".jpeg"))type="image";
+  }
+
+  if(type!=="video" && type!=="image")return null;
+
+  try{
+    return {
+      src:new URL(src,document.baseURI).href,
+      type,
+      name:name||clean.split("/").pop()||"",
+      layout
+    };
+  }catch(e){
+    return null;
+  }
+}
+
+function loadCachedAdsCatalog(layout=getAdsLayout()){
+  try{
+    const raw=localStorage.getItem(
+      adsCacheKey(layout)
+    );
+
+    if(!raw)return [];
+
+    const data=JSON.parse(raw);
+    const list=Array.isArray(data?.ads)?data.ads:[];
+
+    return list
+      .map(normalizeAdEntry)
+      .filter(Boolean);
+  }catch(e){
+    return [];
+  }
+}
+
+function saveCachedAdsCatalog(list,layout=getAdsLayout()){
+  try{
+    localStorage.setItem(
+      adsCacheKey(layout),
+      JSON.stringify({
+        savedAt:Date.now(),
+        layout,
+        ads:list.map(item=>({
+          src:item.src,
+          type:item.type,
+          name:item.name||"",
+          layout:item.layout||layout
+        }))
+      })
+    );
+  }catch(e){}
+}
+
+async function actuallyLoadAdsCatalog(layout=getAdsLayout()){
+  const controller=new AbortController();
+  const timeout=setTimeout(
+    ()=>controller.abort(),
+    10000
+  );
+
+  try{
+    const separator=ADS_API.includes("?")?"&":"?";
+    const response=await fetch(
+      `${ADS_API}${separator}layout=${encodeURIComponent(layout)}&t=${Date.now()}`,
+      {
+        method:"GET",
+        mode:"cors",
+        credentials:"omit",
+        cache:"no-store",
+        signal:controller.signal,
+        headers:{
+          "Accept":"application/json"
+        }
+      }
+    );
+
+    if(!response.ok){
+      throw new Error(`Ads HTTP ${response.status}`);
+    }
+
+    const data=await response.json();
+    const list=Array.isArray(data)
+      ? data
+      : Array.isArray(data?.ads)
+        ? data.ads
+        : [];
+
+    const normalized=list
+      .map(item=>normalizeAdEntry({
+        ...(typeof item==="object" ? item : {url:item}),
+        layout:
+          typeof item==="object" && item?.layout
+            ? item.layout
+            : layout
+      }))
+      .filter(Boolean);
+
+    /*
+      Pencere katalog isteği sürerken başka orana döndüyse eski isteğin
+      sonucu yeni yönü ezmesin.
+    */
+    if(layout!==getAdsLayout()){
+      return adCatalog;
+    }
+
+    adCatalog=[...new Map(
+      normalized.map(item=>[item.name||item.src,item])
+    ).values()];
+
+    adCatalogLayout=layout;
+    saveCachedAdsCatalog(adCatalog,layout);
+
+    console.info(
+      `Flöw ads (${layout}):`,
+      adCatalog.length,
+      "reklam bulundu:",
+      adCatalog.map(item=>item.name).join(", ")
+    );
+
+    return adCatalog;
+  }catch(err){
+    console.warn(`Flöw ads Worker (${layout}):`,err);
+
+    if(layout===getAdsLayout()){
+      const cached=loadCachedAdsCatalog(layout);
+
+      if(cached.length || !adCatalog.length){
+        adCatalog=cached;
+        adCatalogLayout=layout;
+      }
+    }
+
+    return adCatalog;
+  }finally{
+    clearTimeout(timeout);
+  }
+}
+
+function loadAdsCatalog(layout=getAdsLayout()){
+  if(adsCatalogPromise){
+    if(adsCatalogPromiseLayout===layout){
+      return adsCatalogPromise;
+    }
+
+    /*
+      Bir önceki yönün isteği bitince yeni yönü hemen çek.
+    */
+    return adsCatalogPromise.finally(
+      ()=>loadAdsCatalog(layout)
+    );
+  }
+
+  adsCatalogPromiseLayout=layout;
+
+  adsCatalogPromise=actuallyLoadAdsCatalog(layout)
+    .finally(()=>{
+      adsCatalogPromise=null;
+      adsCatalogPromiseLayout="";
+    });
+
+  return adsCatalogPromise;
+}
+
+function startAdsCatalogRefresh(){
+  const layout=getAdsLayout();
+  const cached=loadCachedAdsCatalog(layout);
+
+  adCatalogLayout=layout;
+
+  if(cached.length){
+    adCatalog=cached;
+  }
+
+  loadAdsCatalog(layout);
+
+  if(adCatalogRefreshTimer){
+    clearInterval(adCatalogRefreshTimer);
+  }
+
+  adCatalogRefreshTimer=setInterval(
+    ()=>loadAdsCatalog(getAdsLayout()),
+    ADS_REFRESH_MS
+  );
+}
+
+function refreshAdsLayoutIfNeeded(){
+  const layout=getAdsLayout();
+
+  if(layout===adCatalogLayout)return;
+
+  clearTimeout(adLayoutRefreshTimer);
+
+  adLayoutRefreshTimer=setTimeout(()=>{
+    const current=getAdsLayout();
+
+    if(current===adCatalogLayout)return;
+
+    const cached=loadCachedAdsCatalog(current);
+
+    /*
+      Yeni oranın cache'i varsa anında kullan; ardından Worker'dan tazele.
+      Cache yoksa eski oranın reklamını yeni bir reklam arası için kullanmayız.
+    */
+    adCatalog=cached;
+    adCatalogLayout=current;
+
+    loadAdsCatalog(current);
+  },180);
+}
+
+function chooseRandomAd(){
+  if(!adCatalog.length)return null;
+
+  const candidates=
+    adCatalog.length>1
+      ? adCatalog.filter(
+          item=>(item.name||item.src)!==lastAdName
+        )
+      : adCatalog;
+
+  const pool=candidates.length?candidates:adCatalog;
+  const chosen=pool[Math.floor(Math.random()*pool.length)]||null;
+
+  if(chosen){
+    lastAdName=chosen.name||chosen.src;
+  }
+
+  return chosen;
+}
+
+const FLOW_TRANSITION_CLASSES=[
+  "enter-up","exit-up","enter-down","exit-down",
+  "enter-left","exit-left","enter-right","exit-right"
+];
+
+function transitionPair(dir=1){
+  const forward=dir>0;
+  const directionMap={
+    up:    forward ? ["enter-up","exit-up"]       : ["enter-down","exit-down"],
+    down:  forward ? ["enter-down","exit-down"]   : ["enter-up","exit-up"],
+    left:  forward ? ["enter-left","exit-left"]   : ["enter-right","exit-right"],
+    right: forward ? ["enter-right","exit-right"] : ["enter-left","exit-left"]
+  };
+
+  return directionMap[transitionDirection]||directionMap.up;
+}
+
+function clearFlowTransitionClasses(el){
+  if(!el)return;
+  el.classList.remove(...FLOW_TRANSITION_CLASSES);
+}
+
+function waitForFlowAnimation(el,timeoutMs=900){
+  return new Promise(resolve=>{
+    if(!el){resolve();return;}
+
+    let done=false;
+    let timerId=null;
+
+    const finish=()=>{
+      if(done)return;
+      done=true;
+      clearTimeout(timerId);
+      el.removeEventListener("animationend",onEnd);
+      resolve();
+    };
+
+    const onEnd=e=>{
+      if(e.target===el)finish();
+    };
+
+    el.addEventListener("animationend",onEnd);
+    timerId=setTimeout(finish,timeoutMs);
+  });
+}
+
+async function transitionAdIn(dir=adEntryDirection){
+  if(!adOverlay)return false;
+  if(adHasEntered)return true;
+
+  const currentSlide=slides[state.active];
+  const [enterClass,exitClass]=transitionPair(dir);
+
+  showAdOverlay();
+  clearFlowTransitionClasses(adOverlay);
+  currentSlide.className="slide";
+
+  /*
+    PiP de tarayıcıdakiyle aynı anda haberden reklama kayar.
+  */
+  if(currentAd){
+    startPiPAdTransition(
+      currentAd,
+      dir
+    );
+  }
+
+  void adOverlay.offsetWidth;
+
+  adOverlay.classList.add(enterClass);
+  currentSlide.classList.add(exitClass);
+
+  await waitForFlowAnimation(adOverlay);
+
+  clearFlowTransitionClasses(adOverlay);
+  stopSlideMedia(currentSlide);
+  adHasEntered=true;
+  adSkipEnabledAt=performance.now()+AD_SKIP_GRACE_MS;
+
+  return true;
+}
+
+function requestAdSkip(dir=1){
+  if(!adActive)return false;
+
+  /*
+    Kritik düzeltme:
+    Reklamı tetikleyen trackpad/mouse-wheel gesture'ı birden fazla wheel
+    olayı üretir. Eski davranışta ilk olay reklamı açıyor, hemen arkasından
+    gelen momentum olayları ise reklam henüz giriş animasyonundayken
+    adSkipRequestedDirection değerini set ediyordu. Giriş animasyonu
+    tamamlanınca reklam yaklaşık 1 saniyede "skip" edilmiş görünüyordu.
+
+    Reklam tamamen görünür olmadan ve kısa grace süresi dolmadan skip
+    isteğini kaydetmiyoruz.
+  */
+  if(
+    !adHasEntered ||
+    performance.now()<adSkipEnabledAt
+  ){
+    return false;
+  }
+
+  adSkipRequestedDirection=dir<0?-1:1;
+
+  if(adPlaybackFinish){
+    adPlaybackFinish(adSkipRequestedDirection);
+  }
+
+  return true;
+}
+
+function resetAdMedia(){
+  if(adImage){
+    adImage.hidden=true;
+    adImage.removeAttribute("src");
+  }
+
+  if(adVideo){
+    try{adVideo.pause()}catch(e){}
+    adVideo.hidden=true;
+    adVideo.removeAttribute("src");
+    adVideo.load();
+  }
+}
+
+function showAdOverlay(){
+  document.body.classList.add("ad-mode");
+
+  if(adOverlay){
+    adOverlay.hidden=false;
+    adOverlay.setAttribute("aria-hidden","false");
+  }
+
+  showFullscreenButton();
+}
+
+function hideAdOverlay(){
+  document.body.classList.remove("ad-mode");
+
+  if(adOverlay){
+    adOverlay.hidden=true;
+    adOverlay.setAttribute("aria-hidden","true");
+  }
+
+  resetAdMedia();
+}
+
+function waitForImageAd(src){
+  return new Promise(resolve=>{
+    if(!adImage){
+      resolve({
+        shown:false,
+        direction:1,
+        skipped:false
+      });
+      return;
+    }
+
+    let finished=false;
+    let timerId=null;
+    let loadTimer=null;
+
+    const finish=(shown,direction=1,skipped=false)=>{
+      if(finished)return;
+      finished=true;
+      clearTimeout(timerId);
+      clearTimeout(loadTimer);
+      adImage.onload=null;
+      adImage.onerror=null;
+
+      if(adPlaybackFinish===skip){
+        adPlaybackFinish=null;
+      }
+
+      resolve({
+        shown:Boolean(shown),
+        direction:direction<0?-1:1,
+        skipped:Boolean(skipped)
+      });
+    };
+
+    const skip=direction=>{
+      finish(
+        adHasEntered,
+        direction,
+        true
+      );
+    };
+
+    adPlaybackFinish=skip;
+
+    adImage.onload=async()=>{
+      const entered=await transitionAdIn(
+        adEntryDirection
+      );
+
+      if(!entered){
+        finish(false,1,false);
+        return;
+      }
+
+      if(adSkipRequestedDirection){
+        finish(
+          true,
+          adSkipRequestedDirection,
+          true
+        );
+        return;
+      }
+
+      timerId=setTimeout(
+        ()=>finish(true,1,false),
+        AD_IMAGE_MS
+      );
+    };
+
+    adImage.onerror=()=>{
+      console.warn("Ad image could not load:",src);
+      finish(false,1,false);
+    };
+
+    adImage.hidden=false;
+    adImage.src=src;
+
+    loadTimer=setTimeout(()=>{
+      if(!finished && !adImage.complete){
+        console.warn("Ad image load timeout:",src);
+        finish(false,1,false);
+      }
+    },10000);
+  });
+}
+
+function waitForVideoAd(src){
+  return new Promise(resolve=>{
+    if(!adVideo){
+      resolve({
+        shown:false,
+        direction:1,
+        skipped:false
+      });
+      return;
+    }
+
+    let finished=false;
+    let started=false;
+    let safetyTimer=null;
+    let loadTimer=null;
+
+    const cleanup=()=>{
+      clearTimeout(safetyTimer);
+      clearTimeout(loadTimer);
+
+      adVideo.onloadeddata=null;
+      adVideo.oncanplay=null;
+      adVideo.onended=null;
+      adVideo.onerror=null;
+      adVideo.onabort=null;
+    };
+
+    const finish=(shown,direction=1,skipped=false)=>{
+      if(finished)return;
+      finished=true;
+      cleanup();
+
+      if(adPlaybackFinish===skip){
+        adPlaybackFinish=null;
+      }
+
+      resolve({
+        shown:Boolean(shown),
+        direction:direction<0?-1:1,
+        skipped:Boolean(skipped)
+      });
+    };
+
+    const skip=direction=>{
+      finish(
+        adHasEntered,
+        direction,
+        true
+      );
+    };
+
+    adPlaybackFinish=skip;
+
+    const start=async()=>{
+      if(started||finished)return;
+      started=true;
+
+      const entered=await transitionAdIn(
+        adEntryDirection
+      );
+
+      if(!entered){
+        finish(false,1,false);
+        return;
+      }
+
+      if(adSkipRequestedDirection){
+        finish(
+          true,
+          adSkipRequestedDirection,
+          true
+        );
+        return;
+      }
+
+      try{
+        await adVideo.play();
+        if(finished)return;
+      }catch(err){
+        console.warn("Ad video play:",err);
+        finish(true,1,false);
+        return;
+      }
+
+      safetyTimer=setTimeout(
+        ()=>finish(true,1,false),
+        30*60*1000
+      );
+    };
+
+    adVideo.muted=true;
+    adVideo.defaultMuted=true;
+    adVideo.volume=0;
+    adVideo.autoplay=true;
+    adVideo.playsInline=true;
+    adVideo.loop=false;
+    adVideo.preload="auto";
+    adVideo.hidden=false;
+
+    adVideo.onloadeddata=start;
+    adVideo.oncanplay=start;
+    adVideo.onended=()=>finish(true,1,false);
+    adVideo.onerror=()=>{
+      console.warn("Ad video could not load:",src);
+      finish(adHasEntered,1,false);
+    };
+    adVideo.onabort=()=>finish(adHasEntered,1,false);
+
+    adVideo.src=src;
+    adVideo.load();
+
+    loadTimer=setTimeout(()=>{
+      if(!started&&!finished){
+        console.warn("Ad video load timeout:",src);
+        finish(false,1,false);
+      }
+    },15000);
+  });
+}
+
+async function playAdBreak(options={}){
+  if(adActive||!adCatalog.length)return false;
+
+  const ad=
+    options.ad ||
+    chooseRandomAd();
+
+  if(!ad)return false;
+
+  currentAd=ad;
+  adEntryDirection=
+    options.entryDir<0
+      ? -1
+      : 1;
+
+  historicalAdContext=
+    options.historyContext ||
+    null;
+
+  adActive=true;
+  adHasEntered=false;
+  adSkipRequestedDirection=0;
+  adSkipEnabledAt=0;
+  adPlaybackFinish=null;
+  clearTimeout(state.timer);
+  resetAdMedia();
+
+  let result={
+    shown:false,
+    direction:adEntryDirection,
+    skipped:false
+  };
+
+  try{
+    result=
+      ad.type==="video"
+        ? await waitForVideoAd(ad.src)
+        : await waitForImageAd(ad.src);
+  }catch(err){
+    console.warn("Ad playback:",err);
+    result={
+      shown:false,
+      direction:adEntryDirection,
+      skipped:false
+    };
+  }
+
+  if(!result?.shown){
+    hideAdOverlay();
+    adActive=false;
+    adHasEntered=false;
+    adSkipRequestedDirection=0;
+    adSkipEnabledAt=0;
+    adPlaybackFinish=null;
+    currentAd=null;
+    historicalAdContext=null;
+    slides[state.active].className="slide active";
+    return false;
+  }
+
+  /*
+    İlk normal reklam gösteriminde sayaç sıfırlanır.
+    History içinden aynı reklam tekrar ziyaret edildiğinde yeni bir reklam
+    gösterimi gibi sayaç sıfırlamayız.
+  */
+  if(!options.historyContext){
+    newsShownSinceAd=0;
+  }
+
+  return {
+    shown:true,
+    direction:result.direction<0?-1:1,
+    skipped:Boolean(result.skipped),
+    ad
+  };
+}
+
+function adBreakDue(){
+  return (
+    !adActive &&
+    newsShownSinceAd>=ADS_INTERVAL_NEWS
+  );
+}
+
+async function tryPlayDueAd(){
+  if(!adBreakDue())return false;
+
+  /*
+    Önceki sürümde katalog ilk istekte boş kalırsa reklam arası sessizce
+    atlanıyordu ve bir sonraki katalog yenilemesine kadar bekliyordu.
+    Artık 10. haberden sonra katalog boşsa o anda yeniden yüklemeyi deniyoruz.
+  */
+  if(!adCatalog.length){
+    await loadAdsCatalog();
+  }
+
+  if(!adCatalog.length){
+    console.warn(
+      "Flöw ads: reklam sırası geldi ancak katalog hâlâ boş."
+    );
+    return false;
+  }
+
+  return playAdBreak();
+}
+
+function timer(){
+  clearTimeout(state.timer);
+  state.timer=setTimeout(
+    ()=>move(1,{origin:"auto"}),
+    Math.max(5,showDurationSeconds)*1000
+  );
+}
+
+/*
+  Her geçişte mümkünse mevcut kaynaktan farklı
+  bir haber seçilir. Önce farklı kaynaklar filtrelenir;
+  ardından o kaynaklardan rastgele bir haber seçilir.
+*/
+function sourceKey(source){
+  return String(source||"").trim().toLocaleLowerCase("tr-TR");
+}
+
+/*
+  İleri giderken farklı bir kaynak seçilir ve seçilen haber history'ye
+  eklenir. Geri giderken history'deki gerçek önceki haber gösterilir;
+  böylece aynı haberin yeni bir versiyonu seçilmez.
+*/
+function chooseForward(){
+  if(!state.stories.length)return -1;
+
+  const currentSource=sourceKey(
+    state.stories[state.index]?.source
+  );
+
+  for(let step=1;step<=state.stories.length;step++){
+    const i=(state.index+step)%state.stories.length;
+
+    if(
+      sourceKey(state.stories[i]?.source)!==
+      currentSource
+    ){
+      return i;
+    }
+  }
+
+  return (state.index+1)%state.stories.length;
+}
+
+function preloadImage(url){
+  return new Promise(resolve=>{
+    if(!url){
+      resolve();
+      return;
+    }
+
+    const img=new Image();
+    let done=false;
+
+    const finish=()=>{
+      if(done)return;
+      done=true;
+      resolve();
+    };
+
+    img.onload=finish;
+    img.onerror=finish;
+
+    img.src=url;
+
+    /*
+      Çok yavaş bir görsel geçişi sonsuza kadar
+      bekletmesin.
+    */
+    setTimeout(finish,5000);
+  });
+}
+
+
+function isAtSkippedAdBefore(){
+  return Boolean(
+    skippedAdHistory &&
+    !adActive &&
+    state.historyPos===skippedAdHistory.beforeHistoryPos &&
+    state.index===skippedAdHistory.beforeIndex
+  );
+}
+
+function isAtSkippedAdAfter(){
+  return Boolean(
+    skippedAdHistory &&
+    !adActive &&
+    state.historyPos===skippedAdHistory.afterHistoryPos &&
+    state.index===skippedAdHistory.afterIndex
+  );
+}
+
+async function enterSkippedAdHistory(entryDir){
+  if(!skippedAdHistory)return false;
+
+  const context={
+    ...skippedAdHistory,
+    entryDir:entryDir<0?-1:1
+  };
+
+  await loadAdsCatalog(getAdsLayout());
+
+  const layoutAd=
+    adCatalog.find(
+      item=>
+        item.name &&
+        item.name===context.ad?.name
+    ) ||
+    context.ad;
+
+  const result=await playAdBreak({
+    ad:layoutAd,
+    entryDir:context.entryDir,
+    historyContext:context
+  });
+
+  if(!result?.shown){
+    historicalAdContext=null;
+    return false;
+  }
+
+  /*
+    Kullanıcı history reklamında yön seçerse o yön kazanır.
+    Reklamı hiç atlamaz ve kendi kendine biterse, history'de hangi yönde
+    ilerliyorsa o yönde devam eder.
+  */
+  const exitDir=
+    result.skipped
+      ? result.direction
+      : context.entryDir;
+
+  if(exitDir<0){
+    await transitionFromAdTo(
+      context.beforeIndex,
+      true,
+      -1
+    );
+
+    state.historyPos=
+      context.beforeHistoryPos;
+  }else{
+    await transitionFromAdTo(
+      context.afterIndex,
+      true,
+      1
+    );
+
+    state.historyPos=
+      context.afterHistoryPos;
+  }
+
+  historicalAdContext=null;
+  return true;
+}
+
+async function move(dir,options={}){
+  if(
+    filterReturnStoryKey &&
+    !options.fromAd &&
+    !options.preserveFilterReturn
+  ){
+    filterReturnStoryKey="";
+  }
+
+  /*
+    Reklam ekrandayken normal gezinme reklamı atlama isteğine dönüşür.
+  */
+  if(adActive && !options.fromAd){
+    requestAdSkip(dir);
+    return;
+  }
+
+  if(state.busy||state.stories.length<2)return;
+
+  /*
+    Kullanıcının bitmeden geçtiği reklam history'de gerçek bir ara duraktır.
+    Haber B'den geri -> reklam; haber A'dan ileri -> aynı reklam.
+  */
+  if(!options.skipHistoricalAd){
+    if(dir<0 && isAtSkippedAdAfter()){
+      await enterSkippedAdHistory(-1);
+      return;
+    }
+
+    if(dir>0 && isAtSkippedAdBefore()){
+      await enterSkippedAdHistory(1);
+      return;
+    }
+  }
+
+  if(
+    dir>0 &&
+    !options.skipAd &&
+    adBreakDue()
+  ){
+    const beforeIndex=state.index;
+    const beforeHistoryPos=state.historyPos;
+
+    const adResult=await tryPlayDueAd();
+
+    if(adResult?.shown){
+      if(adResult.direction<0){
+        await transitionAdBackToCurrent(-1);
+      }else{
+        await move(1,{
+          skipAd:true,
+          skipHistoricalAd:true,
+          fromAd:true
+        });
+
+        /*
+          Yalnızca kullanıcı reklamı bitmeden ileri geçtiyse history bağlantısı
+          kurulur. Reklam doğal olarak bittiyse sonradan geri dönmek zorunlu
+          değildir.
+        */
+        if(adResult.skipped){
+          skippedAdHistory={
+            ad:adResult.ad,
+            beforeIndex,
+            beforeHistoryPos,
+            afterIndex:state.index,
+            afterHistoryPos:state.historyPos
+          };
+        }
+      }
+
+      return;
+    }
+  }
+
+  /*
+    GERİ:
+    Daha önce gerçekten gösterilmiş habere dön.
+  */
+  if(dir<0){
+    if(state.historyPos<=0)return;
+
+    const target=
+      state.history[state.historyPos-1];
+
+    await transitionTo(target,true,dir);
+
+    state.historyPos--;
+
+    return;
+  }
+
+  /*
+    İLERİ:
+    Eğer geri gelmişsek history'deki sonraki habere dön.
+  */
+  if(state.historyPos < state.history.length-1){
+    const target=
+      state.history[state.historyPos+1];
+
+    if(options.fromAd){
+      await transitionFromAdTo(target,true,dir);
+    }else{
+      await transitionTo(target,true,dir);
+    }
+
+    state.historyPos++;
+
+    return;
+  }
+
+  const next=chooseForward();
+
+  if(next<0)return;
+
+  if(options.fromAd){
+    await transitionFromAdTo(next,false,dir);
+  }else{
+    await transitionTo(next,false,dir);
+  }
+
+  state.history.push(next);
+  state.historyPos=state.history.length-1;
+}
+
+async function transitionFromAdTo(nextIndex,fromHistory,dir=1){
+  if(state.busy)return;
+
+  state.busy=true;
+  clearTimeout(state.timer);
+
+  const previousSlide=slides[state.active];
+  const nextSlide=slides[1-state.active];
+  const story=state.stories[nextIndex];
+
+  await preloadImage(story.image);
+  fill(nextSlide,story);
+
+  const nextImage=nextSlide.querySelector(".slide-image");
+  if(nextImage?.decode){
+    try{await nextImage.decode();}catch(e){}
+  }
+
+  nextSlide.className="slide";
+  clearFlowTransitionClasses(adOverlay);
+
+  void nextSlide.offsetWidth;
+
+  const [enterClass,exitClass]=transitionPair(dir);
+
+  startPiPTransition(
+    state.stories[state.index],
+    story,
+    dir
+  );
+
+  nextSlide.classList.add(enterClass);
+  adOverlay.classList.add(exitClass);
+
+  await waitForFlowAnimation(nextSlide);
+
+  nextSlide.className="slide active";
+  previousSlide.className="slide";
+  stopSlideMedia(previousSlide);
+
+  state.active=1-state.active;
+  state.index=nextIndex;
+  updateKeywordAlert(story);
+
+  if(dir>0){
+    newsShownSinceAd++;
+  }
+
+  clearFlowTransitionClasses(adOverlay);
+  hideAdOverlay();
+  adActive=false;
+  adHasEntered=false;
+  adSkipRequestedDirection=0;
+  adSkipEnabledAt=0;
+  adPlaybackFinish=null;
+  currentAd=null;
+  historicalAdContext=null;
+  state.busy=false;
+
+  timer();
+}
+
+async function transitionAdBackToCurrent(dir=-1){
+  if(state.busy)return;
+
+  state.busy=true;
+  clearTimeout(state.timer);
+
+  const currentSlide=slides[state.active];
+  const [enterClass,exitClass]=transitionPair(dir);
+
+  clearFlowTransitionClasses(adOverlay);
+  currentSlide.className="slide";
+
+  /*
+    Reklamdan mevcut habere dönüş PiP'te de aynı yönde gerçekleşir.
+    startPiPTransition, pipCurrent reklam ise onu çıkış öğesi olarak kullanır.
+  */
+  startPiPTransition(
+    state.stories[state.index],
+    state.stories[state.index],
+    dir
+  );
+
+  void currentSlide.offsetWidth;
+
+  currentSlide.classList.add(enterClass);
+  adOverlay.classList.add(exitClass);
+
+  await waitForFlowAnimation(currentSlide);
+
+  currentSlide.className="slide active";
+  clearFlowTransitionClasses(adOverlay);
+  hideAdOverlay();
+
+  adActive=false;
+  adHasEntered=false;
+  adSkipRequestedDirection=0;
+  adSkipEnabledAt=0;
+  adPlaybackFinish=null;
+  currentAd=null;
+  historicalAdContext=null;
+  state.busy=false;
+
+  timer();
+}
+
+async function transitionTo(nextIndex,fromHistory,dir){
+  if(state.busy)return;
+
+  state.busy=true;
+  clearTimeout(state.timer);
+
+  const currentSlide=
+    slides[state.active];
+
+  const nextSlide=
+    slides[1-state.active];
+
+  const story=
+    state.stories[nextIndex];
+
+  /*
+    Yeni görsel tamamen hazır olmadan animasyonu başlatma.
+    Böylece geçiş sırasında alttaki/eski görsel görünmez.
+  */
+  await preloadImage(story.image);
+
+  fill(nextSlide,story);
+
+  const nextImage=
+    nextSlide.querySelector(".slide-image");
+
+  if(nextImage.decode){
+    try{
+      await nextImage.decode();
+    }catch(e){}
+  }
+
+  currentSlide.className="slide";
+  nextSlide.className="slide";
+
+  void nextSlide.offsetWidth;
+
+  /*
+    dir > 0 = sonraki haber:
+      yeni haber aşağıdan yukarı gelir.
+
+    dir < 0 = önceki haber:
+      yeni haber yukarıdan aşağı gelir.
+  */
+  const [enterClass,exitClass]=transitionPair(dir);
+
+  startPiPTransition(
+    state.stories[state.index],
+    story,
+    dir
+  );
+
+  nextSlide.classList.add(enterClass);
+  currentSlide.classList.add(exitClass);
+
+  nextSlide.addEventListener(
+    "animationend",
+    ()=>{
+      nextSlide.className="slide active";
+      currentSlide.className="slide";
+      stopSlideMedia(currentSlide);
+
+      state.active=
+        1-state.active;
+
+      state.index=
+        nextIndex;
+
+      updateKeywordAlert(story);
+
+      if(dir>0){
+        newsShownSinceAd++;
+      }
+
+      state.busy=false;
+
+      timer();
+    },
+    {once:true}
+  );
+}
+
+
+let sourceCatalogLoaded=false;
+
+async function fetchSourceCatalog(){
+  if(sourceCatalogLoaded && knownSources.length){
+    return knownSources;
+  }
+
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),8000);
+
+  try{
+    const r=await fetch(META_API,{
+      method:"GET",
+      mode:"cors",
+      credentials:"omit",
+      cache:"default",
+      signal:controller.signal,
+      headers:{
+        "Accept":"application/json"
+      }
+    });
+
+    if(!r.ok)throw new Error(`Meta HTTP ${r.status}`);
+
+    const data=await r.json();
+    const sources=Array.isArray(data?.sources)
+      ? data.sources.filter(Boolean)
+      : [];
+    const foreignSources=Array.isArray(data?.foreignSources)
+      ? data.foreignSources.filter(Boolean)
+      : [];
+
+    if(sources.length){
+      knownSources=[...new Map(
+        sources.map(source=>[
+          sourceKey(source),
+          source
+        ])
+      ).values()];
+    }
+
+    if(foreignSources.length){
+      knownForeignSources=[...new Map(
+        foreignSources.map(source=>[
+          sourceKey(source),
+          source
+        ])
+      ).values()];
+    }
+
+    if(sources.length || foreignSources.length){
+      sourceCatalogLoaded=true;
+    }
+
+    return knownSources;
+  }catch(err){
+    console.warn("Source catalog:",err);
+    return knownSources;
+  }finally{
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchNewsBatch(batch){
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),16000);
+
+  try{
+    const separator=API.includes("?")?"&":"?";
+    const url=`${API}${separator}batch=${batch}`;
+
+    const r=await fetch(url,{
+      method:"GET",
+      mode:"cors",
+      credentials:"omit",
+      cache:"no-store",
+      signal:controller.signal,
+      headers:{
+        "Accept":"application/json"
+      }
+    });
+
+    if(!r.ok)throw new Error(`Batch ${batch}: HTTP ${r.status}`);
+
+    const data=await r.json();
+    if(!Array.isArray(data))throw new Error(`Batch ${batch}: Geçersiz Worker yanıtı`);
+
+    return data;
+  }finally{
+    clearTimeout(timeout);
+  }
+}
+
+async function load(){
+  try{
+    /*
+      Worker kaynakları dört ayrı çağrıya böler. Böylece tek Worker
+      invocation'ında Cloudflare'ın external subrequest sınırına yaklaşmayız.
+      Bir batch geçici olarak hata verse bile diğer batch'lerin haberleri
+      kullanılmaya devam eder.
+    */
+    const catalogPromise=
+      sourceCatalogLoaded
+        ? Promise.resolve(knownSources)
+        : fetchSourceCatalog();
+
+    const settled=await Promise.allSettled(
+      Array.from({length:NEWS_BATCH_COUNT},(_,batch)=>fetchNewsBatch(batch))
+    );
+
+    await catalogPromise;
+
+    const successful=settled
+      .filter(result=>result.status==="fulfilled")
+      .flatMap(result=>result.value);
+
+    const failures=settled
+      .map((result,batch)=>({result,batch}))
+      .filter(x=>x.result.status==="rejected");
+
+    for(const failure of failures){
+      console.warn(
+        `NEWS WALL batch ${failure.batch}:`,
+        failure.result.reason
+      );
+    }
+
+    const unique=new Map();
+
+    function mergeDuplicateStory(existing,candidate){
+      if(!existing)return candidate;
+
+      const oldPriority=Number(existing.categoryPriority)||0;
+      const newPriority=Number(candidate.categoryPriority)||0;
+
+      let preferred=
+        newPriority>oldPriority
+          ? candidate
+          : existing;
+
+      const other=
+        preferred===candidate
+          ? existing
+          : candidate;
+
+      return {
+        ...preferred,
+        breaking:Boolean(existing.breaking||candidate.breaking),
+        video:preferred.video||other.video||"",
+        videoType:preferred.videoType||other.videoType||""
+      };
+    }
+
+    for(const item of successful){
+      if(!item||!item.title||!item.image)continue;
+
+      const key=
+        item.link ||
+        `${item.source||""}|${item.title}`;
+
+      unique.set(
+        key,
+        mergeDuplicateStory(
+          unique.get(key),
+          item
+        )
+      );
+    }
+
+    const incoming=[...unique.values()];
+
+    if(!incoming.length){
+      const firstError=failures[0]?.result?.reason;
+      throw firstError||new Error("Görselli haber yok");
+    }
+
+    rawStories=enrichStories(incoming);
+
+    if(
+      filterReturnStoryKey &&
+      !rawStories.some(
+        story=>storyIdentity(story)===filterReturnStoryKey
+      )
+    ){
+      filterReturnStoryKey="";
+    }
+
+    if(!knownSources.length){
+      knownSources=[...new Map(
+        rawStories
+          .filter(story=>!story.flowForeign)
+          .map(s=>[
+            sourceKey(s.source),
+            s.source||"Bilinmeyen kaynak"
+          ])
+      ).values()];
+    }
+
+    if(!knownForeignSources.length){
+      knownForeignSources=[...new Map(
+        rawStories
+          .filter(story=>story.flowForeign)
+          .map(s=>[
+            sourceKey(s.source),
+            s.source||"Bilinmeyen kaynak"
+          ])
+      ).values()];
+    }
+
+    if(!sourcePreferencesApplied){
+      const available=new Set(knownSources.map(sourceKey));
+
+      if(Array.isArray(savedPreferences.sources)){
+        filters.sources=new Set(
+          savedPreferences.sources.filter(key=>available.has(key))
+        );
+      }else{
+        filters.sources=new Set(available);
+      }
+
+      sourcePreferencesApplied=true;
+    }
+
+    if(!foreignSourcePreferencesApplied){
+      const availableForeign=
+        new Set(knownForeignSources.map(sourceKey));
+
+      if(Array.isArray(savedForeignSources)){
+        foreignSourceFilters=new Set(
+          savedForeignSources.filter(key=>availableForeign.has(key))
+        );
+      }else{
+        foreignSourceFilters=new Set(availableForeign);
+      }
+
+      foreignSourcePreferencesApplied=true;
+    }
+
+    renderOptions();
+
+    const list=activeStories();
+    if(!list.length){
+      status(emptyStoriesMessage());
+
+      if(feedMode==="breaking" || feedMode==="foreign"){
+        state.stories=[];
+        state.index=0;
+        state.history=[];
+        state.historyPos=0;
+        setStoryStageVisible(false);
+      }
+
+      finishInitialLoading();
+      return;
+    }
+
+    if(!state.stories.length){
+      setStoryStageVisible(true);
+      state.stories=list;
+      state.index=0;
+      state.history=[0];
+      state.historyPos=0;
+      skippedAdHistory=null;
+      historicalAdContext=null;
+      fill(slides[0],list[0]);
+      slides[0].className="slide active";
+      updateKeywordAlert(list[0]);
+      newsShownSinceAd=1;
+      clearStatus();
+      finishInitialLoading();
+      timer();
+
+      if(ADS_TEST_MODE){
+        setTimeout(runAdTestOnce,900);
+      }
+
+      return;
+    }
+
+    const currentStory=
+      state.stories[state.index];
+
+    const link=currentStory?.link;
+    const oldSource=sourceKey(currentStory?.source);
+
+    state.stories=list;
+
+    if(link){
+      const idx=list.findIndex(x=>x.link===link);
+
+      if(idx>=0){
+        state.index=idx;
+
+        if(state.history.length){
+          state.history[state.historyPos]=idx;
+        }
+      }else{
+        const idx2=list.findIndex(
+          x=>sourceKey(x.source)!==oldSource
+        );
+
+        if(idx2>=0){
+          state.index=idx2;
+          state.history=[idx2];
+          state.historyPos=0;
+          fill(slides[state.active],list[idx2]);
+          updateKeywordAlert(list[idx2]);
+        }
+      }
+    }
+
+    updateKeywordAlert(state.stories[state.index]);
+    clearStatus();
+    finishInitialLoading();
+  }catch(err){
+    console.error("NEWS WALL:",err);
+
+    if(!state.stories.length){
+      let detail=err?.message||"Worker yanıtı okunamadı.";
+      if(err?.name==="AbortError"){
+        detail="Worker yanıtı zaman aşımına uğradı.";
+      }
+      status(`Haberler alınamadı. ${detail}`);
+      finishInitialLoading();
+    }
+  }
+}
+
+function updateClock(){
+  const now=new Date();
+  document.getElementById("clock-time").textContent=
+    now.toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"});
+  document.getElementById("clock-date").textContent=
+    now.toLocaleDateString("tr-TR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"});
+}
+
+let cursorHideTimer = null;
+
+function setFullscreenIcon(){
+  const btn=document.getElementById("fullscreen-button");
+  const active=!!document.fullscreenElement;
+  btn.textContent="⤢";
+  btn.title=active?"Tam ekrandan çık":"Tam ekran";
+  btn.setAttribute("aria-label",btn.title);
+}
+
+function anyControlPanelOpen(){
+  return Boolean(
+    document.getElementById("control-menu-panel")?.classList.contains("open") ||
+    document.getElementById("time-range-panel")?.classList.contains("open") ||
+    document.getElementById("keyword-filter-panel")?.classList.contains("open") ||
+    document.getElementById("keyword-watch-panel")?.classList.contains("open") ||
+    document.getElementById("stats-overlay")?.classList.contains("open") ||
+    document.getElementById("menu-overlay")?.classList.contains("open")
+  );
+}
+
+/*
+  Hamburger tray açıkken haber navigasyonu çalışmaya devam eder.
+  Sadece gerçek modal/quick paneller swipe/klavye navigasyonunu engeller.
+*/
+function navigationBlockingPanelOpen(){
+  return Boolean(
+    document.getElementById("time-range-panel")?.classList.contains("open") ||
+    document.getElementById("keyword-filter-panel")?.classList.contains("open") ||
+    document.getElementById("keyword-watch-panel")?.classList.contains("open") ||
+    document.getElementById("stats-overlay")?.classList.contains("open") ||
+    document.getElementById("menu-overlay")?.classList.contains("open")
+  );
+}
+
+function showFullscreenButton(){
+  const fs=document.getElementById("fullscreen-button");
+  const hub=document.getElementById("control-menu-button");
+  const feedTabs=document.getElementById("feed-tabs");
+
+  document.body.classList.remove("cursor-idle");
+
+  fs?.classList.add("is-visible");
+  hub?.classList.add("is-visible");
+  feedTabs?.classList.add("is-visible");
+
+  clearTimeout(cursorHideTimer);
+  cursorHideTimer=setTimeout(()=>{
+    if(anyControlPanelOpen())return;
+
+    fs?.classList.remove("is-visible");
+    hub?.classList.remove("is-visible");
+    feedTabs?.classList.remove("is-visible");
+
+    document.body.classList.add("cursor-idle");
+  },2000);
+}
+
+function handlePointerActivity(e){
+  if(e.pointerType==="mouse"){
+    showFullscreenButton();
+  }
+}
+
+async function toggleFullscreen(){
+  try{
+    if(!document.fullscreenElement){
+      await document.documentElement.requestFullscreen();
+    }else{
+      await document.exitFullscreen();
+    }
+  }catch(err){
+    console.error("Fullscreen:",err);
+  }
+}
+
+window.addEventListener("pointermove",handlePointerActivity,{passive:true});
+window.addEventListener("mousemove",showFullscreenButton,{passive:true});
+
+/*
+  Sayfa açıldıktan sonra fare hiç hareket etmese bile imleç 2 saniye sonra
+  kaybolur. İlk hareket showFullscreenButton() ile hem imleci hem kontrolleri
+  yeniden görünür yapar.
+*/
+cursorHideTimer=setTimeout(()=>{
+  if(!anyControlPanelOpen()){
+    document.body.classList.add("cursor-idle");
+  }
+},2000);
+
+
+let pipCanvas=null;
+let pipVideo=null;
+let pipStream=null;
+let pipAnimationFrame=null;
+let pipAnimationTimer=null;
+let pipActive=false;
+let pipCurrent=null;
+let pipTransition=null;
+const pipImageCache=new Map();
+
+function pipSupportMode(){
+  const hasCanvasStream=
+    typeof HTMLCanvasElement.prototype.captureStream==="function";
+
+  if(!hasCanvasStream)return "none";
+
+  if(
+    typeof HTMLVideoElement.prototype.requestPictureInPicture==="function"
+  ){
+    return "standard";
+  }
+
+  const probe=document.createElement("video");
+
+  if(
+    typeof probe.webkitSetPresentationMode==="function" &&
+    typeof probe.webkitSupportsPresentationMode==="function" &&
+    probe.webkitSupportsPresentationMode("picture-in-picture")
+  ){
+    return "webkit";
+  }
+
+  return "none";
+}
+
+function pipSupported(){
+  return pipSupportMode()!=="none";
+}
+
+async function getPiPImage(url){
+  if(!url)return null;
+  if(pipImageCache.has(url))return pipImageCache.get(url);
+
+  const promise=(async()=>{
+    const proxied=
+      `${IMAGE_PROXY_API}?url=${encodeURIComponent(url)}`;
+
+    try{
+      const r=await fetch(proxied,{
+        mode:"cors",
+        credentials:"omit",
+        cache:"default"
+      });
+
+      if(!r.ok)throw new Error("image "+r.status);
+
+      const blob=await r.blob();
+
+      if(typeof createImageBitmap==="function"){
+        return await createImageBitmap(blob);
+      }
+
+      return await new Promise((resolve,reject)=>{
+        const img=new Image();
+        const objectUrl=URL.createObjectURL(blob);
+
+        img.onload=()=>{
+          URL.revokeObjectURL(objectUrl);
+          resolve(img);
+        };
+
+        img.onerror=()=>{
+          URL.revokeObjectURL(objectUrl);
+          reject(new Error("image decode"));
+        };
+
+        img.src=objectUrl;
+      });
+    }catch(e){
+      console.warn("PiP image:",e);
+      return null;
+    }
+  })();
+
+  pipImageCache.set(url,promise);
+  return promise;
+}
+
+function wrapCanvasText(ctx,text,maxWidth,maxLines=3){
+  const words=String(text||"").split(/\s+/);
+  const lines=[];
+  let line="";
+
+  for(const word of words){
+    const test=line ? line+" "+word : word;
+
+    if(ctx.measureText(test).width<=maxWidth){
+      line=test;
+    }else{
+      if(line)lines.push(line);
+      line=word;
+      if(lines.length===maxLines-1)break;
+    }
+  }
+
+  if(line && lines.length<maxLines)lines.push(line);
+
+  if(
+    lines.length===maxLines &&
+    words.join(" ").length>lines.join(" ").length
+  ){
+    let last=lines[maxLines-1];
+
+    while(
+      last.length>2 &&
+      ctx.measureText(last+"…").width>maxWidth
+    ){
+      last=last.slice(0,-1);
+    }
+
+    lines[maxLines-1]=last.trim()+"…";
+  }
+
+  return lines;
+}
+
+function drawPiPStory(ctx,story,img,offsetX=0,offsetY=0){
+  if(!pipCanvas)return;
+
+  const W=pipCanvas.width;
+  const H=pipCanvas.height;
+
+  ctx.save();
+  ctx.translate(offsetX,offsetY);
+  ctx.beginPath();
+  ctx.rect(0,0,W,H);
+  ctx.clip();
+
+  ctx.fillStyle="#090909";
+  ctx.fillRect(0,0,W,H);
+
+  if(img){
+    const iw=img.width||img.videoWidth||W;
+    const ih=img.height||img.videoHeight||H;
+    const scale=Math.max(W/iw,H/ih);
+    const dw=iw*scale;
+    const dh=ih*scale;
+
+    ctx.drawImage(
+      img,
+      (W-dw)/2,
+      (H-dh)/2,
+      dw,
+      dh
+    );
+  }
+
+  const grad=ctx.createLinearGradient(0,H*.34,0,H);
+  grad.addColorStop(0,"rgba(0,0,0,0)");
+  grad.addColorStop(1,"rgba(0,0,0,.92)");
+  ctx.fillStyle=grad;
+  ctx.fillRect(0,0,W,H);
+
+  ctx.textAlign="right";
+  ctx.textBaseline="alphabetic";
+  ctx.shadowColor="rgba(0,0,0,.65)";
+  ctx.shadowBlur=7;
+
+  ctx.font='700 18px "Comfortaa", Arial, sans-serif';
+  ctx.fillStyle="rgba(255,255,255,.88)";
+  ctx.fillText(story?.flowCategory||"",W-28,H-132);
+
+  ctx.font='700 20px "Comfortaa", Arial, sans-serif';
+  ctx.fillStyle="#fff";
+  ctx.fillText(story?.source||"",W-28,H-102);
+
+  ctx.font='700 34px "Comfortaa", Arial, sans-serif';
+  const lines=wrapCanvasText(
+    ctx,
+    story?.title||"Flöw",
+    W-56,
+    2
+  );
+
+  let y=H-58-(lines.length-1)*40;
+
+  for(const line of lines){
+    ctx.fillText(line,W-28,y);
+    y+=40;
+  }
+
+  ctx.shadowBlur=0;
+  ctx.restore();
+}
+
+
+function drawPiPAd(ctx,item,offsetX=0,offsetY=0){
+  if(!pipCanvas || !item)return;
+
+  const W=pipCanvas.width;
+  const H=pipCanvas.height;
+  const media=item.media;
+
+  ctx.save();
+  ctx.translate(offsetX,offsetY);
+  ctx.beginPath();
+  ctx.rect(0,0,W,H);
+  ctx.clip();
+
+  ctx.fillStyle="#000";
+  ctx.fillRect(0,0,W,H);
+
+  if(media){
+    const iw=
+      media.videoWidth ||
+      media.naturalWidth ||
+      media.width ||
+      W;
+
+    const ih=
+      media.videoHeight ||
+      media.naturalHeight ||
+      media.height ||
+      H;
+
+    if(iw>0 && ih>0){
+      /*
+        Tarayıcıdaki reklam görünümü object-fit: contain kullanıyor.
+        PiP de aynı davranışı izler.
+      */
+      const scale=Math.min(W/iw,H/ih);
+      const dw=iw*scale;
+      const dh=ih*scale;
+
+      try{
+        ctx.drawImage(
+          media,
+          (W-dw)/2,
+          (H-dh)/2,
+          dw,
+          dh
+        );
+      }catch(e){}
+    }
+  }
+
+  /*
+    Reklam ibaresi PiP içinde de tarayıcıdaki sade görünümü takip eder:
+    çerçevesiz, arka plansız, Comfortaa.
+  */
+  ctx.textAlign="right";
+  ctx.textBaseline="top";
+  ctx.shadowColor="rgba(0,0,0,.7)";
+  ctx.shadowBlur=6;
+  ctx.font='700 18px "Comfortaa", Arial, sans-serif';
+  ctx.fillStyle="rgba(255,255,255,.78)";
+  ctx.fillText("Reklam",W-24,22);
+  ctx.shadowBlur=0;
+
+  ctx.restore();
+}
+
+function drawPiPItem(ctx,item,offsetX=0,offsetY=0){
+  if(!item)return;
+
+  if(item.kind==="ad"){
+    drawPiPAd(
+      ctx,
+      item,
+      offsetX,
+      offsetY
+    );
+    return;
+  }
+
+  drawPiPStory(
+    ctx,
+    item.story,
+    item.image,
+    offsetX,
+    offsetY
+  );
+}
+
+function pipVector(direction,dir){
+  const forward=dir>0;
+  const sign=forward?1:-1;
+
+  switch(direction){
+    case "down":
+      return {x:0,y:-sign};
+    case "left":
+      return {x:sign,y:0};
+    case "right":
+      return {x:-sign,y:0};
+    case "up":
+    default:
+      return {x:0,y:sign};
+  }
+}
+
+function easePiP(t){
+  return 1-Math.pow(1-t,3);
+}
+
+function drawPiPScene(now=performance.now()){
+  if(!pipCanvas)return;
+
+  const ctx=pipCanvas.getContext("2d");
+  const W=pipCanvas.width;
+  const H=pipCanvas.height;
+
+  if(pipTransition){
+    const duration=700;
+    const raw=Math.min(
+      1,
+      Math.max(0,(now-pipTransition.startedAt)/duration)
+    );
+    const p=easePiP(raw);
+    const vector=pipTransition.vector;
+
+    const newX=vector.x*W*(1-p);
+    const newY=vector.y*H*(1-p);
+    const oldX=-vector.x*W*p;
+    const oldY=-vector.y*H*p;
+
+    ctx.clearRect(0,0,W,H);
+
+    drawPiPItem(
+      ctx,
+      pipTransition.from,
+      oldX,
+      oldY
+    );
+
+    drawPiPItem(
+      ctx,
+      pipTransition.to,
+      newX,
+      newY
+    );
+
+    if(raw>=1){
+      pipCurrent=pipTransition.to;
+      pipTransition=null;
+    }
+  }else if(pipCurrent){
+    ctx.clearRect(0,0,W,H);
+    drawPiPItem(
+      ctx,
+      pipCurrent
+    );
+  }else{
+    ctx.fillStyle="#090909";
+    ctx.fillRect(0,0,W,H);
+  }
+}
+
+function stopPiPRenderLoop(){
+  if(pipAnimationFrame){
+    cancelAnimationFrame(pipAnimationFrame);
+    pipAnimationFrame=null;
+  }
+
+  if(pipAnimationTimer){
+    clearTimeout(pipAnimationTimer);
+    pipAnimationTimer=null;
+  }
+}
+
+function schedulePiPRender(){
+  stopPiPRenderLoop();
+
+  const tick=()=>{
+    if(!pipActive)return;
+
+    drawPiPScene();
+
+    const liveAdVideo=
+      pipCurrent?.kind==="ad" &&
+      pipCurrent?.ad?.type==="video" &&
+      pipCurrent?.media &&
+      !pipCurrent.media.paused &&
+      !pipCurrent.media.ended;
+
+    if(pipTransition || liveAdVideo){
+      pipAnimationFrame=requestAnimationFrame(tick);
+    }else{
+      pipAnimationTimer=setTimeout(tick,500);
+    }
+  };
+
+  pipAnimationFrame=requestAnimationFrame(tick);
+}
+
+async function preparePiPStory(story){
+  if(!story)return null;
+
+  const loadedImage=story.image
+    ? await getPiPImage(story.image)
+    : null;
+
+  const image=
+    loadedImage ||
+    pipCurrent?.image ||
+    null;
+
+  return {
+    kind:"story",
+    story,
+    image
+  };
+}
+
+
+async function preparePiPAd(ad){
+  if(!ad)return null;
+
+  let media=null;
+
+  if(ad.type==="video"){
+    if(
+      adVideo &&
+      !adVideo.hidden &&
+      adVideo.readyState>=2
+    ){
+      media=adVideo;
+    }
+  }else{
+    if(
+      adImage &&
+      !adImage.hidden &&
+      adImage.complete &&
+      adImage.naturalWidth>0
+    ){
+      media=adImage;
+    }
+
+    /*
+      Normal reklam görseli henüz DOM nesnesinden alınamıyorsa PiP için
+      Worker image proxy üzerinden güvenli bir kopya hazırlamayı dene.
+    */
+    if(!media && ad.src){
+      media=await getPiPImage(ad.src);
+    }
+  }
+
+  return {
+    kind:"ad",
+    ad,
+    media
+  };
+}
+
+async function setPiPInitialAd(ad){
+  const prepared=await preparePiPAd(ad);
+  if(!prepared)return;
+
+  pipCurrent=prepared;
+  pipTransition=null;
+  drawPiPScene();
+}
+
+async function startPiPAdTransition(ad,dir=1){
+  if(!pipActive || !ad)return;
+
+  const to=await preparePiPAd(ad);
+
+  if(!pipActive || !to)return;
+
+  let from=pipCurrent;
+
+  if(!from){
+    from=await preparePiPStory(
+      state.stories[state.index]
+    );
+  }
+
+  if(!from){
+    pipCurrent=to;
+    pipTransition=null;
+    schedulePiPRender();
+    return;
+  }
+
+  pipTransition={
+    from,
+    to,
+    vector:pipVector(
+      transitionDirection,
+      dir
+    ),
+    startedAt:performance.now()
+  };
+
+  schedulePiPRender();
+}
+
+async function setPiPInitialStory(story){
+  const prepared=await preparePiPStory(story);
+  if(!prepared)return;
+
+  pipCurrent=prepared;
+  pipTransition=null;
+  drawPiPScene();
+}
+
+async function startPiPTransition(fromStory,toStory,dir){
+  if(!pipActive || !toStory)return;
+
+  const to=await preparePiPStory(toStory);
+
+  if(!pipActive || !to)return;
+
+  let from=pipCurrent;
+
+  /*
+    Reklam PiP'te görünüyorsa çıkış geçişinin "from" tarafı reklamın kendisidir.
+    Haber -> haber geçişlerinde ise eski doğrulama davranışı korunur.
+  */
+  if(
+    !from ||
+    (
+      from.kind!=="ad" &&
+      mediaKey(from.story)!==mediaKey(fromStory)
+    )
+  ){
+    from=await preparePiPStory(fromStory);
+  }
+
+  if(!from){
+    pipCurrent=to;
+    pipTransition=null;
+    schedulePiPRender();
+    return;
+  }
+
+  pipTransition={
+    from,
+    to,
+    vector:pipVector(
+      transitionDirection,
+      dir
+    ),
+    startedAt:performance.now()
+  };
+
+  schedulePiPRender();
+}
+
+async function ensurePiPVideo(){
+  if(!pipCanvas){
+    pipCanvas=document.createElement("canvas");
+    pipCanvas.width=960;
+    pipCanvas.height=540;
+  }
+
+  if(pipVideo)return pipVideo;
+
+  pipVideo=document.createElement("video");
+  pipVideo.muted=true;
+  pipVideo.defaultMuted=true;
+  pipVideo.volume=0;
+  pipVideo.autoplay=true;
+  pipVideo.playsInline=true;
+  pipVideo.disablePictureInPicture=false;
+  pipVideo.setAttribute("playsinline","");
+  pipVideo.setAttribute("webkit-playsinline","");
+  pipVideo.setAttribute("aria-hidden","true");
+  pipVideo.style.position="fixed";
+  pipVideo.style.width="2px";
+  pipVideo.style.height="2px";
+  pipVideo.style.opacity=".01";
+  pipVideo.style.pointerEvents="none";
+  pipVideo.style.right="0";
+  pipVideo.style.bottom="0";
+  pipVideo.style.zIndex="-1";
+
+  document.body.appendChild(pipVideo);
+
+  pipStream=pipCanvas.captureStream(30);
+  pipVideo.srcObject=pipStream;
+
+  pipVideo.addEventListener(
+    "leavepictureinpicture",
+    ()=>{
+      pipActive=false;
+      stopPiPRenderLoop();
+    }
+  );
+
+  pipVideo.addEventListener(
+    "webkitpresentationmodechanged",
+    ()=>{
+      const active=
+        pipVideo.webkitPresentationMode==="picture-in-picture";
+
+      pipActive=active;
+
+      if(active){
+        schedulePiPRender();
+      }else{
+        stopPiPRenderLoop();
+      }
+    }
+  );
+
+  return pipVideo;
+}
+
+async function exitPiP(){
+  if(
+    document.pictureInPictureElement &&
+    typeof document.exitPictureInPicture==="function"
+  ){
+    await document.exitPictureInPicture();
+    return true;
+  }
+
+  if(
+    pipVideo &&
+    pipVideo.webkitPresentationMode==="picture-in-picture" &&
+    typeof pipVideo.webkitSetPresentationMode==="function"
+  ){
+    pipVideo.webkitSetPresentationMode("inline");
+    return true;
+  }
+
+  return false;
+}
+
+async function togglePiP(){
+  const mode=pipSupportMode();
+
+  if(mode==="none"){
+    status(
+      "Bu tarayıcı web sayfasından başlatılan Picture-in-Picture özelliğini desteklemiyor. Tarayıcının kendi video PiP kontrolü varsa onu kullanabilirsiniz."
+    );
+    return;
+  }
+
+  try{
+    if(await exitPiP())return;
+
+    const video=await ensurePiPVideo();
+    const story=state.stories[state.index];
+
+    if(adActive && adHasEntered && currentAd){
+      await setPiPInitialAd(currentAd);
+    }else{
+      await setPiPInitialStory(story);
+    }
+
+    await video.play();
+
+    if(mode==="standard"){
+      await video.requestPictureInPicture();
+      pipActive=true;
+      schedulePiPRender();
+      return;
+    }
+
+    if(mode==="webkit"){
+      video.webkitSetPresentationMode("picture-in-picture");
+      pipActive=true;
+      schedulePiPRender();
+    }
+  }catch(err){
+    console.error("Video PiP:",err);
+    pipActive=false;
+    stopPiPRenderLoop();
+
+    status(
+      "Picture-in-Picture açılamadı. Tarayıcı bu oturumda PiP isteğine izin vermedi."
+    );
+  }
+}
+
+
+
+function renderKeywordFilterControl(){
+  const input=document.getElementById("keyword-filter-input");
+  const show=document.getElementById("keyword-filter-show");
+  const hide=document.getElementById("keyword-filter-hide");
+  const trigger=document.getElementById("keyword-filter-button");
+
+  if(input && document.activeElement!==input){
+    input.value=keywordFilterState.text;
+  }
+
+  const active=
+    parseKeywordList(keywordFilterState.text).length>0 &&
+    keywordFilterState.mode!=="off";
+
+  show?.classList.toggle(
+    "active",
+    active && keywordFilterState.mode==="show"
+  );
+  hide?.classList.toggle(
+    "active",
+    active && keywordFilterState.mode==="hide"
+  );
+
+  show?.setAttribute(
+    "aria-pressed",
+    active && keywordFilterState.mode==="show" ? "true" : "false"
+  );
+  hide?.setAttribute(
+    "aria-pressed",
+    active && keywordFilterState.mode==="hide" ? "true" : "false"
+  );
+
+  trigger?.classList.toggle("tool-active",active);
+  if(trigger){
+    trigger.title=active
+      ? `Anahtar kelime filtresi: ${keywordFilterState.mode==="show"?"Göster":"Gizle"}`
+      : "Anahtar kelime filtresi";
+    trigger.setAttribute("aria-label",trigger.title);
+  }
+}
+
+function applyKeywordFilter(mode){
+  const input=document.getElementById("keyword-filter-input");
+  const text=String(input?.value||"").trim();
+  const keywords=parseKeywordList(text);
+
+  keywordFilterState={
+    text,
+    mode:
+      keywords.length &&
+      (mode==="show" || mode==="hide")
+        ? mode
+        : "off"
+  };
+
+  saveKeywordFilterState();
+  renderKeywordFilterControl();
+  closeKeywordFilterPanel();
+  applyFilters();
+  showFullscreenButton();
+}
+
+function clearKeywordFilter(){
+  const input=document.getElementById("keyword-filter-input");
+  if(input)input.value="";
+
+  keywordFilterState={
+    text:"",
+    mode:"off"
+  };
+
+  saveKeywordFilterState();
+  renderKeywordFilterControl();
+  applyFilters();
+  showFullscreenButton();
+
+  setTimeout(()=>{
+    document.getElementById("keyword-filter-input")?.focus();
+  },0);
+}
+
+function renderKeywordWatchControl(){
+  const input=document.getElementById("keyword-watch-input");
+  const apply=document.getElementById("keyword-watch-apply");
+  const trigger=document.getElementById("keyword-watch-button");
+  const active=currentKeywordWatchKeywords().length>0;
+
+  if(input && document.activeElement!==input){
+    input.value=keywordWatchText;
+  }
+
+  apply?.classList.toggle("active",active);
+  apply?.setAttribute(
+    "aria-pressed",
+    active?"true":"false"
+  );
+
+  trigger?.classList.toggle("tool-active",active);
+  if(trigger){
+    trigger.title=active
+      ? "Anahtar kelime takibi açık"
+      : "Anahtar kelime takibi";
+    trigger.setAttribute("aria-label",trigger.title);
+  }
+}
+
+function applyKeywordWatch(){
+  const input=document.getElementById("keyword-watch-input");
+  keywordWatchText=String(input?.value||"").trim();
+
+  saveKeywordWatchText();
+  renderKeywordWatchControl();
+  closeKeywordWatchPanel();
+
+  updateKeywordAlert(
+    state.stories[state.index]||null
+  );
+
+  showFullscreenButton();
+}
+
+function clearKeywordWatch(){
+  const input=document.getElementById("keyword-watch-input");
+  if(input)input.value="";
+
+  keywordWatchText="";
+  saveKeywordWatchText();
+  renderKeywordWatchControl();
+
+  updateKeywordAlert(
+    state.stories[state.index]||null
+  );
+
+  showFullscreenButton();
+
+  setTimeout(()=>{
+    document.getElementById("keyword-watch-input")?.focus();
+  },0);
+}
+
+function renderTimeRangeControl(){
+  const option=currentTimeRangeOption();
+  const current=document.getElementById("time-range-current");
+  const trigger=document.getElementById("time-range-button");
+
+  if(current)current.textContent=option.label;
+
+  if(trigger){
+    trigger.title=`Zaman aralığı: ${option.label}`;
+    trigger.setAttribute("aria-label",trigger.title);
+  }
+
+  document.querySelectorAll(".time-range-option").forEach(button=>{
+    const active=button.dataset.hours===option.value;
+    button.classList.toggle("active",active);
+    button.setAttribute("aria-pressed",active?"true":"false");
+  });
+}
+
+function setTimeRange(value){
+  const next=normalizeTimeRangeValue(value);
+  if(next===timeRangeValue)return;
+
+  timeRangeValue=next;
+  saveTimeRange();
+  renderTimeRangeControl();
+
+  /*
+    Kaynak/kategori filtrelerinde olduğu gibi applyFilters kullanılır.
+    Böylece dar bir zaman aralığı yüzünden kaybolan mevcut haber, aralık
+    yeniden genişletildiğinde kullanıcı başka habere geçmediyse geri gelir.
+  */
+  applyFilters();
+}
+
+function renderDurationSetting(){
+  const value=document.getElementById("duration-value");
+  const minus=document.getElementById("duration-minus");
+  const plus=document.getElementById("duration-plus");
+
+  if(value)value.textContent=`${showDurationSeconds} sn`;
+  if(minus)minus.disabled=showDurationSeconds<=5;
+  if(plus)plus.disabled=showDurationSeconds>=60;
+}
+
+function setShowDuration(value){
+  const next=Math.min(
+    60,
+    Math.max(5,Math.round(Number(value)||DEFAULT_SHOW_SECONDS))
+  );
+
+  if(next===showDurationSeconds)return;
+
+  showDurationSeconds=next;
+  saveShowDuration();
+  renderDurationSetting();
+
+  if(state.stories.length){
+    timer();
+  }
+}
+
+document.getElementById("duration-minus")?.addEventListener("click",e=>{
+  e.stopPropagation();
+  setShowDuration(showDurationSeconds-1);
+});
+
+document.getElementById("duration-plus")?.addEventListener("click",e=>{
+  e.stopPropagation();
+  setShowDuration(showDurationSeconds+1);
+});
+
+renderDurationSetting();
+renderTimeRangeControl();
+renderKeywordFilterControl();
+renderKeywordWatchControl();
+renderFeedMode();
+
+document.getElementById("keyword-filter-clear")?.addEventListener("click",e=>{
+  e.stopPropagation();
+  clearKeywordFilter();
+});
+
+document.getElementById("keyword-filter-show")?.addEventListener("click",e=>{
+  e.stopPropagation();
+  applyKeywordFilter("show");
+});
+
+document.getElementById("keyword-filter-hide")?.addEventListener("click",e=>{
+  e.stopPropagation();
+  applyKeywordFilter("hide");
+});
+
+document.getElementById("keyword-filter-input")?.addEventListener("keydown",e=>{
+  e.stopPropagation();
+
+  if(e.key==="Enter"){
+    e.preventDefault();
+    applyKeywordFilter(
+      keywordFilterState.mode==="hide"
+        ? "hide"
+        : "show"
+    );
+  }
+});
+
+document.getElementById("keyword-watch-clear")?.addEventListener("click",e=>{
+  e.stopPropagation();
+  clearKeywordWatch();
+});
+
+document.getElementById("keyword-watch-apply")?.addEventListener("click",e=>{
+  e.stopPropagation();
+  applyKeywordWatch();
+});
+
+document.getElementById("keyword-watch-input")?.addEventListener("keydown",e=>{
+  e.stopPropagation();
+
+  if(e.key==="Enter"){
+    e.preventDefault();
+    applyKeywordWatch();
+  }
+});
+
+document.querySelectorAll(".feed-tab").forEach(button=>{
+  button.addEventListener("pointerdown",e=>e.stopPropagation());
+  button.addEventListener("pointerup",e=>e.stopPropagation());
+  button.addEventListener("click",e=>{
+    e.stopPropagation();
+    switchFeedMode(button.dataset.feedMode||"agenda");
+  });
+});
+
+document.querySelectorAll(".time-range-option").forEach(button=>{
+  button.addEventListener("pointerdown",e=>e.stopPropagation());
+  button.addEventListener("pointerup",e=>e.stopPropagation());
+  button.addEventListener("click",e=>{
+    e.stopPropagation();
+    setTimeRange(button.dataset.hours||"all");
+  });
+});
+
+
+function showCookieNoticeIfNeeded(){
+  try{
+    if(localStorage.getItem(COOKIE_NOTICE_KEY)==="dismissed")return;
+  }catch(e){}
+
+  const notice=document.getElementById("cookie-notice");
+  if(notice)notice.hidden=false;
+}
+
+function dismissCookieNotice(){
+  const notice=document.getElementById("cookie-notice");
+  if(notice)notice.hidden=true;
+
+  try{
+    localStorage.setItem(COOKIE_NOTICE_KEY,"dismissed");
+  }catch(e){}
+}
+
+document.getElementById("cookie-close")?.addEventListener("pointerdown",e=>e.stopPropagation());
+document.getElementById("cookie-close")?.addEventListener("pointerup",e=>e.stopPropagation());
+document.getElementById("cookie-close")?.addEventListener("click",e=>{
+  e.stopPropagation();
+  dismissCookieNotice();
+});
+
+
+const WEATHER_GEOCODING_API="https://geocoding-api.open-meteo.com/v1/search";
+const WEATHER_FORECAST_API="https://api.open-meteo.com/v1/forecast";
+const WEATHER_REFRESH_MS=15*60*1000;
+let weatherRefreshTimer=null;
+let weatherInitialized=false;
+
+function weatherSymbol(code,isDay=true){
+  const c=Number(code);
+
+  /*
+    U+FE0E (text presentation selector) keeps weather symbols monochrome/text
+    on mobile platforms which would otherwise substitute colored emoji.
+  */
+  if(c===0)return isDay?"☀︎":"☾";
+  if(c===1||c===2)return isDay?"◐":"☁︎";
+  if(c===3)return "☁︎";
+  if(c===45||c===48)return "≋";
+  if([51,53,55,56,57].includes(c))return "☂︎";
+  if([61,63,65,66,67,80,81,82].includes(c))return "☂︎";
+  if([71,73,75,77,85,86].includes(c))return "❄︎";
+  if([95,96,99].includes(c))return "⚡︎";
+  return "◌";
+}
+
+function renderWeatherUnitOptions(){
+  document.querySelectorAll(".weather-unit-option").forEach(btn=>{
+    const active=btn.dataset.unit===weatherPreferences.unit;
+    btn.classList.toggle("active",active);
+    btn.setAttribute("aria-pressed",active?"true":"false");
+  });
+}
+
+function renderWeatherInput(){
+  const input=document.getElementById("weather-city");
+  if(input)input.value=weatherPreferences.city||"İstanbul";
+  renderWeatherUnitOptions();
+}
+
+function setWeatherFeedback(message="",stateName=""){
+  const el=document.getElementById("weather-feedback");
+  if(!el)return;
+  el.textContent=message;
+  el.dataset.state=stateName;
+}
+
+async function geocodeWeatherCity(city){
+  const q=String(city||"").trim();
+  if(!q)throw new Error("Şehir adı girin.");
+
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),8000);
+
+  try{
+    const url=
+      `${WEATHER_GEOCODING_API}?name=${encodeURIComponent(q)}&count=5&language=tr&format=json`;
+
+    const response=await fetch(url,{
+      method:"GET",
+      mode:"cors",
+      credentials:"omit",
+      cache:"default",
+      signal:controller.signal,
+      headers:{"Accept":"application/json"}
+    });
+
+    if(!response.ok){
+      throw new Error(`Konum HTTP ${response.status}`);
+    }
+
+    const data=await response.json();
+    const results=Array.isArray(data?.results)
+      ? data.results.filter(item=>
+          Number.isFinite(Number(item.latitude)) &&
+          Number.isFinite(Number(item.longitude))
+        )
+      : [];
+
+    if(!results.length){
+      throw new Error("Şehir bulunamadı.");
+    }
+
+    results.sort(
+      (a,b)=>(Number(b.population)||0)-(Number(a.population)||0)
+    );
+
+    const place=results[0];
+
+    return {
+      city:String(place.name||q),
+      label:[
+        place.name,
+        place.admin1 && place.admin1!==place.name
+          ? place.admin1
+          : ""
+      ].filter(Boolean).join(", ") || String(place.name||q),
+      lat:Number(place.latitude),
+      lon:Number(place.longitude)
+    };
+  }finally{
+    clearTimeout(timeout);
+  }
+}
+
+async function ensureWeatherCoordinates(){
+  if(
+    Number.isFinite(weatherPreferences.lat) &&
+    Number.isFinite(weatherPreferences.lon)
+  ){
+    return;
+  }
+
+  const place=await geocodeWeatherCity(
+    weatherPreferences.city||"İstanbul"
+  );
+
+  weatherPreferences={
+    ...weatherPreferences,
+    ...place
+  };
+
+  saveWeatherPreferences();
+  renderWeatherInput();
+}
+
+async function fetchCurrentWeather(){
+  try{
+    await ensureWeatherCoordinates();
+
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),8000);
+
+    try{
+      const params=new URLSearchParams({
+        latitude:String(weatherPreferences.lat),
+        longitude:String(weatherPreferences.lon),
+        current:"temperature_2m,weather_code,is_day",
+        temperature_unit:weatherPreferences.unit,
+        timezone:"auto"
+      });
+
+      const response=await fetch(
+        `${WEATHER_FORECAST_API}?${params.toString()}`,
+        {
+          method:"GET",
+          mode:"cors",
+          credentials:"omit",
+          cache:"no-store",
+          signal:controller.signal,
+          headers:{"Accept":"application/json"}
+        }
+      );
+
+      if(!response.ok){
+        throw new Error(`Hava HTTP ${response.status}`);
+      }
+
+      const data=await response.json();
+      const current=data?.current;
+
+      if(
+        !current ||
+        !Number.isFinite(Number(current.temperature_2m))
+      ){
+        throw new Error("Hava durumu alınamadı.");
+      }
+
+      const box=document.getElementById("weather-current");
+      const icon=document.getElementById("weather-icon");
+      const temp=document.getElementById("weather-temp");
+      const city=document.getElementById("weather-city-label");
+
+      if(icon){
+        icon.textContent=weatherSymbol(
+          current.weather_code,
+          Number(current.is_day)!==0
+        );
+      }
+
+      if(temp){
+        const unit=weatherPreferences.unit==="fahrenheit"
+          ? "°F"
+          : "°C";
+
+        temp.textContent=
+          `${Math.round(Number(current.temperature_2m))}${unit}`;
+      }
+
+      if(city){
+        city.textContent=
+          weatherPreferences.label||
+          weatherPreferences.city;
+      }
+
+      if(box)box.hidden=false;
+
+      setWeatherFeedback(
+        `${weatherPreferences.label||weatherPreferences.city} için hava durumu güncellendi.`,
+        "ok"
+      );
+    }finally{
+      clearTimeout(timeout);
+    }
+  }catch(err){
+    console.warn("Weather:",err);
+
+    setWeatherFeedback(
+      err?.name==="AbortError"
+        ? "Hava durumu isteği zaman aşımına uğradı."
+        : (err?.message||"Hava durumu alınamadı."),
+      "error"
+    );
+  }
+}
+
+async function applyWeatherCity(){
+  const input=document.getElementById("weather-city");
+  const query=String(input?.value||"").trim();
+
+  if(!query){
+    setWeatherFeedback("Şehir adı girin.","error");
+    return;
+  }
+
+  setWeatherFeedback("Şehir aranıyor...","loading");
+
+  try{
+    const place=await geocodeWeatherCity(query);
+
+    weatherPreferences={
+      ...weatherPreferences,
+      ...place
+    };
+
+    saveWeatherPreferences();
+    renderWeatherInput();
+    await fetchCurrentWeather();
+  }catch(err){
+    console.warn("Weather city:",err);
+
+    setWeatherFeedback(
+      err?.name==="AbortError"
+        ? "Şehir araması zaman aşımına uğradı."
+        : (err?.message||"Şehir bulunamadı."),
+      "error"
+    );
+  }
+}
+
+function initWeather(){
+  if(weatherInitialized)return;
+  weatherInitialized=true;
+
+  renderWeatherInput();
+
+  document.getElementById("weather-apply")?.addEventListener("click",e=>{
+    e.stopPropagation();
+    applyWeatherCity();
+  });
+
+  document.getElementById("weather-city")?.addEventListener("keydown",e=>{
+    if(e.key==="Enter"){
+      e.preventDefault();
+      e.stopPropagation();
+      applyWeatherCity();
+    }
+  });
+
+  document.querySelectorAll(".weather-unit-option").forEach(btn=>{
+    btn.addEventListener("click",async e=>{
+      e.stopPropagation();
+
+      const unit=btn.dataset.unit==="fahrenheit"
+        ? "fahrenheit"
+        : "celsius";
+
+      if(unit===weatherPreferences.unit)return;
+
+      weatherPreferences.unit=unit;
+      saveWeatherPreferences();
+      renderWeatherUnitOptions();
+      await fetchCurrentWeather();
+    });
+  });
+
+  fetchCurrentWeather();
+
+  if(weatherRefreshTimer){
+    clearInterval(weatherRefreshTimer);
+  }
+
+  weatherRefreshTimer=setInterval(
+    fetchCurrentWeather,
+    WEATHER_REFRESH_MS
+  );
+}
+
+/*
+  Çerez ve hava durumu başlangıç haber yüklemesinden tamamen ayrıdır.
+  Böylece harici hava servisi yavaşlasa veya hata verse bile haber yükleme
+  akışını etkileyemez.
+*/
+window.addEventListener("floew:ready",()=>{
+  showCookieNoticeIfNeeded();
+  initWeather();
+},{once:true});
+
+function renderDirectionOptions(){
+  document.querySelectorAll(".direction-option").forEach(btn=>{
+    const active=btn.dataset.direction===transitionDirection;
+    btn.classList.toggle("active",active);
+    btn.setAttribute("aria-pressed",active?"true":"false");
+  });
+}
+
+document.querySelectorAll(".direction-option").forEach(btn=>{
+  btn.addEventListener("click",e=>{
+    e.stopPropagation();
+    transitionDirection=btn.dataset.direction||"up";
+    savePreferences();
+    renderDirectionOptions();
+  });
+});
+
+renderDirectionOptions();
+renderVideoSetting();
+
+document.getElementById("video-setting")?.addEventListener("click",e=>{
+  e.stopPropagation();
+  videoEnabled=!videoEnabled;
+  savePreferences();
+  applyVideoSetting();
+});
+
+const PUBLIC_STATS_API="https://thefloew.thefloewback.workers.dev/stats/public";
+let publicStatsRange="7d";
+let controlMenuOpen=false;
+
+function closeControlMenu(){
+  controlMenuOpen=false;
+  const panel=document.getElementById("control-menu-panel");
+  const button=document.getElementById("control-menu-button");
+  panel?.classList.remove("open");
+  panel?.setAttribute("aria-hidden","true");
+  button?.classList.remove("open");
+  button?.setAttribute("aria-expanded","false");
+}
+
+function openControlMenu(){
+  closeQuickPanels();
+  closeMenu();
+  closeStatsOverlay();
+
+  controlMenuOpen=true;
+  const panel=document.getElementById("control-menu-panel");
+  const button=document.getElementById("control-menu-button");
+  panel?.classList.add("open");
+  panel?.setAttribute("aria-hidden","false");
+  button?.classList.add("open");
+  button?.setAttribute("aria-expanded","true");
+  showFullscreenButton();
+}
+
+function toggleControlMenu(){
+  if(controlMenuOpen){
+    closeControlMenu();
+    showFullscreenButton();
+  }else{
+    openControlMenu();
+  }
+}
+
+function closeStatsOverlay(){
+  const overlay=document.getElementById("stats-overlay");
+  overlay?.classList.remove("open");
+  overlay?.setAttribute("aria-hidden","true");
+}
+
+function publicStatsEscape(value){
+  return String(value??"")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;");
+}
+
+function publicStatsNumber(value){
+  return new Intl.NumberFormat("tr-TR").format(Number(value)||0);
+}
+
+function publicStatsDuration(ms){
+  const sec=Math.max(0,Math.round((Number(ms)||0)/1000));
+  if(sec<60)return `${sec} sn`;
+  return `${Math.floor(sec/60)} dk ${sec%60} sn`;
+}
+
+function renderPublicStats(data){
+  const summary=document.getElementById("public-stats-summary");
+  const flora=document.getElementById("public-stats-flora");
+  const categories=document.getElementById("public-stats-categories");
+  const statusEl=document.getElementById("public-stats-status");
+
+  const o=data?.overview||{};
+
+  if(summary){
+    summary.innerHTML=[
+      ["Haber görüntüleme",publicStatsNumber(o.views)],
+      ["Farklı haber",publicStatsNumber(o.stories)],
+      ["Kaynağa gidiş",publicStatsNumber(o.source_opens)],
+      ["Ort. ekranda kalma",publicStatsDuration(o.avg_dwell_ms)]
+    ].map(([label,value])=>`
+      <div class="public-stat-card">
+        <span>${publicStatsEscape(label)}</span>
+        <strong>${publicStatsEscape(value)}</strong>
+      </div>
+    `).join("");
+  }
+
+  if(flora){
+    const rows=(data?.flora||[]).slice(0,5);
+    flora.innerHTML=rows.length
+      ? rows.map((row,index)=>`
+          <a class="public-stat-story" ${row.link?`href="${publicStatsEscape(row.link)}" target="_blank" rel="noopener noreferrer"`:""}>
+            <span class="public-stat-rank">${index+1}</span>
+            <span class="public-stat-story-copy">
+              <strong>${publicStatsEscape(row.title||"Başlıksız haber")}</strong>
+              <small>${publicStatsEscape(row.source||"")}${row.category?` · ${publicStatsEscape(row.category)}`:""}</small>
+            </span>
+            <span class="public-stat-flora">${Number(row.flora||0).toFixed(1)}</span>
+          </a>
+        `).join("")
+      : `<div class="public-stats-empty">Flöra için henüz yeterli veri yok.</div>`;
+  }
+
+  if(categories){
+    const foreignStats=data?.stream==="foreign";
+    const secondaryHeading=
+      document.getElementById("public-stats-secondary-heading");
+    const detailLink=
+      document.getElementById("public-stats-detail-link");
+
+    if(secondaryHeading){
+      secondaryHeading.textContent=
+        foreignStats
+          ? "En çok görüntülenen yabancı kaynaklar"
+          : "En çok ilgi gören kategoriler";
+    }
+
+    if(detailLink){
+      detailLink.style.display=
+        foreignStats
+          ? "none"
+          : "";
+    }
+
+    const rows=
+      foreignStats
+        ? (data?.sources||[]).slice(0,6).map(row=>({
+            label:row.source,
+            views:row.views
+          }))
+        : (data?.categories||[]).slice(0,6).map(row=>({
+            label:row.category,
+            views:row.views
+          }));
+
+    const max=Math.max(1,...rows.map(row=>Number(row.views)||0));
+    categories.innerHTML=rows.length
+      ? rows.map(row=>{
+          const value=Number(row.views)||0;
+          return `
+            <div class="public-stat-category">
+              <span>${publicStatsEscape(row.label||"Bilinmiyor")}</span>
+              <i><b style="width:${Math.max(2,value/max*100)}%"></b></i>
+              <small>${publicStatsNumber(value)}</small>
+            </div>
+          `;
+        }).join("")
+      : `<div class="public-stats-empty">${foreignStats?"Henüz yabancı kaynak verisi yok.":"Henüz kategori verisi yok."}</div>`;
+  }
+
+  if(statusEl){
+    statusEl.textContent=
+      `${data?.label||""} · ${new Date(data?.generatedAt||Date.now()).toLocaleString("tr-TR")}`;
+  }
+}
+
+async function loadPublicStats(range=publicStatsRange){
+  publicStatsRange=range;
+  const statsStream=
+    feedMode==="foreign"
+      ? "foreign"
+      : "main";
+
+  document.querySelectorAll(".public-stats-tab").forEach(tab=>{
+    tab.classList.toggle(
+      "active",
+      tab.dataset.statsRange===range
+    );
+  });
+
+  const title=document.getElementById("public-stats-title");
+  const subtitle=document.getElementById("public-stats-subtitle");
+
+  if(title){
+    title.textContent=
+      statsStream==="foreign"
+        ? "Yabancı İstatistikleri"
+        : "Flöw İstatistikleri";
+  }
+
+  if(subtitle){
+    subtitle.textContent=
+      statsStream==="foreign"
+        ? "Yabancı kaynaklarda son dönemde neler ilgi görüyor?"
+        : "Flöw'de son dönemde neler ilgi görüyor?";
+  }
+
+  const statusEl=document.getElementById("public-stats-status");
+  if(statusEl)statusEl.textContent="İstatistikler hazırlanıyor...";
+
+  try{
+    const response=await fetch(
+      `${PUBLIC_STATS_API}?range=${encodeURIComponent(range)}&stream=${encodeURIComponent(statsStream)}`,
+      {cache:"no-store"}
+    );
+    const data=await response.json();
+    if(!response.ok || !data?.ok){
+      throw new Error(data?.error||`HTTP ${response.status}`);
+    }
+    renderPublicStats(data);
+  }catch(error){
+    const summary=document.getElementById("public-stats-summary");
+    const flora=document.getElementById("public-stats-flora");
+    const categories=document.getElementById("public-stats-categories");
+
+    if(summary)summary.innerHTML="";
+    if(flora)flora.innerHTML=
+      `<div class="public-stats-empty">İstatistikler henüz hazır değil.</div>`;
+    if(categories)categories.innerHTML="";
+    if(statusEl)statusEl.textContent=
+      `Veri alınamadı: ${error?.message||error}`;
+  }
+}
+
+function openStatsOverlay(){
+  closeQuickPanels();
+  closeMenu();
+
+  const overlay=document.getElementById("stats-overlay");
+  overlay?.classList.add("open");
+  overlay?.setAttribute("aria-hidden","false");
+  showFullscreenButton();
+  loadPublicStats(publicStatsRange);
+
+  try{
+    telemetryQueueEvent("public_stats_open",{
+      value_text:publicStatsRange
+    });
+  }catch(e){}
+}
+
+function closeKeywordFilterPanel(){
+  const panel=document.getElementById("keyword-filter-panel");
+  panel?.classList.remove("open");
+  panel?.setAttribute("aria-hidden","true");
+}
+
+function closeKeywordWatchPanel(){
+  const panel=document.getElementById("keyword-watch-panel");
+  panel?.classList.remove("open");
+  panel?.setAttribute("aria-hidden","true");
+}
+
+function closeQuickPanels(except=""){
+  if(except!=="time")closeTimeRangePanel();
+  if(except!=="filter")closeKeywordFilterPanel();
+  if(except!=="watch")closeKeywordWatchPanel();
+}
+
+function openTimeRangePanel(){
+  closeMenu();
+  closeStatsOverlay();
+  closeQuickPanels("time");
+
+  const panel=document.getElementById("time-range-panel");
+  panel?.classList.add("open");
+  panel?.setAttribute("aria-hidden","false");
+
+  renderTimeRangeControl();
+  showFullscreenButton();
+}
+
+function closeTimeRangePanel(){
+  const panel=document.getElementById("time-range-panel");
+  panel?.classList.remove("open");
+  panel?.setAttribute("aria-hidden","true");
+}
+
+function toggleTimeRangePanel(){
+  const panel=document.getElementById("time-range-panel");
+  if(!panel)return;
+
+  if(panel.classList.contains("open")){
+    closeTimeRangePanel();
+    showFullscreenButton();
+  }else{
+    openTimeRangePanel();
+  }
+}
+
+function openKeywordFilterPanel(){
+  closeMenu();
+  closeStatsOverlay();
+  closeQuickPanels("filter");
+
+  const panel=document.getElementById("keyword-filter-panel");
+  panel?.classList.add("open");
+  panel?.setAttribute("aria-hidden","false");
+  renderKeywordFilterControl();
+  showFullscreenButton();
+
+  setTimeout(()=>{
+    const input=document.getElementById("keyword-filter-input");
+    input?.focus();
+    input?.select();
+  },0);
+}
+
+function toggleKeywordFilterPanel(){
+  const panel=document.getElementById("keyword-filter-panel");
+  if(!panel)return;
+
+  if(panel.classList.contains("open")){
+    closeKeywordFilterPanel();
+    showFullscreenButton();
+  }else{
+    openKeywordFilterPanel();
+  }
+}
+
+function openKeywordWatchPanel(){
+  closeMenu();
+  closeStatsOverlay();
+  closeQuickPanels("watch");
+
+  const panel=document.getElementById("keyword-watch-panel");
+  panel?.classList.add("open");
+  panel?.setAttribute("aria-hidden","false");
+  renderKeywordWatchControl();
+  showFullscreenButton();
+
+  setTimeout(()=>{
+    const input=document.getElementById("keyword-watch-input");
+    input?.focus();
+    input?.select();
+  },0);
+}
+
+function toggleKeywordWatchPanel(){
+  const panel=document.getElementById("keyword-watch-panel");
+  if(!panel)return;
+
+  if(panel.classList.contains("open")){
+    closeKeywordWatchPanel();
+    showFullscreenButton();
+  }else{
+    openKeywordWatchPanel();
+  }
+}
+
+function openMenu(){
+  closeStatsOverlay();
+  closeQuickPanels();
+
+  const overlay=document.getElementById("menu-overlay");
+  overlay.classList.add("open");
+  overlay.setAttribute("aria-hidden","false");
+  showFullscreenButton();
+}
+
+function closeMenu(){
+  const overlay=document.getElementById("menu-overlay");
+  overlay.classList.remove("open");
+  overlay.setAttribute("aria-hidden","true");
+}
+
+document.getElementById("control-menu-button")?.addEventListener("pointerdown",e=>e.stopPropagation());
+document.getElementById("control-menu-button")?.addEventListener("pointerup",e=>e.stopPropagation());
+document.getElementById("control-menu-button")?.addEventListener("click",e=>{
+  e.stopPropagation();
+  toggleControlMenu();
+});
+
+document.getElementById("control-menu-panel")?.addEventListener("pointerdown",e=>e.stopPropagation());
+document.getElementById("control-menu-panel")?.addEventListener("pointerup",e=>e.stopPropagation());
+document.getElementById("control-menu-panel")?.addEventListener("click",e=>e.stopPropagation());
+
+document.getElementById("menu-button").addEventListener("pointerdown",e=>e.stopPropagation());
+document.getElementById("menu-button").addEventListener("pointerup",e=>e.stopPropagation());
+document.getElementById("menu-button").addEventListener("click",e=>{
+  e.stopPropagation();
+  openMenu();
+});
+
+document.getElementById("info-button")?.addEventListener("pointerdown",e=>e.stopPropagation());
+document.getElementById("info-button")?.addEventListener("pointerup",e=>e.stopPropagation());
+document.getElementById("info-button")?.addEventListener("click",e=>{
+  e.stopPropagation();
+  openStatsOverlay();
+});
+
+document.getElementById("time-range-button")?.addEventListener("pointerdown",e=>e.stopPropagation());
+document.getElementById("time-range-button")?.addEventListener("pointerup",e=>e.stopPropagation());
+document.getElementById("time-range-button")?.addEventListener("click",e=>{
+  e.stopPropagation();
+  toggleTimeRangePanel();
+});
+
+document.getElementById("time-range-panel")?.addEventListener("pointerdown",e=>e.stopPropagation());
+document.getElementById("time-range-panel")?.addEventListener("pointerup",e=>e.stopPropagation());
+document.getElementById("time-range-panel")?.addEventListener("click",e=>e.stopPropagation());
+
+document.getElementById("keyword-filter-button")?.addEventListener("pointerdown",e=>e.stopPropagation());
+document.getElementById("keyword-filter-button")?.addEventListener("pointerup",e=>e.stopPropagation());
+document.getElementById("keyword-filter-button")?.addEventListener("click",e=>{
+  e.stopPropagation();
+  toggleKeywordFilterPanel();
+});
+
+document.getElementById("keyword-watch-button")?.addEventListener("pointerdown",e=>e.stopPropagation());
+document.getElementById("keyword-watch-button")?.addEventListener("pointerup",e=>e.stopPropagation());
+document.getElementById("keyword-watch-button")?.addEventListener("click",e=>{
+  e.stopPropagation();
+  toggleKeywordWatchPanel();
+});
+
+for(const panelId of ["keyword-filter-panel","keyword-watch-panel"]){
+  const panel=document.getElementById(panelId);
+  panel?.addEventListener("pointerdown",e=>e.stopPropagation());
+  panel?.addEventListener("pointerup",e=>e.stopPropagation());
+  panel?.addEventListener("click",e=>e.stopPropagation());
+}
+
+document.getElementById("stats-close")?.addEventListener("click",closeStatsOverlay);
+
+document.getElementById("stats-overlay")?.addEventListener("click",e=>{
+  if(e.target.id==="stats-overlay")closeStatsOverlay();
+});
+
+document.querySelectorAll(".public-stats-tab").forEach(tab=>{
+  tab.addEventListener("click",()=>{
+    loadPublicStats(tab.dataset.statsRange||"7d");
+  });
+});
+
+document.getElementById("menu-close").addEventListener("click",closeMenu);
+
+document.getElementById("menu-overlay").addEventListener("click",e=>{
+  if(e.target.id==="menu-overlay")closeMenu();
+});
+
+document.querySelectorAll(".menu-tab").forEach(tab=>{
+  tab.addEventListener("click",()=>{
+    document.querySelectorAll(".menu-tab").forEach(x=>x.classList.remove("active"));
+    document.querySelectorAll(".menu-panel").forEach(x=>x.classList.remove("active"));
+    tab.classList.add("active");
+    document.querySelector(`[data-panel="${tab.dataset.tab}"]`).classList.add("active");
+  });
+});
+
+
+document.querySelectorAll(".source-link").forEach(link=>{
+  link.addEventListener("pointerdown",e=>e.stopPropagation());
+  link.addEventListener("pointerup",e=>e.stopPropagation());
+  link.addEventListener("click",e=>e.stopPropagation());
+});
+
+document.addEventListener("keydown",e=>{
+  if(e.key==="Escape"){
+    closeMenu();
+    closeStatsOverlay();
+    closeQuickPanels();
+    showFullscreenButton();
+  }
+});
+
+document.getElementById("pip-button").addEventListener("pointerdown",e=>{
+  e.stopPropagation();
+});
+document.getElementById("pip-button").addEventListener("pointerup",e=>{
+  e.stopPropagation();
+});
+document.getElementById("pip-button").addEventListener("click",e=>{
+  e.stopPropagation();
+  togglePiP();
+});
+
+document.getElementById("fullscreen-button").addEventListener("pointerdown",e=>{
+  e.stopPropagation();
+});
+document.getElementById("fullscreen-button").addEventListener("pointerup",e=>{
+  e.stopPropagation();
+});
+document.getElementById("fullscreen-button").addEventListener("click",e=>{
+  e.stopPropagation();
+  toggleFullscreen();
+});
+document.addEventListener("fullscreenchange",setFullscreenIcon);
+
+window.addEventListener("wheel",e=>{
+  if(e.target.closest && e.target.closest("#feed-tabs"))return;
+  if(e.target.closest && e.target.closest("#fullscreen-button"))return;
+  if(e.target.closest && e.target.closest("#control-menu-button"))return;
+  if(e.target.closest && e.target.closest("#control-menu-panel"))return;
+  if(e.target.closest && e.target.closest("#info-button"))return;
+  if(e.target.closest && e.target.closest("#stats-overlay"))return;
+  if(e.target.closest && e.target.closest("#menu-button"))return;
+  if(e.target.closest && e.target.closest("#time-range-button"))return;
+  if(e.target.closest && e.target.closest("#time-range-panel"))return;
+  if(e.target.closest && e.target.closest("#keyword-filter-button"))return;
+  if(e.target.closest && e.target.closest("#keyword-filter-panel"))return;
+  if(e.target.closest && e.target.closest("#keyword-watch-button"))return;
+  if(e.target.closest && e.target.closest("#keyword-watch-panel"))return;
+  if(e.target.closest && e.target.closest("#pip-button"))return;
+  if(e.target.closest && e.target.closest("#menu-overlay"))return;
+  e.preventDefault();
+  if(Math.abs(e.deltaY)>=5)move(e.deltaY>0?1:-1);
+},{passive:false});
+
+window.addEventListener("keydown",e=>{
+  const menuOpen=
+    document.getElementById("menu-overlay")?.classList.contains("open");
+
+  const statsOpen=
+    document.getElementById("stats-overlay")?.classList.contains("open");
+
+  const timeOpen=
+    document.getElementById("time-range-panel")?.classList.contains("open");
+
+  const keywordFilterOpen=
+    document.getElementById("keyword-filter-panel")?.classList.contains("open");
+
+  const keywordWatchOpen=
+    document.getElementById("keyword-watch-panel")?.classList.contains("open");
+
+  if(menuOpen || statsOpen || timeOpen || keywordFilterOpen || keywordWatchOpen)return;
+
+  if(e.key==="ArrowDown"||e.key==="PageDown"){e.preventDefault();move(1)}
+  else if(e.key==="ArrowUp"||e.key==="PageUp"){e.preventDefault();move(-1)}
+  else if(e.key==="f"||e.key==="F"){toggleFullscreen()}
+});
+
+window.addEventListener("pointerdown",e=>{
+  if(e.button!==0)return;
+
+  if(
+    e.pointerType==="touch" ||
+    (
+      window.matchMedia?.("(pointer: coarse)")?.matches &&
+      e.pointerType!=="mouse"
+    )
+  ){
+    showFullscreenButton();
+  }
+  if(e.target.closest && e.target.closest("#feed-tabs"))return;
+  if(e.target.closest && e.target.closest("#fullscreen-button"))return;
+  if(e.target.closest && e.target.closest("#control-menu-button"))return;
+  if(e.target.closest && e.target.closest("#control-menu-panel"))return;
+  if(e.target.closest && e.target.closest("#info-button"))return;
+  if(e.target.closest && e.target.closest("#stats-overlay"))return;
+  if(e.target.closest && e.target.closest("#menu-button"))return;
+  if(e.target.closest && e.target.closest("#time-range-button"))return;
+  if(e.target.closest && e.target.closest("#time-range-panel"))return;
+  if(e.target.closest && e.target.closest("#keyword-filter-button"))return;
+  if(e.target.closest && e.target.closest("#keyword-filter-panel"))return;
+  if(e.target.closest && e.target.closest("#keyword-watch-button"))return;
+  if(e.target.closest && e.target.closest("#keyword-watch-panel"))return;
+  if(e.target.closest && e.target.closest("#pip-button"))return;
+  if(e.target.closest && e.target.closest("#menu-overlay"))return;
+  state.x=e.clientX;state.y=e.clientY;state.t=performance.now();
+});
+
+window.addEventListener("pointerup",e=>{
+  if(e.button!==0)return;
+  if(e.target.closest && e.target.closest("#feed-tabs"))return;
+  if(document.getElementById("menu-overlay").classList.contains("open"))return;
+  if(document.getElementById("stats-overlay")?.classList.contains("open"))return;
+  if(e.target.closest && e.target.closest("#fullscreen-button"))return;
+  if(e.target.closest && e.target.closest("#control-menu-button"))return;
+  if(e.target.closest && e.target.closest("#control-menu-panel"))return;
+  if(e.target.closest && e.target.closest("#info-button"))return;
+  if(e.target.closest && e.target.closest("#menu-button"))return;
+  if(e.target.closest && e.target.closest("#time-range-button"))return;
+  if(e.target.closest && e.target.closest("#time-range-panel"))return;
+  if(e.target.closest && e.target.closest("#keyword-filter-button"))return;
+  if(e.target.closest && e.target.closest("#keyword-filter-panel"))return;
+  if(e.target.closest && e.target.closest("#keyword-watch-button"))return;
+  if(e.target.closest && e.target.closest("#keyword-watch-panel"))return;
+  if(e.target.closest && e.target.closest("#pip-button"))return;
+  if(e.target.closest && e.target.closest("#menu-overlay"))return;
+
+  if(navigationBlockingPanelOpen()){
+    closeQuickPanels();
+    showFullscreenButton();
+    return;
+  }
+
+  const dx=e.clientX-state.x;
+  const dy=e.clientY-state.y;
+  const dt=performance.now()-state.t;
+
+  /*
+    Yatay swipe = sekmeler arasında komşu akışa geçiş.
+
+      Son dakika <-> Gündem <-> Yabancı
+
+    Sağa kaydırma soldaki sekmeye, sola kaydırma sağdaki sekmeye gider.
+    Dikey swipe haber navigasyonudur.
+  */
+  if(
+    Math.abs(dx)>=SWIPE &&
+    Math.abs(dx)>Math.abs(dy) &&
+    dt<=1000
+  ){
+    const currentModeIndex=FEED_MODE_ORDER.indexOf(feedMode);
+    const targetModeIndex=
+      currentModeIndex + (dx<0 ? 1 : -1);
+
+    if(
+      targetModeIndex>=0 &&
+      targetModeIndex<FEED_MODE_ORDER.length
+    ){
+      switchFeedMode(
+        FEED_MODE_ORDER[targetModeIndex]
+      );
+    }
+  }else if(
+    Math.abs(dy)>=SWIPE &&
+    Math.abs(dy)>=Math.abs(dx) &&
+    dt<=1000
+  ){
+    move(dy<0?1:-1);
+  }else if(
+    e.pointerType!=="touch" &&
+    !(
+      window.matchMedia?.("(pointer: coarse)")?.matches &&
+      e.pointerType!=="mouse"
+    ) &&
+    dt<=1000 &&
+    Math.abs(dx)<10 &&
+    Math.abs(dy)<10
+  ){
+    move(1);
+  }
+});
+
+window.addEventListener("dragstart",e=>e.preventDefault());
+
+window.addEventListener(
+  "resize",
+  refreshAdsLayoutIfNeeded,
+  {passive:true}
+);
+
+window.addEventListener(
+  "orientationchange",
+  refreshAdsLayoutIfNeeded,
+  {passive:true}
+);
+
+updateClock();
+setInterval(updateClock,1000);
+
+if(new URLSearchParams(location.search).get("pip")==="1"){
+  document.body.classList.add("pip-mode");
+}
+window.FloewAds={
+  refresh:()=>loadAdsCatalog(),
+  status:()=>({
+    version:window.__floewAppVersion,
+    testMode:ADS_TEST_MODE,
+    interval:ADS_INTERVAL_NEWS,
+    newsShownSinceAd,
+    adActive,
+    layout:getAdsLayout(),
+    catalogLayout:adCatalogLayout,
+    catalog:adCatalog.map(item=>({
+      name:item.name,
+      type:item.type,
+      src:item.src
+    }))
+  }),
+  test:async()=>{
+    await loadAdsCatalog();
+    const result=await playAdBreak();
+
+    if(!result?.shown)return false;
+
+    if(result.direction<0){
+      await transitionAdBackToCurrent(-1);
+    }else{
+      await move(1,{skipAd:true,fromAd:true});
+    }
+
+    return true;
+  }
+};
+
+async function runAdTestOnce(){
+  if(!ADS_TEST_MODE || adTestRan)return;
+  if(!state.stories.length)return;
+
+  adTestRan=true;
+  clearTimeout(state.timer);
+
+  await loadAdsCatalog();
+
+  if(!adCatalog.length){
+    status(
+      "Reklam testi: Worker ads/ dizininde desteklenen reklam bulamadı."
+    );
+    timer();
+    return;
+  }
+
+  status(
+    `Reklam testi: ${adCatalog.length} dosya bulundu. Reklam oynatılıyor...`
+  );
+
+  await new Promise(resolve=>setTimeout(resolve,700));
+  clearStatus();
+
+  const result=await playAdBreak();
+
+  if(!result?.shown){
+    status(
+      "Reklam testi: dosya listelendi ancak medya yüklenemedi."
+    );
+    timer();
+    return;
+  }
+
+  if(result.direction<0){
+    await transitionAdBackToCurrent(-1);
+  }else{
+    await move(1,{skipAd:true,fromAd:true});
+  }
+}
+
+
+/* ========================================================================
+   FLÖW ANALYTICS / FLÖRA — V31.16.0
+   ------------------------------------------------------------------------
+   Three physically separate D1 stores are used by the Worker:
+   CONTENT_DB  -> public content / Flöra statistics
+   AUDIENCE_DB -> private visitor + session statistics
+   BEHAVIOR_DB -> private raw interaction events
+
+   The frontend batches telemetry so normal news rendering never waits for it.
+   ======================================================================== */
+
+const ANALYTICS_BASE="https://thefloew.thefloewback.workers.dev";
+const TRACK_API=`${ANALYTICS_BASE}/track`;
+const FLOEW_VISITOR_KEY="thefloew.analyticsVisitor.v1";
+const FLOEW_SESSION_KEY="thefloew.analyticsSession.v1";
+const TELEMETRY_FLUSH_MS=10000;
+const TELEMETRY_MAX_BATCH=20;
+
+function telemetryId(){
+  try{
+    if(crypto?.randomUUID)return crypto.randomUUID();
+  }catch(e){}
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+}
+
+function getTelemetryVisitorId(){
+  try{
+    let id=localStorage.getItem(FLOEW_VISITOR_KEY);
+    if(!id){
+      id=telemetryId();
+      localStorage.setItem(FLOEW_VISITOR_KEY,id);
+    }
+    return id;
+  }catch(e){
+    return telemetryId();
+  }
+}
+
+function getTelemetrySession(){
+  const now=Date.now();
+  try{
+    const raw=sessionStorage.getItem(FLOEW_SESSION_KEY);
+    if(raw){
+      const parsed=JSON.parse(raw);
+      if(parsed?.id && Number.isFinite(parsed.startedAt)){
+        return parsed;
+      }
+    }
+    const created={id:telemetryId(),startedAt:now};
+    sessionStorage.setItem(FLOEW_SESSION_KEY,JSON.stringify(created));
+    return created;
+  }catch(e){
+    return {id:telemetryId(),startedAt:now};
+  }
+}
+
+const telemetryVisitorId=getTelemetryVisitorId();
+const telemetrySession=getTelemetrySession();
+let telemetryQueue=[];
+let telemetryFlushTimer=null;
+let telemetryCurrentView=null;
+let telemetryMoveOrigin="";
+let telemetryAdStartedAt=0;
+let telemetryLastWatchKey="";
+let telemetrySequence=0;
+
+const telemetryActivity={
+  pointer_moves:0,
+  pointer_distance_px:0,
+  clicks:0,
+  wheel_events:0,
+  wheel_delta:0,
+  key_events:0,
+  touch_events:0,
+  focus_events:0,
+  blur_events:0,
+  visibility_changes:0
+};
+
+let telemetryLastPointer=null;
+
+function detectDeviceType(){
+  const coarse=matchMedia?.("(pointer: coarse)")?.matches;
+  const width=Math.min(screen?.width||innerWidth||0,screen?.height||innerHeight||0);
+  if(coarse && width && width<768)return "mobile";
+  if(coarse && width && width<1200)return "tablet";
+  return "desktop";
+}
+
+function detectBrowser(){
+  const ua=navigator.userAgent||"";
+  if(/Edg\//.test(ua))return "Edge";
+  if(/OPR\//.test(ua))return "Opera";
+  if(/Firefox\//.test(ua))return "Firefox";
+  if(/Chrome\//.test(ua) && !/Edg\//.test(ua))return "Chrome";
+  if(/Safari\//.test(ua) && !/Chrome\//.test(ua))return "Safari";
+  return "Other";
+}
+
+function detectOS(){
+  const ua=navigator.userAgent||"";
+  const platform=navigator.platform||"";
+  if(/Windows/i.test(ua)||/Win/i.test(platform))return "Windows";
+  if(/Android/i.test(ua))return "Android";
+  if(/iPhone|iPad|iPod/i.test(ua))return "iOS";
+  if(/Mac/i.test(platform)||/Mac OS/i.test(ua))return "macOS";
+  if(/Linux/i.test(platform)||/Linux/i.test(ua))return "Linux";
+  return "Other";
+}
+
+function telemetryClientSnapshot(){
+  const c=navigator.connection||navigator.mozConnection||navigator.webkitConnection||{};
+  return {
+    visitor_id:telemetryVisitorId,
+    session_id:telemetrySession.id,
+    session_started_at:telemetrySession.startedAt,
+    app_version:window.__floewAppVersion,
+    page:location.pathname||"/",
+    href:location.href,
+    referrer:document.referrer||"",
+    language:navigator.language||"",
+    languages:Array.from(navigator.languages||[]),
+    timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||"",
+    user_agent:navigator.userAgent||"",
+    platform:navigator.platform||"",
+    browser:detectBrowser(),
+    os:detectOS(),
+    device_type:detectDeviceType(),
+    screen_w:screen?.width||0,
+    screen_h:screen?.height||0,
+    viewport_w:innerWidth||0,
+    viewport_h:innerHeight||0,
+    dpr:devicePixelRatio||1,
+    color_depth:screen?.colorDepth||0,
+    hardware_concurrency:navigator.hardwareConcurrency||0,
+    device_memory:navigator.deviceMemory||0,
+    touch_points:navigator.maxTouchPoints||0,
+    connection_type:c.effectiveType||"",
+    downlink:Number(c.downlink)||0,
+    rtt:Number(c.rtt)||0,
+    save_data:Boolean(c.saveData),
+    cookies_enabled:Boolean(navigator.cookieEnabled),
+    online:Boolean(navigator.onLine)
+  };
+}
+
+function telemetryStoryPayload(story){
+  if(!story)return null;
+  return {
+    key:storyIdentity(story),
+    title:String(story.title||""),
+    source:String(story.source||""),
+    category:String(story.flowCategory||story.category||""),
+    link:String(story.link||""),
+    published:String(story.published||"")
+  };
+}
+
+function telemetryQueueEvent(eventType,data={}){
+  const event={
+    id:telemetryId(),
+    seq:++telemetrySequence,
+    event:eventType,
+    ts:Date.now(),
+    visitor_id:telemetryVisitorId,
+    session_id:telemetrySession.id,
+    feed_mode:feedMode,
+    story:data.story||telemetryStoryPayload(state.stories[state.index]),
+    ...data
+  };
+
+  telemetryQueue.push(event);
+
+  if(telemetryQueue.length>=TELEMETRY_MAX_BATCH){
+    telemetryFlush();
+  }else{
+    scheduleTelemetryFlush();
+  }
+}
+
+function scheduleTelemetryFlush(){
+  clearTimeout(telemetryFlushTimer);
+  telemetryFlushTimer=setTimeout(
+    ()=>telemetryFlush(),
+    TELEMETRY_FLUSH_MS
+  );
+}
+
+function telemetryFlush(useBeacon=false){
+  if(!telemetryQueue.length)return;
+
+  clearTimeout(telemetryFlushTimer);
+  telemetryFlushTimer=null;
+
+  const events=telemetryQueue.splice(0,TELEMETRY_MAX_BATCH);
+  const payload=JSON.stringify({
+    client:telemetryClientSnapshot(),
+    events
+  });
+
+  if(useBeacon && navigator.sendBeacon){
+    try{
+      const ok=navigator.sendBeacon(
+        TRACK_API,
+        new Blob([payload],{type:"application/json"})
+      );
+      if(ok){
+        if(telemetryQueue.length)telemetryFlush(true);
+        return;
+      }
+    }catch(e){}
+  }
+
+  fetch(TRACK_API,{
+    method:"POST",
+    mode:"cors",
+    credentials:"omit",
+    keepalive:true,
+    headers:{"Content-Type":"application/json"},
+    body:payload
+  }).catch(()=>{});
+
+  if(telemetryQueue.length)scheduleTelemetryFlush();
+}
+
+function telemetryStartStory(story,origin="initial"){
+  if(!story)return;
+
+  const key=storyIdentity(story);
+  if(
+    telemetryCurrentView &&
+    telemetryCurrentView.key===key
+  ){
+    return;
+  }
+
+  telemetryCurrentView={
+    key,
+    story,
+    startedAt:performance.now(),
+    targetMs:Math.max(5,showDurationSeconds)*1000,
+    origin,
+    watchMatched:false
+  };
+
+  telemetryQueueEvent("story_view",{
+    story:telemetryStoryPayload(story),
+    origin,
+    target_ms:telemetryCurrentView.targetMs
+  });
+}
+
+function telemetryFinishStory(reason="unknown",direction=0){
+  const view=telemetryCurrentView;
+  if(!view)return;
+
+  const dwell=Math.max(
+    0,
+    Math.round(performance.now()-view.startedAt)
+  );
+
+  const completed=reason==="auto";
+  const manualSkip=
+    reason==="manual_forward" &&
+    dwell < view.targetMs*.92;
+
+  telemetryQueueEvent("story_leave",{
+    story:telemetryStoryPayload(view.story),
+    dwell_ms:dwell,
+    target_ms:view.targetMs,
+    origin:view.origin,
+    reason,
+    direction:Number(direction)||0,
+    completed,
+    manual_skip:manualSkip
+  });
+
+  telemetryCurrentView=null;
+  telemetryLastWatchKey="";
+}
+
+function telemetryStoryChanged(before,reason,direction=0){
+  const after=state.stories[state.index]||null;
+  const beforeKey=storyIdentity(before);
+  const afterKey=storyIdentity(after);
+
+  if(beforeKey && beforeKey!==afterKey){
+    telemetryFinishStory(reason,direction);
+  }
+
+  if(after && (!telemetryCurrentView || telemetryCurrentView.key!==afterKey)){
+    telemetryStartStory(after,reason);
+  }
+}
+
+function telemetryInteractionSummary(){
+  const values={...telemetryActivity};
+  const meaningful=Object.values(values).some(v=>Number(v)>0);
+  if(!meaningful)return;
+
+  telemetryQueueEvent("interaction_summary",{
+    meta:values
+  });
+
+  for(const key of Object.keys(telemetryActivity)){
+    telemetryActivity[key]=0;
+  }
+}
+
+/* Session + page start */
+telemetryQueueEvent("session_start",{
+  value_text:document.visibilityState,
+  meta:{
+    title:document.title,
+    navigation_type:performance.getEntriesByType?.("navigation")?.[0]?.type||"",
+    history_length:history.length
+  }
+});
+telemetryQueueEvent("page_view",{
+  value_text:location.pathname||"/"
+});
+
+/* Wrap initial/refresh loading so the first visible story is measured. */
+const __floewLoad=load;
+load=async function(...args){
+  const hadView=Boolean(telemetryCurrentView);
+  const before=state.stories[state.index]||null;
+  const result=await __floewLoad.apply(this,args);
+  const after=state.stories[state.index]||null;
+
+  if(!hadView && after){
+    telemetryStartStory(after,"initial");
+  }else if(
+    before &&
+    after &&
+    storyIdentity(before)!==storyIdentity(after)
+  ){
+    telemetryStoryChanged(before,"refresh",0);
+  }
+
+  return result;
+};
+
+/* Navigation origin and story dwell. */
+const __floewMove=move;
+move=async function(dir,options={}){
+  const prevOrigin=telemetryMoveOrigin;
+  telemetryMoveOrigin=
+    options?.origin ||
+    (options?.fromAd
+      ? "ad_exit"
+      : (dir<0 ? "manual_back" : "manual_forward"));
+
+  if(dir<0){
+    telemetryQueueEvent("story_back",{
+      direction:-1,
+      origin:telemetryMoveOrigin
+    });
+  }else if(telemetryMoveOrigin==="manual_forward"){
+    telemetryQueueEvent("story_forward",{
+      direction:1,
+      origin:telemetryMoveOrigin
+    });
+  }
+
+  try{
+    return await __floewMove.call(this,dir,options);
+  }finally{
+    telemetryMoveOrigin=prevOrigin;
+  }
+};
+
+const __floewTransitionTo=transitionTo;
+transitionTo=async function(nextIndex,fromHistory,dir){
+  const before=state.stories[state.index]||null;
+  const reason=
+    telemetryMoveOrigin ||
+    (dir<0?"manual_back":"manual_forward");
+
+  const result=await __floewTransitionTo.apply(this,arguments);
+  telemetryStoryChanged(before,reason,dir);
+  return result;
+};
+
+const __floewTransitionFromAdTo=transitionFromAdTo;
+transitionFromAdTo=async function(nextIndex,fromHistory,dir=1){
+  const before=state.stories[state.index]||null;
+  const result=await __floewTransitionFromAdTo.apply(this,arguments);
+
+  const after=state.stories[state.index]||null;
+  if(after){
+    if(
+      telemetryCurrentView &&
+      before &&
+      storyIdentity(before)!==storyIdentity(after)
+    ){
+      telemetryFinishStory("ad_exit",dir);
+    }
+    telemetryStartStory(after,"ad_exit");
+  }
+
+  return result;
+};
+
+const __floewTransitionAdIn=transitionAdIn;
+transitionAdIn=async function(dir=adEntryDirection){
+  const ok=await __floewTransitionAdIn.apply(this,arguments);
+  if(ok){
+    telemetryFinishStory("ad",dir);
+    telemetryAdStartedAt=performance.now();
+    telemetryQueueEvent("ad_view",{
+      story:null,
+      value_text:currentAd?.name||"",
+      mode:currentAd?.type||"",
+      meta:{
+        creative:currentAd?.name||"",
+        type:currentAd?.type||"",
+        layout:getAdsLayout()
+      }
+    });
+  }
+  return ok;
+};
+
+const __floewPlayAdBreak=playAdBreak;
+playAdBreak=async function(options={}){
+  const startedAt=performance.now();
+  const result=await __floewPlayAdBreak.apply(this,arguments);
+
+  if(result?.shown){
+    const duration=Math.max(
+      0,
+      Math.round(performance.now()-(telemetryAdStartedAt||startedAt))
+    );
+    telemetryQueueEvent(
+      result.skipped ? "ad_skip" : "ad_complete",
+      {
+        story:null,
+        value_text:result.ad?.name||"",
+        value_num:duration,
+        mode:result.ad?.type||"",
+        meta:{
+          creative:result.ad?.name||"",
+          type:result.ad?.type||"",
+          layout:getAdsLayout(),
+          duration_ms:duration,
+          direction:result.direction
+        }
+      }
+    );
+  }
+  telemetryAdStartedAt=0;
+  return result;
+};
+
+const __floewTransitionAdBackToCurrent=transitionAdBackToCurrent;
+transitionAdBackToCurrent=async function(dir=-1){
+  const result=await __floewTransitionAdBackToCurrent.apply(this,arguments);
+  telemetryStartStory(state.stories[state.index],"ad_back");
+  return result;
+};
+
+/* Filters can replace the visible story without a slide transition. */
+const __floewApplyFilters=applyFilters;
+applyFilters=function(...args){
+  const before=state.stories[state.index]||null;
+  const result=__floewApplyFilters.apply(this,args);
+  const after=state.stories[state.index]||null;
+
+  if(
+    before &&
+    after &&
+    storyIdentity(before)!==storyIdentity(after)
+  ){
+    telemetryFinishStory("filter_change",0);
+    telemetryStartStory(after,"filter_change");
+  }
+
+  return result;
+};
+
+/* Tabs */
+const __floewSwitchFeedMode=switchFeedMode;
+switchFeedMode=function(nextMode){
+  const beforeMode=feedMode;
+  const beforeStory=state.stories[state.index]||null;
+  const result=__floewSwitchFeedMode.apply(this,arguments);
+
+  if(feedMode!==beforeMode){
+    telemetryQueueEvent("tab_change",{
+      value_text:`${beforeMode}->${feedMode}`,
+      mode:feedMode
+    });
+    const after=state.stories[state.index]||null;
+    if(
+      beforeStory &&
+      after &&
+      storyIdentity(beforeStory)!==storyIdentity(after)
+    ){
+      telemetryFinishStory("tab_change",0);
+      telemetryStartStory(after,"tab_change");
+    }
+  }else if(
+    nextMode==="breaking" &&
+    beforeMode==="agenda"
+  ){
+    telemetryQueueEvent("breaking_empty",{
+      value_text:"no_recent_stories"
+    });
+  }
+
+  return result;
+};
+
+/* Source/category preference changes */
+const __floewToggleSource=toggleSource;
+toggleSource=function(key){
+  const wasOn=filters.sources.has(key);
+  const result=__floewToggleSource.apply(this,arguments);
+  telemetryQueueEvent("source_toggle",{
+    value_text:String(key||""),
+    mode:wasOn?"off":"on"
+  });
+  return result;
+};
+
+const __floewToggleCategory=toggleCategory;
+toggleCategory=function(cat){
+  const wasOn=filters.categories.has(cat);
+  const result=__floewToggleCategory.apply(this,arguments);
+  telemetryQueueEvent("category_toggle",{
+    value_text:String(cat||""),
+    mode:wasOn?"off":"on"
+  });
+  return result;
+};
+
+const __floewSetTimeRange=setTimeRange;
+setTimeRange=function(value){
+  const before=timeRangeValue;
+  const result=__floewSetTimeRange.apply(this,arguments);
+  if(before!==timeRangeValue){
+    telemetryQueueEvent("time_range_change",{
+      value_text:timeRangeValue,
+      meta:{before,after:timeRangeValue}
+    });
+  }
+  return result;
+};
+
+const __floewSetShowDuration=setShowDuration;
+setShowDuration=function(value){
+  const before=showDurationSeconds;
+  const result=__floewSetShowDuration.apply(this,arguments);
+  if(before!==showDurationSeconds){
+    telemetryQueueEvent("duration_change",{
+      value_num:showDurationSeconds,
+      meta:{before,after:showDurationSeconds}
+    });
+  }
+  return result;
+};
+
+/* Keyword filter/watch — explicit keyword text is stored in private behavior DB. */
+const __floewApplyKeywordFilter=applyKeywordFilter;
+applyKeywordFilter=function(mode){
+  const input=document.getElementById("keyword-filter-input");
+  const text=String(input?.value||"").trim();
+  const keywords=parseKeywordList(text);
+  const result=__floewApplyKeywordFilter.apply(this,arguments);
+  telemetryQueueEvent(
+    keywordFilterState.mode==="show" ? "filter_show" :
+    keywordFilterState.mode==="hide" ? "filter_hide" :
+    "filter_off",
+    {
+      keyword_text:text,
+      keyword_count:keywords.length,
+      mode:keywordFilterState.mode
+    }
+  );
+  return result;
+};
+
+const __floewClearKeywordFilter=clearKeywordFilter;
+clearKeywordFilter=function(){
+  const before=keywordFilterState.text;
+  const result=__floewClearKeywordFilter.apply(this,arguments);
+  telemetryQueueEvent("filter_clear",{
+    keyword_text:before,
+    keyword_count:parseKeywordList(before).length
+  });
+  return result;
+};
+
+const __floewApplyKeywordWatch=applyKeywordWatch;
+applyKeywordWatch=function(){
+  const input=document.getElementById("keyword-watch-input");
+  const text=String(input?.value||"").trim();
+  const keywords=parseKeywordList(text);
+  const result=__floewApplyKeywordWatch.apply(this,arguments);
+  telemetryQueueEvent(
+    keywords.length ? "watch_enable" : "watch_off",
+    {
+      keyword_text:text,
+      keyword_count:keywords.length,
+      mode:keywords.length?"on":"off"
+    }
+  );
+  return result;
+};
+
+const __floewClearKeywordWatch=clearKeywordWatch;
+clearKeywordWatch=function(){
+  const before=keywordWatchText;
+  const result=__floewClearKeywordWatch.apply(this,arguments);
+  telemetryQueueEvent("watch_clear",{
+    keyword_text:before,
+    keyword_count:parseKeywordList(before).length
+  });
+  return result;
+};
+
+const __floewUpdateKeywordAlert=updateKeywordAlert;
+updateKeywordAlert=function(story){
+  const result=__floewUpdateKeywordAlert.apply(this,arguments);
+  const frame=document.getElementById("keyword-alert-frame");
+  const key=storyIdentity(story);
+  if(
+    story &&
+    frame?.classList.contains("active") &&
+    key &&
+    telemetryLastWatchKey!==key
+  ){
+    telemetryLastWatchKey=key;
+    const matches=String(frame.dataset.matches||"");
+    telemetryQueueEvent("watch_match",{
+      story:telemetryStoryPayload(story),
+      keyword_text:matches,
+      keyword_count:parseKeywordList(matches).length
+    });
+  }
+  return result;
+};
+
+/* Source click is a strong Flöra engagement signal. */
+document.querySelectorAll(".source-link").forEach(link=>{
+  link.addEventListener("click",()=>{
+    const story=state.stories[state.index]||null;
+    telemetryQueueEvent("source_open",{
+      story:telemetryStoryPayload(story),
+      value_text:story?.source||""
+    });
+  });
+});
+
+/* UI controls */
+const __floewOpenMenu=openMenu;
+openMenu=function(){
+  telemetryQueueEvent("menu_open");
+  return __floewOpenMenu.apply(this,arguments);
+};
+
+const __floewToggleFullscreen=toggleFullscreen;
+toggleFullscreen=async function(){
+  const result=await __floewToggleFullscreen.apply(this,arguments);
+  telemetryQueueEvent("fullscreen_toggle",{
+    mode:document.fullscreenElement?"on":"off"
+  });
+  return result;
+};
+
+const __floewTogglePiP=togglePiP;
+togglePiP=async function(){
+  const result=await __floewTogglePiP.apply(this,arguments);
+  telemetryQueueEvent("pip_toggle");
+  return result;
+};
+
+document.querySelectorAll(".direction-option").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    telemetryQueueEvent("direction_change",{
+      value_text:btn.dataset.direction||"up"
+    });
+  });
+});
+
+document.getElementById("video-setting")?.addEventListener("click",()=>{
+  setTimeout(()=>{
+    telemetryQueueEvent("video_setting",{
+      mode:videoEnabled?"on":"off"
+    });
+  },0);
+});
+
+/* Video engagement */
+document.querySelectorAll(".slide-video").forEach(video=>{
+  let trackedKey="";
+  video.addEventListener("playing",()=>{
+    const story=state.stories[state.index]||null;
+    const key=storyIdentity(story);
+    if(key && key!==trackedKey){
+      trackedKey=key;
+      telemetryQueueEvent("video_start",{
+        story:telemetryStoryPayload(story)
+      });
+    }
+  });
+  video.addEventListener("ended",()=>{
+    const story=state.stories[state.index]||null;
+    telemetryQueueEvent("video_complete",{
+      story:telemetryStoryPayload(story)
+    });
+  });
+  video.addEventListener("error",()=>{
+    const story=state.stories[state.index]||null;
+    telemetryQueueEvent("video_error",{
+      story:telemetryStoryPayload(story)
+    });
+  });
+});
+
+/* Raw-but-batched movement / interaction counters */
+window.addEventListener("pointermove",e=>{
+  telemetryActivity.pointer_moves++;
+  if(telemetryLastPointer){
+    const dx=e.clientX-telemetryLastPointer.x;
+    const dy=e.clientY-telemetryLastPointer.y;
+    telemetryActivity.pointer_distance_px+=Math.round(Math.hypot(dx,dy));
+  }
+  telemetryLastPointer={x:e.clientX,y:e.clientY};
+},{passive:true});
+
+window.addEventListener("click",()=>{
+  telemetryActivity.clicks++;
+},{passive:true});
+
+window.addEventListener("wheel",e=>{
+  telemetryActivity.wheel_events++;
+  telemetryActivity.wheel_delta+=Math.round(Math.abs(e.deltaY||e.deltaX||0));
+},{passive:true});
+
+window.addEventListener("keydown",()=>{
+  telemetryActivity.key_events++;
+},{passive:true});
+
+window.addEventListener("touchstart",()=>{
+  telemetryActivity.touch_events++;
+},{passive:true});
+
+window.addEventListener("focus",()=>{
+  telemetryActivity.focus_events++;
+  telemetryQueueEvent("window_focus");
+},{passive:true});
+
+window.addEventListener("blur",()=>{
+  telemetryActivity.blur_events++;
+  telemetryQueueEvent("window_blur");
+},{passive:true});
+
+document.addEventListener("visibilitychange",()=>{
+  telemetryActivity.visibility_changes++;
+  telemetryQueueEvent("visibility_change",{
+    value_text:document.visibilityState
+  });
+});
+
+window.addEventListener("resize",()=>{
+  telemetryQueueEvent("viewport_change",{
+    meta:{
+      viewport_w:innerWidth,
+      viewport_h:innerHeight,
+      orientation:innerWidth>=innerHeight?"landscape":"portrait"
+    }
+  });
+},{passive:true});
+
+window.addEventListener("online",()=>{
+  telemetryQueueEvent("network_state",{mode:"online"});
+});
+window.addEventListener("offline",()=>{
+  telemetryQueueEvent("network_state",{mode:"offline"});
+});
+
+window.addEventListener("error",e=>{
+  telemetryQueueEvent("client_error",{
+    value_text:String(e.message||"error"),
+    meta:{
+      filename:String(e.filename||""),
+      lineno:Number(e.lineno)||0,
+      colno:Number(e.colno)||0
+    }
+  });
+});
+
+window.addEventListener("unhandledrejection",e=>{
+  telemetryQueueEvent("client_rejection",{
+    value_text:String(e.reason?.message||e.reason||"rejection").slice(0,500)
+  });
+});
+
+setInterval(()=>{
+  telemetryInteractionSummary();
+  telemetryQueueEvent("session_heartbeat",{
+    value_num:Date.now()-telemetrySession.startedAt,
+    meta:{
+      visibility:document.visibilityState,
+      story_key:storyIdentity(state.stories[state.index])
+    }
+  });
+},30000);
+
+window.addEventListener("pagehide",()=>{
+  telemetryFinishStory("pagehide",0);
+  telemetryInteractionSummary();
+  telemetryQueueEvent("session_end",{
+    value_num:Date.now()-telemetrySession.startedAt
+  });
+  telemetryFlush(true);
+});
+
+window.addEventListener("beforeunload",()=>{
+  telemetryFlush(true);
+});
+
+window.FloewAnalytics={
+  flush:()=>telemetryFlush(),
+  visitorId:telemetryVisitorId,
+  sessionId:telemetrySession.id,
+  status:()=>({
+    queued:telemetryQueue.length,
+    currentStory:telemetryCurrentView?.key||"",
+    endpoint:TRACK_API
+  })
+};
+
+
+setFullscreenIcon();
+startAdsCatalogRefresh();
+load();
+setInterval(load,REFRESH_MS);
+
+if(window.__floewInitialReady){
+  showCookieNoticeIfNeeded();
+  initWeather();
+}
+
+document.getElementById("status-close")?.addEventListener("click", function(e){
+  e.stopPropagation();
+  clearStatus();
+});
