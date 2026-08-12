@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
 <meta charset="utf-8">
-<meta name="floew-version" content="31.17.2">
+<meta name="floew-version" content="31.17.3">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -15,7 +15,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
 <link rel="manifest" href="site.webmanifest">
 
-<link rel="stylesheet" href="css/styles-31.17.2.css">
+<link rel="stylesheet" href="css/styles-31.17.3.css">
 
 <style id="boot-black-style">
   html,body{background:#000}
@@ -67,11 +67,11 @@
 
   <div id="control-menu-panel" aria-hidden="true">
     <button id="pip-button" class="control-menu-item" type="button" aria-label="Picture-in-Picture" title="Köşeye indir">⧉</button>
-    <button id="time-range-button" class="control-menu-item" type="button" aria-label="Haber zaman aralığı" title="Haber zaman aralığı">⏲</button>
+    <button id="time-range-button" class="control-menu-item" type="button" aria-label="Haber zaman aralığı" title="Haber zaman aralığı">⏲︎</button>
     <button id="keyword-filter-button" class="control-menu-item" type="button" aria-label="Anahtar kelime filtresi" title="Anahtar kelime filtresi">±</button>
     <button id="keyword-watch-button" class="control-menu-item" type="button" aria-label="Anahtar kelime takibi" title="Anahtar kelime takibi">⌖</button>
     <button id="info-button" class="control-menu-item" type="button" aria-label="Flöw istatistikleri" title="Flöw istatistikleri">ⓘ</button>
-    <button id="menu-button" class="control-menu-item" type="button" aria-label="Tercihler" title="Tercihler">⚙</button>
+    <button id="menu-button" class="control-menu-item" type="button" aria-label="Tercihler" title="Tercihler">⚙︎</button>
   </div>
 
   <div id="time-range-panel" aria-hidden="true">
@@ -342,12 +342,12 @@
 })();
 </script>
 
-<script src="js/app-31.17.2.js" onerror="
+<script src="js/app-31.17.3.js" onerror="
   var loader=document.getElementById('loading-screen');
   if(loader)loader.remove();
   var status=document.getElementById('status');
   if(status){
-    status.innerHTML='<div class=&quot;status-band&quot;><span class=&quot;status-message&quot;>js/app-31.17.2.js yüklenemedi. GitHub dosya yollarını kontrol edin.</span><button class=&quot;status-close&quot; type=&quot;button&quot; aria-label=&quot;Uyarıyı kapat&quot;>×</button></div>';
+    status.innerHTML='<div class=&quot;status-band&quot;><span class=&quot;status-message&quot;>js/app-31.17.3.js yüklenemedi. GitHub dosya yollarını kontrol edin.</span><button class=&quot;status-close&quot; type=&quot;button&quot; aria-label=&quot;Uyarıyı kapat&quot;>×</button></div>';
     status.hidden=false;
     var close=status.querySelector('.status-close');
     if(close)close.onclick=function(){status.hidden=true;status.innerHTML='';};
