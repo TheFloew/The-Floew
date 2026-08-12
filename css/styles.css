@@ -1017,8 +1017,8 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
     margin-top:8px;
     font-size:12px;
     line-height:1.38;
-    -webkit-line-clamp:2;
-    line-clamp:2;
+    -webkit-line-clamp:5;
+    line-clamp:5;
   }
 }
 
@@ -2842,21 +2842,46 @@ body.foreign-mode #time-range-button{
 
 
 /* =====================================================================
-   V31.18.1 — full news descriptions
+   Description preview / expand
    ===================================================================== */
 
 .description{
+  display:-webkit-box !important;
+  overflow:hidden !important;
+  max-height:none !important;
+  -webkit-box-orient:vertical !important;
+  -webkit-line-clamp:5 !important;
+  line-clamp:5 !important;
+  white-space:normal !important;
+  pointer-events:auto;
+  cursor:pointer;
+  -webkit-user-select:text;
+  user-select:text;
+}
+
+.description:hover{
+  opacity:.95;
+}
+
+.description:focus-visible{
+  outline:1px solid rgba(255,255,255,.72);
+  outline-offset:5px;
+}
+
+.description.is-expanded{
   display:block !important;
   overflow:visible !important;
-  max-height:none !important;
-  -webkit-box-orient:initial !important;
   -webkit-line-clamp:unset !important;
   line-clamp:unset !important;
-  white-space:normal !important;
 }
 
 @media(max-width:520px){
   .description{
+    -webkit-line-clamp:5 !important;
+    line-clamp:5 !important;
+  }
+
+  .description.is-expanded{
     -webkit-line-clamp:unset !important;
     line-clamp:unset !important;
   }
