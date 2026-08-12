@@ -1,6 +1,8 @@
 Beta Versiyon 1.6.0
+- flöw.tr alan adı canlı!
 - Sayfa yenileme hatası giderildi.
 - Flora tasarımında değişiklikler.
+- Haberlere Flöra puanı (𝒇) eklendi.
 
 Beta Versiyon 1.5.0
 - Yabancı haberler sekmesi eklendi.
