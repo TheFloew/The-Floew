@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="index,follow">
+<title>Flöra | Flöw haber karması</title>
+<link rel="icon" href="assets/favicon.ico" sizes="any">
+<link rel="stylesheet" href="css/analytics-31.16.1.css">
+</head>
+<body>
+<main class="page">
+  <div class="topbar">
+    <a class="brand" href="index.html">
+      <img src="assets/logo.png" alt="Flöw">
+      <div>
+        <div class="kicker">Flöw haber karması</div>
+        <h1>Flöra</h1>
+      </div>
+    </a>
+    <div class="range-tabs" aria-label="Dönem">
+      <button class="range-tab" data-range="24h">Bugün</button>
+      <button class="range-tab active" data-range="7d">Son 7 gün</button>
+      <button class="range-tab" data-range="all">Tüm zamanlar</button>
+    </div>
+  </div>
+
+  <p class="lead">
+    Flöra, Flöw'de bir haberin yalnızca kaç kez görüldüğüne değil; ekranda
+    ne kadar kaldığına, tamamlanmasına, geri dönülmesine ve haber kaynağının
+    açılmasına birlikte bakar. Sonuç 0–100 arasında yaşayan bir ilgi skorudur.
+  </p>
+
+  <section id="flora-metrics" class="metrics"></section>
+
+  <div class="two-col">
+    <section>
+      <h2>Flöra sıralaması</h2>
+      <div id="flora-list" class="card list"></div>
+    </section>
+    <section>
+      <h2>Kaynaklar</h2>
+      <div id="source-list" class="card"></div>
+      <h2>Kategoriler</h2>
+      <div id="category-list" class="card"></div>
+    </section>
+  </div>
+
+  <section>
+    <h2>En çok görüntülenenler</h2>
+    <div id="viewed-list" class="card list"></div>
+  </section>
+
+  <div id="flora-status" class="footer"></div>
+</main>
+<script src="js/flora-31.16.1.js"></script>
+</body>
+</html>
