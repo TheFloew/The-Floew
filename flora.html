@@ -4,55 +4,97 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="index,follow">
+<meta name="theme-color" content="#000000">
 <title>Flöra | Flöw haber karması</title>
 <link rel="icon" href="assets/favicon.ico" sizes="any">
-<link rel="stylesheet" href="css/analytics.css?h=dc7d714effb1">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="stylesheet" href="css/flora.css?h=ead0d5473ee8">
 </head>
 <body>
-<main class="page">
-  <div class="topbar">
-    <a class="brand" href="index.html">
-      <img src="assets/logo.png" alt="Flöw">
-      <div>
-        <div class="kicker">Flöw haber karması</div>
-        <h1>Flöra</h1>
-      </div>
-    </a>
-    <div class="range-tabs" aria-label="Dönem">
-      <button class="range-tab" data-range="24h">Bugün</button>
-      <button class="range-tab active" data-range="7d">Son 7 gün</button>
-      <button class="range-tab" data-range="all">Tüm zamanlar</button>
+<main class="flora-page">
+  <header class="flora-header">
+    <div class="flora-header-main">
+      <a class="flora-brand" href="index.html" aria-label="Flöw ana sayfasına dön">
+        <img src="assets/flora-logo.png?h=08e545f420f0" alt="Flöra">
+      </a>
+
+      <a class="back-link" href="index.html">
+        <span aria-hidden="true">←</span>
+        <span>Flöw'e dön</span>
+      </a>
     </div>
-  </div>
 
-  <p class="lead">
-    Flöra, Flöw'de bir haberin yalnızca kaç kez görüldüğüne değil; ekranda
-    ne kadar kaldığına, tamamlanmasına, geri dönülmesine ve haber kaynağının
-    açılmasına birlikte bakar. Sonuç 0–100 arasında yaşayan bir ilgi skorudur.
-  </p>
+    <div class="flora-intro">
+      <div class="intro-copy">
+        <div class="eyebrow">Flöw haber karması</div>
+        <p class="lead">
+          Flöra, Flöw'de bir haberin yalnızca kaç kez görüldüğüne değil; ekranda
+          ne kadar kaldığına, tamamlanmasına, geri dönülmesine ve haber kaynağının
+          açılmasına birlikte bakar. Sonuç 0–100 arasında yaşayan bir ilgi skorudur.
+        </p>
+      </div>
 
-  <section id="flora-metrics" class="metrics"></section>
+      <nav class="range-tabs" aria-label="İstatistik dönemi">
+        <button class="range-tab" data-range="24h">Bugün</button>
+        <button class="range-tab active" data-range="7d">Son 7 gün</button>
+        <button class="range-tab" data-range="all">Tüm zamanlar</button>
+      </nav>
+    </div>
+  </header>
 
-  <div class="two-col">
-    <section>
-      <h2>Flöra sıralaması</h2>
+  <section id="flora-metrics" class="metrics" aria-label="Özet istatistikler"></section>
+
+  <div class="content-grid">
+    <section class="section-block ranking-section">
+      <div class="section-heading">
+        <div>
+          <div class="section-kicker">İlgi skoru</div>
+          <h1>Flöra sıralaması</h1>
+        </div>
+        <span class="section-note">0–100</span>
+      </div>
       <div id="flora-list" class="card list"></div>
     </section>
-    <section>
-      <h2>Kaynaklar</h2>
-      <div id="source-list" class="card"></div>
-      <h2>Kategoriler</h2>
-      <div id="category-list" class="card"></div>
-    </section>
+
+    <aside class="side-column">
+      <section class="section-block">
+        <div class="section-heading compact">
+          <div>
+            <div class="section-kicker">Akış</div>
+            <h2>Kaynaklar</h2>
+          </div>
+        </div>
+        <div id="source-list" class="card bars"></div>
+      </section>
+
+      <section class="section-block">
+        <div class="section-heading compact">
+          <div>
+            <div class="section-kicker">Akış</div>
+            <h2>Kategoriler</h2>
+          </div>
+        </div>
+        <div id="category-list" class="card bars"></div>
+      </section>
+    </aside>
   </div>
 
-  <section>
-    <h2>En çok görüntülenenler</h2>
+  <section class="section-block viewed-section">
+    <div class="section-heading">
+      <div>
+        <div class="section-kicker">Görüntülenme</div>
+        <h2>En çok görüntülenenler</h2>
+      </div>
+    </div>
     <div id="viewed-list" class="card list"></div>
   </section>
 
-  <div id="flora-status" class="footer"></div>
+  <footer class="flora-footer">
+    <div id="flora-status" class="footer"></div>
+    <a href="index.html">flöw.tr</a>
+  </footer>
 </main>
+
 <script src="js/flora.js?h=8e882b5c7f0c"></script>
 </body>
 </html>
