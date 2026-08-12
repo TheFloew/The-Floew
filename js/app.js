@@ -1131,6 +1131,9 @@ function resetSlideMedia(el){
   const embed=el.querySelector(".slide-embed");
 
   if(image){
+    image.onerror=null;
+    image.onload=null;
+    image.removeAttribute("data-image-stage");
     image.style.display="block";
     image.style.visibility="visible";
   }
@@ -1463,12 +1466,69 @@ function applyVideoSetting(){
   }
 }
 
+function storyImageProxyUrl(story){
+  const imageUrl=String(story?.image||"").trim();
+  if(!imageUrl)return "";
+
+  const proxy=new URL(IMAGE_PROXY_API);
+  proxy.searchParams.set("url",imageUrl);
+
+  const articleUrl=String(story?.link||"").trim();
+  if(articleUrl){
+    proxy.searchParams.set("ref",articleUrl);
+  }
+
+  return proxy.href;
+}
+
+function setStoryImage(img,story){
+  if(!img)return;
+
+  const direct=String(story?.image||"").trim();
+  const proxied=storyImageProxyUrl(story);
+
+  img.onerror=null;
+  img.onload=null;
+  img.alt=story?.title||"";
+  img.referrerPolicy="no-referrer";
+  img.style.visibility="visible";
+
+  if(!direct){
+    img.removeAttribute("src");
+    img.style.visibility="hidden";
+    return;
+  }
+
+  img.dataset.imageStage="direct";
+
+  img.onload=()=>{
+    img.style.visibility="visible";
+  };
+
+  img.onerror=()=>{
+    if(
+      img.dataset.imageStage==="direct" &&
+      proxied &&
+      proxied!==img.src
+    ){
+      img.dataset.imageStage="proxy";
+      img.src=proxied;
+      return;
+    }
+
+    img.dataset.imageStage="failed";
+    img.style.visibility="hidden";
+  };
+
+  img.src=direct;
+}
+
 function fill(el,s){
   resetSlideMedia(el);
   el.dataset.storyKey=mediaKey(s);
 
-  el.querySelector(".slide-image").src=s.image;
-  el.querySelector(".slide-image").alt=s.title||"";
+  const slideImage=el.querySelector(".slide-image");
+  setStoryImage(slideImage,s);
 
   const logo=el.querySelector(".source-logo");
   logo.src=sourceLogo(s.source);
@@ -1496,6 +1556,10 @@ function fill(el,s){
 
     description.textContent=text;
     description.hidden=!text;
+    description.classList.remove("is-expanded");
+    description.setAttribute("aria-expanded","false");
+    description.tabIndex=text?0:-1;
+    description.title=text?"Tamamını okumak için tıklayın":"";
   }
 
   el.querySelector(".time").textContent=timeText(s.published);
@@ -1518,6 +1582,52 @@ function fill(el,s){
   }
 }
 
+
+
+function setDescriptionExpanded(description,expanded){
+  if(!description || description.hidden)return;
+
+  description.classList.toggle("is-expanded",expanded);
+  description.setAttribute("aria-expanded",expanded?"true":"false");
+  description.title=expanded
+    ?"Metni daraltmak için tıklayın"
+    :"Tamamını okumak için tıklayın";
+
+  if(expanded){
+    clearTimeout(state.timer);
+  }else if(!adActive){
+    timer();
+  }
+}
+
+function toggleDescription(description){
+  setDescriptionExpanded(
+    description,
+    !description.classList.contains("is-expanded")
+  );
+}
+
+document.querySelectorAll(".description").forEach(description=>{
+  description.setAttribute("role","button");
+  description.setAttribute("aria-expanded","false");
+
+  description.addEventListener("pointerdown",e=>e.stopPropagation());
+  description.addEventListener("pointerup",e=>e.stopPropagation());
+
+  description.addEventListener("click",e=>{
+    e.preventDefault();
+    e.stopPropagation();
+    toggleDescription(description);
+    showFullscreenButton();
+  });
+
+  description.addEventListener("keydown",e=>{
+    if(e.key!=="Enter" && e.key!==" ")return;
+    e.preventDefault();
+    e.stopPropagation();
+    toggleDescription(description);
+  });
+});
 
 
 function isMobileAdDevice(){
