@@ -1,7 +1,7 @@
 Versiyon 1.4.3
-İstatistikler ve kullanıcı hareketlerini depolayan veritabanı geldi.
-Kullanıcı arayüzünden bağımsız olarak raporlama için Flöw Analytics arayüzü eklendi.
-Kullanıcı arayüzüne istatistikler ekranı eklendi.
+- İstatistikler ve kullanıcı hareketlerini depolayan veritabanı geldi.
+- Kullanıcı arayüzünden bağımsız olarak raporlama için Flöw Analytics arayüzü eklendi.
+- Kullanıcı arayüzüne istatistikler ekranı eklendi.
 
 Versiyon 1.3.0
 - Son dakika ve Gündem sekmeleri
