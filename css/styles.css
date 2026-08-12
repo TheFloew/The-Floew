@@ -1890,3 +1890,980 @@ body.cursor-idle *{
 .flora-menu-link:hover{
   color:#fff;
 }
+
+
+/* =====================================================================
+   V31.17.0 — main UI refresh
+   ===================================================================== */
+
+/* 1) Logo: slightly smaller on desktop; roughly half-size on mobile. */
+#logo{
+  width:clamp(112px,7.1vw,148px) !important;
+}
+
+@media(max-width:900px){
+  #logo{
+    width:clamp(52px,10vw,70px) !important;
+  }
+}
+
+@media(max-width:480px){
+  #logo{
+    width:clamp(48px,12vw,62px) !important;
+  }
+}
+
+/* 2) Feed tabs: slightly smaller, especially on mobile. */
+#feed-tabs{
+  gap:28px !important;
+}
+
+.feed-tab{
+  padding:6px 0 !important;
+  font-size:18px !important;
+}
+
+@media(max-width:700px){
+  #feed-tabs{
+    gap:16px !important;
+    top:max(1.55vh,env(safe-area-inset-top)) !important;
+  }
+
+  .feed-tab{
+    padding:5px 0 !important;
+    font-size:14px !important;
+  }
+}
+
+@media(max-width:430px){
+  #feed-tabs{
+    gap:13px !important;
+  }
+
+  .feed-tab{
+    font-size:13px !important;
+  }
+}
+
+/* 6) Stronger lower gradient for better headline legibility. */
+.shade{
+  background:
+    linear-gradient(
+      to bottom,
+      rgba(0,0,0,0) 27%,
+      rgba(0,0,0,.12) 45%,
+      rgba(0,0,0,.38) 62%,
+      rgba(0,0,0,.82) 80%,
+      rgba(0,0,0,.97) 100%
+    ) !important;
+}
+
+/* ---------------------------------------------------------------------
+   5) Top-right controls: fullscreen remains; everything else lives under ☰
+   --------------------------------------------------------------------- */
+
+#fullscreen-button{
+  top:max(2.2vh,env(safe-area-inset-top)) !important;
+  right:max(2.2vw,env(safe-area-inset-right)) !important;
+}
+
+#control-menu-button{
+  position:fixed;
+  z-index:1301;
+  top:calc(max(2.2vh,env(safe-area-inset-top)) + 50px);
+  right:max(2.2vw,env(safe-area-inset-right));
+  width:42px;
+  height:42px;
+  display:grid;
+  place-items:center;
+  padding:0;
+  border:0;
+  background:transparent;
+  color:#fff;
+  cursor:pointer;
+  font-family:Arial,Helvetica,sans-serif;
+  font-size:28px;
+  line-height:42px;
+  font-weight:300;
+  text-shadow:0 1px 3px rgba(0,0,0,.65),0 2px 7px rgba(0,0,0,.42);
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  transform:scale(1);
+  transition:
+    opacity .55s cubic-bezier(.22,.61,.36,1),
+    visibility 0s linear .55s,
+    transform .16s ease;
+}
+
+#control-menu-button.is-visible,
+#control-menu-button.open{
+  opacity:1;
+  visibility:visible;
+  pointer-events:auto;
+  transition:
+    opacity .55s cubic-bezier(.22,.61,.36,1),
+    visibility 0s linear 0s,
+    transform .16s ease;
+}
+
+#control-menu-button:hover{
+  transform:scale(1.03);
+}
+#control-menu-button:active{
+  transform:scale(.95);
+}
+
+#control-menu-panel{
+  position:fixed;
+  z-index:1300;
+  top:calc(max(2.2vh,env(safe-area-inset-top)) + 96px);
+  right:calc(max(2.2vw,env(safe-area-inset-right)) - 5px);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:2px;
+  padding:7px 5px;
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:15px;
+  background:rgba(8,8,8,.68);
+  box-shadow:0 16px 44px rgba(0,0,0,.28);
+  backdrop-filter:blur(6px);
+  -webkit-backdrop-filter:blur(6px);
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  transform:translateY(-6px) scale(.985);
+  transform-origin:top right;
+  transition:
+    opacity .22s ease,
+    transform .22s cubic-bezier(.22,.61,.36,1),
+    visibility 0s linear .22s;
+}
+
+#control-menu-panel.open{
+  opacity:1;
+  visibility:visible;
+  pointer-events:auto;
+  transform:translateY(0) scale(1);
+  transition:
+    opacity .22s ease,
+    transform .22s cubic-bezier(.22,.61,.36,1),
+    visibility 0s linear 0s;
+}
+
+/*
+  Historical fixed-position rules remain in the stylesheet for backwards
+  compatibility. Inside the hamburger they are deliberately normalized.
+*/
+#control-menu-panel #pip-button,
+#control-menu-panel #time-range-button,
+#control-menu-panel #keyword-filter-button,
+#control-menu-panel #keyword-watch-button,
+#control-menu-panel #info-button,
+#control-menu-panel #menu-button{
+  position:static !important;
+  inset:auto !important;
+  width:42px !important;
+  height:42px !important;
+  display:grid !important;
+  place-items:center !important;
+  margin:0 !important;
+  padding:0 !important;
+  border:0 !important;
+  background:transparent !important;
+  color:#fff !important;
+  opacity:1 !important;
+  visibility:visible !important;
+  pointer-events:auto !important;
+  transform:none;
+  text-shadow:0 1px 3px rgba(0,0,0,.65),0 2px 7px rgba(0,0,0,.42);
+  transition:
+    background .16s ease,
+    color .16s ease,
+    transform .14s ease !important;
+}
+
+#control-menu-panel #pip-button:hover,
+#control-menu-panel #time-range-button:hover,
+#control-menu-panel #keyword-filter-button:hover,
+#control-menu-panel #keyword-watch-button:hover,
+#control-menu-panel #info-button:hover,
+#control-menu-panel #menu-button:hover{
+  transform:scale(1.06) !important;
+  background:rgba(255,255,255,.06) !important;
+  border-radius:10px;
+}
+
+#control-menu-panel #pip-button:active,
+#control-menu-panel #time-range-button:active,
+#control-menu-panel #keyword-filter-button:active,
+#control-menu-panel #keyword-watch-button:active,
+#control-menu-panel #info-button:active,
+#control-menu-panel #menu-button:active{
+  transform:scale(.94) !important;
+}
+
+#control-menu-panel #pip-button{
+  font-size:30px !important;
+  line-height:42px !important;
+}
+#control-menu-panel #time-range-button{
+  font-size:27px !important;
+  line-height:42px !important;
+}
+#control-menu-panel #keyword-filter-button{
+  font-size:32px !important;
+  line-height:42px !important;
+}
+#control-menu-panel #keyword-watch-button{
+  font-size:27px !important;
+  line-height:42px !important;
+}
+#control-menu-panel #info-button{
+  font-family:Arial,Helvetica,sans-serif !important;
+  font-size:25px !important;
+  line-height:42px !important;
+  font-weight:300 !important;
+}
+#control-menu-panel #menu-button{
+  font-size:31px !important;
+  line-height:42px !important;
+}
+
+/* Son dakika still hides the user-defined time range — now from the menu. */
+body.breaking-mode #control-menu-panel #time-range-button{
+  display:none !important;
+}
+
+/* During ads the only top-level controls are fullscreen + hamburger. */
+body.ad-mode #control-menu-button{
+  z-index:1301;
+  opacity:1 !important;
+  visibility:visible !important;
+  pointer-events:auto !important;
+}
+
+/* Old ad-mode force-visible rules must not pull child controls out of the menu. */
+body.ad-mode #control-menu-panel #menu-button,
+body.ad-mode #control-menu-panel #pip-button,
+body.ad-mode #control-menu-panel #time-range-button,
+body.ad-mode #control-menu-panel #keyword-filter-button,
+body.ad-mode #control-menu-panel #keyword-watch-button,
+body.ad-mode #control-menu-panel #info-button{
+  position:static !important;
+}
+
+/* Quick panels now align beside the hamburger tool stack. */
+#time-range-panel,
+.keyword-tool-panel{
+  right:calc(max(2.2vw,env(safe-area-inset-right)) + 58px) !important;
+}
+
+#time-range-panel{
+  top:calc(max(2.2vh,env(safe-area-inset-top)) + 98px) !important;
+}
+
+#keyword-filter-panel{
+  top:calc(max(2.2vh,env(safe-area-inset-top)) + 146px) !important;
+}
+
+#keyword-watch-panel{
+  top:calc(max(2.2vh,env(safe-area-inset-top)) + 190px) !important;
+}
+
+body.breaking-mode #keyword-filter-panel{
+  top:calc(max(2.2vh,env(safe-area-inset-top)) + 100px) !important;
+}
+
+body.breaking-mode #keyword-watch-panel{
+  top:calc(max(2.2vh,env(safe-area-inset-top)) + 146px) !important;
+}
+
+/* ---------------------------------------------------------------------
+   4) Public statistics overlay
+   --------------------------------------------------------------------- */
+
+#stats-overlay{
+  position:fixed;
+  z-index:1400;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:5vh 5vw;
+  background:rgba(0,0,0,.68);
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  backdrop-filter:blur(4px);
+  -webkit-backdrop-filter:blur(4px);
+  transition:
+    opacity .30s ease,
+    visibility 0s linear .30s;
+}
+
+#stats-overlay.open{
+  opacity:1;
+  visibility:visible;
+  pointer-events:auto;
+  transition:
+    opacity .30s ease,
+    visibility 0s linear 0s;
+}
+
+#public-stats-panel{
+  width:min(920px,92vw);
+  max-height:min(82vh,760px);
+  overflow:auto;
+  padding:24px;
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:16px;
+  background:rgba(8,8,8,.88);
+  box-shadow:0 24px 70px rgba(0,0,0,.42);
+  color:#fff;
+}
+
+#stats-close{
+  flex:0 0 auto;
+  width:38px;
+  height:38px;
+  border:0;
+  background:transparent;
+  color:rgba(255,255,255,.72);
+  cursor:pointer;
+  font:300 27px/38px Arial,Helvetica,sans-serif;
+}
+
+.public-stats-tabs{
+  display:flex;
+  gap:20px;
+  margin:18px 0 15px;
+}
+
+.public-stats-tab{
+  padding:5px 0;
+  border:0;
+  background:transparent;
+  color:rgba(255,255,255,.34);
+  cursor:pointer;
+  font:700 10px/1.2 "Comfortaa",sans-serif;
+}
+
+.public-stats-tab.active{
+  color:#fff;
+}
+
+.public-stats-summary{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:8px;
+}
+
+.public-stat-card{
+  padding:15px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:11px;
+  background:rgba(255,255,255,.025);
+}
+
+.public-stat-card span{
+  display:block;
+  color:rgba(255,255,255,.40);
+  font-size:9px;
+  line-height:1.35;
+}
+
+.public-stat-card strong{
+  display:block;
+  margin-top:7px;
+  font-size:20px;
+  line-height:1.1;
+}
+
+.public-stats-grid{
+  display:grid;
+  grid-template-columns:1.3fr .7fr;
+  gap:12px;
+  margin-top:20px;
+}
+
+.public-stats-section{
+  min-width:0;
+  padding:15px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:12px;
+  background:rgba(255,255,255,.018);
+}
+
+.public-stats-heading{
+  margin-bottom:8px;
+  color:rgba(255,255,255,.62);
+  font-size:10px;
+  font-weight:700;
+}
+
+.public-stats-list{
+  display:grid;
+}
+
+.public-stat-story{
+  display:grid;
+  grid-template-columns:24px minmax(0,1fr) 48px;
+  gap:10px;
+  align-items:center;
+  padding:10px 0;
+  border-top:1px solid rgba(255,255,255,.065);
+  color:#fff;
+  text-decoration:none;
+}
+
+.public-stat-story:first-child{
+  border-top:0;
+}
+
+.public-stat-rank{
+  color:rgba(255,255,255,.28);
+  font-size:9px;
+}
+
+.public-stat-story-copy{
+  min-width:0;
+}
+
+.public-stat-story-copy strong{
+  display:block;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:10px;
+  line-height:1.4;
+}
+
+.public-stat-story-copy small{
+  display:block;
+  margin-top:4px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:rgba(255,255,255,.34);
+  font-size:8px;
+}
+
+.public-stat-flora{
+  text-align:right;
+  font-size:16px;
+  font-weight:700;
+}
+
+.public-stat-category{
+  display:grid;
+  grid-template-columns:minmax(72px,1fr) 1.4fr 42px;
+  gap:8px;
+  align-items:center;
+  padding:8px 0;
+  border-top:1px solid rgba(255,255,255,.055);
+  font-size:9px;
+}
+
+.public-stat-category:first-child{
+  border-top:0;
+}
+
+.public-stat-category > span{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.public-stat-category i{
+  height:3px;
+  overflow:hidden;
+  border-radius:5px;
+  background:rgba(255,255,255,.08);
+}
+
+.public-stat-category b{
+  display:block;
+  height:100%;
+  border-radius:5px;
+  background:#fff;
+}
+
+.public-stat-category small{
+  text-align:right;
+  color:rgba(255,255,255,.36);
+}
+
+.public-stats-empty{
+  padding:30px 8px;
+  color:rgba(255,255,255,.36);
+  font-size:9px;
+  text-align:center;
+}
+
+.public-stats-footer{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  margin-top:16px;
+  padding-top:13px;
+  border-top:1px solid rgba(255,255,255,.07);
+  color:rgba(255,255,255,.30);
+  font-size:8px;
+}
+
+.public-stats-footer a{
+  flex:0 0 auto;
+  color:rgba(255,255,255,.58);
+  text-decoration:none;
+}
+
+.public-stats-footer a:hover{
+  color:#fff;
+}
+
+/* Existing public Flöra text link in Preferences is now redundant. */
+.flora-menu-link{
+  display:none !important;
+}
+
+@media(max-width:700px){
+  #control-menu-button{
+    top:calc(max(1.7vh,env(safe-area-inset-top)) + 44px);
+    width:38px;
+    height:38px;
+    font-size:25px;
+  }
+
+  #fullscreen-button{
+    width:38px !important;
+    height:38px !important;
+  }
+
+  #control-menu-panel{
+    top:calc(max(1.7vh,env(safe-area-inset-top)) + 85px);
+    right:calc(max(2.2vw,env(safe-area-inset-right)) - 4px);
+    padding:5px 3px;
+  }
+
+  #control-menu-panel #pip-button,
+  #control-menu-panel #time-range-button,
+  #control-menu-panel #keyword-filter-button,
+  #control-menu-panel #keyword-watch-button,
+  #control-menu-panel #info-button,
+  #control-menu-panel #menu-button{
+    width:38px !important;
+    height:38px !important;
+  }
+
+  #public-stats-panel{
+    width:min(94vw,720px);
+    max-height:84vh;
+    padding:18px;
+  }
+
+  .public-stats-summary{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+
+  .public-stats-grid{
+    grid-template-columns:1fr;
+  }
+
+  .public-stats-footer{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+}
+
+/* Reduced-motion keeps tab switches effectively instant, matching prior behavior. */
+@media(prefers-reduced-motion:reduce){
+  .enter-left,.exit-left,.enter-right,.exit-right{
+    animation-duration:1ms !important;
+  }
+}
+
+
+/* =====================================================================
+   V31.17.1 — mobile interaction + menu/statistics polish
+   ===================================================================== */
+
+/* 1) Mobile feed tabs never disappear.
+   Idle = dim, activity = fully visible. */
+@media(max-width:700px){
+  #feed-tabs,
+  #feed-tabs:not(.is-visible){
+    opacity:.42 !important;
+    visibility:visible !important;
+    pointer-events:auto !important;
+    transition:opacity .42s ease !important;
+  }
+
+  #feed-tabs.is-visible{
+    opacity:1 !important;
+    visibility:visible !important;
+    pointer-events:auto !important;
+  }
+
+  body.ad-mode #feed-tabs,
+  body.ad-mode #feed-tabs.is-visible{
+    opacity:.18 !important;
+    visibility:visible !important;
+    pointer-events:none !important;
+  }
+}
+
+/* 3) Public stats overlay now follows Preferences:
+   dark full-screen backdrop, no card/frame around the content. */
+#stats-overlay{
+  background:rgba(0,0,0,.80) !important;
+  backdrop-filter:blur(5px) !important;
+  -webkit-backdrop-filter:blur(5px) !important;
+}
+
+#public-stats-panel{
+  width:min(760px,88vw) !important;
+  max-height:84vh !important;
+  padding:0 !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  box-shadow:none !important;
+}
+
+#public-stats-panel .menu-header{
+  align-items:center !important;
+  padding:0 2px 12px !important;
+}
+
+#stats-close{
+  background:transparent !important;
+  border-radius:0 !important;
+  opacity:.68;
+}
+
+#stats-close:hover{
+  opacity:1;
+}
+
+.public-stats-tabs{
+  justify-content:center;
+  gap:18px !important;
+  margin:12px 0 22px !important;
+}
+
+.public-stats-tab{
+  padding:8px 2px !important;
+  font-size:11px !important;
+}
+
+.public-stats-summary{
+  gap:0 28px !important;
+}
+
+.public-stat-card{
+  padding:10px 2px !important;
+  border:0 !important;
+  border-radius:0 !important;
+  border-bottom:1px solid rgba(255,255,255,.10) !important;
+  background:transparent !important;
+}
+
+.public-stat-card span{
+  font-size:9px !important;
+}
+
+.public-stat-card strong{
+  font-size:18px !important;
+}
+
+.public-stats-grid{
+  gap:0 28px !important;
+}
+
+.public-stats-section{
+  padding:0 !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+}
+
+.public-stats-heading{
+  margin:20px 0 8px !important;
+  text-align:center;
+  opacity:.62;
+}
+
+.public-stat-story{
+  padding:10px 2px !important;
+}
+
+.public-stat-category{
+  padding:9px 2px !important;
+}
+
+.public-stats-footer{
+  border:0 !important;
+  text-align:center;
+}
+
+/* 4) Hamburger tray: frameless and minimal. */
+#control-menu-panel{
+  padding:5px 3px !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  box-shadow:none !important;
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
+}
+
+#control-menu-panel #pip-button:hover,
+#control-menu-panel #time-range-button:hover,
+#control-menu-panel #keyword-filter-button:hover,
+#control-menu-panel #keyword-watch-button:hover,
+#control-menu-panel #info-button:hover,
+#control-menu-panel #menu-button:hover{
+  background:transparent !important;
+  border-radius:0 !important;
+}
+
+/* 5) Preferences: every tab uses exactly the same panel width.
+   Stable scrollbar prevents the menu from visually shifting between tabs. */
+#settings-menu{
+  width:min(760px,88vw) !important;
+  min-width:min(760px,88vw) !important;
+  max-width:min(760px,88vw) !important;
+  scrollbar-gutter:stable both-edges;
+}
+
+.menu-tabs{
+  width:100% !important;
+}
+
+.menu-tab{
+  flex:1 1 0 !important;
+  min-width:0 !important;
+  text-align:center !important;
+}
+
+.menu-panel,
+.menu-panel.active,
+#sources-panel,
+#categories-panel,
+#motion-panel,
+#weather-panel{
+  width:100% !important;
+  min-width:100% !important;
+  max-width:100% !important;
+}
+
+#motion-panel,
+#weather-panel{
+  box-sizing:border-box !important;
+}
+
+.weather-settings,
+.duration-setting-group,
+.media-setting-group,
+.direction-list{
+  width:100% !important;
+}
+
+@media(max-width:700px){
+  #public-stats-panel{
+    width:min(92vw,560px) !important;
+  }
+
+  .public-stats-summary{
+    grid-template-columns:1fr 1fr !important;
+    gap:0 18px !important;
+  }
+
+  .public-stats-grid{
+    grid-template-columns:1fr !important;
+    gap:0 !important;
+  }
+
+  #settings-menu{
+    width:92vw !important;
+    min-width:92vw !important;
+    max-width:92vw !important;
+  }
+
+  .menu-tabs{
+    gap:7px !important;
+  }
+
+  .menu-tab{
+    padding:8px 0 !important;
+    font-size:10px !important;
+  }
+}
+
+
+/* =====================================================================
+   V31.17.3 — mobile fullscreen / stable Preferences / text icons
+   ===================================================================== */
+
+/* 1) Mobile does not need the browser fullscreen control. */
+@media(max-width:700px){
+  #fullscreen-button{
+    display:none !important;
+  }
+
+  /* With fullscreen gone, ☰ becomes the first top-right control. */
+  #control-menu-button{
+    top:max(1.7vh,env(safe-area-inset-top)) !important;
+  }
+
+  #control-menu-panel{
+    top:calc(max(1.7vh,env(safe-area-inset-top)) + 42px) !important;
+  }
+}
+
+/* 2) Desktop Preferences width must not react to the active panel.
+   A permanently reserved vertical scrollbar removes the last width shift
+   between short (Görünüm/Hava) and long (Kaynaklar/Kategoriler) tabs. */
+@media(min-width:701px){
+  #settings-menu{
+    width:760px !important;
+    min-width:760px !important;
+    max-width:760px !important;
+    inline-size:760px !important;
+    min-inline-size:760px !important;
+    max-inline-size:760px !important;
+    flex:0 0 760px !important;
+    overflow-x:hidden !important;
+    overflow-y:scroll !important;
+    scrollbar-gutter:stable !important;
+  }
+
+  #settings-menu .menu-tabs,
+  #settings-menu .menu-panel,
+  #settings-menu .menu-panel.active,
+  #settings-menu #sources-panel,
+  #settings-menu #categories-panel,
+  #settings-menu #motion-panel,
+  #settings-menu #weather-panel{
+    width:100% !important;
+    min-width:0 !important;
+    max-width:none !important;
+    inline-size:100% !important;
+  }
+
+  #settings-menu .option-list,
+  #settings-menu .direction-list,
+  #settings-menu .weather-settings,
+  #settings-menu .duration-setting-group,
+  #settings-menu .media-setting-group{
+    min-width:0 !important;
+    max-width:100% !important;
+  }
+}
+
+/* For narrower desktop windows keep the menu inside the viewport while still
+   using one invariant width across every tab. */
+@media(min-width:701px) and (max-width:860px){
+  #settings-menu{
+    width:calc(100vw - 80px) !important;
+    min-width:calc(100vw - 80px) !important;
+    max-width:calc(100vw - 80px) !important;
+    inline-size:calc(100vw - 80px) !important;
+    min-inline-size:calc(100vw - 80px) !important;
+    max-inline-size:calc(100vw - 80px) !important;
+    flex-basis:calc(100vw - 80px) !important;
+  }
+}
+
+/* 3) Ask supporting browsers for monochrome/text Unicode glyphs and keep a
+   non-emoji font stack ahead of system emoji fonts. U+FE0E is also embedded
+   directly in the affected HTML/JS symbols as a second layer. */
+#control-menu-button,
+#control-menu-panel .control-menu-item,
+#weather-icon,
+.direction-option span,
+#fullscreen-button,
+#menu-close,
+#stats-close{
+  font-variant-emoji:text;
+  font-family:Arial,"Helvetica Neue",Helvetica,sans-serif !important;
+  font-synthesis:none;
+}
+
+#time-range-button,
+#menu-button,
+#weather-icon{
+  font-variant-emoji:text !important;
+}
+
+
+/* =====================================================================
+   V31.18.0 — Yabancı feed
+   ===================================================================== */
+
+#feed-tabs{
+  gap:24px !important;
+}
+
+@media(max-width:700px){
+  #feed-tabs{
+    gap:11px !important;
+    max-width:calc(100vw - 104px);
+  }
+
+  .feed-tab{
+    font-size:12px !important;
+    letter-spacing:-.01em !important;
+  }
+}
+
+@media(max-width:390px){
+  #feed-tabs{
+    gap:8px !important;
+    max-width:calc(100vw - 84px);
+  }
+
+  .feed-tab{
+    font-size:11px !important;
+  }
+}
+
+.foreign-category-option{
+  cursor:default !important;
+  opacity:.72;
+}
+
+body.foreign-mode #time-range-button{
+  display:grid !important;
+}
+
+
+/* =====================================================================
+   V31.18.1 — full news descriptions
+   ===================================================================== */
+
+.description{
+  display:block !important;
+  overflow:visible !important;
+  max-height:none !important;
+  -webkit-box-orient:initial !important;
+  -webkit-line-clamp:unset !important;
+  line-clamp:unset !important;
+  white-space:normal !important;
+}
+
+@media(max-width:520px){
+  .description{
+    -webkit-line-clamp:unset !important;
+    line-clamp:unset !important;
+  }
+}
+
+
+/* =====================================================================
+   V31.18.2 — reload/network resilience
+   No visual changes in this release.
+   ===================================================================== */
