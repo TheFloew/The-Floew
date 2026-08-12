@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<title>Flöw Analytics</title>
+<link rel="stylesheet" href="../css/analytics-31.16.1.css">
+</head>
+<body>
+<main class="page admin-shell">
+  <section id="login-card" class="card login-card">
+    <div class="kicker">Özel yönetim alanı</div>
+    <h1>Flöw Analytics</h1>
+    <p class="lead">Worker'da tanımlı ADMIN_TOKEN değerini girin.</p>
+    <div class="input-row">
+      <input id="admin-token" class="text-input" type="password" autocomplete="current-password" placeholder="ADMIN_TOKEN">
+      <button id="login-button" class="action" type="button">Aç</button>
+    </div>
+    <div id="login-status" class="status"></div>
+  </section>
+
+  <section id="dashboard" class="hidden">
+    <div class="topbar">
+      <div>
+        <div class="kicker">Özel yönetim alanı</div>
+        <h1>Flöw Analytics</h1>
+      </div>
+      <div class="admin-actions">
+        <button class="range-tab active" data-range="7d">Son 7 gün</button>
+        <button class="range-tab" data-range="all">Tüm zamanlar</button>
+        <button id="setup-button" class="action secondary" type="button">Veritabanlarını hazırla</button>
+        <button id="export-button" class="action" type="button">HTML raporu indir</button>
+      </div>
+    </div>
+
+    <section>
+      <h2>Kullanıcılar &amp; Oturumlar</h2>
+      <div id="audience-metrics" class="metrics"></div>
+      <div class="two-col">
+        <div>
+          <h2>Ülkeler</h2>
+          <div id="audience-country" class="card"></div>
+          <h2>Şehirler</h2>
+          <div id="audience-city" class="card"></div>
+        </div>
+        <div>
+          <h2>Cihazlar</h2>
+          <div id="audience-device" class="card"></div>
+          <h2>Tarayıcılar</h2>
+          <div id="audience-browser" class="card"></div>
+          <h2>İşletim sistemleri</h2>
+          <div id="audience-os" class="card"></div>
+        </div>
+      </div>
+      <h2>Son oturumlar</h2>
+      <div id="audience-latest" class="card table-wrap"></div>
+    </section>
+
+    <section>
+      <h2>Hareketler &amp; Etkileşimler</h2>
+      <div id="behavior-metrics" class="metrics"></div>
+      <div class="two-col">
+        <div>
+          <h2>Olay türleri</h2>
+          <div id="behavior-events" class="card"></div>
+          <h2>Anahtar kelimeler</h2>
+          <div id="behavior-keywords" class="card table-wrap"></div>
+        </div>
+        <div>
+          <h2>Kaynaklar</h2>
+          <div id="behavior-sources" class="card"></div>
+          <h2>Kategoriler</h2>
+          <div id="behavior-categories" class="card"></div>
+        </div>
+      </div>
+      <h2>Son hareketler</h2>
+      <div id="behavior-latest" class="card table-wrap"></div>
+    </section>
+
+    <div id="dashboard-status" class="footer"></div>
+  </section>
+</main>
+<script src="../js/analytics-admin-31.16.1.js"></script>
+</body>
+</html>
