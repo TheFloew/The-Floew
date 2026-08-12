@@ -421,9 +421,43 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 }
 
 
+.headline-actions{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-top:10px;
+}
+
+.flora-inline{
+  display:inline-flex;
+  align-items:baseline;
+  gap:5px;
+  min-height:18px;
+  color:rgba(255,255,255,.66);
+  font-size:11px;
+  line-height:1;
+  font-weight:700;
+  text-shadow:
+    0 1px 3px rgba(0,0,0,.65),
+    0 2px 7px rgba(0,0,0,.42);
+  user-select:none;
+}
+
+.flora-inline-mark{
+  color:#ffa37b;
+  font-family:Georgia,"Times New Roman",serif;
+  font-size:18px;
+  font-weight:400;
+  line-height:.8;
+}
+
+.flora-inline.has-score .flora-inline-value{
+  color:rgba(255,255,255,.92);
+}
+
 .source-link{
   display:inline-block;
-  margin-top:10px;
+  margin-top:0;
   font-size:18px;
   line-height:1;
   color:#fff;
@@ -2891,3 +2925,19 @@ body.foreign-mode #time-range-button{
    V31.18.2 — reload/network resilience
    No visual changes in this release.
    ===================================================================== */
+
+
+@media(max-width:520px){
+  .headline-actions{
+    gap:9px;
+    margin-top:9px;
+  }
+
+  .flora-inline{
+    font-size:10px;
+  }
+
+  .flora-inline-mark{
+    font-size:17px;
+  }
+}
