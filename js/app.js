@@ -1481,11 +1481,81 @@ function storyImageProxyUrl(story){
   return proxy.href;
 }
 
+function losAngelesTimesOriginImageUrl(value=""){
+  try{
+    const transformed=new URL(value);
+
+    if(
+      transformed.hostname.toLowerCase()!=="ca-times.brightspotcdn.com"
+    ){
+      return "";
+    }
+
+    let nested=transformed.searchParams.get("url")||"";
+    if(!nested)return "";
+
+    for(let i=0;i<2;i++){
+      try{
+        const candidate=new URL(nested);
+
+        if(
+          candidate.hostname.toLowerCase()===
+          "california-times-brightspot.s3.amazonaws.com"
+        ){
+          return candidate.href;
+        }
+
+        return "";
+      }catch(e){
+        try{
+          const decoded=decodeURIComponent(nested);
+          if(decoded===nested)return "";
+          nested=decoded;
+        }catch(innerError){
+          return "";
+        }
+      }
+    }
+  }catch(e){}
+
+  return "";
+}
+
+function storyExternalImageProxyUrl(story){
+  const source=String(story?.source||"").trim().toLowerCase();
+
+  if(source!=="los angeles times"){
+    return "";
+  }
+
+  const direct=String(story?.image||"").trim();
+  if(!direct)return "";
+
+  /*
+    Los Angeles Times Brightspot görselleri hem tarayıcı gömme
+    kurallarına hem de sunucu tarafı hotlink/transform kontrollerine
+    takılabildiği için son çare olarak görseli uzman bir image-cache
+    servisi üzerinden isteriz. Varsa Brightspot transformer yerine
+    içindeki gerçek California Times S3 görselini kullanırız.
+  */
+  const sourceImage=
+    losAngelesTimesOriginImageUrl(direct)||
+    direct;
+
+  const proxy=new URL("https://wsrv.nl/");
+  proxy.searchParams.set("url",sourceImage);
+  proxy.searchParams.set("output","webp");
+  proxy.searchParams.set("q","86");
+
+  return proxy.href;
+}
+
 function setStoryImage(img,story){
   if(!img)return;
 
   const direct=String(story?.image||"").trim();
   const proxied=storyImageProxyUrl(story);
+  const externalProxy=storyExternalImageProxyUrl(story);
 
   img.onerror=null;
   img.onload=null;
@@ -1513,6 +1583,16 @@ function setStoryImage(img,story){
     ){
       img.dataset.imageStage="proxy";
       img.src=proxied;
+      return;
+    }
+
+    if(
+      img.dataset.imageStage==="proxy" &&
+      externalProxy &&
+      externalProxy!==img.src
+    ){
+      img.dataset.imageStage="external-proxy";
+      img.src=externalProxy;
       return;
     }
 
@@ -1560,6 +1640,12 @@ function fill(el,s){
     description.setAttribute("aria-expanded","false");
     description.tabIndex=text?0:-1;
     description.title=text?"Tamamını okumak için tıklayın":"";
+
+    if(text){
+      prepareDescriptionPreview(description);
+    }else{
+      description.style.removeProperty("max-height");
+    }
   }
 
   el.querySelector(".time").textContent=timeText(s.published);
@@ -1584,14 +1670,64 @@ function fill(el,s){
 
 
 
+function descriptionPreviewHeight(description){
+  const computed=getComputedStyle(description);
+  const fontSize=parseFloat(computed.fontSize)||16;
+
+  let lineHeight=parseFloat(computed.lineHeight);
+  if(!Number.isFinite(lineHeight)){
+    lineHeight=fontSize*1.42;
+  }
+
+  return Math.ceil(lineHeight*5);
+}
+
+function prepareDescriptionPreview(description){
+  if(!description || description.hidden)return;
+
+  description.classList.add("description-no-motion");
+  description.classList.remove("is-expanded");
+  description.style.maxHeight=
+    `${descriptionPreviewHeight(description)}px`;
+
+  /*
+    Yeni haber fill edilirken görünür bir "kapanma" animasyonu oluşmasın.
+    Bir sonraki frame'de normal hareketi tekrar etkinleştiriyoruz.
+  */
+  requestAnimationFrame(()=>{
+    requestAnimationFrame(()=>{
+      description.classList.remove("description-no-motion");
+    });
+  });
+}
+
 function setDescriptionExpanded(description,expanded){
   if(!description || description.hidden)return;
 
+  const collapsedHeight=
+    descriptionPreviewHeight(description);
+
+  /*
+    Geçişe mevcut gerçek yükseklikten başla. Böylece açma ve kapama
+    sırasında metin bir anda sıçramak yerine dikey olarak kayar.
+  */
+  const currentHeight=
+    Math.ceil(description.getBoundingClientRect().height);
+
+  description.style.maxHeight=`${currentHeight}px`;
   description.classList.toggle("is-expanded",expanded);
   description.setAttribute("aria-expanded",expanded?"true":"false");
   description.title=expanded
     ?"Metni daraltmak için tıklayın"
     :"Tamamını okumak için tıklayın";
+
+  requestAnimationFrame(()=>{
+    const targetHeight=expanded
+      ? Math.ceil(description.scrollHeight)
+      : collapsedHeight;
+
+    description.style.maxHeight=`${targetHeight}px`;
+  });
 
   if(expanded){
     clearTimeout(state.timer);
@@ -1628,6 +1764,16 @@ document.querySelectorAll(".description").forEach(description=>{
     toggleDescription(description);
   });
 });
+
+window.addEventListener("resize",()=>{
+  document.querySelectorAll(".description").forEach(description=>{
+    if(description.hidden)return;
+
+    description.style.maxHeight=description.classList.contains("is-expanded")
+      ? `${Math.ceil(description.scrollHeight)}px`
+      : `${descriptionPreviewHeight(description)}px`;
+  });
+},{passive:true});
 
 
 function isMobileAdDevice(){
