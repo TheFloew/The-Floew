@@ -248,15 +248,16 @@ let currentAd=null;
 let adEntryDirection=1;
 
 /*
-  Haber history dizisini bozmadan reklamı gerçek bir gezinme durağı gibi
-  davranacak şekilde araya yerleştiriyoruz.
+  Haber history dizisini bozmadan reklamları gerçek gezinme durakları gibi
+  araya yerleştiriyoruz.
 
-  skippedAdHistory yalnızca kullanıcı reklamı bitmeden ileri geçtiğinde kurulur.
-  Böylece:
-    haber A -> reklam -> haber B
-  dizisinde B'den geri gidildiğinde reklama, reklamdan da A'ya dönülebilir.
+  Bir reklam ister kullanıcı tarafından geçilsin ister doğal olarak tamamlansın,
+  haber A -> reklam -> haber B bağlantısı adHistoryStops içinde saklanır.
+  Böylece history boyunca birden fazla reklam durağı korunur:
+    haber B -> geri = reklam -> geri = haber A
+    haber A -> ileri = reklam -> ileri = haber B
 */
-let skippedAdHistory=null;
+let adHistoryStops=[];
 let historicalAdContext=null;
 
 const state={
@@ -942,7 +943,7 @@ function switchFeedMode(nextMode){
     state.index=0;
     state.history=[];
     state.historyPos=0;
-    skippedAdHistory=null;
+    adHistoryStops=[];
     historicalAdContext=null;
     clearTimeout(state.timer);
     setStoryStageVisible(false);
@@ -996,7 +997,7 @@ function switchFeedMode(nextMode){
   state.index=idx;
   state.history=[idx];
   state.historyPos=0;
-  skippedAdHistory=null;
+  adHistoryStops=[];
   historicalAdContext=null;
   state.active=1-state.active;
 
@@ -1146,7 +1147,7 @@ function applyFilters(){
   state.index=idx;
   state.history=[idx];
   state.historyPos=0;
-  skippedAdHistory=null;
+  adHistoryStops=[];
   historicalAdContext=null;
 
   /*
@@ -2852,29 +2853,43 @@ function preloadImage(url){
 }
 
 
-function isAtSkippedAdBefore(){
-  return Boolean(
-    skippedAdHistory &&
-    !adActive &&
-    state.historyPos===skippedAdHistory.beforeHistoryPos &&
-    state.index===skippedAdHistory.beforeIndex
-  );
+function adHistoryStopBefore(){
+  if(adActive)return null;
+
+  for(let i=adHistoryStops.length-1;i>=0;i--){
+    const stop=adHistoryStops[i];
+    if(
+      state.historyPos===stop.beforeHistoryPos &&
+      state.index===stop.beforeIndex
+    ){
+      return stop;
+    }
+  }
+
+  return null;
 }
 
-function isAtSkippedAdAfter(){
-  return Boolean(
-    skippedAdHistory &&
-    !adActive &&
-    state.historyPos===skippedAdHistory.afterHistoryPos &&
-    state.index===skippedAdHistory.afterIndex
-  );
+function adHistoryStopAfter(){
+  if(adActive)return null;
+
+  for(let i=adHistoryStops.length-1;i>=0;i--){
+    const stop=adHistoryStops[i];
+    if(
+      state.historyPos===stop.afterHistoryPos &&
+      state.index===stop.afterIndex
+    ){
+      return stop;
+    }
+  }
+
+  return null;
 }
 
-async function enterSkippedAdHistory(entryDir){
-  if(!skippedAdHistory)return false;
+async function enterAdHistory(stop,entryDir){
+  if(!stop)return false;
 
   const context={
-    ...skippedAdHistory,
+    ...stop,
     entryDir:entryDir<0?-1:1
   };
 
@@ -2953,17 +2968,17 @@ async function move(dir,options={}){
   if(state.busy||state.stories.length<2)return;
 
   /*
-    Kullanıcının bitmeden geçtiği reklam history'de gerçek bir ara duraktır.
-    Haber B'den geri -> reklam; haber A'dan ileri -> aynı reklam.
+    Daha önce gösterilmiş reklamlar history'de gerçek ara duraklardır.
+    Reklamın ilk gösterimde elle geçilmiş veya doğal tamamlanmış olması fark etmez.
   */
   if(!options.skipHistoricalAd){
-    if(dir<0 && isAtSkippedAdAfter()){
-      await enterSkippedAdHistory(-1);
-      return;
-    }
+    const stop=
+      dir<0
+        ? adHistoryStopAfter()
+        : adHistoryStopBefore();
 
-    if(dir>0 && isAtSkippedAdBefore()){
-      await enterSkippedAdHistory(1);
+    if(stop){
+      await enterAdHistory(stop,dir);
       return;
     }
   }
@@ -2989,18 +3004,27 @@ async function move(dir,options={}){
         });
 
         /*
-          Yalnızca kullanıcı reklamı bitmeden ileri geçtiyse history bağlantısı
-          kurulur. Reklam doğal olarak bittiyse sonradan geri dönmek zorunlu
-          değildir.
+          Reklam ekrana gerçekten girdiyse bitiş şekline bakmadan history'ye
+          gerçek bir ara durak olarak ekle. Aynı history aralığı yeniden
+          kurulursa eski kaydı güncelle; diğer reklam duraklarını koru.
         */
-        if(adResult.skipped){
-          skippedAdHistory={
-            ad:adResult.ad,
-            beforeIndex,
-            beforeHistoryPos,
-            afterIndex:state.index,
-            afterHistoryPos:state.historyPos
-          };
+        const adStop={
+          ad:adResult.ad,
+          beforeIndex,
+          beforeHistoryPos,
+          afterIndex:state.index,
+          afterHistoryPos:state.historyPos
+        };
+
+        const existingStopIndex=adHistoryStops.findIndex(stop=>
+          stop.beforeHistoryPos===beforeHistoryPos &&
+          stop.afterHistoryPos===state.historyPos
+        );
+
+        if(existingStopIndex>=0){
+          adHistoryStops[existingStopIndex]=adStop;
+        }else{
+          adHistoryStops.push(adStop);
         }
       }
 
@@ -3830,7 +3854,7 @@ async function performNewsLoad(){
       state.index=0;
       state.history=[0];
       state.historyPos=0;
-      skippedAdHistory=null;
+      adHistoryStops=[];
       historicalAdContext=null;
       fill(slides[0],list[0]);
       slides[0].className="slide active";
