@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.11.4";
+window.__floewAppVersion="clean";
 const API="https://thefloew.thefloewback.workers.dev/news";
 const VIDEO_API="https://thefloew.thefloewback.workers.dev/video";
 const META_API="https://thefloew.thefloewback.workers.dev/meta";
@@ -174,20 +174,40 @@ const SOURCE_LOGOS={
   "sputnik türkiye":"https://icons.duckduckgo.com/ip3/sputniknews.com.ico",
   "bigpara":"https://icons.duckduckgo.com/ip3/bigpara.hurriyet.com.tr.ico",
   "ekoseyir":"https://icons.duckduckgo.com/ip3/ekoseyir.com.ico",
+  "aydinlik":"https://icons.duckduckgo.com/ip3/aydinlik.com.tr.ico",
+  "bha":"https://icons.duckduckgo.com/ip3/bha.net.tr.ico",
+  "birgun":"https://icons.duckduckgo.com/ip3/birgun.net.ico",
+  "bloomberg ht":"https://icons.duckduckgo.com/ip3/bloomberght.com.ico",
+  "capital":"https://icons.duckduckgo.com/ip3/capital.com.tr.ico",
+  "forbes":"https://icons.duckduckgo.com/ip3/forbes.com.tr.ico",
+  "cnbc-e":"https://icons.duckduckgo.com/ip3/cnbce.com.ico",
+  "diken":"https://icons.duckduckgo.com/ip3/diken.com.tr.ico",
+  "halk tv":"https://icons.duckduckgo.com/ip3/halktv.com.tr.ico",
+  "independent turkce":"https://icons.duckduckgo.com/ip3/indyturk.com.ico",
+  "teyit.org":"https://icons.duckduckgo.com/ip3/teyit.org.ico",
 
   "shiftdelete.net":"https://icons.duckduckgo.com/ip3/shiftdelete.net.ico",
   "onedio":"https://icons.duckduckgo.com/ip3/onedio.com.ico",
   "beyazperde":"https://icons.duckduckgo.com/ip3/beyazperde.com.ico",
   "motor1 türkiye":"https://icons.duckduckgo.com/ip3/tr.motor1.com.ico",
+  "chip online":"https://icons.duckduckgo.com/ip3/chip.com.tr.ico",
+  "log":"https://icons.duckduckgo.com/ip3/log.com.tr.ico",
+  "teknopat":"https://icons.duckduckgo.com/ip3/technopat.net.ico",
   "evrim ağacı":"https://icons.duckduckgo.com/ip3/evrimagaci.org.ico",
   "bant mag.":"https://icons.duckduckgo.com/ip3/bantmag.com.ico",
   "bir baba indie":"https://icons.duckduckgo.com/ip3/birbabaindie.com.ico",
+  "independent bilim":"https://icons.duckduckgo.com/ip3/indyturk.com.ico",
+  "2yaka":"https://icons.duckduckgo.com/ip3/2yaka.org.ico",
+  "cazkolik":"https://icons.duckduckgo.com/ip3/cazkolik.com.ico",
+  "deli kasap":"https://icons.duckduckgo.com/ip3/delikasap.org.ico",
   "edebiyat haber":"https://icons.duckduckgo.com/ip3/edebiyathaber.net.ico",
   "elle türkiye":"https://icons.duckduckgo.com/ip3/elle.com.tr.ico",
   "marie claire türkiye":"https://icons.duckduckgo.com/ip3/marieclaire.com.tr.ico",
   "istanbul life":"https://icons.duckduckgo.com/ip3/istanbullife.com.tr.ico",
   "live to bloom":"https://icons.duckduckgo.com/ip3/livetobloom.com.ico",
   "elele":"https://icons.duckduckgo.com/ip3/elele.com.tr.ico",
+  "bigumigu":"https://icons.duckduckgo.com/ip3/bigumigu.com.ico",
+  "basket dergisi":"https://icons.duckduckgo.com/ip3/basketdergisi.com.ico",
   "arkeofili":"https://icons.duckduckgo.com/ip3/arkeofili.com.ico",
   "işin detayı":"https://icons.duckduckgo.com/ip3/isindetayi.com.ico",
   "al jazeera":"https://icons.duckduckgo.com/ip3/aljazeera.com.ico",
@@ -248,16 +268,15 @@ let currentAd=null;
 let adEntryDirection=1;
 
 /*
-  Haber history dizisini bozmadan reklamları gerçek gezinme durakları gibi
-  araya yerleştiriyoruz.
+  Haber history dizisini bozmadan reklamı gerçek bir gezinme durağı gibi
+  davranacak şekilde araya yerleştiriyoruz.
 
-  Bir reklam ister kullanıcı tarafından geçilsin ister doğal olarak tamamlansın,
-  haber A -> reklam -> haber B bağlantısı adHistoryStops içinde saklanır.
-  Böylece history boyunca birden fazla reklam durağı korunur:
-    haber B -> geri = reklam -> geri = haber A
-    haber A -> ileri = reklam -> ileri = haber B
+  skippedAdHistory yalnızca kullanıcı reklamı bitmeden ileri geçtiğinde kurulur.
+  Böylece:
+    haber A -> reklam -> haber B
+  dizisinde B'den geri gidildiğinde reklama, reklamdan da A'ya dönülebilir.
 */
-let adHistoryStops=[];
+let skippedAdHistory=null;
 let historicalAdContext=null;
 
 const state={
@@ -943,7 +962,7 @@ function switchFeedMode(nextMode){
     state.index=0;
     state.history=[];
     state.historyPos=0;
-    adHistoryStops=[];
+    skippedAdHistory=null;
     historicalAdContext=null;
     clearTimeout(state.timer);
     setStoryStageVisible(false);
@@ -997,7 +1016,7 @@ function switchFeedMode(nextMode){
   state.index=idx;
   state.history=[idx];
   state.historyPos=0;
-  adHistoryStops=[];
+  skippedAdHistory=null;
   historicalAdContext=null;
   state.active=1-state.active;
 
@@ -1147,7 +1166,7 @@ function applyFilters(){
   state.index=idx;
   state.history=[idx];
   state.historyPos=0;
-  adHistoryStops=[];
+  skippedAdHistory=null;
   historicalAdContext=null;
 
   /*
@@ -1265,9 +1284,29 @@ function clearStatus(){
 
 function sourceKey(source){return String(source||"").trim().toLocaleLowerCase("tr-TR")}
 
-function sourceLogo(source){
-  const key=sourceKey(source);
-  return SOURCE_LOGOS[key] || "https://icons.duckduckgo.com/ip3/news.google.com.ico";
+function sourceLogo(source,link=""){
+  const rawKey=sourceKey(source);
+  const normalizedKey=normalize(source);
+  const mapped=
+    SOURCE_LOGOS[rawKey] ||
+    SOURCE_LOGOS[normalizedKey];
+
+  if(mapped)return mapped;
+
+  /*
+    Yeni bir kaynak eklenip SOURCE_LOGOS tablosu henüz güncellenmemiş olsa bile
+    Google News simgesine düşmek yerine haberin gerçek alan adının faviconunu
+    kullan. Böylece kaynak kataloğu büyüdükçe logolar kendiliğinden doğru kalır.
+  */
+  try{
+    const u=new URL(String(link||""));
+    const host=u.hostname.replace(/^www\./i,"").trim();
+    if(host){
+      return `https://icons.duckduckgo.com/ip3/${host}.ico`;
+    }
+  }catch(e){}
+
+  return "https://icons.duckduckgo.com/ip3/news.google.com.ico";
 }
 
 function timeText(v){
@@ -1781,7 +1820,7 @@ function fill(el,s){
   setStoryImage(slideImage,s);
 
   const logo=el.querySelector(".source-logo");
-  logo.src=sourceLogo(s.source);
+  logo.src=sourceLogo(s.source,s.link);
   logo.alt=s.source||"";
   logo.onerror=()=>{logo.style.visibility="hidden"};
   logo.onload=()=>{logo.style.visibility="visible"};
@@ -2853,43 +2892,29 @@ function preloadImage(url){
 }
 
 
-function adHistoryStopBefore(){
-  if(adActive)return null;
-
-  for(let i=adHistoryStops.length-1;i>=0;i--){
-    const stop=adHistoryStops[i];
-    if(
-      state.historyPos===stop.beforeHistoryPos &&
-      state.index===stop.beforeIndex
-    ){
-      return stop;
-    }
-  }
-
-  return null;
+function isAtSkippedAdBefore(){
+  return Boolean(
+    skippedAdHistory &&
+    !adActive &&
+    state.historyPos===skippedAdHistory.beforeHistoryPos &&
+    state.index===skippedAdHistory.beforeIndex
+  );
 }
 
-function adHistoryStopAfter(){
-  if(adActive)return null;
-
-  for(let i=adHistoryStops.length-1;i>=0;i--){
-    const stop=adHistoryStops[i];
-    if(
-      state.historyPos===stop.afterHistoryPos &&
-      state.index===stop.afterIndex
-    ){
-      return stop;
-    }
-  }
-
-  return null;
+function isAtSkippedAdAfter(){
+  return Boolean(
+    skippedAdHistory &&
+    !adActive &&
+    state.historyPos===skippedAdHistory.afterHistoryPos &&
+    state.index===skippedAdHistory.afterIndex
+  );
 }
 
-async function enterAdHistory(stop,entryDir){
-  if(!stop)return false;
+async function enterSkippedAdHistory(entryDir){
+  if(!skippedAdHistory)return false;
 
   const context={
-    ...stop,
+    ...skippedAdHistory,
     entryDir:entryDir<0?-1:1
   };
 
@@ -2968,17 +2993,17 @@ async function move(dir,options={}){
   if(state.busy||state.stories.length<2)return;
 
   /*
-    Daha önce gösterilmiş reklamlar history'de gerçek ara duraklardır.
-    Reklamın ilk gösterimde elle geçilmiş veya doğal tamamlanmış olması fark etmez.
+    Kullanıcının bitmeden geçtiği reklam history'de gerçek bir ara duraktır.
+    Haber B'den geri -> reklam; haber A'dan ileri -> aynı reklam.
   */
   if(!options.skipHistoricalAd){
-    const stop=
-      dir<0
-        ? adHistoryStopAfter()
-        : adHistoryStopBefore();
+    if(dir<0 && isAtSkippedAdAfter()){
+      await enterSkippedAdHistory(-1);
+      return;
+    }
 
-    if(stop){
-      await enterAdHistory(stop,dir);
+    if(dir>0 && isAtSkippedAdBefore()){
+      await enterSkippedAdHistory(1);
       return;
     }
   }
@@ -3004,27 +3029,18 @@ async function move(dir,options={}){
         });
 
         /*
-          Reklam ekrana gerçekten girdiyse bitiş şekline bakmadan history'ye
-          gerçek bir ara durak olarak ekle. Aynı history aralığı yeniden
-          kurulursa eski kaydı güncelle; diğer reklam duraklarını koru.
+          Yalnızca kullanıcı reklamı bitmeden ileri geçtiyse history bağlantısı
+          kurulur. Reklam doğal olarak bittiyse sonradan geri dönmek zorunlu
+          değildir.
         */
-        const adStop={
-          ad:adResult.ad,
-          beforeIndex,
-          beforeHistoryPos,
-          afterIndex:state.index,
-          afterHistoryPos:state.historyPos
-        };
-
-        const existingStopIndex=adHistoryStops.findIndex(stop=>
-          stop.beforeHistoryPos===beforeHistoryPos &&
-          stop.afterHistoryPos===state.historyPos
-        );
-
-        if(existingStopIndex>=0){
-          adHistoryStops[existingStopIndex]=adStop;
-        }else{
-          adHistoryStops.push(adStop);
+        if(adResult.skipped){
+          skippedAdHistory={
+            ad:adResult.ad,
+            beforeIndex,
+            beforeHistoryPos,
+            afterIndex:state.index,
+            afterHistoryPos:state.historyPos
+          };
         }
       }
 
@@ -3854,7 +3870,7 @@ async function performNewsLoad(){
       state.index=0;
       state.history=[0];
       state.historyPos=0;
-      adHistoryStops=[];
+      skippedAdHistory=null;
       historicalAdContext=null;
       fill(slides[0],list[0]);
       slides[0].className="slide active";
