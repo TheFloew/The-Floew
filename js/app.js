@@ -320,7 +320,7 @@ function loadPreferences(){
     return {
       sources:Array.isArray(p.sources)?p.sources:null,
       categories,
-      direction:["up","down","left","right"].includes(p.direction)?p.direction:"up",
+      direction:["up","down"].includes(p.direction)?p.direction:"up",
       videoEnabled:p.videoEnabled!==false
     };
   }catch(e){
@@ -1355,8 +1355,10 @@ function resetSlideMedia(el){
     image.onerror=null;
     image.onload=null;
     image.removeAttribute("data-image-stage");
+    image.removeAttribute("data-focal-key");
     image.style.display="block";
     image.style.visibility="visible";
+    image.style.objectPosition="50% 50%";
   }
 
   if(video){
@@ -1771,6 +1773,258 @@ function storyExternalImageProxyUrl(story){
   return proxy.href;
 }
 
+
+const smartFocalCache=new Map();
+const SMART_FOCAL_SAMPLE=48;
+const SMART_FOCAL_CACHE_MAX=160;
+
+function smartCropEnabled(){
+  try{
+    return (
+      window.innerWidth<=700 ||
+      (
+        window.innerWidth<=900 &&
+        window.matchMedia?.("(pointer: coarse)")?.matches
+      )
+    );
+  }catch(e){
+    return window.innerWidth<=700;
+  }
+}
+
+function clampFocal(value,min,max){
+  return Math.max(min,Math.min(max,value));
+}
+
+function smartFocalFromPixels(data,width,height){
+  if(!data || width<5 || height<5)return null;
+
+  const count=width*height;
+  const luminance=new Float32Array(count);
+  const saliency=new Float32Array(count);
+
+  for(let i=0,p=0;i<count;i++,p+=4){
+    const r=data[p];
+    const g=data[p+1];
+    const b=data[p+2];
+    luminance[i]=0.2126*r+0.7152*g+0.0722*b;
+  }
+
+  for(let y=1;y<height-1;y++){
+    for(let x=1;x<width-1;x++){
+      const i=y*width+x;
+      const p=i*4;
+      const r=data[p];
+      const g=data[p+1];
+      const b=data[p+2];
+      const maxC=Math.max(r,g,b);
+      const minC=Math.min(r,g,b);
+      const saturation=maxC-minC;
+
+      const edge=
+        Math.abs(luminance[i-1]-luminance[i+1])+
+        Math.abs(luminance[i-width]-luminance[i+width]);
+
+      const nx=(x/(width-1))-.5;
+      const ny=(y/(height-1))-.45;
+      const centerDistance=Math.min(1,Math.hypot(nx,ny)*1.35);
+      const centerBias=.78+.22*(1-centerDistance);
+
+      saliency[i]=(edge+saturation*.18)*centerBias;
+    }
+  }
+
+  /*
+    Tek bir parlak piksel yerine özneye benzeyen bir bölgeyi seçmek için
+    saliency haritasını küçük bir pencere içinde topluyoruz.
+  */
+  const integral=new Float32Array((width+1)*(height+1));
+  for(let y=0;y<height;y++){
+    let rowSum=0;
+    for(let x=0;x<width;x++){
+      rowSum+=saliency[y*width+x];
+      integral[(y+1)*(width+1)+(x+1)]=
+        integral[y*(width+1)+(x+1)]+rowSum;
+    }
+  }
+
+  const radius=Math.max(2,Math.round(Math.min(width,height)*.09));
+  let bestScore=-1;
+  let bestX=Math.round(width*.5);
+  let bestY=Math.round(height*.45);
+
+  const marginX=Math.max(1,Math.round(width*.06));
+  const marginY=Math.max(1,Math.round(height*.05));
+
+  for(let y=marginY;y<height-marginY;y++){
+    for(let x=marginX;x<width-marginX;x++){
+      const x0=Math.max(0,x-radius);
+      const y0=Math.max(0,y-radius);
+      const x1=Math.min(width-1,x+radius);
+      const y1=Math.min(height-1,y+radius);
+      const stride=width+1;
+      const sum=
+        integral[(y1+1)*stride+(x1+1)]-
+        integral[y0*stride+(x1+1)]-
+        integral[(y1+1)*stride+x0]+
+        integral[y0*stride+x0];
+      const area=(x1-x0+1)*(y1-y0+1);
+      const score=sum/Math.max(1,area);
+
+      if(score>bestScore){
+        bestScore=score;
+        bestX=x;
+        bestY=y;
+      }
+    }
+  }
+
+  if(!(bestScore>0))return null;
+
+  return {
+    x:clampFocal((bestX/(width-1))*100,12,88),
+    y:clampFocal((bestY/(height-1))*100,10,82)
+  };
+}
+
+function smartFocalCacheSet(key,value){
+  smartFocalCache.set(key,value);
+  while(smartFocalCache.size>SMART_FOCAL_CACHE_MAX){
+    const first=smartFocalCache.keys().next().value;
+    smartFocalCache.delete(first);
+  }
+}
+
+function detectSmartFocalPoint(story){
+  const source=String(story?.image||"").trim();
+  if(!source)return Promise.resolve(null);
+
+  const key=`${mediaKey(story)}|${source}`;
+  if(smartFocalCache.has(key))return smartFocalCache.get(key);
+
+  const task=new Promise(resolve=>{
+    const probe=new Image();
+    let settled=false;
+
+    const finish=value=>{
+      if(settled)return;
+      settled=true;
+      clearTimeout(timeout);
+      resolve(value);
+    };
+
+    const timeout=setTimeout(()=>finish(null),7000);
+
+    probe.crossOrigin="anonymous";
+    probe.referrerPolicy="no-referrer";
+    probe.decoding="async";
+
+    probe.onload=async()=>{
+      try{
+        const naturalWidth=probe.naturalWidth||probe.width;
+        const naturalHeight=probe.naturalHeight||probe.height;
+        if(!naturalWidth || !naturalHeight){
+          finish(null);
+          return;
+        }
+
+        /*
+          Tarayıcı yerleşik yüz algılamasını destekliyorsa önce yüzü kadraj odağı
+          say. Desteklemeyen tarayıcılarda aşağıdaki genel görsel-saliency yöntemi
+          devreye girer; harici ML kütüphanesi indirilmez.
+        */
+        if("FaceDetector" in window){
+          try{
+            const detector=new window.FaceDetector({
+              fastMode:true,
+              maxDetectedFaces:4
+            });
+            const faces=await detector.detect(probe);
+            if(Array.isArray(faces) && faces.length){
+              const face=faces
+                .map(item=>item?.boundingBox)
+                .filter(Boolean)
+                .sort((a,b)=>(b.width*b.height)-(a.width*a.height))[0];
+
+              if(face){
+                finish({
+                  x:clampFocal(((face.x+face.width/2)/naturalWidth)*100,12,88),
+                  y:clampFocal(((face.y+face.height/2)/naturalHeight)*100,10,82)
+                });
+                return;
+              }
+            }
+          }catch(e){}
+        }
+
+        const scale=Math.min(
+          SMART_FOCAL_SAMPLE/naturalWidth,
+          SMART_FOCAL_SAMPLE/naturalHeight,
+          1
+        );
+        const width=Math.max(8,Math.round(naturalWidth*scale));
+        const height=Math.max(8,Math.round(naturalHeight*scale));
+        const canvas=document.createElement("canvas");
+        canvas.width=width;
+        canvas.height=height;
+        const ctx=canvas.getContext("2d",{willReadFrequently:true});
+        if(!ctx){
+          finish(null);
+          return;
+        }
+
+        ctx.drawImage(probe,0,0,width,height);
+        const pixels=ctx.getImageData(0,0,width,height).data;
+        finish(smartFocalFromPixels(pixels,width,height));
+      }catch(e){
+        finish(null);
+      }
+    };
+
+    probe.onerror=()=>finish(null);
+
+    /*
+      Görsel analizi CORS yüzünden takılmasın diye mümkün olduğunda mevcut
+      Worker image proxy'sini kullanıyoruz. Bu işlem yalnız mobil smart-crop
+      açıkken ve arka planda çalışır.
+    */
+    probe.src=storyImageProxyUrl(story)||source;
+  }).then(value=>{
+    smartFocalCacheSet(key,Promise.resolve(value));
+    return value;
+  });
+
+  smartFocalCacheSet(key,task);
+  return task;
+}
+
+function applySmartFocalPoint(img,story){
+  if(!img)return;
+
+  img.style.objectPosition="50% 50%";
+  if(!smartCropEnabled())return;
+
+  const focalKey=`${mediaKey(story)}|${String(story?.image||"").trim()}`;
+  img.dataset.focalKey=focalKey;
+
+  const run=async()=>{
+    const focal=await detectSmartFocalPoint(story);
+    if(
+      !focal ||
+      img.dataset.focalKey!==focalKey ||
+      !smartCropEnabled()
+    )return;
+
+    img.style.objectPosition=`${focal.x.toFixed(1)}% ${focal.y.toFixed(1)}%`;
+  };
+
+  if("requestIdleCallback" in window){
+    window.requestIdleCallback(run,{timeout:900});
+  }else{
+    setTimeout(run,0);
+  }
+}
+
 function setStoryImage(img,story){
   if(!img)return;
 
@@ -1783,6 +2037,7 @@ function setStoryImage(img,story){
   img.alt=story?.title||"";
   img.referrerPolicy="no-referrer";
   img.style.visibility="visible";
+  img.style.objectPosition="50% 50%";
 
   if(!direct){
     img.removeAttribute("src");
@@ -1794,6 +2049,7 @@ function setStoryImage(img,story){
 
   img.onload=()=>{
     img.style.visibility="visible";
+    applySmartFocalPoint(img,story);
   };
 
   img.onerror=()=>{
@@ -1966,16 +2222,81 @@ function toggleDescription(description){
   );
 }
 
+const descriptionPointerState=new WeakMap();
+
+function descriptionUsesSwipeNavigation(e){
+  return Boolean(
+    e.pointerType==="touch" ||
+    (
+      window.matchMedia?.("(pointer: coarse)")?.matches &&
+      e.pointerType!=="mouse"
+    )
+  );
+}
+
 document.querySelectorAll(".description").forEach(description=>{
   description.setAttribute("role","button");
   description.setAttribute("aria-expanded","false");
 
-  description.addEventListener("pointerdown",e=>e.stopPropagation());
-  description.addEventListener("pointerup",e=>e.stopPropagation());
+  description.addEventListener("pointerdown",e=>{
+    if(!descriptionUsesSwipeNavigation(e)){
+      e.stopPropagation();
+      return;
+    }
+
+    descriptionPointerState.set(description,{
+      pointerId:e.pointerId,
+      x:e.clientX,
+      y:e.clientY,
+      moved:false
+    });
+  });
+
+  description.addEventListener("pointermove",e=>{
+    const gesture=descriptionPointerState.get(description);
+    if(!gesture || gesture.pointerId!==e.pointerId)return;
+
+    if(
+      Math.abs(e.clientX-gesture.x)>10 ||
+      Math.abs(e.clientY-gesture.y)>10
+    ){
+      gesture.moved=true;
+    }
+  },{passive:true});
+
+  description.addEventListener("pointerup",e=>{
+    if(!descriptionUsesSwipeNavigation(e)){
+      e.stopPropagation();
+      return;
+    }
+
+    const gesture=descriptionPointerState.get(description);
+    if(!gesture || gesture.pointerId!==e.pointerId)return;
+
+    /* Click, pointerup'tan hemen sonra gelebilir; swipe bilgisini kısa süre tut. */
+    setTimeout(()=>{
+      if(descriptionPointerState.get(description)===gesture){
+        descriptionPointerState.delete(description);
+      }
+    },450);
+  });
+
+  description.addEventListener("pointercancel",()=>{
+    descriptionPointerState.delete(description);
+  });
 
   description.addEventListener("click",e=>{
+    const gesture=descriptionPointerState.get(description);
+    if(gesture?.moved){
+      e.preventDefault();
+      e.stopPropagation();
+      descriptionPointerState.delete(description);
+      return;
+    }
+
     e.preventDefault();
     e.stopPropagation();
+    descriptionPointerState.delete(description);
     toggleDescription(description);
     showFullscreenButton();
   });
