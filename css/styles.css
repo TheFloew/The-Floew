@@ -900,6 +900,62 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 #cookie-notice[hidden]{
   display:none;
 }
+
+#cookie-notice .cookie-consent-message,
+#cookie-notice .cookie-actions{
+  display:none;
+}
+
+#cookie-notice[data-mode="consent"] .cookie-info-message{
+  display:none;
+}
+
+#cookie-notice[data-mode="consent"] .cookie-consent-message,
+#cookie-notice[data-mode="consent"] .cookie-actions{
+  display:flex;
+}
+
+#cookie-notice[data-mode="consent"] .status-close{
+  display:none;
+}
+
+.cookie-actions{
+  align-items:center;
+  gap:8px;
+  flex:0 0 auto;
+}
+
+.cookie-action{
+  height:31px;
+  border:1px solid rgba(255,255,255,.22);
+  border-radius:7px;
+  background:#fff;
+  color:#111;
+  padding:0 11px;
+  font:700 9px/1 "Comfortaa",sans-serif;
+  cursor:pointer;
+}
+
+.cookie-action.secondary{
+  background:transparent;
+  color:#fff;
+}
+
+@media(max-width:620px){
+  #cookie-notice[data-mode="consent"] .status-band{
+    align-items:flex-start;
+    gap:10px;
+  }
+
+  #cookie-notice[data-mode="consent"] .cookie-consent-message{
+    flex:1 1 auto;
+  }
+
+  .cookie-actions{
+    flex:0 0 auto;
+  }
+}
+
 #cookie-notice .status-band{
   pointer-events:auto;
 }
