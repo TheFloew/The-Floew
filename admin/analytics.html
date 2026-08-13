@@ -8,7 +8,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>Flöw Analytics</title>
-<link rel="stylesheet" href="../css/analytics.css?h=dc7d714effb1">
+<link rel="stylesheet" href="../css/analytics.css?h=70df79f53fd5">
 </head>
 <body>
 <main class="page admin-shell">
@@ -33,7 +33,7 @@
         <button class="range-tab active" data-range="7d">Son 7 gün</button>
         <button class="range-tab" data-range="all">Tüm zamanlar</button>
         <button id="setup-button" class="action secondary" type="button">Veritabanlarını hazırla</button>
-        <button id="export-button" class="action" type="button">HTML raporu indir</button>
+        <button id="export-button" class="action" type="button">Genel HTML raporu</button>
       </div>
     </div>
 
@@ -41,7 +41,13 @@
       Veritabanı durumu kontrol ediliyor...
     </div>
 
-    <section>
+    <nav class="admin-tabs" aria-label="Analytics bölümleri">
+      <button class="admin-tab active" data-admin-tab="audience" type="button">Kullanıcılar</button>
+      <button class="admin-tab" data-admin-tab="behavior" type="button">Davranış</button>
+      <button class="admin-tab" data-admin-tab="ads" type="button">Reklamlar</button>
+    </nav>
+
+    <section class="admin-panel" data-admin-panel="audience">
       <h2>Kullanıcılar &amp; Oturumlar</h2>
       <div id="audience-metrics" class="metrics"></div>
       <div class="two-col">
@@ -60,11 +66,26 @@
           <div id="audience-os" class="card"></div>
         </div>
       </div>
+      <h2>Demografi</h2>
+      <div id="audience-demographic-note" class="database-status"></div>
+      <div class="two-col">
+        <div>
+          <h2>Yaş</h2>
+          <div id="audience-age" class="card table-wrap"></div>
+        </div>
+        <div>
+          <h2>Cinsiyet</h2>
+          <div id="audience-gender" class="card table-wrap"></div>
+        </div>
+      </div>
+      <h2>Yaş × Saat</h2>
+      <div id="audience-age-hour" class="card table-wrap"></div>
+
       <h2>Son oturumlar</h2>
       <div id="audience-latest" class="card table-wrap"></div>
     </section>
 
-    <section>
+    <section class="admin-panel hidden" data-admin-panel="behavior">
       <h2>Hareketler &amp; Etkileşimler</h2>
       <div id="behavior-metrics" class="metrics"></div>
       <div class="two-col">
@@ -85,9 +106,74 @@
       <div id="behavior-latest" class="card table-wrap"></div>
     </section>
 
+    <section class="admin-panel hidden" data-admin-panel="ads">
+      <div id="ads-overview">
+        <div class="section-head">
+          <div>
+            <h2>Reklamlar</h2>
+            <p class="lead compact">Gösterim, izleme süresi, skip, tamamlama ve geri dönüp yeniden izleme metrikleri D1'dan; yaş/cinsiyet kırılımları yapılandırıldığında Google Analytics'ten gelir.</p>
+          </div>
+          <button id="ga4-setup-button" class="action secondary" type="button">GA4 tanımlarını hazırla</button>
+        </div>
+
+        <div id="ga4-status" class="database-status"></div>
+        <div id="ads-metrics" class="metrics"></div>
+
+        <h2>Reklam performansı</h2>
+        <div id="ads-list" class="card table-wrap"></div>
+      </div>
+
+      <div id="ad-detail" class="hidden">
+        <div class="detail-toolbar">
+          <button id="ad-detail-back" class="range-tab" type="button">← Reklamlar</button>
+          <button id="ad-report-button" class="action" type="button">Bu reklamın HTML raporu</button>
+        </div>
+
+        <div class="kicker">Reklam detayı</div>
+        <h2 id="ad-detail-title" class="detail-title"></h2>
+        <div id="ad-detail-subtitle" class="lead compact"></div>
+        <div id="ad-detail-metrics" class="metrics"></div>
+
+        <div class="three-col">
+          <div>
+            <h2>Yatay / Dikey</h2>
+            <div id="ad-orientation" class="card table-wrap"></div>
+          </div>
+          <div>
+            <h2>Cihazlar</h2>
+            <div id="ad-devices" class="card table-wrap"></div>
+          </div>
+          <div>
+            <h2>Saatler</h2>
+            <div id="ad-hours" class="card table-wrap"></div>
+          </div>
+        </div>
+
+        <h2>Yön × Cihaz</h2>
+        <div id="ad-orientation-device" class="card table-wrap"></div>
+
+        <h2>Demografi</h2>
+        <div id="ad-demographic-note" class="database-status"></div>
+
+        <div class="two-col">
+          <div>
+            <h2>Yaş</h2>
+            <div id="ad-age" class="card table-wrap"></div>
+          </div>
+          <div>
+            <h2>Cinsiyet</h2>
+            <div id="ad-gender" class="card table-wrap"></div>
+          </div>
+        </div>
+
+        <h2>Yaş × Cinsiyet</h2>
+        <div id="ad-age-gender" class="card table-wrap"></div>
+      </div>
+    </section>
+
     <div id="dashboard-status" class="footer"></div>
   </section>
 </main>
-<script src="../js/analytics-admin.js?h=fc43ac0efcaf"></script>
+<script src="../js/analytics-admin.js?h=3e1652d714c7"></script>
 </body>
 </html>
