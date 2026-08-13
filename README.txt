@@ -1,3 +1,7 @@
+Beta Versiyon 1.6.2
+- Analytics geliştirmeleri
+- Hata düzeltmeleri
+
 Beta Versiyon 1.6.0
 - flöw.tr alan adı canlı!
 - Sayfa yenileme hatası giderildi.
