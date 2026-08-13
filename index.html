@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
 <link rel="manifest" href="site.webmanifest">
 
-<link rel="stylesheet" href="css/styles.css?h=2edce6023d2e">
+<link rel="stylesheet" href="css/styles.css?h=0ac2e4064d74">
 
 <style id="boot-black-style">
   html,body{background:#000}
@@ -46,9 +46,16 @@
 <div id="loading-screen" aria-live="polite" aria-label="Yükleniyor">
   <div class="loading-stage" aria-hidden="true">
     <div class="loading-marquee">
-      <img class="loading-logo" src="assets/logo.png" alt="">
-      <img class="loading-logo" src="assets/logo.png" alt="">
-      <img class="loading-logo" src="assets/logo.png" alt="">
+      <div class="loading-set">
+        <img class="loading-logo loading-logo-active" src="assets/logo.png" alt="">
+        <img class="loading-logo" src="assets/logo.png" alt="">
+        <img class="loading-logo" src="assets/logo.png" alt="">
+      </div>
+      <div class="loading-set" aria-hidden="true">
+        <img class="loading-logo loading-logo-active" src="assets/logo.png" alt="">
+        <img class="loading-logo" src="assets/logo.png" alt="">
+        <img class="loading-logo" src="assets/logo.png" alt="">
+      </div>
     </div>
   </div>
 </div>
@@ -176,12 +183,10 @@
       </div>
 
       <div class="menu-panel" id="motion-panel" data-panel="motion">
-        <div class="motion-label">Haberlerin kayma yönü</div>
+        <div class="motion-label">Haber geçiş yönü</div>
         <div class="direction-list">
           <button class="direction-option" data-direction="up" type="button"><span>↑</span> Aşağıdan yukarı</button>
           <button class="direction-option" data-direction="down" type="button"><span>↓</span> Yukarıdan aşağı</button>
-          <button class="direction-option" data-direction="left" type="button"><span>←</span> Sağdan sola</button>
-          <button class="direction-option" data-direction="right" type="button"><span>→</span> Soldan sağa</button>
         </div>
 
         <div class="duration-setting-group">
@@ -354,7 +359,7 @@
 })();
 </script>
 
-<script src="js/app.js?h=56a51e653d64" onerror="
+<script src="js/app.js?h=9b152f4f06b0" onerror="
   var loader=document.getElementById('loading-screen');
   if(loader)loader.remove();
   var status=document.getElementById('status');
