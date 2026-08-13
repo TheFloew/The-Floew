@@ -3008,3 +3008,95 @@ body.foreign-mode #time-range-button{
     font-size:17px;
   }
 }
+
+
+/* =====================================================================
+   V31.18.3 — mobile swipe / smart crop / simplified motion / loader loop
+   ===================================================================== */
+
+/* Manşet altı metin mobilde hâlâ dokunulabilir, fakat swipe yüzeyi olarak da
+   davranır. Uzun basma / metin seçimi kaydırmayı engellemesin. */
+@media(max-width:700px), (pointer:coarse){
+  .description{
+    touch-action:none !important;
+    -webkit-user-select:none !important;
+    user-select:none !important;
+  }
+}
+
+/* Yatay hareket artık akış sekmelerine ayrıldığı için Görünüm'de yalnız iki
+   dikey haber geçiş yönü var. */
+.direction-list{
+  grid-template-columns:1fr 1fr !important;
+}
+@media(max-width:700px){
+  .direction-list{
+    grid-template-columns:1fr !important;
+  }
+}
+
+/* Mobil smart-crop JS tarafından object-position'a yazılır; geçiş sırasında
+   focal point'in ani sıçramasını yumuşat. */
+.slide-image{
+  object-position:50% 50%;
+  transition:object-position .28s ease;
+}
+
+/* Daha küçük ve kesintisiz, gerçek sonsuz döngülü loading bandı. İkinci set
+   birincinin birebir kopyasıdır; -50% geçişte track aynı kareye gelir. */
+.loading-stage{
+  width:clamp(136px,18vw,244px) !important;
+  height:clamp(56px,7.5vw,92px) !important;
+  display:block !important;
+}
+.loading-marquee{
+  position:absolute !important;
+  top:0 !important;
+  left:0 !important;
+  width:100% !important;
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:stretch !important;
+  gap:0 !important;
+  animation:flowLoadingLoop 3.2s linear infinite !important;
+  will-change:transform;
+}
+.loading-set{
+  flex:0 0 auto;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:12px;
+  padding-bottom:12px;
+}
+.loading-logo{
+  width:clamp(136px,18vw,244px) !important;
+  opacity:.14 !important;
+  flex:0 0 auto;
+}
+.loading-logo-active{
+  opacity:1 !important;
+  filter:drop-shadow(0 0 7px rgba(255,255,255,.10)) !important;
+}
+@keyframes flowLoadingLoop{
+  from{transform:translateY(0)}
+  to{transform:translateY(-50%)}
+}
+@media(max-width:520px){
+  .loading-stage{
+    width:clamp(118px,43vw,178px) !important;
+    height:clamp(50px,17vw,70px) !important;
+  }
+  .loading-logo{
+    width:clamp(118px,43vw,178px) !important;
+  }
+  .loading-set{
+    gap:10px;
+    padding-bottom:10px;
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  .loading-marquee{
+    animation-duration:6s !important;
+  }
+}
