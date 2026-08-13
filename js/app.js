@@ -1285,11 +1285,23 @@ function clearStatus(){
 function sourceKey(source){return String(source||"").trim().toLocaleLowerCase("tr-TR")}
 
 function sourceLogo(source,link=""){
-  const rawKey=sourceKey(source);
-  const normalizedKey=normalize(source);
+  const raw=String(source||"").trim();
+  const rawKey=sourceKey(raw);
+  const standardKey=raw.toLowerCase();
+  const asciiKey=standardKey
+    .replace(/ı/g,"i")
+    .replace(/ğ/g,"g")
+    .replace(/ü/g,"u")
+    .replace(/ş/g,"s")
+    .replace(/ö/g,"o")
+    .replace(/ç/g,"c")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g,"");
+
   const mapped=
     SOURCE_LOGOS[rawKey] ||
-    SOURCE_LOGOS[normalizedKey];
+    SOURCE_LOGOS[standardKey] ||
+    SOURCE_LOGOS[asciiKey];
 
   if(mapped)return mapped;
 
