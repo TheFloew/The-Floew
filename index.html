@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
 <link rel="manifest" href="site.webmanifest">
 
-<link rel="stylesheet" href="css/styles.css?h=0ac2e4064d74">
+<link rel="stylesheet" href="css/styles.css?h=b86b968b6a24">
 
 <style id="boot-black-style">
   html,body{background:#000}
@@ -84,7 +84,14 @@
   <div id="time-range-panel" aria-hidden="true">
     <div class="time-range-heading">
       <strong>Zaman aralığı</strong>
-      <span id="time-range-current">Tüm zamanlar</span>
+      <span id="time-range-current">Algoritmik · Tüm zamanlar</span>
+    </div>
+    <div class="feed-order-row">
+      <span class="feed-order-label">Sıralama</span>
+      <div class="feed-order-strip" role="group" aria-label="Haber sıralama biçimi">
+        <button class="feed-order-option" data-order-mode="algorithmic" type="button">Algoritmik</button>
+        <button class="feed-order-option" data-order-mode="chronological" type="button">Kronolojik</button>
+      </div>
     </div>
     <div class="time-range-strip" role="group" aria-label="Gösterilecek haberlerin zaman aralığı">
       <button class="time-range-option" data-hours="1" type="button">1 saat</button>
@@ -359,7 +366,7 @@
 })();
 </script>
 
-<script src="js/app.js?h=9b152f4f06b0" onerror="
+<script src="js/app.js?h=514512b7e44c" onerror="
   var loader=document.getElementById('loading-screen');
   if(loader)loader.remove();
   var status=document.getElementById('status');
