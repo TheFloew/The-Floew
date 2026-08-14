@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.18.4";
+window.__floewAppVersion="31.18.5";
 const API="https://thefloew.thefloewback.workers.dev/news";
 const VIDEO_API="https://thefloew.thefloewback.workers.dev/video";
 const META_API="https://thefloew.thefloewback.workers.dev/meta";
@@ -1532,6 +1532,10 @@ function resetSlideMedia(el){
   }
 
   if(video){
+    if(video.__floewHls){
+      try{video.__floewHls.destroy()}catch(e){}
+      video.__floewHls=null;
+    }
     try{video.pause()}catch(e){}
     video.removeAttribute("src");
     video.load();
@@ -1612,6 +1616,38 @@ async function resolveStoryMedia(story){
   return promise;
 }
 
+const HLS_JS_URL="https://cdn.jsdelivr.net/npm/hls.js@1.6.17/dist/hls.min.js";
+let hlsLibraryPromise=null;
+
+function ensureHlsLibrary(){
+  if(window.Hls)return Promise.resolve(window.Hls);
+  if(hlsLibraryPromise)return hlsLibraryPromise;
+
+  hlsLibraryPromise=new Promise(resolve=>{
+    const existing=document.querySelector('script[data-floew-hls="1"]');
+    if(existing){
+      existing.addEventListener("load",()=>resolve(window.Hls||null),{once:true});
+      existing.addEventListener("error",()=>resolve(null),{once:true});
+      return;
+    }
+
+    const script=document.createElement("script");
+    script.src=HLS_JS_URL;
+    script.async=true;
+    script.crossOrigin="anonymous";
+    script.referrerPolicy="no-referrer";
+    script.dataset.floewHls="1";
+    script.addEventListener("load",()=>resolve(window.Hls||null),{once:true});
+    script.addEventListener("error",()=>{
+      console.warn("Flöw video: HLS.js yüklenemedi.");
+      resolve(null);
+    },{once:true});
+    document.head.appendChild(script);
+  });
+
+  return hlsLibraryPromise;
+}
+
 function showDirectVideo(el,story,media,token){
   const image=el.querySelector(".slide-image");
   const video=el.querySelector(".slide-video");
@@ -1627,6 +1663,14 @@ function showDirectVideo(el,story,media,token){
   video.poster=story.image||"";
 
   let settled=false;
+  let mediaRecoveryTried=false;
+
+  const destroyHls=()=>{
+    if(video.__floewHls){
+      try{video.__floewHls.destroy()}catch(e){}
+      video.__floewHls=null;
+    }
+  };
 
   const fallback=()=>{
     if(settled)return;
@@ -1637,6 +1681,7 @@ function showDirectVideo(el,story,media,token){
       mediaKey(story)!==el.dataset.storyKey
     ) return;
 
+    destroyHls();
     try{video.pause()}catch(e){}
     video.removeAttribute("src");
     video.load();
@@ -1661,8 +1706,6 @@ function showDirectVideo(el,story,media,token){
     try{
       await video.play();
     }catch(e){
-      // Muted autoplay normally succeeds. If the browser blocks it,
-      // keep the still image instead of showing a broken player.
       fallback();
       return;
     }
@@ -1690,17 +1733,78 @@ function showDirectVideo(el,story,media,token){
     type.includes("mpegurl") ||
     /\.m3u8(?:[?#]|$)/i.test(media.url);
 
-  if(
-    isHls &&
-    !video.canPlayType("application/vnd.apple.mpegurl") &&
-    !video.canPlayType("application/x-mpegURL")
-  ){
-    fallback();
+  const startNative=()=>{
+    video.src=media.url;
+    video.load();
+  };
+
+  if(!isHls){
+    startNative();
     return;
   }
 
-  video.src=media.url;
-  video.load();
+  /*
+    Chrome/Firefox gibi MSE destekli tarayıcılarda HLS.js kullanılır.
+    Safari/iOS gibi native HLS oynatabilen ortamlarda native yol fallback'tir.
+  */
+  (async()=>{
+    const HlsCtor=await ensureHlsLibrary();
+
+    if(
+      settled ||
+      token!==el.dataset.mediaToken ||
+      mediaKey(story)!==el.dataset.storyKey
+    ) return;
+
+    if(HlsCtor?.isSupported?.()){
+      const hls=new HlsCtor({
+        enableWorker:true,
+        lowLatencyMode:false,
+        backBufferLength:30
+      });
+
+      video.__floewHls=hls;
+
+      hls.on(HlsCtor.Events.MEDIA_ATTACHED,()=>{
+        if(settled)return;
+        hls.loadSource(media.url);
+      });
+
+      hls.on(HlsCtor.Events.MANIFEST_PARSED,()=>{
+        reveal();
+      });
+
+      hls.on(HlsCtor.Events.ERROR,(_event,data)=>{
+        if(!data?.fatal || settled)return;
+
+        if(
+          data.type===HlsCtor.ErrorTypes.MEDIA_ERROR &&
+          !mediaRecoveryTried
+        ){
+          mediaRecoveryTried=true;
+          try{
+            hls.recoverMediaError();
+            return;
+          }catch(e){}
+        }
+
+        fallback();
+      });
+
+      hls.attachMedia(video);
+      return;
+    }
+
+    if(
+      video.canPlayType("application/vnd.apple.mpegurl") ||
+      video.canPlayType("application/x-mpegURL")
+    ){
+      startNative();
+      return;
+    }
+
+    fallback();
+  })();
 }
 
 
@@ -1734,12 +1838,14 @@ function cleanEmbedUrl(media){
       u.searchParams.set("dnt","1");
     }else if(provider==="dailymotion"){
       /*
-        Dailymotion'un 2026 embed endpoint'inde eski UI query parametrelerinin
-        çoğu artık geçerli değil. mute/loop destekleniyor; kalan arayüzü
-        CSS tarafında ekranın dışına kırpıyoruz.
+        Dailymotion runtime parametreleri autoplay ve scaleMode'u destekliyor.
+        İframe Flöw navigasyonu için pointer-events:none olduğundan autoplay
+        zorunlu; scaleMode=fill ise mobil portrede siyah bant bırakmadan kırpar.
       */
+      u.searchParams.set("autoplay","true");
       u.searchParams.set("mute","true");
       u.searchParams.set("loop","true");
+      u.searchParams.set("scaleMode","fill");
     }
 
     return u.href;
