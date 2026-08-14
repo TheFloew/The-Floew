@@ -3100,3 +3100,59 @@ body.foreign-mode #time-range-button{
     animation-duration:6s !important;
   }
 }
+
+
+/* =====================================================================
+   V31.18.4 — algorithmic / chronological feed order
+   ===================================================================== */
+.feed-order-row{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin:0 0 10px;
+}
+.feed-order-label{
+  flex:0 0 auto;
+  font:700 10px/1 "Comfortaa",sans-serif;
+  color:rgba(255,255,255,.55);
+}
+.feed-order-strip{
+  flex:1 1 auto;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  overflow:hidden;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:9px;
+  background:rgba(255,255,255,.025);
+}
+.feed-order-option{
+  height:34px;
+  padding:0 12px;
+  border:0;
+  border-right:1px solid rgba(255,255,255,.09);
+  background:transparent;
+  color:rgba(255,255,255,.56);
+  cursor:pointer;
+  font:700 10px/34px "Comfortaa",sans-serif;
+  white-space:nowrap;
+  transition:background .16s ease,color .16s ease;
+}
+.feed-order-option:last-child{border-right:0}
+.feed-order-option:hover{
+  color:#fff;
+  background:rgba(255,255,255,.06);
+}
+.feed-order-option.active{
+  color:#111;
+  background:#fff;
+}
+@media(max-width:700px){
+  .feed-order-row{
+    align-items:stretch;
+    flex-direction:column;
+    gap:7px;
+  }
+  .feed-order-label{
+    padding-left:1px;
+  }
+}
