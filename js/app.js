@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="clean";
+window.__floewAppVersion="31.18.4";
 const API="https://thefloew.thefloewback.workers.dev/news";
 const VIDEO_API="https://thefloew.thefloewback.workers.dev/video";
 const META_API="https://thefloew.thefloewback.workers.dev/meta";
@@ -24,6 +24,12 @@ const NEWS_BATCH_STALE_CACHE_MAX_AGE_MS=24*60*60*1000;
 const DEFAULT_SHOW_SECONDS=10;
 const SHOW_SECONDS_KEY="thefloew.showSeconds.v1";
 const TIME_RANGE_KEY="thefloew.timeRange.v1";
+const FEED_ORDER_KEY="thefloew.feedOrder.v1";
+const RECENT_SEEN_KEY="thefloew.recentSeen.v1";
+const RECENT_SEEN_TTL_MS=6*60*60*1000;
+const RECENT_SEEN_MAX=300;
+const ALGO_TOP_CANDIDATES=6;
+const ALGO_SESSION_SEED=`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`;
 const KEYWORD_FILTER_KEY="thefloew.keywordFilter.v1";
 const KEYWORD_WATCH_KEY="thefloew.keywordWatch.v1";
 const WEATHER_PREFS_KEY="thefloew.weather.v1";
@@ -98,6 +104,42 @@ function currentTimeRangeOption(){
   return TIME_RANGE_OPTIONS.find(
     option=>option.value===timeRangeValue
   ) || TIME_RANGE_OPTIONS[TIME_RANGE_OPTIONS.length-1];
+}
+
+const FEED_ORDER_MODES=[
+  {value:"algorithmic",label:"Algoritmik"},
+  {value:"chronological",label:"Kronolojik"}
+];
+
+function normalizeFeedOrderMode(value){
+  const raw=String(value||"algorithmic");
+  return FEED_ORDER_MODES.some(option=>option.value===raw)
+    ? raw
+    : "algorithmic";
+}
+
+function loadFeedOrderMode(){
+  try{
+    return normalizeFeedOrderMode(
+      localStorage.getItem(FEED_ORDER_KEY)
+    );
+  }catch(e){
+    return "algorithmic";
+  }
+}
+
+let feedOrderMode=loadFeedOrderMode();
+
+function saveFeedOrderMode(){
+  try{
+    localStorage.setItem(FEED_ORDER_KEY,feedOrderMode);
+  }catch(e){}
+}
+
+function currentFeedOrderOption(){
+  return FEED_ORDER_MODES.find(
+    option=>option.value===feedOrderMode
+  ) || FEED_ORDER_MODES[0];
 }
 
 function saveShowDuration(){
@@ -418,6 +460,128 @@ function storyIdentity(story){
   if(!story)return "";
   if(story.link)return String(story.link);
   return `${String(story.source||"").trim().toLocaleLowerCase("tr-TR")}|${String(story.title||"").trim()}`;
+}
+
+function pruneRecentSeenEntries(entries){
+  const now=Date.now();
+  return Object.entries(entries||{})
+    .filter(([key,ts])=>
+      key &&
+      Number.isFinite(Number(ts)) &&
+      now-Number(ts)<=RECENT_SEEN_TTL_MS
+    )
+    .sort((a,b)=>Number(b[1])-Number(a[1]))
+    .slice(0,RECENT_SEEN_MAX);
+}
+
+function loadRecentSeenStories(){
+  try{
+    const parsed=JSON.parse(localStorage.getItem(RECENT_SEEN_KEY)||"{}");
+    return new Map(pruneRecentSeenEntries(parsed));
+  }catch(e){
+    return new Map();
+  }
+}
+
+const recentSeenStories=loadRecentSeenStories();
+const sessionSeenStories=new Set();
+
+function saveRecentSeenStories(){
+  try{
+    const entries=pruneRecentSeenEntries(
+      Object.fromEntries(recentSeenStories)
+    );
+    recentSeenStories.clear();
+    for(const [key,ts] of entries){
+      recentSeenStories.set(key,Number(ts));
+    }
+    localStorage.setItem(
+      RECENT_SEEN_KEY,
+      JSON.stringify(Object.fromEntries(recentSeenStories))
+    );
+  }catch(e){}
+}
+
+function rememberSeenStory(story){
+  const key=storyIdentity(story);
+  if(!key)return;
+  const now=Date.now();
+  sessionSeenStories.add(key);
+  recentSeenStories.set(key,now);
+  saveRecentSeenStories();
+}
+
+function storyPublishedMs(story){
+  const value=new Date(story?.published).getTime();
+  return Number.isFinite(value) ? value : 0;
+}
+
+function hashUnit(value){
+  const input=String(value||"");
+  let hash=2166136261;
+  for(let i=0;i<input.length;i++){
+    hash^=input.charCodeAt(i);
+    hash=Math.imul(hash,16777619);
+  }
+  return (hash>>>0)/4294967295;
+}
+
+function stableStoryJitter(story){
+  return hashUnit(`${ALGO_SESSION_SEED}|${storyIdentity(story)}`);
+}
+
+function recentSeenPenalty(story){
+  const key=storyIdentity(story);
+  if(!key)return 0;
+  if(sessionSeenStories.has(key))return -1000;
+
+  const seenAt=Number(recentSeenStories.get(key))||0;
+  if(!seenAt)return 0;
+
+  const age=Math.max(0,Date.now()-seenAt);
+  if(age>=RECENT_SEEN_TTL_MS)return 0;
+
+  return -180*(1-age/RECENT_SEEN_TTL_MS);
+}
+
+function algorithmicStoryScore(story){
+  const published=storyPublishedMs(story);
+  const ageHours=published
+    ? Math.max(0,(Date.now()-published)/(60*60*1000))
+    : 999;
+
+  /*
+    Güncellik ana ağırlık. 8 saatlik yumuşak azalma eski haberlerin bir anda
+    çok yeni haberlerin önüne fırlamasını önler. Oturum/jitter yalnız eşit
+    güçteki adayların sırasını canlı tutar.
+  */
+  const freshness=150*Math.exp(-ageHours/8);
+  const jitter=stableStoryJitter(story)*24;
+
+  return freshness+jitter+recentSeenPenalty(story);
+}
+
+function chronologicalStories(list){
+  return [...list].sort((a,b)=>{
+    const delta=storyPublishedMs(b)-storyPublishedMs(a);
+    if(delta)return delta;
+    return storyIdentity(a).localeCompare(storyIdentity(b),"tr");
+  });
+}
+
+function orderStoriesForFeed(list,mode){
+  const chronological=chronologicalStories(list);
+
+  /* Son dakika kendi güncellik mantığında kesin kronolojik kalır. */
+  if(mode==="breaking" || feedOrderMode==="chronological"){
+    return chronological;
+  }
+
+  return chronological.sort((a,b)=>{
+    const scoreDelta=algorithmicStoryScore(b)-algorithmicStoryScore(a);
+    if(Math.abs(scoreDelta)>.0001)return scoreDelta;
+    return storyPublishedMs(b)-storyPublishedMs(a);
+  });
 }
 
 const floraScoreMap=new Map();
@@ -824,26 +988,28 @@ function storyInBreakingWindow(story){
 
 function storiesForFeedMode(mode){
   if(mode==="foreign"){
-    return rawStories.filter(s=>{
+    const list=rawStories.filter(s=>{
       if(!s.flowForeign)return false;
       if(!storyInTimeRange(s))return false;
       if(!foreignSourceFilters.has(sourceKey(s.source)))return false;
       if(!passesKeywordFilter(s))return false;
       return true;
     });
+    return orderStoriesForFeed(list,mode);
   }
 
   if(mode==="breaking"){
-    return rawStories.filter(s=>{
+    const list=rawStories.filter(s=>{
       if(s.flowForeign)return false;
       if(!storyInBreakingWindow(s))return false;
       if(!filters.sources.has(sourceKey(s.source)))return false;
       if(!passesKeywordFilter(s))return false;
       return true;
     });
+    return orderStoriesForFeed(list,mode);
   }
 
-  return rawStories.filter(s=>{
+  const list=rawStories.filter(s=>{
     /*
       #Yabancı hiçbir koşulda Gündem havuzuna giremez.
     */
@@ -866,6 +1032,8 @@ function storiesForFeedMode(mode){
 
     return true;
   });
+
+  return orderStoriesForFeed(list,mode);
 }
 
 function activeStories(){
@@ -1123,7 +1291,7 @@ function toggleCategory(cat){
 }
 
 
-function applyFilters(){
+function applyFilters(options={}){
   const previousStory=state.stories[state.index]||null;
   const previousKey=storyIdentity(previousStory);
   const list=activeStories();
@@ -1143,14 +1311,16 @@ function applyFilters(){
   setStoryStageVisible(true);
   state.stories=list;
 
-  const preferredKey=
-    filterReturnStoryKey ||
-    previousKey;
+  const resetToStart=Boolean(options?.resetToStart);
+  const preferredKey=resetToStart
+    ? ""
+    : (filterReturnStoryKey || previousKey);
 
-  let idx=
-    preferredKey
-      ? list.findIndex(x=>storyIdentity(x)===preferredKey)
-      : -1;
+  let idx=resetToStart
+    ? 0
+    : (preferredKey
+        ? list.findIndex(x=>storyIdentity(x)===preferredKey)
+        : -1);
 
   if(idx<0){
     if(!filterReturnStoryKey && previousKey){
@@ -3176,23 +3346,62 @@ function sourceKey(source){
 */
 function chooseForward(){
   if(!state.stories.length)return -1;
+  if(state.stories.length===1)return 0;
 
-  const currentSource=sourceKey(
-    state.stories[state.index]?.source
-  );
-
-  for(let step=1;step<=state.stories.length;step++){
-    const i=(state.index+step)%state.stories.length;
-
-    if(
-      sourceKey(state.stories[i]?.source)!==
-      currentSource
-    ){
-      return i;
-    }
+  /*
+    Kronolojik seçimde hiçbir algoritmik atlama yok: listedeki gerçek bir
+    sonraki (daha eski) haber gelir. Son dakika da bu davranışı kullanır.
+  */
+  if(feedOrderMode==="chronological" || feedMode==="breaking"){
+    return (state.index+1)%state.stories.length;
   }
 
-  return (state.index+1)%state.stories.length;
+  const currentStory=state.stories[state.index]||null;
+  const currentSource=sourceKey(currentStory?.source);
+  const currentKey=storyIdentity(currentStory);
+
+  let candidates=state.stories
+    .map((story,index)=>({story,index}))
+    .filter(item=>
+      item.index!==state.index &&
+      storyIdentity(item.story)!==currentKey
+    );
+
+  /* Aynı kaynak arka arkaya gelmesin; başka kaynak yoksa mecburen izin ver. */
+  const differentSource=candidates.filter(item=>
+    sourceKey(item.story?.source)!==currentSource
+  );
+  if(differentSource.length)candidates=differentSource;
+
+  /* Oturum içinde henüz gösterilmemiş haber varsa tekrarları havuzdan çıkar. */
+  const unseen=candidates.filter(item=>
+    !sessionSeenStories.has(storyIdentity(item.story))
+  );
+  if(unseen.length)candidates=unseen;
+
+  candidates.sort((a,b)=>
+    algorithmicStoryScore(b.story)-algorithmicStoryScore(a.story)
+  );
+
+  const top=candidates.slice(0,ALGO_TOP_CANDIDATES);
+  if(!top.length){
+    return (state.index+1)%state.stories.length;
+  }
+
+  /*
+    En güçlü altı aday arasında sıra ağırlıklı seçim: 6,5,4,3,2,1.
+    Böylece güncellik/seen puanı korunur ama aynı havuz her oturumda aynı
+    deterministik sırayla akmaz.
+  */
+  const total=top.length*(top.length+1)/2;
+  let pick=Math.random()*total;
+
+  for(let rank=0;rank<top.length;rank++){
+    pick-=top.length-rank;
+    if(pick<=0)return top[rank].index;
+  }
+
+  return top[0].index;
 }
 
 function preloadImage(url){
@@ -5211,13 +5420,14 @@ function clearKeywordWatch(){
 
 function renderTimeRangeControl(){
   const option=currentTimeRangeOption();
+  const order=currentFeedOrderOption();
   const current=document.getElementById("time-range-current");
   const trigger=document.getElementById("time-range-button");
 
-  if(current)current.textContent=option.label;
+  if(current)current.textContent=`${order.label} · ${option.label}`;
 
   if(trigger){
-    trigger.title=`Zaman aralığı: ${option.label}`;
+    trigger.title=`Akış: ${order.label} · ${option.label}`;
     trigger.setAttribute("aria-label",trigger.title);
   }
 
@@ -5226,6 +5436,25 @@ function renderTimeRangeControl(){
     button.classList.toggle("active",active);
     button.setAttribute("aria-pressed",active?"true":"false");
   });
+
+  document.querySelectorAll(".feed-order-option").forEach(button=>{
+    const active=button.dataset.orderMode===feedOrderMode;
+    button.classList.toggle("active",active);
+    button.setAttribute("aria-pressed",active?"true":"false");
+  });
+}
+
+function setFeedOrderMode(value){
+  const next=normalizeFeedOrderMode(value);
+  if(next===feedOrderMode)return;
+
+  feedOrderMode=next;
+  saveFeedOrderMode();
+  renderTimeRangeControl();
+
+  /* Mod değişince kullanıcı seçiminin sonucu net görülsün: yeni listenin başı. */
+  filterReturnStoryKey="";
+  applyFilters({resetToStart:true});
 }
 
 function setTimeRange(value){
@@ -5340,6 +5569,15 @@ document.querySelectorAll(".feed-tab").forEach(button=>{
   button.addEventListener("click",e=>{
     e.stopPropagation();
     switchFeedMode(button.dataset.feedMode||"agenda");
+  });
+});
+
+document.querySelectorAll(".feed-order-option").forEach(button=>{
+  button.addEventListener("pointerdown",e=>e.stopPropagation());
+  button.addEventListener("pointerup",e=>e.stopPropagation());
+  button.addEventListener("click",e=>{
+    e.stopPropagation();
+    setFeedOrderMode(button.dataset.orderMode||"algorithmic");
   });
 });
 
@@ -6939,6 +7177,8 @@ function telemetryFlush(useBeacon=false){
 
 function telemetryStartStory(story,origin="initial"){
   if(!story)return;
+
+  rememberSeenStory(story);
 
   const key=storyIdentity(story);
   if(
