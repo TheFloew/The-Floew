@@ -3156,3 +3156,51 @@ body.foreign-mode #time-range-button{
     padding-left:1px;
   }
 }
+
+
+/* =====================================================================
+   V31.18.5 — Hürriyet/HLS playback + mobile video cover
+   ===================================================================== */
+
+/* Direct <video> içerikleri mobilde de görsel ile aynı cover davranışını
+   kullanır. Eski tarayıcı/override kombinasyonlarında siyah boşluk kalmasın. */
+.slide-video{
+  object-fit:cover !important;
+  object-position:50% 50% !important;
+}
+
+/* Dailymotion tarafında scaleMode=fill runtime parametresi gerçek video
+   yüzeyini kırpar; iframe'in kendisi viewport'u aynen doldurur. */
+.slide-embed[data-provider="dailymotion"]{
+  width:100% !important;
+  height:100% !important;
+  left:0 !important;
+  top:0 !important;
+  right:0 !important;
+  bottom:0 !important;
+}
+
+/* YouTube/Vimeo iframe'leri portre viewport'a 16:9 olarak yerleştirildiğinde
+   player içindeki letterbox kaybolur; taşan sağ/sol kısım Flöw tarafından
+   doğal olarak kırpılır. */
+@media (orientation:portrait) and (max-width:900px),
+       (orientation:portrait) and (pointer:coarse){
+  .slide-embed[data-provider="youtube"],
+  .slide-embed[data-provider="vimeo"]{
+    width:177.7778vh !important;
+    height:100vh !important;
+    left:50% !important;
+    right:auto !important;
+    top:0 !important;
+    bottom:auto !important;
+    transform:translateX(-50%) !important;
+  }
+
+  @supports (height:100dvh){
+    .slide-embed[data-provider="youtube"],
+    .slide-embed[data-provider="vimeo"]{
+      width:177.7778dvh !important;
+      height:100dvh !important;
+    }
+  }
+}
