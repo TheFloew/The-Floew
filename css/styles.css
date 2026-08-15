@@ -3400,3 +3400,73 @@ body.foreign-mode #time-range-button{
     max-width:30vw;
   }
 }
+
+
+/* =====================================================================
+   V31.20.0 — mobile autoplay recovery / next-story preload / soft source tab
+   ===================================================================== */
+
+/* Kaynağa özel geçici sekme açılırken/kapanırken layout'u sertçe zıplatmasın. */
+.source-feed-tab{
+  max-width:0 !important;
+  padding-left:0 !important;
+  padding-right:0 !important;
+  margin-left:-24px;
+  opacity:0;
+  transform:translateX(-8px) scale(.97);
+  overflow:hidden;
+  transition:
+    max-width .30s cubic-bezier(.22,.61,.36,1),
+    margin .30s cubic-bezier(.22,.61,.36,1),
+    opacity .20s ease,
+    transform .30s cubic-bezier(.22,.61,.36,1);
+}
+.source-feed-tab.is-visible{
+  max-width:min(28vw,260px) !important;
+  padding-left:0 !important;
+  padding-right:0 !important;
+  margin-left:0;
+  opacity:1;
+  transform:translateX(0) scale(1);
+}
+.source-feed-tab.is-leaving{
+  pointer-events:none !important;
+}
+
+/* iOS'un video elementinin üstüne koyabildiği native başlangıç kontrolünü
+   Flöw navigasyon yüzeyinde göstermeyelim. */
+.slide-video,
+#ad-video{
+  -webkit-appearance:none;
+}
+.slide-video::-webkit-media-controls,
+#ad-video::-webkit-media-controls,
+.slide-video::-webkit-media-controls-start-playback-button,
+#ad-video::-webkit-media-controls-start-playback-button{
+  display:none !important;
+  -webkit-appearance:none;
+}
+
+#custom-rss-input:disabled,
+#custom-rss-add:disabled{
+  opacity:.45;
+  cursor:progress;
+}
+
+@media(max-width:700px){
+  .source-feed-tab{
+    margin-left:-11px;
+  }
+  .source-feed-tab.is-visible{
+    max-width:30vw !important;
+    margin-left:0;
+  }
+}
+@media(max-width:390px){
+  .source-feed-tab{
+    margin-left:-8px;
+  }
+  .source-feed-tab.is-visible{
+    margin-left:0;
+  }
+}
