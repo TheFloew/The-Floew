@@ -3035,11 +3035,12 @@ body.foreign-mode #time-range-button{
   }
 }
 
-/* Mobil smart-crop JS tarafından object-position'a yazılır; geçiş sırasında
-   focal point'in ani sıçramasını yumuşat. */
+/* Mobil smart-crop odağı slide hareketi başlamadan önce JS tarafından
+   kilitlenir. object-position kendi başına animasyon yapmaz; böylece haber
+   kayarken görselin eski/merkez konumuna aniden dönmesi engellenir. */
 .slide-image{
   object-position:50% 50%;
-  transition:object-position .28s ease;
+  transition:none !important;
 }
 
 /* Daha küçük ve kesintisiz, gerçek sonsuz döngülü loading bandı. İkinci set
@@ -3470,3 +3471,33 @@ body.foreign-mode #time-range-button{
     margin-left:0;
   }
 }
+
+/* =====================================================================
+   V31.23.0 — Advanced / near-duplicate algorithmic feed control
+   ===================================================================== */
+
+#advanced-panel{
+  width:100% !important;
+  min-width:100% !important;
+  max-width:100% !important;
+  box-sizing:border-box !important;
+}
+
+.advanced-setting-group{
+  width:100%;
+  margin-top:0;
+}
+
+#near-duplicate-setting{
+  width:100%;
+}
+
+#near-duplicate-setting small{
+  line-height:1.5;
+}
+
+
+/* =====================================================================
+   V31.23.1 — integrated mobile smart-focus stability
+   Face-group union center · safer crop bounds · pre-transition focal lock
+   ===================================================================== */
