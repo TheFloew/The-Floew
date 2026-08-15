@@ -1,34 +1,28 @@
 /*
- * Flöw mobile focus / transition hotfix 31.21.1
- * Loaded after css/styles.css.
+ * Flöw mobile focus / transition fix 31.21.2
+ * Loaded AFTER css/styles.css.
+ *
+ * The image crop is frozen for the whole lifetime of a displayed story.
+ * Only the parent slide animates.
  */
 
-/* The crop itself must not animate while its parent slide is moving. */
 #wall .slide-image{
+  object-position:50% 50%;
   transition:none !important;
 }
 
-/* A late focal result may settle gently only while the story is stationary. */
-#wall .slide.active .slide-image{
-  transition:object-position .22s ease-out !important;
-}
-
-#wall .slide.enter-up .slide-image,
-#wall .slide.exit-up .slide-image,
-#wall .slide.enter-down .slide-image,
-#wall .slide.exit-down .slide-image,
-#wall .slide.enter-left .slide-image,
-#wall .slide.exit-left .slide-image,
-#wall .slide.enter-right .slide-image,
-#wall .slide.exit-right .slide-image{
-  transition:none !important;
+/* Reduce compositor flashes on mobile WebKit/Chromium. */
+#wall .slide{
+  -webkit-backface-visibility:hidden;
+  backface-visibility:hidden;
 }
 
 /*
-  Passive slides use translateY(100%) in the base stylesheet. At animation end
-  an outgoing slide is reset from -100% to that passive position. Keep passive
-  slides invisible so mobile compositors cannot flash that reset frame.
-*/
+ * A passive slide normally sits at translateY(100%). When an outgoing slide
+ * finishes at -100% and its class is reset to plain .slide, that transform
+ * jumps back to +100%. Hiding passive slides prevents that reset frame from
+ * ever becoming visible.
+ */
 #wall[data-story-stage-visible="1"] .slide{
   visibility:hidden !important;
 }
