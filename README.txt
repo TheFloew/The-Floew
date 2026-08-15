@@ -1,3 +1,12 @@
+Beta Versiyon 1.7.0
+- Kullanıcıya kendi özel kaynağını ekleyebilme desteği.
+- Kaynağa özel akış sekmesi desteği.
+- Akışı duraklatabilme seçeneği.
+- Mobil cihazlarda kaydırma iyileştirmeleri.
+- Çerezler uyarısı düzeltmesi.
+- Bazı player'larda otomatik oynatma sorunları düzeltmesi.
+- Bazı haber kaynaklarında düşük çözünürlüklü görsel düzeltmesi.
+
 Beta Versiyon 1.6.2
 - Analytics geliştirmeleri
 - Hata düzeltmeleri
