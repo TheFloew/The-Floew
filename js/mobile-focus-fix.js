@@ -1,19 +1,19 @@
 /*
- * Flöw mobile focus / transition hotfix
+ * Flöw mobile focus / transition fix
  * Base frontend: 31.21.0
- * Hotfix: 31.21.1
+ * Fix version: 31.21.2
  *
- * Goals:
- * - Prefer the whole meaningful face group instead of only the largest face.
- * - Keep non-face fallback focus closer to the safe center on mobile.
- * - Pre-compute the next story's focal point before marking its slide ready.
- * - Never change object-position while a slide is physically moving.
- * - Keep passive slides hidden so their transform reset cannot flash on screen.
+ * Main changes versus 31.21.1:
+ * - focal position is LOCKED before a story transition starts;
+ * - late analysis is never applied to an active/moving story;
+ * - fast/manual swipes get a short focal-analysis grace period;
+ * - browsers without FaceDetector use a much safer horizontal center bias;
+ * - passive slides are hidden by the companion CSS during transform reset.
  */
 (function(){
   "use strict";
 
-  window.__floewMobileFocusFixVersion="31.21.1";
+  window.__floewMobileFocusFixVersion="31.21.2";
 
   if(
     !window.__floewAppStarted ||
@@ -23,31 +23,24 @@
     typeof smartFocalFromPixels!=="function" ||
     typeof preloadStoryAssets!=="function" ||
     typeof scheduleNextStoryPreload!=="function" ||
-    typeof setStoryStageVisible!=="function"
+    typeof setStoryStageVisible!=="function" ||
+    typeof transitionTo!=="function"
   ){
-    console.warn("Flöw mobile focus hotfix: compatible app.js not found.");
+    console.warn("Flöw mobile focus fix 31.21.2: compatible app.js not found.");
     return;
   }
 
-  const HOTFIX_TRANSITION_CLASSES=[
-    "enter-up","exit-up","enter-down","exit-down",
-    "enter-left","exit-left","enter-right","exit-right"
-  ];
-  const HOTFIX_FOCAL_SAMPLE=48;
-  const HOTFIX_FOCAL_CACHE_MAX=180;
-  const hotfixFocalCache=new Map();
+  const FIX_FOCAL_CACHE_MAX=180;
+  const FIX_FOCAL_SAMPLE=56;
+  const FIX_FAST_FOCAL_WAIT_MS=520;
+  const fixFocalCache=new Map();
 
-  function clampHotfix(value,min,max){
+  function clampFix(value,min,max){
     return Math.max(min,Math.min(max,value));
   }
 
-  function isFlowTransitioning(slide){
-    return Boolean(
-      slide &&
-      HOTFIX_TRANSITION_CLASSES.some(
-        className=>slide.classList.contains(className)
-      )
-    );
+  function focalKeyFor(story){
+    return `${mediaKey(story)}|${String(story?.image||"").trim()}`;
   }
 
   function focalPosition(focal){
@@ -55,25 +48,33 @@
   }
 
   function rememberFocal(key,value){
-    if(hotfixFocalCache.has(key))hotfixFocalCache.delete(key);
-    hotfixFocalCache.set(key,value);
-
-    while(hotfixFocalCache.size>HOTFIX_FOCAL_CACHE_MAX){
-      hotfixFocalCache.delete(hotfixFocalCache.keys().next().value);
+    if(fixFocalCache.has(key))fixFocalCache.delete(key);
+    fixFocalCache.set(key,value);
+    while(fixFocalCache.size>FIX_FOCAL_CACHE_MAX){
+      fixFocalCache.delete(fixFocalCache.keys().next().value);
     }
   }
 
+  function timeoutValue(ms,value=null){
+    return new Promise(resolve=>setTimeout(()=>resolve(value),ms));
+  }
+
   /*
-    Replace the 31.21.0 focal detector. The old FaceDetector branch selected
-    only the largest face. Here, faces that are at least 12% of the largest
-    face are treated as one meaningful group and the group's center is used.
-  */
+   * Native FaceDetector: use the complete meaningful face group, not only the
+   * largest face. This is particularly important for two-person/group photos.
+   *
+   * No FaceDetector (notably many mobile browsers): the old generic saliency
+   * detector could chase a logo/text/high-contrast object to an edge. In that
+   * fallback we deliberately keep X close to center. This is less clever, but
+   * substantially safer for people in a portrait viewport where most cropping
+   * happens horizontally.
+   */
   detectSmartFocalPoint=function(story){
     const source=String(story?.image||"").trim();
     if(!source)return Promise.resolve(null);
 
-    const key=`${mediaKey(story)}|${source}`;
-    if(hotfixFocalCache.has(key))return hotfixFocalCache.get(key);
+    const key=focalKeyFor(story);
+    if(fixFocalCache.has(key))return fixFocalCache.get(key);
 
     const task=new Promise(resolve=>{
       const probe=new Image();
@@ -87,16 +88,14 @@
       };
 
       const timeout=setTimeout(()=>finish(null),4500);
-
       probe.crossOrigin="anonymous";
       probe.referrerPolicy="no-referrer";
       probe.decoding="async";
 
       probe.onload=async()=>{
         try{
-          const naturalWidth=probe.naturalWidth||0;
-          const naturalHeight=probe.naturalHeight||0;
-
+          const naturalWidth=probe.naturalWidth||probe.width||0;
+          const naturalHeight=probe.naturalHeight||probe.height||0;
           if(!naturalWidth || !naturalHeight){
             finish(null);
             return;
@@ -108,7 +107,6 @@
                 fastMode:true,
                 maxDetectedFaces:8
               });
-
               const detected=await detector.detect(probe);
               const faces=(Array.isArray(detected)?detected:[])
                 .map(item=>item?.boundingBox)
@@ -122,43 +120,34 @@
                 const largestArea=Math.max(
                   ...faces.map(face=>face.width*face.height)
                 );
-
-                const relevantFaces=faces.filter(
-                  face=>face.width*face.height>=largestArea*.12
+                const relevant=faces.filter(
+                  face=>face.width*face.height>=largestArea*.10
                 );
-
-                const left=Math.min(...relevantFaces.map(face=>face.x));
-                const right=Math.max(...relevantFaces.map(face=>face.x+face.width));
-                const top=Math.min(...relevantFaces.map(face=>face.y));
-                const bottom=Math.max(...relevantFaces.map(face=>face.y+face.height));
-
-                const centerX=(left+right)/2;
-                const centerY=(top+bottom)/2;
+                const left=Math.min(...relevant.map(face=>face.x));
+                const right=Math.max(...relevant.map(face=>face.x+face.width));
+                const top=Math.min(...relevant.map(face=>face.y));
+                const bottom=Math.max(...relevant.map(face=>face.y+face.height));
+                const groupCenterX=(left+right)/2;
+                const groupCenterY=(top+bottom)/2;
                 const groupWidth=(right-left)/naturalWidth;
 
-                /*
-                  Very wide groups are safer around the geometric center.
-                  object-fit:cover cannot zoom out, so this avoids pulling the
-                  crop toward one edge and losing the opposite person.
-                */
-                const faceX=groupWidth>.58
+                /* Wide groups stay near geometric center so neither side is lost. */
+                const x=groupWidth>.50
                   ? 50
-                  : (centerX/naturalWidth)*100;
+                  : (groupCenterX/naturalWidth)*100;
 
                 finish({
-                  x:clampHotfix(faceX,20,80),
-                  y:clampHotfix((centerY/naturalHeight)*100,14,74)
+                  x:clampFix(x,24,76),
+                  y:clampFix((groupCenterY/naturalHeight)*100,16,72)
                 });
                 return;
               }
-            }catch(e){
-              /* Fall through to the pixel heuristic. */
-            }
+            }catch(e){}
           }
 
           const scale=Math.min(
-            HOTFIX_FOCAL_SAMPLE/naturalWidth,
-            HOTFIX_FOCAL_SAMPLE/naturalHeight,
+            FIX_FOCAL_SAMPLE/naturalWidth,
+            FIX_FOCAL_SAMPLE/naturalHeight,
             1
           );
           const width=Math.max(8,Math.round(naturalWidth*scale));
@@ -166,41 +155,37 @@
           const canvas=document.createElement("canvas");
           canvas.width=width;
           canvas.height=height;
-
           const ctx=canvas.getContext("2d",{willReadFrequently:true});
           if(!ctx){
-            finish(null);
+            finish({x:50,y:46});
             return;
           }
 
           ctx.drawImage(probe,0,0,width,height);
           const pixels=ctx.getImageData(0,0,width,height).data;
           const raw=smartFocalFromPixels(pixels,width,height);
-
           if(!raw){
-            finish(null);
+            finish({x:50,y:46});
             return;
           }
 
           /*
-            The generic saliency heuristic can be attracted to bright text,
-            logos or a high-contrast object at the edge. Pull it 35% toward
-            center and use tighter safety limits so faces are less likely to
-            disappear from a portrait viewport.
-          */
-          const centerBiasedX=50+(Number(raw.x)-50)*.65;
-          const centerBiasedY=50+(Number(raw.y)-50)*.72;
-
+           * Keep horizontal movement intentionally small without true face data.
+           * Vertical movement may be a little stronger because portrait-screen
+           * cropping of landscape news images is predominantly horizontal.
+           */
+          const safeX=50+(Number(raw.x)-50)*.20;
+          const safeY=46+(Number(raw.y)-46)*.45;
           finish({
-            x:clampHotfix(centerBiasedX,20,80),
-            y:clampHotfix(centerBiasedY,14,74)
+            x:clampFix(safeX,42,58),
+            y:clampFix(safeY,28,64)
           });
         }catch(e){
-          finish(null);
+          finish({x:50,y:46});
         }
       };
 
-      probe.onerror=()=>finish(null);
+      probe.onerror=()=>finish({x:50,y:46});
       probe.src=storyImageProxyUrl(story)||source;
     }).then(value=>{
       rememberFocal(key,Promise.resolve(value));
@@ -212,63 +197,68 @@
   };
 
   /*
-    Do not move the crop inside a slide while the slide itself is moving.
-    If analysis finishes late, wait until animation end and only apply it to
-    the slide that actually became active. CSS then eases that late correction.
-  */
+   * Reset our lock whenever the image element is reused for another story.
+   * The base setter then calls the patched applySmartFocalPoint below.
+   */
+  const originalSetStoryImage=setStoryImage;
+  setStoryImage=function(img,story){
+    if(img){
+      delete img.dataset.focalLockedKey;
+      img.style.objectPosition="50% 50%";
+    }
+    return originalSetStoryImage(img,story);
+  };
+
+  /*
+   * Never change the crop of an active or moving slide. Analysis is allowed to
+   * settle only while the slide is passive (preload stage), before its focal
+   * position is locked for presentation.
+   */
   applySmartFocalPoint=function(img,story){
     if(!img)return;
 
     img.style.objectPosition="50% 50%";
     if(!smartCropEnabled())return;
 
-    const focalKey=`${mediaKey(story)}|${String(story?.image||"").trim()}`;
-    img.dataset.focalKey=focalKey;
-
-    const applyIfCurrent=focal=>{
-      if(
-        !focal ||
-        img.dataset.focalKey!==focalKey ||
-        !smartCropEnabled()
-      )return;
-
-      img.style.objectPosition=focalPosition(focal);
-    };
+    const key=focalKeyFor(story);
+    img.dataset.focalKey=key;
 
     const run=async()=>{
       const focal=await detectSmartFocalPoint(story);
       if(
         !focal ||
-        img.dataset.focalKey!==focalKey ||
+        img.dataset.focalKey!==key ||
+        img.dataset.focalLockedKey===key ||
         !smartCropEnabled()
       )return;
 
       const slide=img.closest(".slide");
+      if(!slide)return;
 
-      if(isFlowTransitioning(slide)){
-        slide.addEventListener(
-          "animationend",
-          ()=>{
-            if(slide.classList.contains("active")){
-              requestAnimationFrame(()=>applyIfCurrent(focal));
-            }
-          },
-          {once:true}
-        );
-        return;
-      }
+      /* Active/animated images never receive a late object-position update. */
+      if(
+        slide.classList.contains("active") ||
+        slide.classList.contains("enter-up") ||
+        slide.classList.contains("exit-up") ||
+        slide.classList.contains("enter-down") ||
+        slide.classList.contains("exit-down") ||
+        slide.classList.contains("enter-left") ||
+        slide.classList.contains("exit-left") ||
+        slide.classList.contains("enter-right") ||
+        slide.classList.contains("exit-right")
+      )return;
 
-      applyIfCurrent(focal);
+      img.style.objectPosition=focalPosition(focal);
     };
 
     if("requestIdleCallback" in window){
-      window.requestIdleCallback(run,{timeout:700});
+      window.requestIdleCallback(run,{timeout:650});
     }else{
       setTimeout(run,0);
     }
   };
 
-  /* Start focal analysis as soon as normal asset preloading starts. */
+  /* Start focus analysis together with normal media preloading. */
   const originalPreloadStoryAssets=preloadStoryAssets;
   preloadStoryAssets=function(story){
     if(story && smartCropEnabled()){
@@ -278,10 +268,9 @@
   };
 
   /*
-    31.21.0 marked the inactive slide as preloaded after image.decode(), even
-    when focal analysis was still running. This version waits for focal data
-    and writes object-position before data-preloaded-story-key is set.
-  */
+   * Mark the passive next slide ready only after its final image URL is decoded
+   * AND focal position is resolved. This is the normal 10-second path.
+   */
   scheduleNextStoryPreload=function(delay=70){
     clearTimeout(nextStoryPreloadTimer);
 
@@ -318,25 +307,10 @@
 
         const markReady=async()=>{
           await Promise.resolve();
-
           if(image && (!image.complete || !image.naturalWidth))return;
 
           if(image?.decode){
             try{await image.decode();}catch(e){}
-          }
-
-          if(image && smartCropEnabled()){
-            try{
-              const focal=await detectSmartFocalPoint(story);
-              if(
-                focal &&
-                slides[1-state.active]===inactiveSlide &&
-                storyIdentity(state.stories[state.index])===fromKey &&
-                storyIdentity(state.stories[index])===targetKey
-              ){
-                image.style.objectPosition=focalPosition(focal);
-              }
-            }catch(e){}
           }
 
           if(
@@ -348,6 +322,30 @@
           ){
             cleanupReady();
             return;
+          }
+
+          const key=focalKeyFor(story);
+          let focal=null;
+          if(image && smartCropEnabled()){
+            try{focal=await detectSmartFocalPoint(story);}catch(e){}
+          }
+
+          if(
+            adActive ||
+            state.busy ||
+            slides[1-state.active]!==inactiveSlide ||
+            storyIdentity(state.stories[state.index])!==fromKey ||
+            storyIdentity(state.stories[index])!==targetKey
+          ){
+            cleanupReady();
+            return;
+          }
+
+          if(image){
+            image.style.objectPosition=focal
+              ? focalPosition(focal)
+              : "50% 50%";
+            image.dataset.focalLockedKey=key;
           }
 
           inactiveSlide.dataset.preloadedStoryKey=targetKey;
@@ -362,10 +360,98 @@
   };
 
   /*
-    Track whether the story stage as a whole should be visible. The matching
-    CSS hides passive slides with !important so inline visibility="visible"
-    from the base app cannot expose a slide during its transform reset.
-  */
+   * Critical path for an early/manual swipe. The base 31.21.0 transition waits
+   * for image decode, but not focal analysis. Here focus analysis starts before
+   * image preparation and receives a short grace period before animation. Once
+   * chosen, that object-position is locked until the image element is reused.
+   */
+  transitionTo=async function(nextIndex,fromHistory,dir){
+    if(state.busy)return;
+
+    state.busy=true;
+    clearTimeout(state.timer);
+
+    const currentSlide=slides[state.active];
+    const nextSlide=slides[1-state.active];
+    const story=state.stories[nextIndex];
+    const key=focalKeyFor(story);
+    const focalTask=smartCropEnabled()
+      ? detectSmartFocalPoint(story).catch(()=>null)
+      : Promise.resolve(null);
+
+    if(!slidePreloadedForStory(nextSlide,story)){
+      await preloadImage(story.image);
+    }
+    preloadStoryAssets(story);
+
+    prepareTransitionSlide(nextSlide,story);
+
+    const nextImage=nextSlide.querySelector(".slide-image");
+    if(nextImage?.decode){
+      try{await nextImage.decode();}catch(e){}
+    }
+
+    let focal=null;
+    if(smartCropEnabled()){
+      try{
+        focal=await Promise.race([
+          focalTask,
+          timeoutValue(FIX_FAST_FOCAL_WAIT_MS,null)
+        ]);
+      }catch(e){}
+    }
+
+    /* If preloader already locked the exact story, preserve that result. */
+    if(nextImage && nextImage.dataset.focalLockedKey!==key){
+      nextImage.style.objectPosition=focal
+        ? focalPosition(focal)
+        : "50% 50%";
+      nextImage.dataset.focalLockedKey=key;
+    }
+
+    currentSlide.className="slide";
+    nextSlide.className="slide";
+
+    void nextSlide.offsetWidth;
+
+    const [enterClass,exitClass]=transitionPair(dir);
+
+    startPiPTransition(
+      state.stories[state.index],
+      story,
+      dir
+    );
+
+    nextSlide.classList.add(enterClass);
+    currentSlide.classList.add(exitClass);
+    activateSlideMedia(nextSlide,story);
+
+    nextSlide.addEventListener(
+      "animationend",
+      ()=>{
+        nextSlide.className="slide active";
+        currentSlide.className="slide";
+        stopSlideMedia(currentSlide);
+
+        state.active=1-state.active;
+        state.index=nextIndex;
+        updateKeywordAlert(story);
+
+        if(dir>0){
+          newsShownSinceAd++;
+        }
+
+        state.busy=false;
+        timer();
+      },
+      {once:true}
+    );
+  };
+
+  /*
+   * Tell CSS whether story slides should be visible at all. This also makes the
+   * outgoing-slide transform reset invisible after animationend.
+   */
   const originalSetStoryStageVisible=setStoryStageVisible;
   setStoryStageVisible=function(visible){
     const wall=document.getElementById("wall");
@@ -380,7 +466,6 @@
     wall.dataset.storyStageVisible="1";
   }
 
-  /* Prewarm the first next-story focus with the patched scheduler. */
   try{
     scheduleNextStoryPreload(0);
   }catch(e){}
