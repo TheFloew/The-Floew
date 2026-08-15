@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.20.0";
+window.__floewAppVersion="31.21.0";
 const API="https://thefloew.thefloewback.workers.dev/news";
 const VIDEO_API="https://thefloew.thefloewback.workers.dev/video";
 const META_API="https://thefloew.thefloewback.workers.dev/meta";
@@ -6546,6 +6546,15 @@ async function reloadAfterCustomRssChange(){
   await load();
 }
 
+function telemetryCustomRssAddFailed(reason){
+  telemetryQueueEvent("custom_rss_add_failed",{
+    story:null,
+    mode:String(reason||"unknown"),
+    value_num:customRssFeeds.length,
+    meta:{feed_count:customRssFeeds.length}
+  });
+}
+
 async function addCustomRssFromInput(){
   const input=document.getElementById("custom-rss-input");
   const addButton=document.getElementById("custom-rss-add");
@@ -6555,16 +6564,19 @@ async function addCustomRssFromInput(){
 
   if(!url){
     setCustomRssFeedback("Geçerli bir http/https RSS adresi girin.",true);
+    telemetryCustomRssAddFailed("invalid_url");
     return;
   }
 
   if(customRssFeeds.some(feed=>feed.url===url)){
     setCustomRssFeedback("Bu RSS kaynağı zaten ekli.",true);
+    telemetryCustomRssAddFailed("duplicate");
     return;
   }
 
   if(customRssFeeds.length>=CUSTOM_RSS_MAX_FEEDS){
     setCustomRssFeedback(`En fazla ${CUSTOM_RSS_MAX_FEEDS} özel RSS kaynağı eklenebilir.`,true);
+    telemetryCustomRssAddFailed("limit");
     return;
   }
 
@@ -6577,6 +6589,7 @@ async function addCustomRssFromInput(){
 
     if(!preview.length){
       setCustomRssFeedback("RSS okundu ancak kullanılabilir haber bulunamadı.",true);
+      telemetryCustomRssAddFailed("no_items");
       return;
     }
 
@@ -6585,12 +6598,19 @@ async function addCustomRssFromInput(){
     if(!saveCustomRssFeeds()){
       customRssFeeds.pop();
       setCustomRssFeedback("Özel RSS listesi çerez sınırına ulaştı.",true);
+      telemetryCustomRssAddFailed("cookie_limit");
       return;
     }
 
     input.value="";
     renderCustomRssList();
     setCustomRssFeedback(`RSS kaynağı eklendi · ${preview.length} haber bulundu.`);
+    telemetryQueueEvent("custom_rss_add",{
+      story:null,
+      mode:"success",
+      value_num:customRssFeeds.length,
+      meta:{feed_count:customRssFeeds.length,item_count:preview.length}
+    });
 
     await reloadAfterCustomRssChange();
   }catch(error){
@@ -6599,6 +6619,7 @@ async function addCustomRssFromInput(){
       "RSS adresine ulaşılamadı veya Worker bu akışı okuyamadı.",
       true
     );
+    telemetryCustomRssAddFailed("fetch_error");
   }finally{
     input.disabled=false;
     if(addButton)addButton.disabled=false;
@@ -6716,6 +6737,12 @@ function ensureEnhancementUi(){
     saveCustomRssFeeds();
     renderCustomRssList();
     setCustomRssFeedback("RSS kaynağı kaldırıldı.");
+    telemetryQueueEvent("custom_rss_remove",{
+      story:null,
+      mode:"remove",
+      value_num:customRssFeeds.length,
+      meta:{feed_count:customRssFeeds.length}
+    });
     await reloadAfterCustomRssChange();
   });
 }
@@ -8323,6 +8350,8 @@ let telemetryMoveOrigin="";
 let telemetryAdStartedAt=0;
 let telemetryLastWatchKey="";
 let telemetrySequence=0;
+let telemetrySourceFilterSession=null;
+let telemetryAutoPauseStartedAt=autoAdvancePaused?performance.now():0;
 const telemetryAdSeenCount=new Map();
 
 function telemetryAdPayload(ad=currentAd){
@@ -8443,6 +8472,20 @@ function telemetryClientSnapshot(){
 
 function telemetryStoryPayload(story){
   if(!story)return null;
+
+  /* Özel RSS içerik kimlikleri merkezi analytics'e taşınmaz. */
+  if(story.customRss){
+    return {
+      key:"",
+      title:"",
+      source:"",
+      category:"",
+      link:"",
+      published:"",
+      custom_rss:true
+    };
+  }
+
   return {
     key:storyIdentity(story),
     title:String(story.title||""),
@@ -8453,23 +8496,55 @@ function telemetryStoryPayload(story){
   };
 }
 
+const CUSTOM_RSS_EVENT_MAP={
+  story_view:"custom_rss_story_view",
+  story_leave:"custom_rss_story_leave",
+  story_back:"custom_rss_story_back",
+  story_forward:"custom_rss_story_forward",
+  source_open:"custom_rss_source_open",
+  video_start:"custom_rss_video_start",
+  video_complete:"custom_rss_video_complete",
+  video_error:"custom_rss_video_error"
+};
+
 function telemetryQueueEvent(eventType,data={}){
+  const hasExplicitStory=Object.prototype.hasOwnProperty.call(data,"story");
+  const storyPayload=hasExplicitStory
+    ? data.story
+    : telemetryStoryPayload(state.stories[state.index]);
+  const isCustomRss=Boolean(storyPayload?.custom_rss);
+  const mappedEventType=isCustomRss
+    ? (CUSTOM_RSS_EVENT_MAP[eventType]||eventType)
+    : eventType;
+  const meta={
+    ...(data.meta&&typeof data.meta==="object"?data.meta:{}),
+    ...(isCustomRss?{
+      custom_rss:true,
+      custom_rss_feed_count:customRssFeeds.length
+    }:{})
+  };
+
   const event={
     id:telemetryId(),
     seq:++telemetrySequence,
-    event:eventType,
+    event:mappedEventType,
     ts:Date.now(),
     visitor_id:telemetryVisitorId,
     session_id:telemetrySession.id,
     feed_mode:feedMode,
-    story:data.story||telemetryStoryPayload(state.stories[state.index]),
-    ...data
+    story:storyPayload,
+    ...data,
+    meta
   };
+
+  if(isCustomRss && mappedEventType==="custom_rss_story_leave"){
+    event.value_num=Math.max(0,Number(data.dwell_ms)||0);
+  }
 
   telemetryQueue.push(event);
 
-  if(eventType.startsWith("ad_")){
-    ga4TrackAdEvent(eventType,event);
+  if(event.event.startsWith("ad_")){
+    ga4TrackAdEvent(event.event,event);
   }
 
   if(telemetryQueue.length>=TELEMETRY_MAX_BATCH){
@@ -8546,6 +8621,10 @@ function telemetryStartStory(story,origin="initial"){
     watchMatched:false
   };
 
+  if(feedMode==="source" && telemetrySourceFilterSession){
+    telemetrySourceFilterSession.storiesViewed++;
+  }
+
   telemetryQueueEvent("story_view",{
     story:telemetryStoryPayload(story),
     origin,
@@ -8621,6 +8700,12 @@ telemetryQueueEvent("session_start",{
 });
 telemetryQueueEvent("page_view",{
   value_text:location.pathname||"/"
+});
+telemetryQueueEvent("custom_rss_state",{
+  story:null,
+  mode:customRssFeeds.length?"configured":"none",
+  value_num:customRssFeeds.length,
+  meta:{feed_count:customRssFeeds.length}
 });
 
 /* Wrap initial/refresh loading so the first visible story is measured. */
@@ -8812,12 +8897,83 @@ applyFilters=function(...args){
   return result;
 };
 
+function telemetryCloseSourceFilter(reason="close"){
+  const session=telemetrySourceFilterSession;
+  if(!session)return;
+
+  const duration=Math.max(0,Math.round(performance.now()-session.startedAt));
+  telemetryQueueEvent("source_filter_close",{
+    story:null,
+    value_text:session.name,
+    value_num:duration,
+    mode:reason,
+    meta:{
+      source_key:session.key,
+      duration_ms:duration,
+      stories_viewed:session.storiesViewed
+    }
+  });
+  telemetrySourceFilterSession=null;
+}
+
+const __floewActivateTemporarySourceFeed=activateTemporarySourceFeed;
+activateTemporarySourceFeed=function(sourceName){
+  const name=String(sourceName||"").trim();
+  const key=sourceKey(name);
+  const alreadyActive=
+    feedMode==="source" &&
+    temporarySourceFilter?.key===key;
+
+  if(!name || !key || alreadyActive){
+    return __floewActivateTemporarySourceFeed.apply(this,arguments);
+  }
+
+  if(telemetrySourceFilterSession){
+    telemetryCloseSourceFilter("source_change");
+  }
+
+  telemetrySourceFilterSession={
+    name,
+    key,
+    startedAt:performance.now(),
+    storiesViewed:0
+  };
+
+  const result=__floewActivateTemporarySourceFeed.apply(this,arguments);
+
+  if(feedMode==="source" && temporarySourceFilter?.key===key){
+    const visibleStory=state.stories[state.index]||null;
+    if(
+      telemetrySourceFilterSession &&
+      telemetrySourceFilterSession.storiesViewed===0 &&
+      sourceKey(visibleStory?.source)===key
+    ){
+      telemetrySourceFilterSession.storiesViewed=1;
+    }
+
+    telemetryQueueEvent("source_filter_open",{
+      story:null,
+      value_text:name,
+      mode:"source",
+      meta:{source_key:key}
+    });
+  }else{
+    telemetrySourceFilterSession=null;
+  }
+
+  return result;
+};
+
 /* Tabs */
 const __floewSwitchFeedMode=switchFeedMode;
 switchFeedMode=function(nextMode){
   const beforeMode=feedMode;
   const beforeStory=state.stories[state.index]||null;
   const result=__floewSwitchFeedMode.apply(this,arguments);
+
+  if(beforeMode==="source" && feedMode!=="source"){
+    telemetryCloseSourceFilter("tab_change");
+  }
 
   if(feedMode!==beforeMode){
     telemetryQueueEvent("tab_change",{
@@ -8891,6 +9047,32 @@ setShowDuration=function(value){
       meta:{before,after:showDurationSeconds}
     });
   }
+  return result;
+};
+
+const __floewSetAutoAdvancePaused=setAutoAdvancePaused;
+setAutoAdvancePaused=function(paused){
+  const before=autoAdvancePaused;
+  const result=__floewSetAutoAdvancePaused.apply(this,arguments);
+
+  if(before!==autoAdvancePaused){
+    if(autoAdvancePaused){
+      telemetryAutoPauseStartedAt=performance.now();
+      telemetryQueueEvent("auto_advance_pause",{story:null,mode:"pause"});
+    }else{
+      const duration=telemetryAutoPauseStartedAt
+        ? Math.max(0,Math.round(performance.now()-telemetryAutoPauseStartedAt))
+        : 0;
+      telemetryAutoPauseStartedAt=0;
+      telemetryQueueEvent("auto_advance_resume",{
+        story:null,
+        mode:"resume",
+        value_num:duration,
+        meta:{pause_duration_ms:duration}
+      });
+    }
+  }
+
   return result;
 };
 
@@ -9137,13 +9319,28 @@ setInterval(()=>{
     value_num:Date.now()-telemetrySession.startedAt,
     meta:{
       visibility:document.visibilityState,
-      story_key:storyIdentity(state.stories[state.index])
+      story_key:state.stories[state.index]?.customRss
+        ? ""
+        : storyIdentity(state.stories[state.index])
     }
   });
 },30000);
 
 window.addEventListener("pagehide",()=>{
   telemetryFinishStory("pagehide",0);
+  if(telemetrySourceFilterSession){
+    telemetryCloseSourceFilter("pagehide");
+  }
+  if(autoAdvancePaused && telemetryAutoPauseStartedAt){
+    const duration=Math.max(0,Math.round(performance.now()-telemetryAutoPauseStartedAt));
+    telemetryQueueEvent("auto_advance_pause_end",{
+      story:null,
+      mode:"pagehide",
+      value_num:duration,
+      meta:{pause_duration_ms:duration}
+    });
+    telemetryAutoPauseStartedAt=0;
+  }
   telemetryInteractionSummary();
   telemetryQueueEvent("session_end",{
     value_num:Date.now()-telemetrySession.startedAt
