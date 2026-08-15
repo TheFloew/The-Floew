@@ -157,6 +157,67 @@ function saveCustomRssFeeds(){
   }
 }
 
+function customRssClientError(message,code="unknown",status=0,details={}){
+  const error=new Error(message||code||"Custom RSS error");
+  error.code=String(code||"unknown");
+  error.status=Number(status)||0;
+  error.details=details&&typeof details==="object"?details:{};
+  return error;
+}
+
+function customRssErrorMessage(error){
+  const code=String(error?.code||"");
+  const upstreamStatus=Number(error?.details?.upstream_status||0);
+
+  if(error?.name==="AbortError" || code==="timeout"){
+    return "Kaynak çok yavaş yanıt verdi (zaman aşımı).";
+  }
+
+  switch(code){
+    case "invalid_url":
+    case "unsafe_url":
+      return "Bu adres geçerli ve herkese açık bir RSS/Atom adresi değil.";
+
+    case "unsafe_redirect":
+      return "RSS adresinin yönlendirmesi güvenlik nedeniyle engellendi.";
+
+    case "too_many_redirects":
+      return "RSS adresi çok fazla yönlendirme yapıyor.";
+
+    case "upstream_forbidden":
+      return `Kaynak Worker erişimini reddetti${upstreamStatus?` (${upstreamStatus})`:""}.`;
+
+    case "upstream_rate_limited":
+      return "Kaynak çok fazla istek nedeniyle erişimi geçici olarak sınırladı (429).";
+
+    case "upstream_not_found":
+      return `RSS adresi bulunamadı${upstreamStatus?` (${upstreamStatus})`:""}.`;
+
+    case "upstream_error":
+      return `Kaynak sunucusu geçici bir hata verdi${upstreamStatus?` (${upstreamStatus})`:""}.`;
+
+    case "upstream_http":
+      return `Kaynak isteği kabul etmedi${upstreamStatus?` (${upstreamStatus})`:""}.`;
+
+    case "feed_too_large":
+      return "RSS dosyası çok büyük (2,5 MB sınırı).";
+
+    case "unsupported_format":
+      return "Adres desteklenen bir RSS, Atom veya JSON Feed biçimi döndürmüyor.";
+
+    case "no_items":
+      return "RSS bulundu ancak kullanılabilir haber bulunamadı.";
+
+    case "network_error":
+      return "Kaynağa ağ üzerinden ulaşılamadı.";
+
+    default:
+      return error?.status
+        ? `RSS kaynağı okunamadı (HTTP ${error.status}).`
+        : "RSS adresine ulaşılamadı veya kaynak okunamadı.";
+  }
+}
+
 async function fetchCustomRssFeed(feed){
   const controller=new AbortController();
   const timeout=setTimeout(()=>controller.abort(),12000);
@@ -174,11 +235,28 @@ async function fetchCustomRssFeed(feed){
       headers:{"Accept":"application/json"}
     });
 
-    if(!response.ok){
-      throw new Error(`HTTP ${response.status}`);
+    let data=null;
+    try{
+      data=await response.json();
+    }catch(e){
+      if(response.ok){
+        throw customRssClientError(
+          "Worker geçersiz JSON yanıtı döndürdü.",
+          "invalid_worker_response",
+          response.status
+        );
+      }
     }
 
-    const data=await response.json();
+    if(!response.ok || data?.ok===false){
+      throw customRssClientError(
+        String(data?.error||`HTTP ${response.status}`),
+        String(data?.code||`http_${response.status}`),
+        response.status,
+        data||{}
+      );
+    }
+
     const items=Array.isArray(data?.items)
       ? data.items
       : Array.isArray(data)
@@ -212,6 +290,17 @@ async function fetchCustomRssFeed(feed){
           image:String(item.image||"").trim() || CUSTOM_RSS_FALLBACK_IMAGE
         };
       });
+  }catch(error){
+    if(error?.name==="AbortError"){
+      const timeoutError=customRssClientError(
+        "RSS isteği zaman aşımına uğradı.",
+        "timeout",
+        0
+      );
+      timeoutError.name="AbortError";
+      throw timeoutError;
+    }
+    throw error;
   }finally{
     clearTimeout(timeout);
   }
@@ -6616,10 +6705,10 @@ async function addCustomRssFromInput(){
   }catch(error){
     console.warn("Custom RSS validation:",url,error);
     setCustomRssFeedback(
-      "RSS adresine ulaşılamadı veya Worker bu akışı okuyamadı.",
+      customRssErrorMessage(error),
       true
     );
-    telemetryCustomRssAddFailed("fetch_error");
+    telemetryCustomRssAddFailed(String(error?.code||"fetch_error"));
   }finally{
     input.disabled=false;
     if(addButton)addButton.disabled=false;
