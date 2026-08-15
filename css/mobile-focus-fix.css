@@ -1,0 +1,50 @@
+/*
+ * Flöw mobile focus / transition hotfix 31.21.1
+ * Loaded after css/styles.css.
+ */
+
+/* The crop itself must not animate while its parent slide is moving. */
+#wall .slide-image{
+  transition:none !important;
+}
+
+/* A late focal result may settle gently only while the story is stationary. */
+#wall .slide.active .slide-image{
+  transition:object-position .22s ease-out !important;
+}
+
+#wall .slide.enter-up .slide-image,
+#wall .slide.exit-up .slide-image,
+#wall .slide.enter-down .slide-image,
+#wall .slide.exit-down .slide-image,
+#wall .slide.enter-left .slide-image,
+#wall .slide.exit-left .slide-image,
+#wall .slide.enter-right .slide-image,
+#wall .slide.exit-right .slide-image{
+  transition:none !important;
+}
+
+/*
+  Passive slides use translateY(100%) in the base stylesheet. At animation end
+  an outgoing slide is reset from -100% to that passive position. Keep passive
+  slides invisible so mobile compositors cannot flash that reset frame.
+*/
+#wall[data-story-stage-visible="1"] .slide{
+  visibility:hidden !important;
+}
+
+#wall[data-story-stage-visible="1"] .slide.active,
+#wall[data-story-stage-visible="1"] .slide.enter-up,
+#wall[data-story-stage-visible="1"] .slide.exit-up,
+#wall[data-story-stage-visible="1"] .slide.enter-down,
+#wall[data-story-stage-visible="1"] .slide.exit-down,
+#wall[data-story-stage-visible="1"] .slide.enter-left,
+#wall[data-story-stage-visible="1"] .slide.exit-left,
+#wall[data-story-stage-visible="1"] .slide.enter-right,
+#wall[data-story-stage-visible="1"] .slide.exit-right{
+  visibility:visible !important;
+}
+
+#wall[data-story-stage-visible="0"] .slide{
+  visibility:hidden !important;
+}
