@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.19.0";
+window.__floewAppVersion="31.20.0";
 const API="https://thefloew.thefloewback.workers.dev/news";
 const VIDEO_API="https://thefloew.thefloewback.workers.dev/video";
 const META_API="https://thefloew.thefloewback.workers.dev/meta";
@@ -185,13 +185,33 @@ async function fetchCustomRssFeed(feed){
         ? data
         : [];
 
+    const fetchedAt=Date.now();
+    const sourceName=String(data?.source||"").trim();
+
     return items
       .filter(item=>item?.title && item?.link)
-      .map(item=>({
-        ...item,
-        customRss:true,
-        image:String(item.image||"").trim() || CUSTOM_RSS_FALLBACK_IMAGE
-      }));
+      .map((item,index)=>{
+        const publishedMs=new Date(item?.published).getTime();
+
+        /*
+          Bazı RSS/Atom akışları tarih alanını hiç vermiyor ya da tarayıcının
+          parse edemediği bir format kullanıyor. Kronolojik modda bu maddeler
+          listenin görünmez dibine düşmesin: feed sırasını koruyacak biçimde
+          çekim anından geriye doğru küçük bir fallback zaman damgası veriyoruz.
+        */
+        const published=Number.isFinite(publishedMs)
+          ? item.published
+          : new Date(fetchedAt-index*1000).toISOString();
+
+        return {
+          ...item,
+          source:String(item.source||sourceName||"Özel RSS").trim()||"Özel RSS",
+          published,
+          customRss:true,
+          customRssFeedUrl:feed.url,
+          image:String(item.image||"").trim() || CUSTOM_RSS_FALLBACK_IMAGE
+        };
+      });
   }finally{
     clearTimeout(timeout);
   }
@@ -1284,6 +1304,13 @@ function ensureTemporarySourceTab(){
 
     const foreign=tabs.querySelector('[data-feed-mode="foreign"]');
     tabs.insertBefore(button,foreign||null);
+
+    /* DOM'a eklendikten sonraki frame'de genişleyerek gelsin. */
+    requestAnimationFrame(()=>{
+      requestAnimationFrame(()=>button?.classList.add("is-visible"));
+    });
+  }else{
+    button.classList.add("is-visible");
   }
 
   button.textContent=temporarySourceFilter.name;
@@ -1293,7 +1320,20 @@ function ensureTemporarySourceTab(){
 }
 
 function clearTemporarySourceTab(){
-  document.querySelector('[data-feed-mode="source"]')?.remove();
+  const button=document.querySelector('[data-feed-mode="source"]');
+
+  if(button){
+    /*
+      Filtreyi hemen kaldır; buton yalnız görsel çıkış animasyonunu tamamlar.
+      data-feed-mode değiştirilir ki kullanıcı anında yeni bir kaynak açarsa
+      çıkmakta olan eski düğme tekrar kullanılmasın.
+    */
+    button.dataset.feedMode="source-leaving";
+    button.classList.remove("is-visible");
+    button.classList.add("is-leaving");
+    setTimeout(()=>button.remove(),320);
+  }
+
   temporarySourceFilter=null;
   feedModeStoryKeys.source="";
 }
@@ -1425,7 +1465,8 @@ function switchFeedMode(nextMode){
   clearTimeout(state.timer);
 
   preloadImage(nextStory.image);
-  fill(nextSlide,nextStory);
+  preloadStoryAssets(nextStory);
+  prepareTransitionSlide(nextSlide,nextStory);
 
   currentSlide.className="slide";
   nextSlide.className="slide";
@@ -1434,6 +1475,7 @@ function switchFeedMode(nextMode){
 
   nextSlide.classList.add(enterClass);
   currentSlide.classList.add(exitClass);
+  activateSlideMedia(nextSlide,nextStory);
 
   state.stories=list;
   state.index=idx;
@@ -1771,6 +1813,7 @@ function resetSlideMedia(el){
   el.dataset.mediaToken=String(
     (Number(el.dataset.mediaToken)||0)+1
   );
+  el.removeAttribute("data-preloaded-story-key");
 
   const image=el.querySelector(".slide-image");
   const video=el.querySelector(".slide-video");
@@ -1913,11 +1956,8 @@ function ensureHlsLibrary(){
   return hlsLibraryPromise;
 }
 
-function showDirectVideo(el,story,media,token){
-  const image=el.querySelector(".slide-image");
-  const video=el.querySelector(".slide-video");
-
-  if(!video || !media?.url)return;
+function setMutedInlinePlaybackAttributes(video){
+  if(!video)return;
 
   video.muted=true;
   video.defaultMuted=true;
@@ -1925,6 +1965,43 @@ function showDirectVideo(el,story,media,token){
   video.autoplay=true;
   video.playsInline=true;
   video.controls=false;
+  video.setAttribute("muted","");
+  video.setAttribute("autoplay","");
+  video.setAttribute("playsinline","");
+  video.setAttribute("webkit-playsinline","");
+}
+
+async function attemptMutedAutoplay(video,attempts=5){
+  if(!video)return false;
+  setMutedInlinePlaybackAttributes(video);
+
+  const delays=[0,90,220,450,800];
+  const count=Math.max(1,Math.min(attempts,delays.length));
+
+  for(let i=0;i<count;i++){
+    if(delays[i]){
+      await new Promise(resolve=>setTimeout(resolve,delays[i]));
+    }else{
+      await new Promise(resolve=>requestAnimationFrame(()=>resolve()));
+    }
+
+    try{
+      const result=video.play();
+      if(result?.then)await result;
+      if(!video.paused)return true;
+    }catch(e){}
+  }
+
+  return !video.paused;
+}
+
+function showDirectVideo(el,story,media,token){
+  const image=el.querySelector(".slide-image");
+  const video=el.querySelector(".slide-video");
+
+  if(!video || !media?.url)return;
+
+  setMutedInlinePlaybackAttributes(video);
   video.poster=story.image||"";
 
   let settled=false;
@@ -1968,9 +2045,8 @@ function showDirectVideo(el,story,media,token){
       return;
     }
 
-    try{
-      await video.play();
-    }catch(e){
+    const played=await attemptMutedAutoplay(video,5);
+    if(!played){
       fallback();
       return;
     }
@@ -2294,6 +2370,7 @@ async function showDailymotionVideo(el,story,media,token){
       video:parts.videoId,
       params:{
         loop:true,
+        mute:true,
         scaleMode:"fill"
       }
     });
@@ -2861,7 +2938,7 @@ function setStoryImage(img,story){
   img.src=articleFirst ? articleProxy : direct;
 }
 
-function fill(el,s){
+function fill(el,s,options={}){
   resetSlideMedia(el);
   el.dataset.storyKey=mediaKey(s);
 
@@ -2942,9 +3019,31 @@ function fill(el,s){
     }
   }
 
-  if(videoEnabled){
+  if(videoEnabled && options.prepareMedia!==false){
     prepareSlideMedia(el,s);
   }
+}
+
+function activateSlideMedia(el,story){
+  if(!videoEnabled || !el || !story)return;
+  if(mediaKey(story)!==el.dataset.storyKey)return;
+  prepareSlideMedia(el,story);
+}
+
+function slidePreloadedForStory(el,story){
+  return Boolean(
+    el &&
+    story &&
+    el.dataset.preloadedStoryKey===storyIdentity(story) &&
+    el.dataset.storyKey===mediaKey(story)
+  );
+}
+
+function prepareTransitionSlide(el,story){
+  if(!slidePreloadedForStory(el,story)){
+    fill(el,story,{prepareMedia:false});
+  }
+  el?.removeAttribute("data-preloaded-story-key");
 }
 
 
@@ -3612,6 +3711,7 @@ function resetAdMedia(){
 
   if(adVideo){
     try{adVideo.pause()}catch(e){}
+    adVideo.controls=false;
     adVideo.hidden=true;
     adVideo.removeAttribute("src");
     adVideo.load();
@@ -3801,12 +3901,22 @@ function waitForVideoAd(src){
         return;
       }
 
-      try{
-        await adVideo.play();
-        if(finished)return;
-      }catch(err){
-        console.warn("Ad video play:",err);
-        finish(true,1,false);
+      const played=await attemptMutedAutoplay(adVideo,5);
+      if(finished)return;
+
+      if(!played){
+        /*
+          Mobil autoplay yine de engellenirse reklamı bitmiş sayıp bir sonraki
+          habere sıçrama. İlk kareyi kısa süre reklam olarak tut; kullanıcı
+          swipe ederse normal reklam-history davranışı çalışmaya devam eder.
+        */
+        console.warn("Flöw ads: video autoplay engellendi; sabit-kare fallback.");
+        try{adVideo.pause()}catch(e){}
+        adVideo.controls=false;
+        safetyTimer=setTimeout(
+          ()=>finish(true,1,false),
+          AD_IMAGE_MS
+        );
         return;
       }
 
@@ -3816,11 +3926,7 @@ function waitForVideoAd(src){
       );
     };
 
-    adVideo.muted=true;
-    adVideo.defaultMuted=true;
-    adVideo.volume=0;
-    adVideo.autoplay=true;
-    adVideo.playsInline=true;
+    setMutedInlinePlaybackAttributes(adVideo);
     adVideo.loop=false;
     adVideo.preload="auto";
     adVideo.hidden=false;
@@ -3956,6 +4062,9 @@ function timer(){
   clearTimeout(state.timer);
   state.timer=null;
 
+  /* Otomatik ilerleme kapalı olsa bile sıradaki haber hazır tutulur. */
+  scheduleNextStoryPreload();
+
   if(autoAdvancePaused)return;
 
   state.timer=setTimeout(
@@ -3978,7 +4087,7 @@ function sourceKey(source){
   eklenir. Geri giderken history'deki gerçek önceki haber gösterilir;
   böylece aynı haberin yeni bir versiyonu seçilmez.
 */
-function chooseForward(){
+function chooseForwardCandidate(){
   if(!state.stories.length)return -1;
   if(state.stories.length===1)return 0;
 
@@ -4038,33 +4147,257 @@ function chooseForward(){
   return top[0].index;
 }
 
-function preloadImage(url){
-  return new Promise(resolve=>{
-    if(!url){
-      resolve();
-      return;
-    }
 
+let plannedForwardStory=null;
+
+function chooseForward(){
+  const currentKey=storyIdentity(state.stories[state.index]);
+  const planned=plannedForwardStory;
+
+  if(
+    planned &&
+    planned.fromKey===currentKey &&
+    planned.index>=0 &&
+    planned.index<state.stories.length &&
+    storyIdentity(state.stories[planned.index])===planned.toKey
+  ){
+    plannedForwardStory=null;
+    return planned.index;
+  }
+
+  plannedForwardStory=null;
+  return chooseForwardCandidate();
+}
+
+const imagePreloadCache=new Map();
+const storyAssetPreloadCache=new Map();
+const mediaWarmupCache=new Map();
+let nextStoryPreloadTimer=null;
+
+function preloadImage(url){
+  if(!url)return Promise.resolve();
+  if(imagePreloadCache.has(url))return imagePreloadCache.get(url);
+
+  const promise=new Promise(resolve=>{
     const img=new Image();
     let done=false;
 
     const finish=()=>{
       if(done)return;
       done=true;
-      resolve();
+
+      if(img.decode){
+        let resolved=false;
+        const done=()=>{
+          if(resolved)return;
+          resolved=true;
+          resolve();
+        };
+        img.decode().catch(()=>{}).finally(done);
+        setTimeout(done,700);
+      }else{
+        resolve();
+      }
     };
 
     img.onload=finish;
     img.onerror=finish;
-
     img.src=url;
-
-    /*
-      Çok yavaş bir görsel geçişi sonsuza kadar
-      bekletmesin.
-    */
     setTimeout(finish,5000);
   });
+
+  imagePreloadCache.set(url,promise);
+  if(imagePreloadCache.size>120){
+    const first=imagePreloadCache.keys().next().value;
+    if(first)imagePreloadCache.delete(first);
+  }
+
+  return promise;
+}
+
+function warmDirectMedia(media){
+  const url=String(media?.url||"");
+  if(!url || mediaWarmupCache.has(url))return;
+
+  const type=String(media?.type||"").toLowerCase();
+  const isHls=
+    type.includes("mpegurl") ||
+    /\.m3u8(?:[?#]|$)/i.test(url);
+
+  if(isHls)ensureHlsLibrary();
+
+  try{
+    const video=document.createElement("video");
+    setMutedInlinePlaybackAttributes(video);
+    video.autoplay=false;
+    video.removeAttribute("autoplay");
+    video.preload="auto";
+    video.src=url;
+    video.load();
+
+    mediaWarmupCache.set(url,video);
+
+    if(mediaWarmupCache.size>3){
+      const first=mediaWarmupCache.keys().next().value;
+      const old=mediaWarmupCache.get(first);
+      try{old?.pause?.()}catch(e){}
+      try{old?.removeAttribute?.("src");old?.load?.()}catch(e){}
+      mediaWarmupCache.delete(first);
+    }
+  }catch(e){}
+}
+
+function warmEmbedMedia(media){
+  try{
+    const url=new URL(media?.url||"");
+    const origin=url.origin;
+    const found=[...document.querySelectorAll('link[data-floew-preconnect]')]
+      .some(link=>link.dataset.floewPreconnect===origin);
+
+    if(origin && !found){
+      const link=document.createElement("link");
+      link.rel="preconnect";
+      link.href=origin;
+      link.crossOrigin="anonymous";
+      link.dataset.floewPreconnect=origin;
+      document.head.appendChild(link);
+    }
+  }catch(e){}
+
+  if(String(media?.provider||"").toLowerCase()==="dailymotion"){
+    const parts=dailymotionMediaParts(media);
+    if(parts?.playerId)ensureDailymotionLibrary(parts.playerId);
+  }
+}
+
+function preloadStoryAssets(story){
+  if(!story)return Promise.resolve();
+  const key=mediaKey(story);
+  if(storyAssetPreloadCache.has(key))return storyAssetPreloadCache.get(key);
+
+  const promise=(async()=>{
+    const imagePromise=preloadImage(story.image);
+    const mediaPromise=videoEnabled
+      ? resolveStoryMedia(story).then(media=>{
+          if(!media)return;
+          if(media.kind==="video")warmDirectMedia(media);
+          else if(media.kind==="embed")warmEmbedMedia(media);
+        }).catch(()=>{})
+      : Promise.resolve();
+
+    await Promise.allSettled([imagePromise,mediaPromise]);
+  })();
+
+  storyAssetPreloadCache.set(key,promise);
+  if(storyAssetPreloadCache.size>80){
+    const first=storyAssetPreloadCache.keys().next().value;
+    if(first)storyAssetPreloadCache.delete(first);
+  }
+
+  return promise;
+}
+
+function nextStoryIndexForPreload(){
+  if(state.stories.length<2)return -1;
+
+  if(state.historyPos<state.history.length-1){
+    return state.history[state.historyPos+1];
+  }
+
+  const currentKey=storyIdentity(state.stories[state.index]);
+
+  if(
+    plannedForwardStory &&
+    plannedForwardStory.fromKey===currentKey &&
+    plannedForwardStory.index>=0 &&
+    plannedForwardStory.index<state.stories.length &&
+    storyIdentity(state.stories[plannedForwardStory.index])===plannedForwardStory.toKey
+  ){
+    return plannedForwardStory.index;
+  }
+
+  const index=chooseForwardCandidate();
+  if(index<0)return -1;
+
+  plannedForwardStory={
+    fromKey:currentKey,
+    toKey:storyIdentity(state.stories[index]),
+    index
+  };
+
+  return index;
+}
+
+function scheduleNextStoryPreload(delay=70){
+  clearTimeout(nextStoryPreloadTimer);
+
+  nextStoryPreloadTimer=setTimeout(()=>{
+    if(adActive || state.busy || state.stories.length<2)return;
+
+    const index=nextStoryIndexForPreload();
+    if(index<0)return;
+
+    const story=state.stories[index];
+    const fromKey=storyIdentity(state.stories[state.index]);
+    const targetKey=storyIdentity(story);
+
+    /* Video URL/player çözümü ile ağ ısınmasını arka planda başlat. */
+    preloadStoryAssets(story);
+
+    /*
+      Görsel decode olunca pasif slaytı da önceden doldur. Geçiş anında aynı
+      hedef hâlâ sıradaysa fill/decode beklemeden doğrudan animasyona girer.
+    */
+    preloadImage(story.image).then(()=>{
+      if(
+        adActive ||
+        state.busy ||
+        storyIdentity(state.stories[state.index])!==fromKey ||
+        storyIdentity(state.stories[index])!==targetKey
+      ) return;
+
+      const inactiveSlide=slides[1-state.active];
+      fill(inactiveSlide,story,{prepareMedia:false});
+      inactiveSlide.className="slide";
+
+      const image=inactiveSlide.querySelector(".slide-image");
+
+      const cleanupReady=()=>{
+        image?.removeEventListener("load",markReady);
+        image?.removeEventListener("error",markReady);
+      };
+
+      const markReady=async()=>{
+        /* setStoryImage ilk thumbnail yüklenince daha iyi article-proxy'ye
+           geçebilir. O anda img.complete tekrar false olur; son URL gerçekten
+           hazır olana kadar bu listener yaşamaya devam eder. */
+        await Promise.resolve();
+        if(image && (!image.complete || !image.naturalWidth))return;
+
+        if(image?.decode){
+          try{await image.decode();}catch(e){}
+        }
+
+        if(
+          adActive ||
+          state.busy ||
+          slides[1-state.active]!==inactiveSlide ||
+          storyIdentity(state.stories[state.index])!==fromKey ||
+          storyIdentity(state.stories[index])!==targetKey
+        ){
+          cleanupReady();
+          return;
+        }
+
+        inactiveSlide.dataset.preloadedStoryKey=targetKey;
+        cleanupReady();
+      };
+
+      image?.addEventListener("load",markReady);
+      image?.addEventListener("error",markReady);
+      markReady();
+    }).catch(()=>{});
+  },Math.max(0,delay));
 }
 
 
@@ -4284,8 +4617,11 @@ async function transitionFromAdTo(nextIndex,fromHistory,dir=1){
   const nextSlide=slides[1-state.active];
   const story=state.stories[nextIndex];
 
-  await preloadImage(story.image);
-  fill(nextSlide,story);
+  if(!slidePreloadedForStory(nextSlide,story)){
+    await preloadImage(story.image);
+  }
+  preloadStoryAssets(story);
+  prepareTransitionSlide(nextSlide,story);
 
   const nextImage=nextSlide.querySelector(".slide-image");
   if(nextImage?.decode){
@@ -4307,6 +4643,7 @@ async function transitionFromAdTo(nextIndex,fromHistory,dir=1){
 
   nextSlide.classList.add(enterClass);
   adOverlay.classList.add(exitClass);
+  activateSlideMedia(nextSlide,story);
 
   await waitForFlowAnimation(nextSlide);
 
@@ -4362,6 +4699,7 @@ async function transitionAdBackToCurrent(dir=-1){
 
   currentSlide.classList.add(enterClass);
   adOverlay.classList.add(exitClass);
+  activateSlideMedia(currentSlide,state.stories[state.index]);
 
   await waitForFlowAnimation(currentSlide);
 
@@ -4400,9 +4738,12 @@ async function transitionTo(nextIndex,fromHistory,dir){
     Yeni görsel tamamen hazır olmadan animasyonu başlatma.
     Böylece geçiş sırasında alttaki/eski görsel görünmez.
   */
-  await preloadImage(story.image);
+  if(!slidePreloadedForStory(nextSlide,story)){
+    await preloadImage(story.image);
+  }
+  preloadStoryAssets(story);
 
-  fill(nextSlide,story);
+  prepareTransitionSlide(nextSlide,story);
 
   const nextImage=
     nextSlide.querySelector(".slide-image");
@@ -4435,6 +4776,7 @@ async function transitionTo(nextIndex,fromHistory,dir){
 
   nextSlide.classList.add(enterClass);
   currentSlide.classList.add(exitClass);
+  activateSlideMedia(nextSlide,story);
 
   nextSlide.addEventListener(
     "animationend",
@@ -5090,8 +5432,9 @@ async function performNewsLoad(){
       state.historyPos=0;
       skippedAdHistory=null;
       historicalAdContext=null;
-      fill(slides[0],list[0]);
+      fill(slides[0],list[0],{prepareMedia:false});
       slides[0].className="slide active";
+      activateSlideMedia(slides[0],list[0]);
       updateKeywordAlert(list[0]);
       newsShownSinceAd=1;
       clearStatus();
@@ -6205,6 +6548,7 @@ async function reloadAfterCustomRssChange(){
 
 async function addCustomRssFromInput(){
   const input=document.getElementById("custom-rss-input");
+  const addButton=document.getElementById("custom-rss-add");
   if(!input)return;
 
   const url=normalizeCustomRssUrl(input.value);
@@ -6224,19 +6568,41 @@ async function addCustomRssFromInput(){
     return;
   }
 
-  customRssFeeds.push({url});
+  input.disabled=true;
+  if(addButton)addButton.disabled=true;
+  setCustomRssFeedback("RSS kontrol ediliyor…");
 
-  if(!saveCustomRssFeeds()){
-    customRssFeeds.pop();
-    setCustomRssFeedback("Özel RSS listesi çerez sınırına ulaştı.",true);
-    return;
+  try{
+    const preview=await fetchCustomRssFeed({url});
+
+    if(!preview.length){
+      setCustomRssFeedback("RSS okundu ancak kullanılabilir haber bulunamadı.",true);
+      return;
+    }
+
+    customRssFeeds.push({url});
+
+    if(!saveCustomRssFeeds()){
+      customRssFeeds.pop();
+      setCustomRssFeedback("Özel RSS listesi çerez sınırına ulaştı.",true);
+      return;
+    }
+
+    input.value="";
+    renderCustomRssList();
+    setCustomRssFeedback(`RSS kaynağı eklendi · ${preview.length} haber bulundu.`);
+
+    await reloadAfterCustomRssChange();
+  }catch(error){
+    console.warn("Custom RSS validation:",url,error);
+    setCustomRssFeedback(
+      "RSS adresine ulaşılamadı veya Worker bu akışı okuyamadı.",
+      true
+    );
+  }finally{
+    input.disabled=false;
+    if(addButton)addButton.disabled=false;
   }
-
-  input.value="";
-  renderCustomRssList();
-  setCustomRssFeedback("RSS kaynağı eklendi.");
-
-  await reloadAfterCustomRssChange();
 }
 
 function ensureEnhancementUi(){
