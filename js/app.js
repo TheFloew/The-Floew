@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.21.0";
+window.__floewAppVersion="31.23.1";
 const API="https://thefloew.thefloewback.workers.dev/news";
 const VIDEO_API="https://thefloew.thefloewback.workers.dev/video";
 const META_API="https://thefloew.thefloewback.workers.dev/meta";
@@ -39,6 +39,17 @@ const CUSTOM_RSS_COOKIE_KEY="thefloew.customRss.v1";
 const CUSTOM_RSS_MAX_FEEDS=8;
 const CUSTOM_RSS_MAX_URL_LENGTH=320;
 const CUSTOM_RSS_FALLBACK_IMAGE="assets/defaultrss.jpg";
+
+/*
+  Algoritmik akışta farklı kaynakların aynı olayı çok benzer başlıklarla
+  tekrar etmesini azaltır. Kronolojik mod bu kurala hiçbir zaman girmez.
+*/
+const NEAR_DUPLICATE_PREF_KEY="thefloew.nearDuplicateDedup.v1";
+const NEAR_DUPLICATE_WINDOW_MS=8*60*60*1000;
+const NEAR_DUPLICATE_HISTORY_DEPTH=12;
+const NEAR_DUPLICATE_MIN_COMMON_TOKENS=3;
+const NEAR_DUPLICATE_OVERLAP_THRESHOLD=.74;
+const NEAR_DUPLICATE_JACCARD_THRESHOLD=.42;
 const REFRESH_MS=120000;
 const SWIPE=44;
 
@@ -66,6 +77,26 @@ function loadShowDuration(){
 
 let showDurationSeconds=loadShowDuration();
 let autoAdvancePaused=false;
+
+function loadNearDuplicateDedupPreference(){
+  try{
+    const raw=localStorage.getItem(NEAR_DUPLICATE_PREF_KEY);
+    return raw===null ? true : raw!=="0";
+  }catch(e){
+    return true;
+  }
+}
+
+let nearDuplicateDedupEnabled=loadNearDuplicateDedupPreference();
+
+function saveNearDuplicateDedupPreference(){
+  try{
+    localStorage.setItem(
+      NEAR_DUPLICATE_PREF_KEY,
+      nearDuplicateDedupEnabled ? "1" : "0"
+    );
+  }catch(e){}
+}
 
 
 function readCookieValue(name){
@@ -2684,6 +2715,7 @@ function storyExternalImageProxyUrl(story){
 const smartFocalCache=new Map();
 const SMART_FOCAL_SAMPLE=48;
 const SMART_FOCAL_CACHE_MAX=160;
+const SMART_FOCAL_LOCK_TIMEOUT_MS=520;
 
 function smartCropEnabled(){
   try{
@@ -2789,8 +2821,8 @@ function smartFocalFromPixels(data,width,height){
   if(!(bestScore>0))return null;
 
   return {
-    x:clampFocal((bestX/(width-1))*100,12,88),
-    y:clampFocal((bestY/(height-1))*100,10,82)
+    x:clampFocal((bestX/(width-1))*100,20,80),
+    y:clampFocal((bestY/(height-1))*100,14,74)
   };
 }
 
@@ -2848,15 +2880,49 @@ function detectSmartFocalPoint(story){
             });
             const faces=await detector.detect(probe);
             if(Array.isArray(faces) && faces.length){
-              const face=faces
+              const boxes=faces
                 .map(item=>item?.boundingBox)
-                .filter(Boolean)
-                .sort((a,b)=>(b.width*b.height)-(a.width*a.height))[0];
+                .filter(box=>
+                  box &&
+                  Number.isFinite(box.x) &&
+                  Number.isFinite(box.y) &&
+                  Number.isFinite(box.width) &&
+                  Number.isFinite(box.height) &&
+                  box.width>0 &&
+                  box.height>0
+                );
 
-              if(face){
+              if(boxes.length){
+                /*
+                  Birden fazla insan varsa yalnız en büyük yüzü takip etmek,
+                  diğer kişileri portre kadrajının dışında bırakabiliyordu.
+                  En büyük yüz alanının en az %12'si büyüklüğündeki yüzleri
+                  anlamlı grup sayıp grubun tamamını kapsayan union alanının
+                  merkezini kullanıyoruz.
+                */
+                const largestArea=Math.max(
+                  ...boxes.map(box=>box.width*box.height)
+                );
+
+                const meaningful=boxes.filter(
+                  box=>(box.width*box.height)>=largestArea*.12
+                );
+
+                const group=meaningful.length
+                  ? meaningful
+                  : boxes;
+
+                const left=Math.min(...group.map(box=>box.x));
+                const top=Math.min(...group.map(box=>box.y));
+                const right=Math.max(...group.map(box=>box.x+box.width));
+                const bottom=Math.max(...group.map(box=>box.y+box.height));
+
+                const centerX=(left+right)/2;
+                const centerY=(top+bottom)/2;
+
                 finish({
-                  x:clampFocal(((face.x+face.width/2)/naturalWidth)*100,12,88),
-                  y:clampFocal(((face.y+face.height/2)/naturalHeight)*100,10,82)
+                  x:clampFocal((centerX/naturalWidth)*100,20,80),
+                  y:clampFocal((centerY/naturalHeight)*100,14,74)
                 });
                 return;
               }
@@ -2905,31 +2971,82 @@ function detectSmartFocalPoint(story){
   return task;
 }
 
+async function lockSmartFocalPoint(
+  img,
+  story,
+  timeoutMs=SMART_FOCAL_LOCK_TIMEOUT_MS
+){
+  if(!img)return null;
+
+  const focalKey=
+    `${mediaKey(story)}|${String(story?.image||"").trim()}`;
+
+  img.dataset.focalKey=focalKey;
+
+  if(!smartCropEnabled()){
+    img.style.objectPosition="50% 50%";
+    img.dataset.focalLockedKey=focalKey;
+    return null;
+  }
+
+  /*
+    Odak sonucu slide hareket etmeye başlamadan önce kilitlenir.
+    FaceDetector/saliency sonucu bu kısa pencereye yetişmezse merkez kullanılır;
+    geçiş başladıktan sonra object-position sonradan değiştirilmez.
+  */
+  let timeoutId=0;
+  const timeout=new Promise(resolve=>{
+    timeoutId=setTimeout(()=>resolve(null),Math.max(0,timeoutMs));
+  });
+
+  let focal=null;
+  try{
+    focal=await Promise.race([
+      detectSmartFocalPoint(story),
+      timeout
+    ]);
+  }catch(e){
+    focal=null;
+  }finally{
+    clearTimeout(timeoutId);
+  }
+
+  if(
+    img.dataset.focalKey!==focalKey ||
+    !smartCropEnabled()
+  ){
+    return null;
+  }
+
+  if(focal){
+    img.style.objectPosition=
+      `${focal.x.toFixed(1)}% ${focal.y.toFixed(1)}%`;
+  }else{
+    img.style.objectPosition="50% 50%";
+  }
+
+  img.dataset.focalLockedKey=focalKey;
+  return focal;
+}
+
 function applySmartFocalPoint(img,story){
   if(!img)return;
 
-  img.style.objectPosition="50% 50%";
-  if(!smartCropEnabled())return;
+  const focalKey=
+    `${mediaKey(story)}|${String(story?.image||"").trim()}`;
 
-  const focalKey=`${mediaKey(story)}|${String(story?.image||"").trim()}`;
-  img.dataset.focalKey=focalKey;
+  if(img.dataset.focalLockedKey===focalKey)return;
 
-  const run=async()=>{
-    const focal=await detectSmartFocalPoint(story);
-    if(
-      !focal ||
-      img.dataset.focalKey!==focalKey ||
-      !smartCropEnabled()
-    )return;
-
-    img.style.objectPosition=`${focal.x.toFixed(1)}% ${focal.y.toFixed(1)}%`;
-  };
-
-  if("requestIdleCallback" in window){
-    window.requestIdleCallback(run,{timeout:900});
-  }else{
-    setTimeout(run,0);
-  }
+  /*
+    Görünür/ilk slide için de sonucu sonsuza kadar beklemeyiz.
+    En geç 520 ms'de merkez kilitlenir; geç gelen analiz sonucu ekrandaki
+    görseli sonradan kaydırmaz.
+  */
+  void lockSmartFocalPoint(
+    img,
+    story,
+    SMART_FOCAL_LOCK_TIMEOUT_MS
+  );
 }
 
 function setStoryImage(img,story){
@@ -2950,6 +3067,8 @@ function setStoryImage(img,story){
   img.referrerPolicy="no-referrer";
   img.style.visibility="visible";
   img.style.objectPosition="50% 50%";
+  img.dataset.focalKey="";
+  img.dataset.focalLockedKey="";
 
   if(!direct){
     img.removeAttribute("src");
@@ -4171,6 +4290,123 @@ function sourceKey(source){
   return String(source||"").trim().toLocaleLowerCase("tr-TR");
 }
 
+const NEAR_DUPLICATE_STOPWORDS=new Set([
+  "ve","veya","ile","icin","ama","fakat","ancak","bir","bu","su","o",
+  "da","de","mi","mu","ne","nasil","neden","son","dakika","sondakika",
+  "flas","iste","detay","detaylar","haber","haberi","yeni","canli",
+  "acikladi","aciklandi","belli","oldu","gelisme","gelismesi"
+]);
+
+function normalizeNearDuplicateTitle(value){
+  return normalizeText(value)
+    .replace(/ı/g,"i")
+    .replace(/(\d)[.,](\d)/g,"$1$2")
+    .replace(/[^a-z0-9]+/g," ")
+    .trim();
+}
+
+function nearDuplicateStem(token){
+  const value=String(token||"");
+  if(value.length>=10)return value.slice(0,7);
+  if(value.length>=8)return value.slice(0,6);
+  return value;
+}
+
+function nearDuplicateTokens(story){
+  const normalized=normalizeNearDuplicateTitle(story?.title||"");
+  if(!normalized)return [];
+
+  const tokens=[];
+  const seen=new Set();
+
+  for(const raw of normalized.split(/\s+/)){
+    if(!raw)continue;
+    if(raw.length<3 && !/^\d{2,}$/.test(raw))continue;
+    if(NEAR_DUPLICATE_STOPWORDS.has(raw))continue;
+
+    const token=nearDuplicateStem(raw);
+    if(!token || seen.has(token))continue;
+    seen.add(token);
+    tokens.push(token);
+  }
+
+  return tokens;
+}
+
+function areNearDuplicateStories(a,b){
+  if(!a || !b)return false;
+
+  const sourceA=sourceKey(a.source);
+  const sourceB=sourceKey(b.source);
+
+  /* Özellik yalnız farklı kaynakların aynı olayı tekrar etmesini hedefler. */
+  if(!sourceA || !sourceB || sourceA===sourceB)return false;
+
+  const timeA=storyPublishedMs(a);
+  const timeB=storyPublishedMs(b);
+  if(!timeA || !timeB)return false;
+  if(Math.abs(timeA-timeB)>NEAR_DUPLICATE_WINDOW_MS)return false;
+
+  const tokensA=nearDuplicateTokens(a);
+  const tokensB=nearDuplicateTokens(b);
+  if(tokensA.length<NEAR_DUPLICATE_MIN_COMMON_TOKENS ||
+     tokensB.length<NEAR_DUPLICATE_MIN_COMMON_TOKENS){
+    return false;
+  }
+
+  const setB=new Set(tokensB);
+  let common=0;
+  for(const token of tokensA){
+    if(setB.has(token))common++;
+  }
+
+  if(common<NEAR_DUPLICATE_MIN_COMMON_TOKENS)return false;
+
+  const smaller=Math.min(tokensA.length,tokensB.length);
+  const union=tokensA.length+tokensB.length-common;
+  const overlap=smaller ? common/smaller : 0;
+  const jaccard=union ? common/union : 0;
+
+  return overlap>=NEAR_DUPLICATE_OVERLAP_THRESHOLD &&
+    jaccard>=NEAR_DUPLICATE_JACCARD_THRESHOLD;
+}
+
+function recentStoriesForNearDuplicateCheck(){
+  const result=[];
+  const used=new Set();
+
+  const pushStory=story=>{
+    const key=storyIdentity(story);
+    if(!story || !key || used.has(key))return;
+    used.add(key);
+    result.push(story);
+  };
+
+  /* Mevcut haber mutlaka karşılaştırma penceresinin içindedir. */
+  pushStory(state.stories[state.index]);
+
+  const history=Array.isArray(state.history)?state.history:[];
+  let pos=Math.min(
+    Number.isInteger(state.historyPos)?state.historyPos:history.length-1,
+    history.length-1
+  );
+
+  for(;pos>=0 && result.length<NEAR_DUPLICATE_HISTORY_DEPTH;pos--){
+    const index=history[pos];
+    if(!Number.isInteger(index))continue;
+    pushStory(state.stories[index]);
+  }
+
+  return result.slice(0,NEAR_DUPLICATE_HISTORY_DEPTH);
+}
+
+function nearDuplicateDedupActive(){
+  return nearDuplicateDedupEnabled &&
+    feedOrderMode==="algorithmic" &&
+    feedMode!=="breaking" &&
+    feedMode!=="source";
+}
+
 /*
   İleri giderken farklı bir kaynak seçilir ve seçilen haber history'ye
   eklenir. Geri giderken history'deki gerçek önceki haber gösterilir;
@@ -4210,6 +4446,24 @@ function chooseForwardCandidate(){
     !sessionSeenStories.has(storyIdentity(item.story))
   );
   if(unseen.length)candidates=unseen;
+
+  /*
+    Yalnız algoritmik mod: son 12 haberde gösterilen farklı kaynaklı ve
+    çok benzer başlıklı haberleri aday havuzundan çıkar. Eğer bütün havuz
+    eleniyorsa akışın kilitlenmemesi için mevcut havuzu koru.
+  */
+  if(nearDuplicateDedupActive()){
+    const recentStories=recentStoriesForNearDuplicateCheck();
+    const distinctCandidates=candidates.filter(item=>
+      !recentStories.some(previous=>
+        areNearDuplicateStories(item.story,previous)
+      )
+    );
+
+    if(distinctCandidates.length){
+      candidates=distinctCandidates;
+    }
+  }
 
   candidates.sort((a,b)=>
     algorithmicStoryScore(b.story)-algorithmicStoryScore(a.story)
@@ -4366,6 +4620,10 @@ function preloadStoryAssets(story){
 
   const promise=(async()=>{
     const imagePromise=preloadImage(story.image);
+    const focalPromise=
+      smartCropEnabled() && story?.image
+        ? detectSmartFocalPoint(story).catch(()=>null)
+        : Promise.resolve(null);
     const mediaPromise=videoEnabled
       ? resolveStoryMedia(story).then(media=>{
           if(!media)return;
@@ -4374,7 +4632,11 @@ function preloadStoryAssets(story){
         }).catch(()=>{})
       : Promise.resolve();
 
-    await Promise.allSettled([imagePromise,mediaPromise]);
+    await Promise.allSettled([
+      imagePromise,
+      focalPromise,
+      mediaPromise
+    ]);
   })();
 
   storyAssetPreloadCache.set(key,promise);
@@ -4717,6 +4979,14 @@ async function transitionFromAdTo(nextIndex,fromHistory,dir=1){
     try{await nextImage.decode();}catch(e){}
   }
 
+  if(nextImage){
+    await lockSmartFocalPoint(
+      nextImage,
+      story,
+      SMART_FOCAL_LOCK_TIMEOUT_MS
+    );
+  }
+
   nextSlide.className="slide";
   clearFlowTransitionClasses(adOverlay);
 
@@ -4841,6 +5111,14 @@ async function transitionTo(nextIndex,fromHistory,dir){
     try{
       await nextImage.decode();
     }catch(e){}
+  }
+
+  if(nextImage){
+    await lockSmartFocalPoint(
+      nextImage,
+      story,
+      SMART_FOCAL_LOCK_TIMEOUT_MS
+    );
   }
 
   currentSlide.className="slide";
@@ -6644,6 +6922,29 @@ function telemetryCustomRssAddFailed(reason){
   });
 }
 
+function renderNearDuplicateSetting(){
+  const button=document.getElementById("near-duplicate-setting");
+  const stateEl=button?.querySelector(".media-setting-state");
+  if(!button)return;
+
+  button.classList.toggle("active",nearDuplicateDedupEnabled);
+  button.setAttribute("aria-pressed",nearDuplicateDedupEnabled?"true":"false");
+  if(stateEl)stateEl.textContent=nearDuplicateDedupEnabled?"Açık":"Kapalı";
+}
+
+function setNearDuplicateDedupEnabled(value){
+  const next=Boolean(value);
+  if(next===nearDuplicateDedupEnabled)return;
+
+  nearDuplicateDedupEnabled=next;
+  saveNearDuplicateDedupPreference();
+  renderNearDuplicateSetting();
+
+  /* Daha önce planlanan preload eski seçim kuralına ait olabilir. */
+  plannedForwardStory=null;
+  scheduleNextStoryPreload();
+}
+
 async function addCustomRssFromInput(){
   const input=document.getElementById("custom-rss-input");
   const addButton=document.getElementById("custom-rss-add");
@@ -6789,7 +7090,40 @@ function ensureEnhancementUi(){
     sourcesPanel.insertAdjacentElement("afterend",panel);
   }
 
+  /* Gelişmiş ayarlar sekmesi, mevcut HTML'yi değiştirmeden son sekme olarak eklenir. */
+  const weatherTab=document.querySelector('.menu-tab[data-tab="weather"]');
+  const weatherPanel=document.querySelector('[data-panel="weather"]');
+
+  if(weatherTab && !document.querySelector('.menu-tab[data-tab="advanced"]')){
+    const tab=document.createElement("button");
+    tab.type="button";
+    tab.className="menu-tab";
+    tab.dataset.tab="advanced";
+    tab.textContent="Gelişmiş";
+    weatherTab.insertAdjacentElement("afterend",tab);
+  }
+
+  if(weatherPanel && !document.querySelector('[data-panel="advanced"]')){
+    const panel=document.createElement("div");
+    panel.className="menu-panel";
+    panel.id="advanced-panel";
+    panel.dataset.panel="advanced";
+    panel.innerHTML=`
+      <div class="media-setting-group advanced-setting-group">
+        <button id="near-duplicate-setting" class="media-setting" type="button" aria-pressed="true">
+          <span>
+            <strong>Benzer haberleri azalt</strong>
+            <small>Algoritmik akışta farklı kaynakların aynı olayı anlatan çok benzer haberlerini peş peşe göstermemeye çalışır. Kronolojik sıralamayı etkilemez.</small>
+          </span>
+          <span class="media-setting-state">Açık</span>
+        </button>
+      </div>
+    `;
+    weatherPanel.insertAdjacentElement("afterend",panel);
+  }
+
   renderCustomRssList();
+  renderNearDuplicateSetting();
 
   document.getElementById("duration-play")?.addEventListener("click",e=>{
     e.stopPropagation();
@@ -6799,6 +7133,11 @@ function ensureEnhancementUi(){
   document.getElementById("duration-pause")?.addEventListener("click",e=>{
     e.stopPropagation();
     setAutoAdvancePaused(true);
+  });
+
+  document.getElementById("near-duplicate-setting")?.addEventListener("click",e=>{
+    e.stopPropagation();
+    setNearDuplicateDedupEnabled(!nearDuplicateDedupEnabled);
   });
 
   document.getElementById("custom-rss-add")?.addEventListener("click",e=>{
