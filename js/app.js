@@ -1,9 +1,10 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.18.5";
+window.__floewAppVersion="31.19.0";
 const API="https://thefloew.thefloewback.workers.dev/news";
 const VIDEO_API="https://thefloew.thefloewback.workers.dev/video";
 const META_API="https://thefloew.thefloewback.workers.dev/meta";
 const IMAGE_PROXY_API="https://thefloew.thefloewback.workers.dev/image";
+const CUSTOM_RSS_API="https://thefloew.thefloewback.workers.dev/custom-rss";
 const FLORA_SCORES_API="https://thefloew.thefloewback.workers.dev/stats/flora-scores";
 const NEWS_REQUEST_SESSION=
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`;
@@ -34,8 +35,12 @@ const KEYWORD_FILTER_KEY="thefloew.keywordFilter.v1";
 const KEYWORD_WATCH_KEY="thefloew.keywordWatch.v1";
 const WEATHER_PREFS_KEY="thefloew.weather.v1";
 const COOKIE_NOTICE_KEY="thefloew.cookieNotice.v1";
+const CUSTOM_RSS_COOKIE_KEY="thefloew.customRss.v1";
+const CUSTOM_RSS_MAX_FEEDS=8;
+const CUSTOM_RSS_MAX_URL_LENGTH=320;
+const CUSTOM_RSS_FALLBACK_IMAGE="assets/defaultrss.jpg";
 const REFRESH_MS=120000;
-const SWIPE=70;
+const SWIPE=44;
 
 const ADS_API="https://thefloew.thefloewback.workers.dev/ads";
 const ADS_CACHE_KEY="thefloew.adsCatalog.v5";
@@ -60,6 +65,161 @@ function loadShowDuration(){
 }
 
 let showDurationSeconds=loadShowDuration();
+let autoAdvancePaused=false;
+
+
+function readCookieValue(name){
+  const prefix=`${encodeURIComponent(name)}=`;
+
+  for(const part of String(document.cookie||"").split(";")){
+    const value=part.trim();
+    if(value.startsWith(prefix)){
+      return decodeURIComponent(value.slice(prefix.length));
+    }
+  }
+
+  return "";
+}
+
+function writeCookieValue(name,value,maxAgeSeconds=31536000){
+  document.cookie=
+    `${encodeURIComponent(name)}=${encodeURIComponent(value)}; `+
+    `Path=/; Max-Age=${Math.max(0,Math.round(maxAgeSeconds))}; `+
+    "SameSite=Lax";
+}
+
+function normalizeCustomRssUrl(value){
+  const raw=String(value||"").trim();
+  if(!raw || raw.length>CUSTOM_RSS_MAX_URL_LENGTH)return "";
+
+  try{
+    const url=new URL(raw);
+    if(url.protocol!=="https:" && url.protocol!=="http:")return "";
+    if(url.username || url.password)return "";
+    return url.href;
+  }catch(e){
+    return "";
+  }
+}
+
+function loadCustomRssFeeds(){
+  try{
+    const raw=readCookieValue(CUSTOM_RSS_COOKIE_KEY);
+    if(!raw)return [];
+
+    const parsed=JSON.parse(raw);
+    if(!Array.isArray(parsed))return [];
+
+    const seen=new Set();
+    const feeds=[];
+
+    for(const entry of parsed){
+      const url=normalizeCustomRssUrl(
+        typeof entry==="string" ? entry : entry?.url
+      );
+
+      if(!url || seen.has(url))continue;
+      seen.add(url);
+      feeds.push({url});
+
+      if(feeds.length>=CUSTOM_RSS_MAX_FEEDS)break;
+    }
+
+    return feeds;
+  }catch(e){
+    console.warn("Custom RSS cookie:",e);
+    return [];
+  }
+}
+
+let customRssFeeds=loadCustomRssFeeds();
+let customRssSourceKeys=new Set();
+
+function saveCustomRssFeeds(){
+  try{
+    const payload=JSON.stringify(
+      customRssFeeds.map(feed=>({url:feed.url}))
+    );
+
+    /* Keep comfortably below the practical ~4 KB per-cookie limit. */
+    if(encodeURIComponent(payload).length>3500){
+      return false;
+    }
+
+    writeCookieValue(
+      CUSTOM_RSS_COOKIE_KEY,
+      payload
+    );
+    return true;
+  }catch(e){
+    console.warn("Custom RSS save:",e);
+    return false;
+  }
+}
+
+async function fetchCustomRssFeed(feed){
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),12000);
+
+  try{
+    const url=new URL(CUSTOM_RSS_API);
+    url.searchParams.set("url",feed.url);
+
+    const response=await fetch(url.href,{
+      method:"GET",
+      mode:"cors",
+      credentials:"omit",
+      cache:"no-store",
+      signal:controller.signal,
+      headers:{"Accept":"application/json"}
+    });
+
+    if(!response.ok){
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data=await response.json();
+    const items=Array.isArray(data?.items)
+      ? data.items
+      : Array.isArray(data)
+        ? data
+        : [];
+
+    return items
+      .filter(item=>item?.title && item?.link)
+      .map(item=>({
+        ...item,
+        customRss:true,
+        image:String(item.image||"").trim() || CUSTOM_RSS_FALLBACK_IMAGE
+      }));
+  }finally{
+    clearTimeout(timeout);
+  }
+}
+
+async function loadCustomRssStories(){
+  if(!customRssFeeds.length)return [];
+
+  const settled=await Promise.allSettled(
+    customRssFeeds.map(fetchCustomRssFeed)
+  );
+
+  const stories=[];
+
+  settled.forEach((result,index)=>{
+    if(result.status==="fulfilled"){
+      stories.push(...result.value);
+    }else{
+      console.warn(
+        "Custom RSS:",
+        customRssFeeds[index]?.url,
+        result.reason
+      );
+    }
+  });
+
+  return stories;
+}
 
 const TIME_RANGE_OPTIONS=[
   {value:"1",hours:1,label:"1 saat"},
@@ -328,6 +488,9 @@ const state={
   busy:false,
   timer:null,
   x:0,y:0,t:0,
+  pointerId:null,
+  swipeHandled:false,
+  swipeTouch:false,
   history:[],
   historyPos:0
 };
@@ -341,7 +504,14 @@ const CATEGORIES=[
 const PREFS_KEY="thefloew.preferences.v5";
 const FOREIGN_SOURCE_PREFS_KEY="thefloew.foreignSources.v1";
 const FOREIGN_CATEGORY="#Yabancı";
-const FEED_MODE_ORDER=["breaking","agenda","foreign"];
+const BASE_FEED_MODE_ORDER=["breaking","agenda","foreign"];
+let temporarySourceFilter=null;
+
+function currentFeedModeOrder(){
+  return temporarySourceFilter
+    ? ["breaking","agenda","source","foreign"]
+    : BASE_FEED_MODE_ORDER;
+}
 
 const NEW_CATEGORIES=["#Yaşam","#Sağlık","#Otomotiv","#Sinema","#Müzik","#Edebiyat","#Televizyon","#Bilim","#Moda","#Tarih","#Gezi"];
 const NEW_SOURCES=["shiftdelete.net","onedio","beyazperde","motor1 türkiye","evrim ağacı","bant mag.","bir baba indie","edebiyat haber","elle türkiye","marie claire türkiye","istanbul life","live to bloom","elele","arkeofili","işin detayı"];
@@ -437,6 +607,7 @@ let feedMode="agenda";
 const feedModeStoryKeys={
   agenda:"",
   breaking:"",
+  source:"",
   foreign:""
 };
 const BREAKING_WINDOW_MS=20*60*1000;
@@ -987,6 +1158,19 @@ function storyInBreakingWindow(story){
 }
 
 function storiesForFeedMode(mode){
+  if(mode==="source"){
+    if(!temporarySourceFilter)return [];
+
+    const list=rawStories.filter(s=>{
+      if(sourceKey(s.source)!==temporarySourceFilter.key)return false;
+      if(!storyInTimeRange(s))return false;
+      if(!passesKeywordFilter(s))return false;
+      return true;
+    });
+
+    return orderStoriesForFeed(list,mode);
+  }
+
   if(mode==="foreign"){
     const list=rawStories.filter(s=>{
       if(!s.flowForeign)return false;
@@ -1060,6 +1244,10 @@ function emptyStoriesMessage(){
     return "Seçtiğiniz yabancı kaynak ve zaman aralığında haber bulunamadı.";
   }
 
+  if(feedMode==="source"){
+    return `${temporarySourceFilter?.name||"Bu kaynak"} için seçilen zaman aralığında haber bulunamadı.`;
+  }
+
   return "Seçtiğiniz kaynak, kategori ve zaman aralığında haber bulunamadı.";
 }
 
@@ -1067,6 +1255,67 @@ function setStoryStageVisible(visible){
   slides.forEach(slide=>{
     slide.style.visibility=visible?"visible":"hidden";
   });
+}
+
+function bindFeedTabButton(button){
+  if(!button || button.dataset.floewBound==="1")return;
+
+  button.dataset.floewBound="1";
+  button.addEventListener("pointerdown",e=>e.stopPropagation());
+  button.addEventListener("pointerup",e=>e.stopPropagation());
+  button.addEventListener("click",e=>{
+    e.stopPropagation();
+    switchFeedMode(button.dataset.feedMode||"agenda");
+  });
+}
+
+function ensureTemporarySourceTab(){
+  const tabs=document.getElementById("feed-tabs");
+  if(!tabs || !temporarySourceFilter)return null;
+
+  let button=tabs.querySelector('[data-feed-mode="source"]');
+
+  if(!button){
+    button=document.createElement("button");
+    button.type="button";
+    button.className="feed-tab source-feed-tab";
+    button.dataset.feedMode="source";
+    button.setAttribute("aria-pressed","false");
+
+    const foreign=tabs.querySelector('[data-feed-mode="foreign"]');
+    tabs.insertBefore(button,foreign||null);
+  }
+
+  button.textContent=temporarySourceFilter.name;
+  button.title=`${temporarySourceFilter.name} haberleri`;
+  bindFeedTabButton(button);
+  return button;
+}
+
+function clearTemporarySourceTab(){
+  document.querySelector('[data-feed-mode="source"]')?.remove();
+  temporarySourceFilter=null;
+  feedModeStoryKeys.source="";
+}
+
+function activateTemporarySourceFeed(sourceName){
+  const name=String(sourceName||"").trim();
+  const key=sourceKey(name);
+  if(!name || !key)return;
+
+  if(
+    feedMode==="source" &&
+    temporarySourceFilter?.key===key
+  ){
+    return;
+  }
+
+  temporarySourceFilter={name,key};
+  feedModeStoryKeys.source=storyIdentity(
+    state.stories[state.index]
+  );
+  ensureTemporarySourceTab();
+  switchFeedMode("source");
 }
 
 function renderFeedMode(){
@@ -1091,8 +1340,9 @@ function renderFeedMode(){
 }
 
 function switchFeedMode(nextMode){
+  const modeOrder=currentFeedModeOrder();
   const next=
-    FEED_MODE_ORDER.includes(nextMode)
+    modeOrder.includes(nextMode)
       ? nextMode
       : "agenda";
 
@@ -1118,6 +1368,11 @@ function switchFeedMode(nextMode){
 
   feedMode=next;
   filterReturnStoryKey="";
+
+  if(previousMode==="source" && next!=="source"){
+    clearTemporarySourceTab();
+  }
+
   closeQuickPanels();
   renderFeedMode();
   showFullscreenButton();
@@ -1160,8 +1415,8 @@ function switchFeedMode(nextMode){
     Soldaki bir sekmeye geçiliyorsa yeni içerik soldan,
     sağdaki bir sekmeye geçiliyorsa sağdan gelir.
   */
-  const previousModeIndex=FEED_MODE_ORDER.indexOf(previousMode);
-  const nextModeIndex=FEED_MODE_ORDER.indexOf(next);
+  const previousModeIndex=modeOrder.indexOf(previousMode);
+  const nextModeIndex=modeOrder.indexOf(next);
   const movingRight=nextModeIndex>previousModeIndex;
   const enterClass=movingRight ? "enter-left" : "enter-right";
   const exitClass=movingRight ? "exit-left" : "exit-right";
@@ -1520,6 +1775,7 @@ function resetSlideMedia(el){
   const image=el.querySelector(".slide-image");
   const video=el.querySelector(".slide-video");
   const embed=el.querySelector(".slide-embed");
+  const dailymotionHost=el.querySelector(".slide-dailymotion");
 
   if(image){
     image.onerror=null;
@@ -1548,6 +1804,15 @@ function resetSlideMedia(el){
     embed.classList.remove("media-visible");
     embed.setAttribute("aria-hidden","true");
     embed.removeAttribute("data-provider");
+  }
+
+  if(dailymotionHost){
+    try{
+      window.dailymotion?.destroy?.(dailymotionHost.id);
+    }catch(e){}
+    dailymotionHost.replaceChildren();
+    dailymotionHost.classList.remove("media-visible");
+    dailymotionHost.setAttribute("aria-hidden","true");
   }
 }
 
@@ -1854,7 +2119,7 @@ function cleanEmbedUrl(media){
   }
 }
 
-function showEmbedVideo(el,story,media,token){
+function showGenericEmbedVideo(el,story,media,token){
   const image=el.querySelector(".slide-image");
   const embed=el.querySelector(".slide-embed");
 
@@ -1897,6 +2162,190 @@ function showEmbedVideo(el,story,media,token){
   );
 
   embed.src=cleanUrl;
+}
+
+
+let dailymotionLibraryPromise=null;
+let dailymotionLibraryPlayerId="";
+let dailymotionHostSequence=0;
+
+function dailymotionMediaParts(media){
+  if(String(media?.provider||"").toLowerCase()!=="dailymotion")return null;
+
+  try{
+    const url=new URL(media.url);
+    const videoId=String(url.searchParams.get("video")||"").trim();
+    const playerMatch=url.pathname.match(
+      /\/player\/([A-Za-z0-9_-]+)\.html$/i
+    );
+    const playerId=playerMatch?.[1]||"";
+
+    if(!/^[A-Za-z0-9]{5,24}$/.test(videoId))return null;
+    if(!/^[A-Za-z0-9_-]{3,40}$/.test(playerId))return null;
+
+    return {videoId,playerId};
+  }catch(e){
+    return null;
+  }
+}
+
+function ensureDailymotionHost(el){
+  let host=el.querySelector(".slide-dailymotion");
+  if(host)return host;
+
+  host=document.createElement("div");
+  host.className="slide-dailymotion";
+  host.id=`floew-dailymotion-${++dailymotionHostSequence}`;
+  host.setAttribute("aria-hidden","true");
+
+  const embed=el.querySelector(".slide-embed");
+  if(embed){
+    embed.insertAdjacentElement("afterend",host);
+  }else{
+    el.appendChild(host);
+  }
+
+  return host;
+}
+
+function ensureDailymotionLibrary(playerId){
+  if(window.dailymotion?.createPlayer){
+    return Promise.resolve(window.dailymotion);
+  }
+
+  if(dailymotionLibraryPromise){
+    return dailymotionLibraryPromise;
+  }
+
+  dailymotionLibraryPlayerId=playerId;
+
+  dailymotionLibraryPromise=new Promise(resolve=>{
+    const existing=document.querySelector(
+      'script[data-floew-dailymotion-library="1"]'
+    );
+
+    const finish=()=>{
+      resolve(
+        window.dailymotion?.createPlayer
+          ? window.dailymotion
+          : null
+      );
+    };
+
+    if(existing){
+      if(window.dailymotion?.createPlayer){
+        finish();
+      }else{
+        existing.addEventListener("load",finish,{once:true});
+        existing.addEventListener("error",()=>resolve(null),{once:true});
+      }
+      return;
+    }
+
+    const script=document.createElement("script");
+    script.src=`https://geo.dailymotion.com/libs/player/${encodeURIComponent(playerId)}.js`;
+    script.async=true;
+    script.referrerPolicy="strict-origin-when-cross-origin";
+    script.dataset.floewDailymotionLibrary="1";
+    script.dataset.floewDailymotionPlayerId=playerId;
+    script.addEventListener("load",finish,{once:true});
+    script.addEventListener("error",()=>{
+      console.warn("Flöw video: Dailymotion Player Library yüklenemedi.");
+      dailymotionLibraryPromise=null;
+      dailymotionLibraryPlayerId="";
+      resolve(null);
+    },{once:true});
+    document.body.appendChild(script);
+  });
+
+  return dailymotionLibraryPromise;
+}
+
+async function showDailymotionVideo(el,story,media,token){
+  const parts=dailymotionMediaParts(media);
+  if(!parts){
+    showGenericEmbedVideo(el,story,media,token);
+    return;
+  }
+
+  const image=el.querySelector(".slide-image");
+  const host=ensureDailymotionHost(el);
+  const dm=await ensureDailymotionLibrary(parts.playerId);
+
+  if(
+    !dm?.createPlayer ||
+    !videoEnabled ||
+    token!==el.dataset.mediaToken ||
+    mediaKey(story)!==el.dataset.storyKey
+  ){
+    if(dm?.createPlayer){
+      return;
+    }
+    showGenericEmbedVideo(el,story,media,token);
+    return;
+  }
+
+  try{
+    try{dm.destroy?.(host.id)}catch(e){}
+    host.replaceChildren();
+
+    const player=await dm.createPlayer(host.id,{
+      player:parts.playerId,
+      video:parts.videoId,
+      params:{
+        loop:true,
+        scaleMode:"fill"
+      }
+    });
+
+    if(
+      !videoEnabled ||
+      token!==el.dataset.mediaToken ||
+      mediaKey(story)!==el.dataset.storyKey
+    ){
+      try{dm.destroy?.(host.id)}catch(e){}
+      return;
+    }
+
+    try{await player.setVolume?.(0)}catch(e){}
+    try{await player.setScaleMode?.("fill")}catch(e){}
+
+    let played=false;
+    try{
+      await player.play();
+      played=true;
+    }catch(e){
+      await new Promise(resolve=>setTimeout(resolve,250));
+      try{
+        await player.play();
+        played=true;
+      }catch(innerError){}
+    }
+
+    if(!played){
+      try{dm.destroy?.(host.id)}catch(e){}
+      showGenericEmbedVideo(el,story,media,token);
+      return;
+    }
+
+    host.classList.add("media-visible");
+    host.setAttribute("aria-hidden","false");
+    if(image)image.style.display="none";
+  }catch(error){
+    console.warn("Flöw video: Dailymotion SDK:",error);
+    showGenericEmbedVideo(el,story,media,token);
+  }
+}
+
+function showEmbedVideo(el,story,media,token){
+  const provider=String(media?.provider||"").toLowerCase();
+
+  if(provider==="dailymotion"){
+    showDailymotionVideo(el,story,media,token);
+    return;
+  }
+
+  showGenericEmbedVideo(el,story,media,token);
 }
 
 async function prepareSlideMedia(el,story){
@@ -1965,9 +2414,21 @@ function applyVideoSetting(){
   }
 }
 
-function storyImageProxyUrl(story){
+const ARTICLE_FIRST_IMAGE_SOURCES=new Set([
+  "halk tv",
+  "aydınlık",
+  "aydinlik"
+]);
+
+function storyPrefersArticleImage(story){
+  return ARTICLE_FIRST_IMAGE_SOURCES.has(
+    sourceKey(story?.source)
+  );
+}
+
+function storyImageProxyUrl(story,{preferArticle=false}={}){
   const imageUrl=String(story?.image||"").trim();
-  if(!imageUrl)return "";
+  if(!/^https?:\/\//i.test(imageUrl))return "";
 
   const proxy=new URL(IMAGE_PROXY_API);
   proxy.searchParams.set("url",imageUrl);
@@ -1975,6 +2436,10 @@ function storyImageProxyUrl(story){
   const articleUrl=String(story?.link||"").trim();
   if(articleUrl){
     proxy.searchParams.set("ref",articleUrl);
+  }
+
+  if(preferArticle || storyPrefersArticleImage(story)){
+    proxy.searchParams.set("preferArticle","1");
   }
 
   return proxy.href;
@@ -2306,7 +2771,12 @@ function setStoryImage(img,story){
 
   const direct=String(story?.image||"").trim();
   const proxied=storyImageProxyUrl(story);
+  const articleProxy=storyImageProxyUrl(
+    story,
+    {preferArticle:true}
+  );
   const externalProxy=storyExternalImageProxyUrl(story);
+  const articleFirst=storyPrefersArticleImage(story) && articleProxy;
 
   img.onerror=null;
   img.onload=null;
@@ -2321,16 +2791,41 @@ function setStoryImage(img,story){
     return;
   }
 
-  img.dataset.imageStage="direct";
+  img.dataset.imageStage=articleFirst
+    ? "article-proxy"
+    : "direct";
 
   img.onload=()=>{
+    const stage=img.dataset.imageStage;
+
+    /*
+      RSS resmi tarayıcıda başarıyla açılsa bile küçük bir thumbnail olabilir.
+      Bu durumda hata beklemeden Worker'a haber sayfasındaki OG/JSON-LD
+      görselini tercih etmesini söyleriz.
+    */
+    if(
+      stage==="direct" &&
+      articleProxy &&
+      /^https?:\/\//i.test(direct) &&
+      (
+        (img.naturalWidth>0 && img.naturalWidth<700) ||
+        (img.naturalHeight>0 && img.naturalHeight<400)
+      )
+    ){
+      img.dataset.imageStage="article-proxy";
+      img.src=articleProxy;
+      return;
+    }
+
     img.style.visibility="visible";
     applySmartFocalPoint(img,story);
   };
 
   img.onerror=()=>{
+    const stage=img.dataset.imageStage;
+
     if(
-      img.dataset.imageStage==="direct" &&
+      stage==="direct" &&
       proxied &&
       proxied!==img.src
     ){
@@ -2340,7 +2835,17 @@ function setStoryImage(img,story){
     }
 
     if(
-      img.dataset.imageStage==="proxy" &&
+      stage==="article-proxy" &&
+      direct &&
+      direct!==img.src
+    ){
+      img.dataset.imageStage="direct-fallback";
+      img.src=direct;
+      return;
+    }
+
+    if(
+      (stage==="proxy" || stage==="direct-fallback") &&
       externalProxy &&
       externalProxy!==img.src
     ){
@@ -2353,7 +2858,7 @@ function setStoryImage(img,story){
     img.style.visibility="hidden";
   };
 
-  img.src=direct;
+  img.src=articleFirst ? articleProxy : direct;
 }
 
 function fill(el,s){
@@ -2369,7 +2874,26 @@ function fill(el,s){
   logo.onerror=()=>{logo.style.visibility="hidden"};
   logo.onload=()=>{logo.style.visibility="visible"};
 
-  el.querySelector(".source").textContent=s.source||"";
+  const sourceEl=el.querySelector(".source");
+  if(sourceEl){
+    sourceEl.textContent=s.source||"";
+    sourceEl.title="Bu kaynakten tüm haberleri göster";
+    sourceEl.setAttribute("role","button");
+    sourceEl.tabIndex=0;
+    sourceEl.onpointerdown=e=>e.stopPropagation();
+    sourceEl.onpointerup=e=>e.stopPropagation();
+    sourceEl.onclick=e=>{
+      e.stopPropagation();
+      activateTemporarySourceFeed(s.source);
+    };
+    sourceEl.onkeydown=e=>{
+      if(e.key==="Enter" || e.key===" "){
+        e.preventDefault();
+        e.stopPropagation();
+        activateTemporarySourceFeed(s.source);
+      }
+    };
+  }
   const category=el.querySelector(".category");
   if(category) category.textContent=s.flowCategory||"#Yaşam";
   el.querySelector("h1").textContent=s.title||"";
@@ -3430,6 +3954,10 @@ async function tryPlayDueAd(){
 
 function timer(){
   clearTimeout(state.timer);
+  state.timer=null;
+
+  if(autoAdvancePaused)return;
+
   state.timer=setTimeout(
     ()=>move(1,{origin:"auto"}),
     Math.max(5,showDurationSeconds)*1000
@@ -4357,16 +4885,22 @@ async function performNewsLoad(){
         ? Promise.resolve(knownSources)
         : fetchSourceCatalog();
 
-    const settled=await settleNewsBatches(
-      NEWS_BATCH_COUNT,
-      NEWS_BATCH_CONCURRENCY
-    );
+    const [settled,customStories]=await Promise.all([
+      settleNewsBatches(
+        NEWS_BATCH_COUNT,
+        NEWS_BATCH_CONCURRENCY
+      ),
+      loadCustomRssStories()
+    ]);
 
     await catalogPromise;
 
-    const successful=settled
-      .filter(result=>result.status==="fulfilled")
-      .flatMap(result=>result.value);
+    const successful=[
+      ...settled
+        .filter(result=>result.status==="fulfilled")
+        .flatMap(result=>result.value),
+      ...customStories
+    ];
 
     const failures=settled
       .map((result,batch)=>({result,batch}))
@@ -4434,6 +4968,37 @@ async function performNewsLoad(){
 
     rawStories=enrichStories(incoming);
 
+    /*
+      /meta yalnız yerleşik kaynakları bilir. Özel RSS kaynaklarını her yüklemede
+      canlı sonuçtan kataloğa ekleyip artık silinmiş özel kaynakları çıkarıyoruz.
+    */
+    if(customRssSourceKeys.size){
+      knownSources=knownSources.filter(
+        name=>!customRssSourceKeys.has(sourceKey(name))
+      );
+    }
+
+    customRssSourceKeys=new Set();
+
+    const customSourceNames=[...new Map(
+      rawStories
+        .filter(story=>story.customRss)
+        .map(story=>[
+          sourceKey(story.source),
+          story.source||"Özel RSS"
+        ])
+    ).values()];
+
+    for(const name of customSourceNames){
+      const key=sourceKey(name);
+      if(!key)continue;
+      customRssSourceKeys.add(key);
+
+      if(!knownSources.some(source=>sourceKey(source)===key)){
+        knownSources.push(name);
+      }
+    }
+
     if(
       filterReturnStoryKey &&
       !rawStories.some(
@@ -4474,6 +5039,11 @@ async function performNewsLoad(){
         );
       }else{
         filters.sources=new Set(available);
+      }
+
+      /* Yeni eklenen özel RSS kaynakları ilk yüklemede açık gelsin. */
+      for(const key of customRssSourceKeys){
+        filters.sources.add(key);
       }
 
       sourcePreferencesApplied=true;
@@ -5579,6 +6149,239 @@ function setTimeRange(value){
   applyFilters();
 }
 
+function renderCustomRssList(){
+  const list=document.getElementById("custom-rss-list");
+  if(!list)return;
+
+  list.replaceChildren();
+
+  if(!customRssFeeds.length){
+    const empty=document.createElement("div");
+    empty.className="custom-rss-empty";
+    empty.textContent="Henüz özel RSS kaynağı eklenmedi.";
+    list.appendChild(empty);
+    return;
+  }
+
+  customRssFeeds.forEach((feed,index)=>{
+    const row=document.createElement("div");
+    row.className="custom-rss-row";
+
+    const text=document.createElement("div");
+    text.className="custom-rss-url";
+    text.textContent=feed.url;
+    text.title=feed.url;
+
+    const remove=document.createElement("button");
+    remove.type="button";
+    remove.className="custom-rss-remove";
+    remove.dataset.customRssRemove=String(index);
+    remove.setAttribute("aria-label","RSS kaynağını kaldır");
+    remove.title="RSS kaynağını kaldır";
+    remove.textContent="×";
+
+    row.append(text,remove);
+    list.appendChild(row);
+  });
+}
+
+function setCustomRssFeedback(message="",isError=false){
+  const feedback=document.getElementById("custom-rss-feedback");
+  if(!feedback)return;
+
+  feedback.textContent=message;
+  feedback.classList.toggle("error",Boolean(isError));
+  feedback.hidden=!message;
+}
+
+async function reloadAfterCustomRssChange(){
+  if(newsLoadInFlight){
+    try{await newsLoadInFlight}catch(e){}
+  }
+
+  sourcePreferencesApplied=false;
+  await load();
+}
+
+async function addCustomRssFromInput(){
+  const input=document.getElementById("custom-rss-input");
+  if(!input)return;
+
+  const url=normalizeCustomRssUrl(input.value);
+
+  if(!url){
+    setCustomRssFeedback("Geçerli bir http/https RSS adresi girin.",true);
+    return;
+  }
+
+  if(customRssFeeds.some(feed=>feed.url===url)){
+    setCustomRssFeedback("Bu RSS kaynağı zaten ekli.",true);
+    return;
+  }
+
+  if(customRssFeeds.length>=CUSTOM_RSS_MAX_FEEDS){
+    setCustomRssFeedback(`En fazla ${CUSTOM_RSS_MAX_FEEDS} özel RSS kaynağı eklenebilir.`,true);
+    return;
+  }
+
+  customRssFeeds.push({url});
+
+  if(!saveCustomRssFeeds()){
+    customRssFeeds.pop();
+    setCustomRssFeedback("Özel RSS listesi çerez sınırına ulaştı.",true);
+    return;
+  }
+
+  input.value="";
+  renderCustomRssList();
+  setCustomRssFeedback("RSS kaynağı eklendi.");
+
+  await reloadAfterCustomRssChange();
+}
+
+function ensureEnhancementUi(){
+  /* Cookie banner: current HTML lost the consent buttons; rebuild it in place. */
+  const cookieBand=document.querySelector("#cookie-notice .status-band");
+
+  if(cookieBand && !document.getElementById("cookie-accept")){
+    cookieBand.innerHTML=`
+      <span class="status-message cookie-info-message">Çerez politikası hakkında bilgi.</span>
+      <span class="status-message cookie-consent-message">The Flöw deneyimi ve anonim kullanım ölçümü için çerezleri kullanabilir.</span>
+      <div class="cookie-actions" aria-label="Çerez tercihi">
+        <button id="cookie-reject" class="cookie-action secondary" type="button">Reddet</button>
+        <button id="cookie-accept" class="cookie-action" type="button">Kabul et</button>
+      </div>
+      <button id="cookie-close" class="status-close" type="button" aria-label="Kapat" title="Kapat">×</button>
+    `;
+  }
+
+  /* Haber süresi yanına ayrı devam / duraklat düğmeleri. */
+  const durationControl=document.getElementById("duration-plus")?.parentElement;
+
+  if(durationControl && !document.getElementById("duration-play")){
+    const play=document.createElement("button");
+    play.id="duration-play";
+    play.type="button";
+    play.className="duration-auto-button";
+    play.textContent="▶︎";
+    play.title="Otomatik kaydırmayı devam ettir";
+    play.setAttribute("aria-label",play.title);
+
+    const pause=document.createElement("button");
+    pause.id="duration-pause";
+    pause.type="button";
+    pause.className="duration-auto-button";
+    pause.textContent="⏸";
+    pause.title="Otomatik kaydırmayı durdur";
+    pause.setAttribute("aria-label",pause.title);
+
+    durationControl.append(play,pause);
+  }
+
+  /* Kaynaklar'ın hemen yanına Özel kaynaklar sekmesi. */
+  const sourcesTab=document.querySelector('.menu-tab[data-tab="sources"]');
+  const sourcesPanel=document.querySelector('[data-panel="sources"]');
+
+  if(sourcesTab && !document.querySelector('.menu-tab[data-tab="custom-sources"]')){
+    const tab=document.createElement("button");
+    tab.type="button";
+    tab.className="menu-tab";
+    tab.dataset.tab="custom-sources";
+    tab.textContent="Özel kaynaklar";
+    sourcesTab.insertAdjacentElement("afterend",tab);
+  }
+
+  if(sourcesPanel && !document.querySelector('[data-panel="custom-sources"]')){
+    const panel=document.createElement("div");
+    panel.className="menu-panel";
+    panel.id="custom-sources-panel";
+    panel.dataset.panel="custom-sources";
+    panel.innerHTML=`
+      <div class="custom-rss-setting">
+        <div class="setting-copy custom-rss-copy">
+          <strong>Özel RSS kaynakları</strong>
+          <small>RSS adresini ekleyin. Kaynaklar bu cihazdaki çerezde saklanır.</small>
+        </div>
+        <div class="custom-rss-add-row">
+          <input id="custom-rss-input" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://ornek.com/rss.xml" aria-label="RSS adresi">
+          <button id="custom-rss-add" type="button" aria-label="RSS kaynağı ekle" title="RSS kaynağı ekle">+</button>
+        </div>
+        <div id="custom-rss-feedback" class="custom-rss-feedback" hidden></div>
+        <div id="custom-rss-list" class="custom-rss-list"></div>
+      </div>
+    `;
+    sourcesPanel.insertAdjacentElement("afterend",panel);
+  }
+
+  renderCustomRssList();
+
+  document.getElementById("duration-play")?.addEventListener("click",e=>{
+    e.stopPropagation();
+    setAutoAdvancePaused(false);
+  });
+
+  document.getElementById("duration-pause")?.addEventListener("click",e=>{
+    e.stopPropagation();
+    setAutoAdvancePaused(true);
+  });
+
+  document.getElementById("custom-rss-add")?.addEventListener("click",e=>{
+    e.stopPropagation();
+    addCustomRssFromInput();
+  });
+
+  document.getElementById("custom-rss-input")?.addEventListener("keydown",e=>{
+    e.stopPropagation();
+    if(e.key==="Enter"){
+      e.preventDefault();
+      addCustomRssFromInput();
+    }
+  });
+
+  document.getElementById("custom-rss-list")?.addEventListener("click",async e=>{
+    const button=e.target.closest?.("[data-custom-rss-remove]");
+    if(!button)return;
+
+    e.stopPropagation();
+    const index=Number(button.dataset.customRssRemove);
+    if(!Number.isInteger(index) || !customRssFeeds[index])return;
+
+    customRssFeeds.splice(index,1);
+    saveCustomRssFeeds();
+    renderCustomRssList();
+    setCustomRssFeedback("RSS kaynağı kaldırıldı.");
+    await reloadAfterCustomRssChange();
+  });
+}
+
+function renderAutoAdvanceSetting(){
+  const play=document.getElementById("duration-play");
+  const pause=document.getElementById("duration-pause");
+
+  if(play){
+    play.classList.toggle("active",!autoAdvancePaused);
+    play.setAttribute("aria-pressed",autoAdvancePaused?"false":"true");
+  }
+
+  if(pause){
+    pause.classList.toggle("active",autoAdvancePaused);
+    pause.setAttribute("aria-pressed",autoAdvancePaused?"true":"false");
+  }
+}
+
+function setAutoAdvancePaused(paused){
+  autoAdvancePaused=Boolean(paused);
+  clearTimeout(state.timer);
+  state.timer=null;
+  renderAutoAdvanceSetting();
+
+  if(!autoAdvancePaused && state.stories.length){
+    timer();
+  }
+}
+
+ensureEnhancementUi();
+
 function renderDurationSetting(){
   const value=document.getElementById("duration-value");
   const minus=document.getElementById("duration-minus");
@@ -5587,6 +6390,7 @@ function renderDurationSetting(){
   if(value)value.textContent=`${showDurationSeconds} sn`;
   if(minus)minus.disabled=showDurationSeconds<=5;
   if(plus)plus.disabled=showDurationSeconds>=60;
+  renderAutoAdvanceSetting();
 }
 
 function setShowDuration(value){
@@ -5669,14 +6473,7 @@ document.getElementById("keyword-watch-input")?.addEventListener("keydown",e=>{
   }
 });
 
-document.querySelectorAll(".feed-tab").forEach(button=>{
-  button.addEventListener("pointerdown",e=>e.stopPropagation());
-  button.addEventListener("pointerup",e=>e.stopPropagation());
-  button.addEventListener("click",e=>{
-    e.stopPropagation();
-    switchFeedMode(button.dataset.feedMode||"agenda");
-  });
-});
+document.querySelectorAll(".feed-tab").forEach(bindFeedTabButton);
 
 document.querySelectorAll(".feed-order-option").forEach(button=>{
   button.addEventListener("pointerdown",e=>e.stopPropagation());
@@ -5706,28 +6503,22 @@ function updateAnalyticsConsentNotice(){
   const notice=document.getElementById("cookie-notice");
   if(!notice)return;
 
-  /*
-    Google demografi katmanı Worker'da henüz yapılandırılmadıysa eski
-    bilgilendirme davranışını koru. Yapılandırıldığında aktif seçim iste.
-  */
-  if(!ga4CollectionEnabled){
-    try{
-      if(
-        localStorage.getItem(COOKIE_NOTICE_KEY)==="dismissed"
-      ){
-        notice.hidden=true;
-        return;
-      }
-    }catch(e){}
+  let acceptedLocally=false;
+  try{
+    acceptedLocally=
+      localStorage.getItem(COOKIE_NOTICE_KEY)==="accepted";
+  }catch(e){}
 
-    notice.dataset.mode="info";
-    notice.hidden=false;
-    return;
-  }
-
-  const consent=getGa4Consent();
-
-  if(consent){
+  if(ga4CollectionEnabled){
+    /*
+      "denied" analitik tercihi korunur, ancak Reddet seçimi banner'ı
+      sonraki site girişlerinde kalıcı olarak kapatmaz.
+    */
+    if(getGa4Consent()==="granted"){
+      notice.hidden=true;
+      return;
+    }
+  }else if(acceptedLocally){
     notice.hidden=true;
     return;
   }
@@ -5740,14 +6531,18 @@ function showCookieNoticeIfNeeded(){
   updateAnalyticsConsentNotice();
 }
 
-function dismissCookieNotice(){
-  hideCookieNotice();
-
+function rememberCookieAcceptance(){
   try{
     localStorage.setItem(
       COOKIE_NOTICE_KEY,
-      "dismissed"
+      "accepted"
     );
+  }catch(e){}
+}
+
+function forgetCookieAcceptance(){
+  try{
+    localStorage.removeItem(COOKIE_NOTICE_KEY);
   }catch(e){}
 }
 
@@ -5755,20 +6550,17 @@ document.getElementById("cookie-close")?.addEventListener("pointerdown",e=>e.sto
 document.getElementById("cookie-close")?.addEventListener("pointerup",e=>e.stopPropagation());
 document.getElementById("cookie-close")?.addEventListener("click",e=>{
   e.stopPropagation();
-
-  if(ga4CollectionEnabled){
-    setGa4Consent("denied");
-    hideCookieNotice();
-  }else{
-    dismissCookieNotice();
-  }
+  forgetCookieAcceptance();
+  if(ga4CollectionEnabled)setGa4Consent("denied");
+  hideCookieNotice();
 });
 
 document.getElementById("cookie-reject")?.addEventListener("pointerdown",e=>e.stopPropagation());
 document.getElementById("cookie-reject")?.addEventListener("pointerup",e=>e.stopPropagation());
 document.getElementById("cookie-reject")?.addEventListener("click",e=>{
   e.stopPropagation();
-  setGa4Consent("denied");
+  forgetCookieAcceptance();
+  if(ga4CollectionEnabled)setGa4Consent("denied");
   hideCookieNotice();
 });
 
@@ -5776,7 +6568,8 @@ document.getElementById("cookie-accept")?.addEventListener("pointerdown",e=>e.st
 document.getElementById("cookie-accept")?.addEventListener("pointerup",e=>e.stopPropagation());
 document.getElementById("cookie-accept")?.addEventListener("click",e=>{
   e.stopPropagation();
-  setGa4Consent("granted");
+  rememberCookieAcceptance();
+  if(ga4CollectionEnabled)setGa4Consent("granted");
   hideCookieNotice();
 });
 
@@ -6636,6 +7429,10 @@ window.addEventListener("keydown",e=>{
 window.addEventListener("pointerdown",e=>{
   if(e.button!==0)return;
 
+  state.pointerId=null;
+  state.swipeHandled=false;
+  state.swipeTouch=false;
+
   if(
     e.pointerType==="touch" ||
     (
@@ -6661,6 +7458,71 @@ window.addEventListener("pointerdown",e=>{
   if(e.target.closest && e.target.closest("#pip-button"))return;
   if(e.target.closest && e.target.closest("#menu-overlay"))return;
   state.x=e.clientX;state.y=e.clientY;state.t=performance.now();
+  state.pointerId=e.pointerId;
+  state.swipeTouch=
+    e.pointerType==="touch" ||
+    (
+      window.matchMedia?.("(pointer: coarse)")?.matches &&
+      e.pointerType!=="mouse"
+    );
+});
+
+/*
+  Mobilde parmağın kalkmasını bekleme: baskın eksende eşik aşılır aşılmaz
+  yalnız bir kez gezin. pointerup aynı hareketi ikinci kez çalıştırmaz.
+*/
+window.addEventListener("pointermove",e=>{
+  if(
+    !state.swipeTouch ||
+    state.swipeHandled ||
+    state.pointerId===null ||
+    e.pointerId!==state.pointerId ||
+    state.busy ||
+    adActive
+  )return;
+
+  if(navigationBlockingPanelOpen())return;
+
+  const dx=e.clientX-state.x;
+  const dy=e.clientY-state.y;
+  const dt=performance.now()-state.t;
+
+  if(dt>1200)return;
+
+  if(
+    Math.abs(dx)>=SWIPE &&
+    Math.abs(dx)>Math.abs(dy)
+  ){
+    const order=currentFeedModeOrder();
+    const currentModeIndex=order.indexOf(feedMode);
+    const targetModeIndex=
+      currentModeIndex + (dx<0 ? 1 : -1);
+
+    state.swipeHandled=true;
+
+    if(
+      targetModeIndex>=0 &&
+      targetModeIndex<order.length
+    ){
+      switchFeedMode(order[targetModeIndex]);
+    }
+    return;
+  }
+
+  if(
+    Math.abs(dy)>=SWIPE &&
+    Math.abs(dy)>=Math.abs(dx)
+  ){
+    state.swipeHandled=true;
+    move(dy<0?1:-1);
+  }
+},{passive:true});
+
+window.addEventListener("pointercancel",e=>{
+  if(e.pointerId!==state.pointerId)return;
+  state.pointerId=null;
+  state.swipeHandled=false;
+  state.swipeTouch=false;
 });
 
 window.addEventListener("pointerup",e=>{
@@ -6681,6 +7543,16 @@ window.addEventListener("pointerup",e=>{
   if(e.target.closest && e.target.closest("#keyword-watch-panel"))return;
   if(e.target.closest && e.target.closest("#pip-button"))return;
   if(e.target.closest && e.target.closest("#menu-overlay"))return;
+
+  if(
+    state.swipeHandled &&
+    e.pointerId===state.pointerId
+  ){
+    state.pointerId=null;
+    state.swipeHandled=false;
+    state.swipeTouch=false;
+    return;
+  }
 
   if(navigationBlockingPanelOpen()){
     closeQuickPanels();
@@ -6705,16 +7577,17 @@ window.addEventListener("pointerup",e=>{
     Math.abs(dx)>Math.abs(dy) &&
     dt<=1000
   ){
-    const currentModeIndex=FEED_MODE_ORDER.indexOf(feedMode);
+    const order=currentFeedModeOrder();
+    const currentModeIndex=order.indexOf(feedMode);
     const targetModeIndex=
       currentModeIndex + (dx<0 ? 1 : -1);
 
     if(
       targetModeIndex>=0 &&
-      targetModeIndex<FEED_MODE_ORDER.length
+      targetModeIndex<order.length
     ){
       switchFeedMode(
-        FEED_MODE_ORDER[targetModeIndex]
+        order[targetModeIndex]
       );
     }
   }else if(
@@ -6735,6 +7608,10 @@ window.addEventListener("pointerup",e=>{
   ){
     move(1);
   }
+
+  state.pointerId=null;
+  state.swipeHandled=false;
+  state.swipeTouch=false;
 });
 
 window.addEventListener("dragstart",e=>e.preventDefault());
