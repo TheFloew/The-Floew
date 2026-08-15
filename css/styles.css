@@ -3204,3 +3204,199 @@ body.foreign-mode #time-range-button{
     }
   }
 }
+
+/* =====================================================================
+   V31.19.0 — source feed / custom RSS / instant mobile swipe / autoplay
+   ===================================================================== */
+
+/* Kaynak adı artık geçici kaynak sekmesini açan bir kontrol. */
+.source{
+  pointer-events:auto !important;
+  cursor:pointer;
+  text-underline-offset:3px;
+}
+.source:hover,
+.source:focus-visible{
+  opacity:1;
+  text-decoration:underline;
+  outline:none;
+}
+
+/* Dinamik kaynak sekmesi Gündem ile Yabancı arasında oluşur. */
+.source-feed-tab{
+  max-width:min(28vw,260px);
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+/* Dailymotion Player Library için iframe yerine programatik host. */
+.slide-dailymotion{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  background:#000;
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  z-index:1;
+}
+.slide-dailymotion.media-visible{
+  opacity:1;
+  visibility:visible;
+}
+.slide-dailymotion,
+.slide-dailymotion *{
+  pointer-events:none !important;
+  user-select:none !important;
+  -webkit-user-select:none !important;
+}
+.slide-dailymotion > *,
+.slide-dailymotion iframe{
+  width:100% !important;
+  height:100% !important;
+  max-width:none !important;
+  max-height:none !important;
+  border:0 !important;
+}
+
+/* Haber süresi yanındaki ayrı devam/duraklat kontrolleri. */
+.duration-control .duration-auto-button{
+  font-size:15px;
+  line-height:30px;
+}
+.duration-control .duration-auto-button.active{
+  border-color:rgba(255,255,255,.72);
+  background:rgba(255,255,255,.14);
+}
+
+/* Beş Preferences sekmesi aynı panel genişliğini korur. */
+#custom-sources-panel{
+  width:100% !important;
+  min-width:100% !important;
+  max-width:100% !important;
+  box-sizing:border-box !important;
+}
+
+.custom-rss-setting{
+  width:100%;
+}
+.custom-rss-copy{
+  margin-bottom:14px;
+}
+.custom-rss-add-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 38px;
+  gap:8px;
+  align-items:center;
+  margin-bottom:10px;
+}
+#custom-rss-input{
+  width:100%;
+  min-width:0;
+  height:38px;
+  box-sizing:border-box;
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:8px;
+  outline:none;
+  background:rgba(255,255,255,.05);
+  color:#fff;
+  padding:0 11px;
+  font:500 11px/1 "Comfortaa",sans-serif;
+}
+#custom-rss-input:focus{
+  border-color:rgba(255,255,255,.52);
+  background:rgba(255,255,255,.08);
+}
+#custom-rss-input::placeholder{
+  color:rgba(255,255,255,.34);
+}
+#custom-rss-add{
+  width:38px;
+  height:38px;
+  border:1px solid rgba(255,255,255,.22);
+  border-radius:50%;
+  background:rgba(255,255,255,.06);
+  color:#fff;
+  cursor:pointer;
+  font:300 24px/36px Arial,sans-serif;
+}
+#custom-rss-add:hover{
+  background:rgba(255,255,255,.13);
+}
+.custom-rss-feedback{
+  margin:2px 0 10px;
+  font-size:10px;
+  line-height:1.4;
+  opacity:.72;
+}
+.custom-rss-feedback.error{
+  opacity:1;
+}
+.custom-rss-list{
+  display:flex;
+  flex-direction:column;
+  gap:7px;
+}
+.custom-rss-empty{
+  padding:12px 0;
+  font-size:10px;
+  opacity:.42;
+}
+.custom-rss-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 32px;
+  align-items:center;
+  gap:8px;
+  min-height:42px;
+  padding:6px 7px 6px 11px;
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:8px;
+  background:rgba(255,255,255,.035);
+}
+.custom-rss-url{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:10px;
+  opacity:.78;
+}
+.custom-rss-remove{
+  width:30px;
+  height:30px;
+  padding:0;
+  border:0;
+  border-radius:50%;
+  background:transparent;
+  color:#fff;
+  cursor:pointer;
+  opacity:.55;
+  font:300 21px/30px Arial,sans-serif;
+}
+.custom-rss-remove:hover{
+  opacity:1;
+  background:rgba(255,255,255,.08);
+}
+
+@media(max-width:700px){
+  .menu-tabs{
+    gap:4px !important;
+  }
+  .menu-tab{
+    font-size:9px !important;
+    letter-spacing:-.02em;
+  }
+  .duration-control{
+    gap:7px;
+  }
+  .duration-control button{
+    width:30px;
+    height:30px;
+  }
+  .source-feed-tab{
+    max-width:30vw;
+  }
+}
