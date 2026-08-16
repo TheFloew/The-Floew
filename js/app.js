@@ -7731,6 +7731,70 @@ document.getElementById("video-setting")?.addEventListener("click",e=>{
 const PUBLIC_STATS_API="https://thefloew.thefloewback.workers.dev/stats/public";
 let publicStatsRange="7d";
 let controlMenuOpen=false;
+let aboutActiveTab="stats";
+const aboutDocumentCache=new Map();
+const ABOUT_LEGAL_DOCS={
+  terms:{title:"Kullanım koşulları",path:"docs/KULLANIM.txt"},
+  privacy:{title:"Gizlilik",path:"docs/GIZLILIK.txt"},
+  cookies:{title:"Çerezler",path:"docs/CEREZLER.txt"}
+};
+
+async function loadAboutDocument(path,target){
+  if(!path || !target)return;
+  target.textContent="İçerik yükleniyor...";
+  try{
+    let text=aboutDocumentCache.get(path);
+    if(typeof text!=="string"){
+      const response=await fetch(new URL(path,document.baseURI),{cache:"no-store"});
+      if(!response.ok)throw new Error(`HTTP ${response.status}`);
+      text=await response.text();
+      aboutDocumentCache.set(path,text);
+    }
+    target.textContent=text.trim()||"Bu belge şu anda boş.";
+  }catch(error){
+    target.textContent=`İçerik yüklenemedi. (${error?.message||error})`;
+  }
+}
+
+function closeAboutDocumentViewer(){
+  const viewer=document.getElementById("about-doc-viewer");
+  viewer?.classList.remove("open");
+  viewer?.setAttribute("aria-hidden","true");
+}
+
+function openAboutDocumentViewer(kind){
+  const config=ABOUT_LEGAL_DOCS[kind];
+  if(!config)return;
+  const viewer=document.getElementById("about-doc-viewer");
+  const title=document.getElementById("about-doc-viewer-title");
+  const content=document.getElementById("about-doc-viewer-content");
+  if(title)title.textContent=config.title;
+  viewer?.classList.add("open");
+  viewer?.setAttribute("aria-hidden","false");
+  loadAboutDocument(config.path,content);
+}
+
+function activateAboutTab(name="stats",{load=true}={}){
+  const valid=["stats","report","faq","legal","ads","contact"];
+  aboutActiveTab=valid.includes(name)?name:"stats";
+  closeAboutDocumentViewer();
+
+  document.querySelectorAll(".about-tab").forEach(tab=>{
+    const active=tab.dataset.aboutTab===aboutActiveTab;
+    tab.classList.toggle("active",active);
+    tab.setAttribute("aria-selected",active?"true":"false");
+  });
+  document.querySelectorAll(".about-panel").forEach(panel=>{
+    panel.classList.toggle("active",panel.dataset.aboutPanel===aboutActiveTab);
+  });
+
+  if(!load)return;
+  if(aboutActiveTab==="stats")loadPublicStats(publicStatsRange);
+  else if(aboutActiveTab==="faq")loadAboutDocument("docs/SSS.txt",document.querySelector('[data-about-panel="faq"] [data-about-doc]'));
+  else if(aboutActiveTab==="ads")loadAboutDocument("docs/REKLAM.txt",document.querySelector('[data-about-panel="ads"] [data-about-doc]'));
+  else if(aboutActiveTab==="contact")loadAboutDocument("docs/ILETISIM.txt",document.querySelector('[data-about-panel="contact"] [data-about-doc]'));
+}
+
 
 function closeControlMenu(){
   controlMenuOpen=false;
@@ -7768,6 +7832,7 @@ function toggleControlMenu(){
 
 function closeStatsOverlay(){
   const overlay=document.getElementById("stats-overlay");
+  closeAboutDocumentViewer();
   overlay?.classList.remove("open");
   overlay?.setAttribute("aria-hidden","true");
 }
@@ -7947,7 +8012,7 @@ function openStatsOverlay(){
   overlay?.classList.add("open");
   overlay?.setAttribute("aria-hidden","false");
   showFullscreenButton();
-  loadPublicStats(publicStatsRange);
+  activateAboutTab("stats");
 
   try{
     telemetryQueueEvent("public_stats_open",{
@@ -8139,6 +8204,25 @@ for(const panelId of ["keyword-filter-panel","keyword-watch-panel"]){
 }
 
 document.getElementById("stats-close")?.addEventListener("click",closeStatsOverlay);
+
+document.getElementById("about-doc-viewer-close")?.addEventListener("click",e=>{
+  e.stopPropagation();
+  closeAboutDocumentViewer();
+});
+
+document.querySelectorAll(".about-tab").forEach(tab=>{
+  tab.addEventListener("click",e=>{
+    e.stopPropagation();
+    activateAboutTab(tab.dataset.aboutTab||"stats");
+  });
+});
+
+document.querySelectorAll(".about-legal-button").forEach(button=>{
+  button.addEventListener("click",e=>{
+    e.stopPropagation();
+    openAboutDocumentViewer(button.dataset.legalDoc||"");
+  });
+});
 
 document.getElementById("stats-overlay")?.addEventListener("click",e=>{
   if(e.target.id==="stats-overlay")closeStatsOverlay();
