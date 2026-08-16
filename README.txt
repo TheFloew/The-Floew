@@ -1,3 +1,9 @@
+Beta Versiyon 1.7.1
+- "Flöw hakkında bazı bilgiler" ekranı güncellendi.
+- Kullanım koşulları, gizlilik ve çerez politikası, iletişim ekranları eklendi.
+- "Sıkça sorulan sorular" eklendi.
+- Hata bildirme prosedürü eklendi.
+
 Beta Versiyon 1.7.0
 - Kullanıcıya kendi özel kaynağını ekleyebilme desteği.
 - Kaynağa özel akış sekmesi desteği.
