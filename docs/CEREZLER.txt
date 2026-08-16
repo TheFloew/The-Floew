@@ -1,0 +1,153 @@
+# Çerez Politikası
+
+**Son güncelleme: 16 Ağustos 2026**
+
+Bu Çerez Politikası, Flöw internet sitesinde kullanılan çerezler ve benzeri tarayıcı teknolojileri hakkında bilgi vermek amacıyla hazırlanmıştır.
+
+Flöw’ü ziyaret ettiğinizde sitenin çalışması, tercihlerinizin uygulanması ve izin verdiğiniz durumlarda belirli ek işlevlerin sağlanması amacıyla çerezler veya tarayıcınızın yerel depolama özellikleri kullanılabilir.
+
+## 1. Çerez nedir?
+
+Çerezler, ziyaret ettiğiniz internet siteleri tarafından tarayıcınız aracılığıyla cihazınızda saklanabilen küçük veri parçalarıdır.
+
+Benzer şekilde `localStorage`, `sessionStorage` ve benzeri tarayıcı teknolojileri de belirli ayarların veya tercihlerin cihazınızda tutulmasını sağlayabilir.
+
+Bu politika kapsamında, aksi özellikle belirtilmedikçe bu teknolojiler birlikte “çerezler ve benzeri teknolojiler” olarak anılmaktadır.
+
+## 2. Flöw neden çerez kullanıyor?
+
+Flöw çerezleri ve benzeri teknolojileri aşağıdaki amaçlarla kullanabilir:
+
+* sitenin temel işlevlerinin çalışmasını sağlamak,
+* güvenlik ve teknik sürekliliği sağlamak,
+* kullanıcı tarafından yapılan tercihleri hatırlamak,
+* seçilen haber kaynaklarını ve kategorileri saklamak,
+* arayüz ve görüntüleme tercihlerini korumak,
+* çerez tercihlerini yönetmek,
+* kullanıcının izin vermesi halinde kullanım ve performans hakkında istatistiksel bilgi edinmek,
+* kullanıcının izin vermesi halinde reklam veya benzeri hizmetleri sağlamak.
+
+## 3. Hangi tür çerezler kullanılabilir?
+
+### Kesinlikle gerekli çerezler ve teknolojiler
+
+Bunlar Flöw’ün temel işlevlerinin çalışabilmesi için gerekli olan teknolojilerdir.
+
+Örneğin güvenlik işlemleri, temel site fonksiyonları veya kullanıcının gizlilik tercihinin uygulanabilmesi için kullanılabilirler.
+
+Bu tür teknolojilerin kullanımının kullanıcının açık rızasına dayanmadığı durumlarda ayrıca onay istenmeyebilir.
+
+### Tercih ve işlevsellik teknolojileri
+
+Bunlar Flöw kullanımınızı kişiselleştiren belirli tercihlerin cihazınızda hatırlanmasını sağlayabilir.
+
+Örneğin:
+
+* seçtiğiniz haber kaynakları,
+* seçtiğiniz kategoriler,
+* bazı arayüz ayarları,
+* görüntüleme tercihleri
+
+tarayıcı üzerinde saklanabilir.
+
+Bu bilgilerin önemli bir bölümü Flöw sunucularındaki kişisel bir kullanıcı profili yerine doğrudan cihazınızda tutulabilir.
+
+### Analitik ve performans çerezleri
+
+Flöw ileride ziyaretçi trafiği, kullanım şekilleri veya teknik performans hakkında toplu istatistikler oluşturmak amacıyla analitik hizmetlerden yararlanabilir.
+
+Açık rıza gerektiren analitik veya performans teknolojileri kullanılması halinde bunlar siz izin vermeden etkinleştirilmez.
+
+### Reklam ve pazarlama çerezleri
+
+Flöw üzerinde reklam gösterilmesi, her reklamın mutlaka takip veya kişiselleştirme çerezi kullandığı anlamına gelmez.
+
+Bununla birlikte kişiselleştirilmiş reklam, kullanıcı takibi veya pazarlama amacıyla açık rıza gerektiren teknolojiler kullanılması halinde bunlar siz izin vermeden etkinleştirilmez.
+
+## 4. “Kabul Et” ve “Reddet” seçenekleri ne anlama gelir?
+
+Flöw’de bir çerez tercih ekranı gösterildiğinde:
+
+**Kabul Et** seçeneği, açık rızanıza bağlı olarak kullanılan isteğe bağlı teknolojilere izin vermenizi sağlayabilir.
+
+**Reddet** seçeneği ise açık rıza gerektiren isteğe bağlı çerezlerin ve benzeri takip teknolojilerinin kullanılmasını reddetmenizi sağlar.
+
+Reddet seçeneğinin kullanılması, sitenin çalışması için gerçekten gerekli olan teknik işlemleri otomatik olarak devre dışı bırakmaz.
+
+Flöw’ün temel haber görüntüleme özellikleri mümkün olduğunca isteğe bağlı çerezlerin kabul edilmesine bağlı olmadan sunulur.
+
+## 5. Çerezleri reddedersem ne olur?
+
+İsteğe bağlı çerezleri reddetmeniz Flöw’ün temel haber akışını kullanmanızı engellememelidir.
+
+Ancak kullanılan teknolojiye bağlı olarak:
+
+* bazı tercihleriniz hatırlanmayabilir,
+* bazı kişiselleştirme özellikleri çalışmayabilir,
+* kullanım istatistiklerine katkıda bulunmayabilirsiniz,
+* kişiselleştirilmiş reklam veya benzeri özellikler devre dışı kalabilir.
+
+## 6. Tarayıcıda saklanan Flöw tercihleri
+
+Flöw bazı tercihlerinizi doğrudan tarayıcınızda saklayabilir.
+
+Bunlar örneğin:
+
+* aktif haber kaynakları,
+* aktif haber kategorileri,
+* arayüz tercihleri,
+* gizlilik ve çerez tercihleri
+
+olabilir.
+
+Bu bilgiler cihazınızdaki tarayıcı verilerini temizlemeniz, farklı bir tarayıcı kullanmanız veya farklı bir cihazdan Flöw’e erişmeniz halinde kaybolabilir.
+
+## 7. Üçüncü taraf hizmetleri
+
+Flöw’ün teknik altyapısı GitHub Pages, Cloudflare veya benzeri üçüncü taraf hizmet sağlayıcılarından yararlanabilir.
+
+Bu sağlayıcılar güvenlik, trafik yönetimi, içerik dağıtımı ve hizmetin sunulması amacıyla kendi teknik kayıtlarını veya teknolojilerini kullanabilir.
+
+Bir haber bağlantısına tıklayarak başka bir haber sitesine geçtiğinizde ise artık ilgili internet sitesinin çerez politikası ve gizlilik uygulamaları geçerli olur.
+
+Flöw, bağlantı verilen üçüncü taraf sitelerin kullandığı çerezleri kontrol etmez.
+
+## 8. Çerez tercihlerinizi nasıl değiştirebilirsiniz?
+
+Flöw üzerinde sunulan çerez tercih seçeneklerinden yararlanabilirsiniz.
+
+Bunun yanında kullandığınız tarayıcı üzerinden:
+
+* mevcut çerezleri görüntüleyebilir,
+* belirli sitelere ait çerezleri silebilir,
+* tüm site verilerini temizleyebilir,
+* üçüncü taraf çerezlerini engelleyebilir,
+* tarayıcınızın çerez kullanım ayarlarını değiştirebilirsiniz.
+
+Tarayıcı verilerinin silinmesi Flöw üzerinde daha önce kaydedilmiş bazı tercihlerin de silinmesine neden olabilir.
+
+## 9. Açık rızanın geri alınması
+
+Açık rızaya dayalı bir veri işleme faaliyeti bulunması halinde verdiğiniz rızayı daha sonra geri alabilirsiniz.
+
+Rızanızı geri almanız, geri alma işleminden önce rızanıza dayanılarak gerçekleştirilen işlemlerin hukuka uygunluğunu geriye dönük olarak etkilemez.
+
+Geri alma işleminden sonra ilgili isteğe bağlı teknolojilerin kullanılmasına son verilir.
+
+## 10. Kişisel veriler
+
+Çerezler veya benzeri teknolojiler aracılığıyla kişisel veri işlenmesi halinde bu işlemler yürürlükteki kişisel verilerin korunması mevzuatına uygun olarak gerçekleştirilir.
+
+Kişisel verilerin hangi amaçlarla işlenebileceği ve KVKK kapsamındaki haklarınız hakkında daha ayrıntılı bilgi için **Gizlilik Politikası**nı inceleyebilirsiniz.
+
+## 11. Değişiklikler
+
+Flöw’ün kullandığı teknolojilerin veya hukuki gerekliliklerin değişmesi halinde bu Çerez Politikası güncellenebilir.
+
+Güncel sürüm Flöw üzerinde yayımlanır ve son değişiklik tarihi bu sayfanın üst kısmında belirtilir.
+
+## 12. İletişim
+
+Çerezler, gizlilik veya kişisel verilerinizle ilgili sorularınız için bizimle iletişime geçebilirsiniz:
+
+**E-posta:** `[KVKK / İLETİŞİM E-POSTASI]`

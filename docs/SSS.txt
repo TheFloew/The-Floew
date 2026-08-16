@@ -1,0 +1,133 @@
+# Sıkça Sorulan Sorular
+
+## Flöw nedir?
+
+Flöw, farklı haber kaynaklarındaki güncel haberleri tek bir akışta takip etmeyi kolaylaştıran bir haber keşif platformudur.
+
+Amacımız onlarca haber sitesini ayrı ayrı dolaşmak yerine gündemde neler olduğunu hızlıca görebileceğiniz sade bir akış sunmak.
+
+## Flöw bir haber sitesi mi?
+
+Klasik anlamda değil.
+
+Flöw kendi haber merkezinde haber üretmek yerine farklı yayın kuruluşlarında yayımlanan haberleri bir araya getirir ve sizi haberin asıl kaynağına yönlendirir.
+
+## Haberleri Flöw mü yazıyor?
+
+Hayır.
+
+Haber başlıkları, görseller ve diğer haber bilgileri ilgili haber kaynaklarından alınır. Flöw içerikleri görüntüleme, sınıflandırma ve akışa yerleştirme amacıyla teknik olarak işleyebilir.
+
+Haberin tamamı ve editoryal sorumluluğu ilgili yayın kuruluşuna aittir.
+
+## Bir haberin tamamını nasıl okuyabilirim?
+
+Haber üzerindeki kaynak bağlantısını kullanarak doğrudan haberi yayımlayan internet sitesine gidebilirsiniz.
+
+Flöw’ün amacı özgün haber kaynağının yerine geçmek değil, habere ulaşmayı kolaylaştırmaktır.
+
+## Flöw haberleri hangi kaynaklardan alıyor?
+
+Flöw farklı ulusal, uluslararası ve bağımsız haber kaynaklarını aynı akış içinde gösterebilir.
+
+Kullanılabilir kaynaklar zaman içinde değişebilir.
+
+Kaynak seçimindeki amaç aynı olaya mümkün olduğunca farklı yayınlardan ulaşabilmenizi sağlamaktır.
+
+## Flöw tarafsız mı?
+
+Flöw herhangi bir haber kaynağının görüşünü otomatik olarak benimsemez.
+
+Ancak tamamen “tarafsız” bir haber akışı iddiasında bulunmak yerine farklı kaynakları aynı ortamda görünür kılmayı tercih ediyoruz.
+
+Bir haberin Flöw’de görünmesi o haberin içeriğini veya yayıncının görüşlerini onayladığımız anlamına gelmez.
+
+En sağlıklı değerlendirme için aynı konuyu farklı kaynaklardan okumanızı öneririz.
+
+## Haberler neye göre sıralanıyor?
+
+Akış; haberlerin güncelliği, seçili kaynaklar ve kategoriler gibi bilgiler kullanılarak otomatik olarak oluşturulur.
+
+Flöw aynı kaynağın arka arkaya sürekli gösterilmesini azaltmak ve farklı kaynakların akışta yer almasını sağlamak için sıralamayı teknik olarak düzenleyebilir.
+
+Bu nedenle Flöw’deki sıralama herhangi bir haberin önem veya doğruluk sıralaması olarak değerlendirilmemelidir.
+
+## Haberler ne sıklıkla güncelleniyor?
+
+Flöw haber kaynaklarını otomatik olarak ve düzenli aralıklarla kontrol eder.
+
+Yeni haberlerin Flöw’e ulaşma süresi kaynak sitenin yapısına, güncelleme zamanına ve teknik koşullara göre değişebilir.
+
+Bu nedenle Flöw gerçek zamanlı bir acil durum bildirim sistemi olarak değerlendirilmemelidir.
+
+## Eski haberler neden akıştan kayboluyor?
+
+Flöw güncel bir haber akışı sunmak için belirli bir süreden sonra eski haberleri akıştan çıkarabilir.
+
+Haberin Flöw’den kaldırılması, haberin özgün kaynaktan silindiği anlamına gelmez.
+
+## Bazı haberlerin görselleri neden düşük kaliteli veya farklı görünüyor?
+
+Flöw görselleri haber kaynaklarının internet üzerinde sunduğu bilgilerden elde eder.
+
+Bazı yayıncılar farklı cihazlar için farklı boyutlarda görseller sunabilir veya Flöw’ün erişebildiği görsel özgün yüksek çözünürlüklü dosya olmayabilir.
+
+Bu nedenle görüntü kalitesi kaynaktan kaynağa değişebilir.
+
+## Bazı videolar neden otomatik başlamıyor?
+
+Video oynatma davranışları videonun bulunduğu platforma, tarayıcı politikalarına ve cihaz ayarlarına bağlı olabilir.
+
+Özellikle sesli videoların otomatik oynatılması birçok tarayıcı tarafından sınırlandırılmaktadır.
+
+## Kaynakları veya kategorileri değiştirebilir miyim?
+
+Evet.
+
+Flöw’de görmek istediğiniz kaynakları ve haber kategorilerini mevcut ayarlar üzerinden seçebilirsiniz.
+
+Bu tercihler desteklenen cihaz ve tarayıcılarda hatırlanabilir.
+
+## Flöw beni takip ediyor mu?
+
+Flöw’ü kullanmak için hesap oluşturmanız veya kişisel profil oluşturmanız gerekmez.
+
+Ancak sitenin çalışması için IP adresi gibi standart teknik bağlantı bilgileri altyapı sağlayıcıları tarafından işlenebilir.
+
+Ayrıntılı bilgi için **Gizlilik Politikası** bölümünü inceleyebilirsiniz.
+
+## Çerezleri reddedersem Flöw’ü kullanabilir miyim?
+
+Flöw’ün temel işlevleri mümkün olduğunca çerez tercihinizden bağımsız çalışacak şekilde tasarlanır.
+
+Zorunlu olmayan çerez veya benzeri teknolojileri reddetmeniz halinde bazı tercihlerin hatırlanmaması gibi farklılıklar yaşanabilir.
+
+## Flöw’de reklam var mı?
+
+Flöw zaman zaman reklam veya sponsorlu içerik gösterebilir.
+
+Reklam veya sponsorlu içerik kullanılması halinde bunların haber içeriğiyle karıştırılmaması için mümkün olduğunca açık biçimde ayırt edilmesi amaçlanır.
+
+Reklamverenler Flöw’ün haber kaynaklarının veya haber içeriklerinin seçimini doğrudan belirlemez.
+
+## Bir haber yanlışsa ne yapmalıyım?
+
+Flöw haberlerin özgün yayıncısı değildir. Haber içeriğindeki bir yanlışlık için öncelikle haberi yayımlayan yayın kuruluşuyla iletişime geçebilirsiniz.
+
+Flöw’de yanlış başlık, yanlış görsel, hatalı bağlantı veya benzeri teknik bir sorun görüyorsanız bize bildirebilirsiniz.
+
+## İçeriğimin Flöw’den kaldırılmasını nasıl isteyebilirim?
+
+Hak sahibi olduğunuz bir içeriğin Flöw üzerinde gösterilmesiyle ilgili bir talebiniz varsa:
+
+**E-posta:** `[İLETİŞİM E-POSTASI]`
+
+adresinden bizimle iletişime geçebilirsiniz.
+
+Talebinizin hızlı değerlendirilebilmesi için ilgili haberin bağlantısını ve talebinizin nedenini belirtmeniz faydalı olacaktır.
+
+## Flöw ile nasıl iletişime geçebilirim?
+
+Her türlü öneri, hata bildirimi, içerik talebi veya diğer konular için:
+
+**E-posta:** `[İLETİŞİM E-POSTASI]`

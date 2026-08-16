@@ -1,0 +1,143 @@
+# Gizlilik Politikası
+
+**Son güncelleme: 15 Ağustos 2026**
+
+Flöw olarak kullanıcıların gizliliğine önem veriyoruz.
+
+Bu Gizlilik Politikası, Flöw’ü ziyaret ettiğinizde hangi bilgilerin işlenebileceğini, bunların hangi amaçlarla kullanılabileceğini ve kişisel verilerinizle ilgili haklarınızı açıklamaktadır.
+
+## 1. Veri sorumlusu
+
+6698 sayılı Kişisel Verilerin Korunması Kanunu (“KVKK”) kapsamında veri sorumlusu:
+
+**Ad / Unvan:** `[VERİ SORUMLUSUNUN ADI VEYA UNVANI]`
+**E-posta:** `[İLETİŞİM E-POSTASI]`
+**Adres:** `[ADRES – GEREKİYORSA]`
+
+## 2. Hangi veriler işlenebilir?
+
+Flöw’ü kullanmak için hesap açmanız, adınızı vermeniz veya kişisel profil oluşturmanız gerekmez.
+
+Bununla birlikte internet sitesinin çalışması sırasında bazı teknik bilgiler otomatik olarak işlenebilir.
+
+Bunlar arasında:
+
+* IP adresi,
+* tarayıcı ve cihaz bilgileri,
+* işletim sistemi bilgisi,
+* erişim tarihi ve zamanı,
+* talep edilen sayfa veya kaynak bilgileri,
+* hata ve güvenlik kayıtları,
+* yaklaşık bağlantı ve trafik bilgileri
+
+yer alabilir.
+
+Bu bilgilerin bir kısmı Flöw tarafından doğrudan değil, siteyi çalıştırmak için kullanılan barındırma, güvenlik veya içerik dağıtım hizmetleri tarafından teknik olarak işlenebilir.
+
+## 3. Veriler hangi amaçlarla kullanılır?
+
+Teknik veriler aşağıdaki amaçlarla işlenebilir:
+
+* Flöw’ün çalışmasını sağlamak,
+* güvenliği korumak,
+* kötüye kullanım ve saldırıları önlemek,
+* teknik hataları tespit etmek,
+* performans sorunlarını çözmek,
+* hizmetin güvenilirliğini sağlamak,
+* hukuki yükümlülüklerin yerine getirilmesini sağlamak.
+
+Hizmetin güvenli ve kararlı biçimde sunulması için gerekli teknik veriler, ilgili mevzuatta öngörülen veri işleme şartlarına dayanılarak işlenebilir.
+
+Açık rıza gerektiren isteğe bağlı çerez veya benzeri teknolojilerin kullanılması halinde ise ilgili işlemler kullanıcının tercihine göre gerçekleştirilir.
+
+## 4. Çerezler ve tarayıcı depolaması
+
+Flöw, sitenin çalışması ve kullanıcı tercihlerinin hatırlanması amacıyla çerezler veya tarayıcı üzerinde çalışan yerel depolama teknolojileri kullanabilir.
+
+Örneğin aşağıdaki tercihler cihazınızda saklanabilir:
+
+* seçtiğiniz haber kaynakları,
+* kategori tercihleri,
+* arayüz ayarları,
+* çerez tercihleri.
+
+Hizmetin çalışması için zorunlu olmayan analitik, reklam veya benzeri takip teknolojilerinin kullanılması halinde kullanıcıya gerekli tercih seçenekleri sunulur.
+
+Zorunlu olmayan çerezleri reddetmeniz Flöw’ün temel haber görüntüleme işlevlerine erişiminizi engellememelidir.
+
+Tarayıcınız üzerinden çerezleri ve site verilerini ayrıca silebilir veya engelleyebilirsiniz. Bu durumda bazı tercihlerinizin yeniden ayarlanması gerekebilir.
+
+## 5. Haber kaynakları ve harici bağlantılar
+
+Flöw farklı haber kuruluşlarına bağlantılar içerir.
+
+Bir haber bağlantısına tıklayarak Flöw’den ayrılıp üçüncü taraf bir internet sitesine geçtiğinizde, ilgili sitenin kendi gizlilik politikası ve veri işleme uygulamaları geçerli olur.
+
+Flöw üçüncü taraf internet sitelerinin kişisel veri işleme faaliyetlerini kontrol etmez.
+
+## 6. Teknik hizmet sağlayıcılar
+
+Flöw’ün çalışması için barındırma, içerik dağıtımı, güvenlik ve ağ altyapısı sağlayan üçüncü taraf hizmetlerden yararlanılabilir.
+
+Mevcut teknik altyapıda bu hizmetler GitHub Pages ve Cloudflare gibi sağlayıcıları içerebilir.
+
+Bu sağlayıcılar, hizmeti sunabilmek amacıyla IP adresi ve bağlantı kayıtları gibi belirli teknik verileri kendi sistemlerinde işleyebilir.
+
+Bu hizmetlerin kullanılması nedeniyle kişisel verilerin yurt dışına aktarılmasının söz konusu olması halinde, ilgili işlemler yürürlükteki kişisel verilerin korunması mevzuatı kapsamında değerlendirilir ve gerekli hukuki mekanizmalar uygulanır.
+
+## 7. Verilerin paylaşılması
+
+Kişisel verileriniz satılmaz.
+
+Teknik veriler yalnızca hizmetin çalışması için gerekli olduğu ölçüde:
+
+* altyapı ve barındırma sağlayıcıları,
+* güvenlik hizmetleri,
+* teknik hizmet sağlayıcıları,
+* kanunen yetkili kamu kurum ve kuruluşları
+
+ile paylaşılabilir.
+
+## 8. Verilerin saklanması
+
+Kişisel veriler yalnızca işlenme amacı için gerekli süre boyunca veya yürürlükteki mevzuatın gerektirdiği süre boyunca saklanır.
+
+Saklanmasını gerektiren amaç ortadan kalktığında veriler yürürlükteki mevzuata uygun şekilde silinir, yok edilir veya anonim hale getirilir.
+
+Tarayıcınızda yerel olarak saklanan tercih verilerini tarayıcı ayarlarınız üzerinden istediğiniz zaman silebilirsiniz.
+
+## 9. Veri güvenliği
+
+Flöw, işlenen kişisel verilerin hukuka aykırı şekilde erişilmesini, kullanılmasını veya değiştirilmesini önlemeye yönelik makul teknik ve idari güvenlik önlemlerinin uygulanmasını amaçlar.
+
+Bununla birlikte internet üzerinden gerçekleştirilen hiçbir veri aktarım yönteminin mutlak güvenlik sağlayamayacağı unutulmamalıdır.
+
+## 10. KVKK kapsamındaki haklarınız
+
+KVKK kapsamında, koşulları oluştuğu ölçüde:
+
+* kişisel verilerinizin işlenip işlenmediğini öğrenme,
+* işlenmişse buna ilişkin bilgi talep etme,
+* işlenme amacını ve amacına uygun kullanılıp kullanılmadığını öğrenme,
+* kişisel verilerin aktarıldığı üçüncü kişileri öğrenme,
+* eksik veya yanlış işlenen verilerin düzeltilmesini isteme,
+* mevzuattaki şartlar çerçevesinde kişisel verilerin silinmesini veya yok edilmesini isteme,
+* düzeltme veya silme işlemlerinin verilerin aktarıldığı üçüncü kişilere bildirilmesini isteme,
+* kanunda öngörülen durumlarda otomatik sistemlerle yapılan analizlere itiraz etme,
+* hukuka aykırı veri işlenmesi nedeniyle zarara uğramanız halinde zararın giderilmesini talep etme
+
+haklarına sahip olabilirsiniz.
+
+## 11. Başvuru ve iletişim
+
+Kişisel verilerinizle ilgili soru veya talepleriniz için veri sorumlusuna ulaşabilirsiniz:
+
+**E-posta:** `[KVKK / İLETİŞİM E-POSTASI]`
+
+Başvurular yürürlükteki kişisel verilerin korunması mevzuatı çerçevesinde değerlendirilir.
+
+## 12. Politika değişiklikleri
+
+Bu Gizlilik Politikası hizmetteki veya mevzuattaki değişikliklere bağlı olarak güncellenebilir.
+
+Güncel sürüm her zaman Flöw üzerinden yayımlanır ve son değişiklik tarihi bu sayfanın üst kısmında belirtilir.

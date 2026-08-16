@@ -1,0 +1,101 @@
+# Kullanım Koşulları
+
+**Son güncelleme: 15 Ağustos 2026**
+
+Flöw’ü kullanarak aşağıdaki kullanım koşullarını kabul etmiş sayılırsınız. Bu koşulları kabul etmiyorsanız Flöw’ü kullanmamanızı rica ederiz.
+
+## 1. Flöw nedir?
+
+Flöw, farklı haber kaynaklarında yayımlanan güncel içerikleri tek bir akış üzerinden keşfetmeyi kolaylaştıran bir haber takip platformudur.
+
+Flöw’ün amacı haberlerin kaynağının yerini almak değil, kullanıcıların farklı yayınlardan haberlere hızlı biçimde ulaşmasını sağlamaktır.
+
+Flöw’de gösterilen haber başlıkları, görseller, kaynak bilgileri, bağlantılar ve benzeri içerikler ilgili haber kaynaklarından ve kamuya açık internet kaynaklarından elde edilebilir.
+
+Bir habere ait özgün içeriğe ulaşmak için kullanıcı ilgili haber kaynağına yönlendirilir.
+
+## 2. Üçüncü taraf içerikleri
+
+Flöw’de görüntülenen haberler ve bunlara ilişkin başlık, görsel, video, logo, marka ve diğer içerikler ilgili yayıncıların veya hak sahiplerinin sorumluluğundadır.
+
+Flöw:
+
+* Haberlerin doğruluğunu, eksiksizliğini veya güncelliğini garanti etmez.
+* Haber kaynaklarının görüşlerini benimsemiş sayılmaz.
+* Üçüncü taraf sitelerde yer alan içeriklerden sorumlu değildir.
+* Harici sitelerin kullanım koşulları, gizlilik uygulamaları veya güvenliğinden sorumlu değildir.
+
+Bir haberin Flöw’de gösterilmesi, Flöw ile ilgili yayın kuruluşu arasında ticari ortaklık, sponsorluk veya onay ilişkisi bulunduğu anlamına gelmez.
+
+## 3. Başlıklar ve haber bilgileri
+
+Flöw, haberlerin mümkün olduğunca kaynak tarafından sağlanan başlık ve içerik bilgileriyle görüntülenmesini amaçlar.
+
+Bununla birlikte içerikler; farklı ekran boyutlarına uyarlanması, teknik olarak işlenmesi, sınıflandırılması, sıralanması veya platformun çalışması için gerekli diğer otomatik işlemlerden geçirilebilir.
+
+Flöw bağımsız bir haber doğrulama servisi değildir.
+
+Bir haber hakkında kesin veya ayrıntılı bilgi edinmek isteyen kullanıcıların özgün haber kaynağını incelemesi önerilir.
+
+## 4. Fikri mülkiyet
+
+Flöw adı, Flöw logosu, arayüz tasarımı, yazılımı, özgün grafik unsurları ve Flöw tarafından oluşturulan diğer içerikler üzerindeki haklar ilgili hak sahiplerine aittir.
+
+Flöw üzerinden erişilebilen üçüncü taraf haber içerikleri, görselleri, videoları, markaları ve logoları üzerindeki haklar ise ilgili yayıncı veya hak sahiplerine aittir.
+
+Flöw üzerinde üçüncü taraf içeriklerinin gösterilmesi, bu içeriklerin mülkiyetinin Flöw’e ait olduğu anlamına gelmez.
+
+Hak sahibi olduğunuz bir içeriğin Flöw’de yer almasına ilişkin talebiniz varsa bizimle `[İLETİŞİM E-POSTASI]` adresinden iletişime geçebilirsiniz.
+
+## 5. Kabul edilebilir kullanım
+
+Flöw yalnızca hukuka uygun amaçlarla kullanılabilir.
+
+Kullanıcılar:
+
+* Flöw’ün çalışmasını engellemeye,
+* güvenlik mekanizmalarını aşmaya,
+* sisteme zarar vermeye,
+* hizmet üzerinde olağan dışı veya kötü niyetli otomatik trafik oluşturmaya,
+* Flöw altyapısını izinsiz biçimde kopyalamaya veya yeniden dağıtmaya,
+* Flöw’ü hukuka aykırı faaliyetlerde kullanmaya
+
+yönelik davranışlarda bulunamaz.
+
+## 6. Hizmetin kullanılabilirliği
+
+Flöw hizmetin kesintisiz, hatasız veya her zaman erişilebilir olacağını garanti etmez.
+
+Haber kaynaklarındaki değişiklikler, internet bağlantısı sorunları, üçüncü taraf hizmetler, bakım çalışmaları veya teknik nedenlerle bazı haberler, görseller, videolar ya da özellikler geçici veya kalıcı olarak kullanılamayabilir.
+
+Flöw herhangi bir özelliği ekleme, değiştirme veya kaldırma hakkını saklı tutar.
+
+## 7. Sorumluluğun sınırlandırılması
+
+Flöw’de sunulan bilgiler genel bilgilendirme ve haber keşfi amacı taşır.
+
+Flöw’de görüntülenen herhangi bir içerik hukuki, finansal, yatırım, sağlık veya başka bir profesyonel tavsiye olarak değerlendirilmemelidir.
+
+Kullanıcıların Flöw veya bağlantı verilen üçüncü taraf içeriklerine dayanarak verdikleri kararların sorumluluğu kendilerine aittir.
+
+Yürürlükteki mevzuatın izin verdiği ölçüde Flöw; üçüncü taraf içeriklerden, hizmet kesintilerinden veya harici sitelerin kullanımından doğabilecek doğrudan veya dolaylı zararlardan sorumlu tutulamaz.
+
+## 8. Koşullardaki değişiklikler
+
+Bu Kullanım Koşulları zaman zaman güncellenebilir.
+
+Önemli değişikliklerde metnin üst bölümündeki “Son güncelleme” tarihi değiştirilir.
+
+Flöw’ü kullanmaya devam etmeniz güncel kullanım koşullarının geçerli olacağı anlamına gelir.
+
+## 9. Uygulanacak hukuk
+
+Bu kullanım koşulları bakımından yürürlükteki Türkiye Cumhuriyeti hukuku uygulanır.
+
+Uyuşmazlıklarda yetkili makam ve merciler yürürlükteki mevzuata göre belirlenir.
+
+## 10. İletişim
+
+Kullanım koşulları, içerikler veya hak ihlali bildirimleriyle ilgili bizimle iletişime geçebilirsiniz:
+
+**E-posta:** `[İLETİŞİM E-POSTASI]`
