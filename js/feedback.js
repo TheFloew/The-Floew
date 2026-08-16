@@ -1,5 +1,5 @@
 /* ========================================================================
-   FLÖW FEEDBACK — v1.0.0
+   FLÖW FEEDBACK — v1.1.0
    Self-contained feedback flow for the existing "Flöw hakkında" report tab.
    Requires app.js to be loaded first. No Worker change is required: submissions
    use the existing /track endpoint and are stored as feedback_submit events.
@@ -7,7 +7,7 @@
 (function(){
   "use strict";
 
-  const FEEDBACK_VERSION="1.0.0";
+  const FEEDBACK_VERSION="1.1.0";
   const TRACK_ENDPOINT="https://thefloew.thefloewback.workers.dev/track";
   const MAX_NOTE_LENGTH=1600;
 
@@ -727,6 +727,12 @@
       dpr:context.dpr,
       language:context.language,
       page:context.page,
+      story_key:String(context.story_payload?.key||"").slice(0,500),
+      story_title:String(context.story_payload?.title||"").slice(0,500),
+      story_link:String(context.story_payload?.link||"").slice(0,1200),
+      story_published:String(context.story_payload?.published||"").slice(0,160),
+      story_source:String(context.story_payload?.source||"").slice(0,240),
+      story_category:String(context.story_payload?.category||"").slice(0,160),
       feedback_captured_at:context.captured_at
     };
   }
