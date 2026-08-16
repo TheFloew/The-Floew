@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
 <link rel="manifest" href="site.webmanifest">
 
-<link rel="stylesheet" href="css/styles.css?h=dbaa3d54ba43">
+<link rel="stylesheet" href="css/styles.css?h=bc0e881cd610">
 
 <style id="boot-black-style">
   html,body{background:#000}
@@ -77,7 +77,7 @@
     <button id="time-range-button" class="control-menu-item" type="button" aria-label="Haber zaman aralığı" title="Haber zaman aralığı">⏲︎</button>
     <button id="keyword-filter-button" class="control-menu-item" type="button" aria-label="Anahtar kelime filtresi" title="Anahtar kelime filtresi">±</button>
     <button id="keyword-watch-button" class="control-menu-item" type="button" aria-label="Anahtar kelime takibi" title="Anahtar kelime takibi">⌖</button>
-    <button id="info-button" class="control-menu-item" type="button" aria-label="Flöw istatistikleri" title="Flöw istatistikleri">ⓘ</button>
+    <button id="info-button" class="control-menu-item" type="button" aria-label="Flöw hakkında bazı bilgiler" title="Flöw hakkında bazı bilgiler">ⓘ</button>
     <button id="menu-button" class="control-menu-item" type="button" aria-label="Tercihler" title="Tercihler">⚙︎</button>
   </div>
 
@@ -129,38 +129,90 @@
   </div>
 
   <div id="stats-overlay" aria-hidden="true">
-    <section id="public-stats-panel" role="dialog" aria-modal="true" aria-label="Flöw istatistikleri">
-      <div class="menu-header">
+    <section id="public-stats-panel" role="dialog" aria-modal="true" aria-label="Flöw hakkında bazı bilgiler">
+      <div class="menu-header about-main-header">
         <div>
-          <div id="public-stats-title" class="menu-title">Flöw İstatistikleri</div>
-          <div id="public-stats-subtitle" class="menu-subtitle">Flöw'de son dönemde neler ilgi görüyor?</div>
+          <div class="menu-title">Flöw hakkında</div>
+          <div class="menu-subtitle">Flöw'e dair bilgiler, belgeler ve iletişim.</div>
         </div>
-        <button id="stats-close" type="button" aria-label="İstatistikleri kapat">×</button>
+        <button id="stats-close" type="button" aria-label="Bilgi ekranını kapat">×</button>
       </div>
 
-      <div class="public-stats-tabs" role="tablist" aria-label="İstatistik dönemi">
-        <button class="public-stats-tab active" data-stats-range="7d" type="button">Son 7 gün</button>
-        <button class="public-stats-tab" data-stats-range="all" type="button">Tüm zamanlar</button>
+      <div class="about-tabs" role="tablist" aria-label="Flöw hakkında bölümler">
+        <button class="about-tab active" data-about-tab="stats" type="button">İstatistikler</button>
+        <button class="about-tab" data-about-tab="report" type="button">Hata bildir</button>
+        <button class="about-tab" data-about-tab="faq" type="button">SSS</button>
+        <button class="about-tab" data-about-tab="legal" type="button">Legal</button>
+        <button class="about-tab" data-about-tab="ads" type="button">Reklam</button>
+        <button class="about-tab" data-about-tab="contact" type="button">İletişim</button>
       </div>
 
-      <div id="public-stats-summary" class="public-stats-summary"></div>
+      <div class="about-panel active" data-about-panel="stats">
+        <div class="about-section-copy">
+          <div id="public-stats-title" class="about-section-title">Flöw İstatistikleri</div>
+          <div id="public-stats-subtitle" class="about-section-subtitle">Flöw'de son dönemde neler ilgi görüyor?</div>
+        </div>
 
-      <div class="public-stats-grid">
-        <section class="public-stats-section">
-          <div class="public-stats-heading">Flöra'da öne çıkanlar</div>
-          <div id="public-stats-flora" class="public-stats-list"></div>
-        </section>
+        <div class="public-stats-tabs" role="tablist" aria-label="İstatistik dönemi">
+          <button class="public-stats-tab active" data-stats-range="7d" type="button">Son 7 gün</button>
+          <button class="public-stats-tab" data-stats-range="all" type="button">Tüm zamanlar</button>
+        </div>
 
-        <section class="public-stats-section">
-          <div id="public-stats-secondary-heading" class="public-stats-heading">En çok ilgi gören kategoriler</div>
-          <div id="public-stats-categories" class="public-stats-list compact"></div>
-        </section>
+        <div id="public-stats-summary" class="public-stats-summary"></div>
+
+        <div class="public-stats-grid">
+          <section class="public-stats-section">
+            <div class="public-stats-heading">Flöra'da öne çıkanlar</div>
+            <div id="public-stats-flora" class="public-stats-list"></div>
+          </section>
+
+          <section class="public-stats-section">
+            <div id="public-stats-secondary-heading" class="public-stats-heading">En çok ilgi gören kategoriler</div>
+            <div id="public-stats-categories" class="public-stats-list compact"></div>
+          </section>
+        </div>
+
+        <div class="public-stats-footer">
+          <span id="public-stats-status">İstatistikler hazırlanıyor...</span>
+          <a id="public-stats-detail-link" href="flora.html" target="_blank" rel="noopener noreferrer">Flöra'yı ayrıntılı gör →</a>
+        </div>
       </div>
 
-      <div class="public-stats-footer">
-        <span id="public-stats-status">İstatistikler hazırlanıyor...</span>
-        <a id="public-stats-detail-link" href="flora.html" target="_blank" rel="noopener noreferrer">Flöra'yı ayrıntılı gör →</a>
+      <div class="about-panel" data-about-panel="report">
+        <div class="about-placeholder">
+          <strong>Hata bildir</strong>
+          <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+        </div>
       </div>
+
+      <div class="about-panel" data-about-panel="faq">
+        <div class="about-doc-text" data-about-doc="docs/SSS.txt">İçerik yükleniyor...</div>
+      </div>
+
+      <div class="about-panel" data-about-panel="legal">
+        <div class="about-legal-intro">Flöw'ün kullanım ve veri politikaları.</div>
+        <div class="about-legal-options">
+          <button class="about-legal-button" data-legal-doc="terms" type="button">Kullanım koşulları</button>
+          <button class="about-legal-button" data-legal-doc="privacy" type="button">Gizlilik</button>
+          <button class="about-legal-button" data-legal-doc="cookies" type="button">Çerezler</button>
+        </div>
+      </div>
+
+      <div class="about-panel" data-about-panel="ads">
+        <div class="about-doc-text" data-about-doc="docs/REKLAM.txt">İçerik yükleniyor...</div>
+      </div>
+
+      <div class="about-panel" data-about-panel="contact">
+        <div class="about-doc-text" data-about-doc="docs/ILETISIM.txt">İçerik yükleniyor...</div>
+      </div>
+    </section>
+
+    <section id="about-doc-viewer" role="dialog" aria-modal="true" aria-hidden="true" aria-label="Belge görüntüleyici">
+      <div class="about-doc-viewer-header">
+        <strong id="about-doc-viewer-title"></strong>
+        <button id="about-doc-viewer-close" type="button" aria-label="Belgeyi kapat">×</button>
+      </div>
+      <div id="about-doc-viewer-content" class="about-doc-text">İçerik yükleniyor...</div>
     </section>
   </div>
 
@@ -366,7 +418,7 @@
 })();
 </script>
 
-<script src="js/app.js?h=1038735f1174" onerror="
+<script src="js/app.js?h=ced8d046776c" onerror="
   var loader=document.getElementById('loading-screen');
   if(loader)loader.remove();
   var status=document.getElementById('status');
