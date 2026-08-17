@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
 <link rel="manifest" href="site.webmanifest">
 
-<link rel="stylesheet" href="css/styles.css?h=bc0e881cd610">
+<link rel="stylesheet" href="css/styles.css?h=eea41c02d060">
 
 <style id="boot-black-style">
   html,body{background:#000}
@@ -58,6 +58,7 @@
       </div>
     </div>
   </div>
+  <div class="loading-progress" aria-hidden="true"><span></span></div>
 </div>
 
 <main id="wall">
@@ -380,45 +381,24 @@
 
 <script>
 (function(){
-  var FAILSAFE_MS=12000;
-
-  function hideLoader(){
-    var loader=document.getElementById("loading-screen");
-    if(loader)loader.remove();
-  }
-
-  function showBootError(){
-    var status=document.getElementById("status");
-    if(!status || window.__floewInitialReady)return;
-
-    status.innerHTML=
-      '<div class="status-band">'+
-      '<span class="status-message">Haberler henüz yüklenemedi. Lütfen biraz bekleyin veya sayfayı yenileyin.</span>'+
-      '<button class="status-close" type="button" aria-label="Uyarıyı kapat">×</button>'+
-      '</div>';
-    status.hidden=false;
-
-    var close=status.querySelector(".status-close");
-    if(close){
-      close.onclick=function(e){
-        e.stopPropagation();
-        status.hidden=true;
-        status.innerHTML="";
-      };
-    }
-  }
+  /*
+    app.js kendi bağlantı/retry uyarılarını yönetiyor. Bu failsafe yalnızca
+    beklenmedik bir JS parse/runtime sorunu loading katmanını sonsuza kadar
+    ekranda bırakmasın diye var; başarılı haber yüklemesinin üstüne sahte
+    "haberler alınamadı" mesajı üretmez.
+  */
+  var FAILSAFE_MS=15000;
 
   setTimeout(function(){
     var loader=document.getElementById("loading-screen");
-    if(loader){
-      hideLoader();
-      showBootError();
+    if(loader && !window.__floewInitialReady){
+      loader.remove();
     }
   },FAILSAFE_MS);
 })();
 </script>
 
-<script src="js/app.js?h=ced8d046776c" onerror="
+<script src="js/app.js?h=d00f610bf0b4" onerror="
   var loader=document.getElementById('loading-screen');
   if(loader)loader.remove();
   var status=document.getElementById('status');
@@ -431,7 +411,7 @@
 "></script>
 <script src="js/share.js?h=1c844799fcff"></script>
 <script src="js/feedback.js?h=e798cee066b1"></script>
-<script src="js/headline-actions.js?h=d4def2fd961f"></script>
+<script src="js/headline-actions.js?h=6696cfd8bd7f"></script>
 
 </body>
 </html>
