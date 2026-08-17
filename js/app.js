@@ -53,6 +53,10 @@ const NEAR_DUPLICATE_OVERLAP_THRESHOLD=.74;
 const NEAR_DUPLICATE_JACCARD_THRESHOLD=.42;
 const REFRESH_MS=120000;
 const SWIPE=44;
+const TOUCH_DRAG_START_PX=7;
+const TOUCH_DRAG_COMMIT_RATIO=.18;
+const TOUCH_DRAG_MIN_COMMIT_PX=64;
+const TOUCH_DRAG_VELOCITY_PX_MS=.48;
 
 const ADS_API="https://thefloew.thefloewback.workers.dev/ads";
 const ADS_CACHE_KEY="thefloew.adsCatalog.v5";
@@ -632,6 +636,14 @@ const state={
   pointerId:null,
   swipeHandled:false,
   swipeTouch:false,
+  touchDragActive:false,
+  touchDragDirection:0,
+  touchDragTargetIndex:-1,
+  touchDragFromHistory:false,
+  touchDragDy:0,
+  touchDragLastY:0,
+  touchDragLastT:0,
+  touchDragVelocityY:0,
   history:[],
   historyPos:0
 };
@@ -647,11 +659,18 @@ const FOREIGN_SOURCE_PREFS_KEY="thefloew.foreignSources.v1";
 const FOREIGN_CATEGORY="#Yabancı";
 const BASE_FEED_MODE_ORDER=["breaking","agenda","foreign"];
 let temporarySourceFilter=null;
+let temporaryCategoryFilter=null;
 
 function currentFeedModeOrder(){
-  return temporarySourceFilter
-    ? ["breaking","agenda","source","foreign"]
-    : BASE_FEED_MODE_ORDER;
+  if(temporarySourceFilter){
+    return ["breaking","agenda","source","foreign"];
+  }
+
+  if(temporaryCategoryFilter){
+    return ["breaking","agenda","category","foreign"];
+  }
+
+  return BASE_FEED_MODE_ORDER;
 }
 
 const NEW_CATEGORIES=["#Yaşam","#Sağlık","#Otomotiv","#Sinema","#Müzik","#Edebiyat","#Televizyon","#Bilim","#Moda","#Tarih","#Gezi"];
@@ -749,6 +768,7 @@ const feedModeStoryKeys={
   agenda:"",
   breaking:"",
   source:"",
+  category:"",
   foreign:""
 };
 const BREAKING_WINDOW_MS=20*60*1000;
@@ -1630,6 +1650,19 @@ function storiesForFeedMode(mode){
     return orderStoriesForFeed(list,mode);
   }
 
+  if(mode==="category"){
+    if(!temporaryCategoryFilter)return [];
+
+    const list=rawStories.filter(s=>{
+      if(String(s.flowCategory||"")!==temporaryCategoryFilter.name)return false;
+      if(!storyInTimeRange(s))return false;
+      if(!passesKeywordFilter(s))return false;
+      return true;
+    });
+
+    return orderStoriesForFeed(list,mode);
+  }
+
   if(mode==="foreign"){
     const list=rawStories.filter(s=>{
       if(!s.flowForeign)return false;
@@ -1705,6 +1738,10 @@ function emptyStoriesMessage(){
 
   if(feedMode==="source"){
     return `${temporarySourceFilter?.name||"Bu kaynak"} için seçilen zaman aralığında haber bulunamadı.`;
+  }
+
+  if(feedMode==="category"){
+    return `${temporaryCategoryFilter?.name||"Bu kategori"} için seçilen zaman aralığında haber bulunamadı.`;
   }
 
   return "Seçtiğiniz kaynak, kategori ve zaman aralığında haber bulunamadı.";
@@ -1789,12 +1826,82 @@ function activateTemporarySourceFeed(sourceName){
     return;
   }
 
+  if(temporaryCategoryFilter){
+    clearTemporaryCategoryTab();
+  }
+
   temporarySourceFilter={name,key};
   feedModeStoryKeys.source=storyIdentity(
     state.stories[state.index]
   );
   ensureTemporarySourceTab();
   switchFeedMode("source");
+}
+
+function ensureTemporaryCategoryTab(){
+  const tabs=document.getElementById("feed-tabs");
+  if(!tabs || !temporaryCategoryFilter)return null;
+
+  let button=tabs.querySelector('[data-feed-mode="category"]');
+
+  if(!button){
+    button=document.createElement("button");
+    button.type="button";
+    button.className="feed-tab source-feed-tab category-feed-tab";
+    button.dataset.feedMode="category";
+    button.setAttribute("aria-pressed","false");
+
+    const foreign=tabs.querySelector('[data-feed-mode="foreign"]');
+    tabs.insertBefore(button,foreign||null);
+
+    requestAnimationFrame(()=>{
+      requestAnimationFrame(()=>button?.classList.add("is-visible"));
+    });
+  }else{
+    button.classList.add("is-visible");
+  }
+
+  button.textContent=temporaryCategoryFilter.name;
+  button.title=`${temporaryCategoryFilter.name} haberleri`;
+  bindFeedTabButton(button);
+  return button;
+}
+
+function clearTemporaryCategoryTab(){
+  const button=document.querySelector('[data-feed-mode="category"]');
+
+  if(button){
+    button.dataset.feedMode="category-leaving";
+    button.classList.remove("is-visible");
+    button.classList.add("is-leaving");
+    setTimeout(()=>button.remove(),320);
+  }
+
+  temporaryCategoryFilter=null;
+  feedModeStoryKeys.category="";
+}
+
+function activateTemporaryCategoryFeed(categoryName){
+  const name=String(categoryName||"").trim();
+  if(!name)return;
+
+  if(
+    feedMode==="category" &&
+    temporaryCategoryFilter?.name===name
+  ){
+    return;
+  }
+
+  if(temporarySourceFilter){
+    clearTemporarySourceTab();
+  }
+
+  temporaryCategoryFilter={name};
+  feedModeStoryKeys.category=storyIdentity(
+    state.stories[state.index]
+  );
+  ensureTemporaryCategoryTab();
+  switchFeedMode("category");
 }
 
 function renderFeedMode(){
@@ -1851,6 +1958,10 @@ function switchFeedMode(nextMode){
 
   if(previousMode==="source" && next!=="source"){
     clearTemporarySourceTab();
+  }
+
+  if(previousMode==="category" && next!=="category"){
+    clearTemporaryCategoryTab();
   }
 
   closeQuickPanels();
@@ -2121,6 +2232,8 @@ function finishInitialLoading(forceImmediate=false){
     return;
   }
 
+  const progress=screen.querySelector(".loading-progress");
+
   const remove=()=>{
     if(screen.isConnected)screen.remove();
 
@@ -2131,6 +2244,7 @@ function finishInitialLoading(forceImmediate=false){
   };
 
   if(forceImmediate){
+    progress?.classList.add("is-complete");
     remove();
     return;
   }
@@ -2140,10 +2254,20 @@ function finishInitialLoading(forceImmediate=false){
 
   setTimeout(()=>{
     requestAnimationFrame(()=>{
-      screen.classList.add("is-done");
-      screen.addEventListener("transitionend",remove,{once:true});
-      // Güvenlik: transitionend herhangi bir nedenle gelmezse overlay kalmasın.
-      setTimeout(remove,700);
+      progress?.classList.add("is-complete");
+
+      /* Barın %100'e vardığı kısa an görünür kalsın; ardından loading katmanı
+         yumuşak biçimde kaybolsun. */
+      setTimeout(()=>{
+        if(!screen.isConnected){
+          remove();
+          return;
+        }
+        screen.classList.add("is-done");
+        screen.addEventListener("transitionend",remove,{once:true});
+        // Güvenlik: transitionend herhangi bir nedenle gelmezse overlay kalmasın.
+        setTimeout(remove,700);
+      },190);
     });
   },wait);
 }
@@ -3549,7 +3673,26 @@ function fill(el,s,options={}){
     };
   }
   const category=el.querySelector(".category");
-  if(category) category.textContent=s.flowCategory||"#Yaşam";
+  if(category){
+    const categoryName=s.flowCategory||"#Yaşam";
+    category.textContent=categoryName;
+    category.title="Bu kategoriden tüm haberleri göster";
+    category.setAttribute("role","button");
+    category.tabIndex=0;
+    category.onpointerdown=e=>e.stopPropagation();
+    category.onpointerup=e=>e.stopPropagation();
+    category.onclick=e=>{
+      e.stopPropagation();
+      activateTemporaryCategoryFeed(categoryName);
+    };
+    category.onkeydown=e=>{
+      if(e.key==="Enter" || e.key===" "){
+        e.preventDefault();
+        e.stopPropagation();
+        activateTemporaryCategoryFeed(categoryName);
+      }
+    };
+  }
   el.querySelector("h1").textContent=s.title||"";
 
   const description=el.querySelector(".description");
@@ -4773,7 +4916,8 @@ function nearDuplicateDedupActive(){
   return nearDuplicateDedupEnabled &&
     feedOrderMode==="algorithmic" &&
     feedMode!=="breaking" &&
-    feedMode!=="source";
+    feedMode!=="source" &&
+    feedMode!=="category";
 }
 
 /*
@@ -5965,7 +6109,7 @@ async function performNewsLoad(){
     Aktif geçiş/reklam varken mevcut akışı olduğu gibi bırak; sonraki refresh
     turu güncel listeyi alır.
   */
-  if((state.busy || adActive) && state.stories.length){
+  if((state.busy || adActive || state.touchDragActive) && state.stories.length){
     return;
   }
 
@@ -5993,7 +6137,7 @@ async function performNewsLoad(){
 
     /* Fetch sürerken kullanıcı kaydırmaya başlamış olabilir. Eski refresh
        sonucu geçişin kullandığı history/index yapısını değiştirmesin. */
-    if((state.busy || adActive) && state.stories.length){
+    if((state.busy || adActive || state.touchDragActive) && state.stories.length){
       return;
     }
 
@@ -8245,7 +8389,7 @@ const ABOUT_LEGAL_DOCS={
   cookies:{title:"Çerezler",path:"docs/CEREZLER.txt"}
 };
 
-function renderLegalDocumentText(target,text){
+function renderStructuredAboutDocumentText(target,text){
   if(!target)return;
   target.replaceChildren();
 
@@ -8267,18 +8411,18 @@ function renderLegalDocumentText(target,text){
       continue;
     }
 
-    if(line.startsWith("##")){
+    if(/^#(?!#)/.test(line)){
       const heading=document.createElement("h2");
       heading.className="about-doc-heading";
-      heading.textContent=line.replace(/^##+\s*/,"");
+      heading.textContent=line.replace(/^#\s*/,"");
       fragment.appendChild(heading);
       continue;
     }
 
-    if(line.startsWith("#")){
+    if(/^##+/.test(line)){
       const strong=document.createElement("div");
       strong.className="about-doc-strong";
-      strong.textContent=line.replace(/^#+\s*/,"");
+      strong.textContent=line.replace(/^##+\s*/,"");
       fragment.appendChild(strong);
       continue;
     }
@@ -8292,7 +8436,7 @@ function renderLegalDocumentText(target,text){
   target.appendChild(fragment);
 }
 
-async function loadAboutDocument(path,target,{legal=false}={}){
+async function loadAboutDocument(path,target,{structured=false}={}){
   if(!path || !target)return;
   target.textContent="İçerik yükleniyor...";
   try{
@@ -8304,8 +8448,8 @@ async function loadAboutDocument(path,target,{legal=false}={}){
       aboutDocumentCache.set(path,text);
     }
 
-    if(legal){
-      renderLegalDocumentText(target,text);
+    if(structured){
+      renderStructuredAboutDocumentText(target,text);
     }else{
       target.textContent=text.trim()||"Bu belge şu anda boş.";
     }
@@ -8329,7 +8473,7 @@ function openAboutDocumentViewer(kind){
   if(title)title.textContent=config.title;
   viewer?.classList.add("open");
   viewer?.setAttribute("aria-hidden","false");
-  loadAboutDocument(config.path,content,{legal:true});
+  loadAboutDocument(config.path,content,{structured:true});
 }
 
 function activateAboutTab(name="stats",{load=true}={}){
@@ -8348,7 +8492,7 @@ function activateAboutTab(name="stats",{load=true}={}){
 
   if(!load)return;
   if(aboutActiveTab==="stats")loadPublicStats(publicStatsRange);
-  else if(aboutActiveTab==="faq")loadAboutDocument("docs/SSS.txt",document.querySelector('[data-about-panel="faq"] [data-about-doc]'));
+  else if(aboutActiveTab==="faq")loadAboutDocument("docs/SSS.txt",document.querySelector('[data-about-panel="faq"] [data-about-doc]'),{structured:true});
   else if(aboutActiveTab==="ads")loadAboutDocument("docs/REKLAM.txt",document.querySelector('[data-about-panel="ads"] [data-about-doc]'));
   else if(aboutActiveTab==="contact")loadAboutDocument("docs/ILETISIM.txt",document.querySelector('[data-about-panel="contact"] [data-about-doc]'));
 }
@@ -8891,6 +9035,293 @@ window.addEventListener("keydown",e=>{
   else if(e.key==="f"||e.key==="F"){toggleFullscreen()}
 });
 
+
+function resetTouchDragState(){
+  state.touchDragActive=false;
+  state.touchDragDirection=0;
+  state.touchDragTargetIndex=-1;
+  state.touchDragFromHistory=false;
+  state.touchDragDy=0;
+  state.touchDragLastY=0;
+  state.touchDragLastT=0;
+  state.touchDragVelocityY=0;
+}
+
+function clearTouchDragVisuals(){
+  slides.forEach(slide=>{
+    slide.classList.remove("touch-dragging");
+    slide.style.removeProperty("transform");
+    slide.style.removeProperty("transition");
+    slide.style.removeProperty("z-index");
+  });
+}
+
+function touchDragTargetForDirection(direction){
+  if(direction<0){
+    if(isAtSkippedAdAfter() || state.historyPos<=0)return null;
+    const index=state.history[state.historyPos-1];
+    return Number.isInteger(index)
+      ? {index,fromHistory:true}
+      : null;
+  }
+
+  if(isAtSkippedAdBefore() || adBreakDue())return null;
+
+  if(state.historyPos<state.history.length-1){
+    const index=state.history[state.historyPos+1];
+    return Number.isInteger(index)
+      ? {index,fromHistory:true}
+      : null;
+  }
+
+  const index=nextStoryIndexForPreload();
+  return index>=0
+    ? {index,fromHistory:false}
+    : null;
+}
+
+function prepareTouchDragTarget(direction){
+  const target=touchDragTargetForDirection(direction);
+  const standby=slides[1-state.active];
+
+  if(!target){
+    state.touchDragActive=true;
+    state.touchDragDirection=direction;
+    state.touchDragTargetIndex=-1;
+    state.touchDragFromHistory=false;
+    clearTimeout(state.timer);
+    state.timer=null;
+    slides[state.active].classList.add("touch-dragging");
+    standby.className="slide touch-dragging";
+    standby.style.removeProperty("transform");
+    standby.style.removeProperty("transition");
+    return false;
+  }
+
+  if(
+    state.touchDragActive &&
+    state.touchDragDirection===direction &&
+    state.touchDragTargetIndex===target.index
+  ){
+    return true;
+  }
+
+  const story=state.stories[target.index];
+  if(!story)return false;
+
+  state.touchDragActive=true;
+  state.touchDragDirection=direction;
+  state.touchDragTargetIndex=target.index;
+  state.touchDragFromHistory=target.fromHistory;
+
+  clearTimeout(state.timer);
+  state.timer=null;
+
+  preloadStoryAssets(story);
+  preloadImage(story.image).catch(()=>{});
+  prepareTransitionSlide(standby,story);
+
+  const image=standby.querySelector(".slide-image");
+  if(image){
+    lockSmartFocalPoint(image,story,180).catch(()=>{});
+  }
+
+  standby.className="slide touch-dragging";
+  standby.style.zIndex="3";
+  slides[state.active].classList.add("touch-dragging");
+  slides[state.active].style.zIndex="4";
+  return true;
+}
+
+function updateTouchStoryDrag(dy,e){
+  const direction=dy<0 ? 1 : -1;
+  const height=Math.max(1,window.innerHeight||document.documentElement.clientHeight||1);
+  const current=slides[state.active];
+  const standby=slides[1-state.active];
+
+  prepareTouchDragTarget(direction);
+
+  const now=performance.now();
+  if(state.touchDragLastT>0){
+    const dt=Math.max(1,now-state.touchDragLastT);
+    state.touchDragVelocityY=(e.clientY-state.touchDragLastY)/dt;
+  }
+  state.touchDragLastY=e.clientY;
+  state.touchDragLastT=now;
+  state.touchDragDy=dy;
+
+  if(state.touchDragTargetIndex<0){
+    const resisted=Math.max(-height*.18,Math.min(height*.18,dy*.24));
+    current.style.transform=`translate3d(0,${resisted}px,0)`;
+    current.style.transition="none";
+    return;
+  }
+
+  const clamped=Math.max(-height,Math.min(height,dy));
+  const standbyOffset=direction>0 ? height : -height;
+
+  current.style.transition="none";
+  standby.style.transition="none";
+  current.style.transform=`translate3d(0,${clamped}px,0)`;
+  standby.style.transform=`translate3d(0,${standbyOffset+clamped}px,0)`;
+}
+
+function animateTouchDragPair(current,standby,currentY,standbyY,duration=260){
+  return new Promise(resolve=>{
+    let done=false;
+    const finish=()=>{
+      if(done)return;
+      done=true;
+      current.removeEventListener("transitionend",onEnd);
+      clearTimeout(timeout);
+      resolve();
+    };
+    const onEnd=e=>{
+      if(e.target===current && e.propertyName==="transform")finish();
+    };
+    const timeout=setTimeout(finish,duration+100);
+
+    current.addEventListener("transitionend",onEnd);
+    const transition=`transform ${duration}ms cubic-bezier(.22,.61,.36,1)`;
+    current.style.transition=transition;
+    standby.style.transition=transition;
+
+    requestAnimationFrame(()=>{
+      current.style.transform=`translate3d(0,${currentY}px,0)`;
+      standby.style.transform=`translate3d(0,${standbyY}px,0)`;
+    });
+  });
+}
+
+async function cancelTouchStoryDrag(){
+  const current=slides[state.active];
+  const standby=slides[1-state.active];
+  const height=Math.max(1,window.innerHeight||document.documentElement.clientHeight||1);
+  const direction=state.touchDragDirection || (state.touchDragDy<0?1:-1);
+
+  state.busy=true;
+  await animateTouchDragPair(
+    current,
+    standby,
+    0,
+    direction>0 ? height : -height,
+    220
+  );
+
+  current.className="slide active";
+  standby.className="slide";
+  clearTouchDragVisuals();
+  resetTouchDragState();
+  state.busy=false;
+  timer();
+}
+
+async function commitTouchStoryDrag(direction){
+  const targetIndex=state.touchDragTargetIndex;
+  const fromHistory=state.touchDragFromHistory;
+  const before=state.stories[state.index]||null;
+  const story=state.stories[targetIndex]||null;
+
+  if(!story || targetIndex<0){
+    await cancelTouchStoryDrag();
+    return;
+  }
+
+  const current=slides[state.active];
+  const standby=slides[1-state.active];
+  const height=Math.max(1,window.innerHeight||document.documentElement.clientHeight||1);
+
+  state.busy=true;
+  clearTimeout(state.timer);
+  state.timer=null;
+
+  startPiPTransition(before,story,direction);
+  activateSlideMedia(standby,story);
+
+  await animateTouchDragPair(
+    current,
+    standby,
+    direction>0 ? -height : height,
+    0,
+    260
+  );
+
+  standby.className="slide active";
+  current.className="slide";
+  stopSlideMedia(current);
+  clearTouchDragVisuals();
+
+  state.active=1-state.active;
+  state.index=targetIndex;
+
+  if(direction>0){
+    if(fromHistory){
+      state.historyPos=Math.min(state.history.length-1,state.historyPos+1);
+    }else{
+      state.history.push(targetIndex);
+      state.historyPos=state.history.length-1;
+      plannedForwardStory=null;
+    }
+    newsShownSinceAd++;
+    telemetryQueueEvent("story_forward",{
+      direction:1,
+      origin:"touch_drag"
+    });
+  }else{
+    state.historyPos=Math.max(0,state.historyPos-1);
+    telemetryQueueEvent("story_back",{
+      direction:-1,
+      origin:"touch_drag"
+    });
+  }
+
+  updateKeywordAlert(story);
+  telemetryStoryChanged(before,"touch_drag",direction);
+  resetTouchDragState();
+  state.busy=false;
+  timer();
+}
+
+async function finishTouchStoryDrag(){
+  if(!state.touchDragActive){
+    resetTouchDragState();
+    return false;
+  }
+
+  const height=Math.max(1,window.innerHeight||document.documentElement.clientHeight||1);
+  const distance=Math.abs(state.touchDragDy);
+  const velocity=Math.abs(state.touchDragVelocityY);
+  const threshold=Math.max(TOUCH_DRAG_MIN_COMMIT_PX,height*TOUCH_DRAG_COMMIT_RATIO);
+  const direction=state.touchDragDirection;
+
+  const strongGesture=
+    distance>=threshold ||
+    (distance>=24 && velocity>=TOUCH_DRAG_VELOCITY_PX_MS);
+
+  const shouldCommit=
+    state.touchDragTargetIndex>=0 &&
+    strongGesture;
+
+  if(shouldCommit){
+    await commitTouchStoryDrag(direction);
+  }else{
+    const shouldDeferToNormalNavigation=
+      strongGesture &&
+      (
+        (direction>0 && (isAtSkippedAdBefore() || adBreakDue())) ||
+        (direction<0 && isAtSkippedAdAfter())
+      );
+
+    await cancelTouchStoryDrag();
+
+    if(shouldDeferToNormalNavigation){
+      move(direction,{origin:"touch_drag"});
+    }
+  }
+
+  return true;
+}
+
 window.addEventListener("pointerdown",e=>{
   if(e.button!==0)return;
 
@@ -8924,6 +9355,10 @@ window.addEventListener("pointerdown",e=>{
   if(e.target.closest && e.target.closest("#menu-overlay"))return;
   state.x=e.clientX;state.y=e.clientY;state.t=performance.now();
   state.pointerId=e.pointerId;
+  resetTouchDragState();
+  state.touchDragLastY=e.clientY;
+  state.touchDragLastT=state.t;
+  try{e.target?.setPointerCapture?.(e.pointerId);}catch(_){}
   state.swipeTouch=
     e.pointerType==="touch" ||
     (
@@ -8933,13 +9368,13 @@ window.addEventListener("pointerdown",e=>{
 });
 
 /*
-  Mobilde parmağın kalkmasını bekleme: baskın eksende eşik aşılır aşılmaz
-  yalnız bir kez gezin. pointerup aynı hareketi ikinci kez çalıştırmaz.
+  Mobil doğrudan manipülasyon:
+  Dikey harekette haber parmakla birlikte hareket eder; kullanıcı parmağını
+  bırakmadan yönü tersine çevirebilir. Yatay swipe sekme değiştirmeyi korur.
 */
 window.addEventListener("pointermove",e=>{
   if(
     !state.swipeTouch ||
-    state.swipeHandled ||
     state.pointerId===null ||
     e.pointerId!==state.pointerId ||
     state.busy ||
@@ -8950,13 +9385,14 @@ window.addEventListener("pointermove",e=>{
 
   const dx=e.clientX-state.x;
   const dy=e.clientY-state.y;
-  const dt=performance.now()-state.t;
-
-  if(dt>1200)return;
+  const absX=Math.abs(dx);
+  const absY=Math.abs(dy);
 
   if(
-    Math.abs(dx)>=SWIPE &&
-    Math.abs(dx)>Math.abs(dy)
+    !state.touchDragActive &&
+    !state.swipeHandled &&
+    absX>=SWIPE &&
+    absX>absY*1.1
   ){
     const order=currentFeedModeOrder();
     const currentModeIndex=order.indexOf(feedMode);
@@ -8975,16 +9411,23 @@ window.addEventListener("pointermove",e=>{
   }
 
   if(
-    Math.abs(dy)>=SWIPE &&
-    Math.abs(dy)>=Math.abs(dx)
+    !state.swipeHandled &&
+    (state.touchDragActive || (absY>=TOUCH_DRAG_START_PX && absY>=absX))
   ){
-    state.swipeHandled=true;
-    move(dy<0?1:-1);
+    e.preventDefault();
+    updateTouchStoryDrag(dy,e);
   }
-},{passive:true});
+},{passive:false});
 
 window.addEventListener("pointercancel",e=>{
   if(e.pointerId!==state.pointerId)return;
+
+  if(state.touchDragActive){
+    cancelTouchStoryDrag();
+  }else{
+    resetTouchDragState();
+  }
+
   state.pointerId=null;
   state.swipeHandled=false;
   state.swipeTouch=false;
@@ -8992,6 +9435,20 @@ window.addEventListener("pointercancel",e=>{
 
 window.addEventListener("pointerup",e=>{
   if(e.button!==0)return;
+
+  /* Pointer capture desteklenmeyen bir cihazda parmak bir kontrolün üstünde
+     bırakılmış olsa bile aktif doğrudan sürüklemeyi mutlaka sonlandır. */
+  if(
+    state.touchDragActive &&
+    e.pointerId===state.pointerId
+  ){
+    finishTouchStoryDrag();
+    state.pointerId=null;
+    state.swipeHandled=false;
+    state.swipeTouch=false;
+    return;
+  }
+
   if(e.target.closest && e.target.closest("#feed-tabs"))return;
   if(document.getElementById("menu-overlay").classList.contains("open"))return;
   if(document.getElementById("stats-overlay")?.classList.contains("open"))return;

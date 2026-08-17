@@ -230,7 +230,7 @@
         );
 
         button.textContent=
-          oldText || "⤴";
+          oldText || "⤴︎";
 
         button.setAttribute(
           "aria-label",
@@ -425,7 +425,7 @@
       button.className=
         "share-link";
 
-      button.textContent="⤴";
+      button.textContent="⤴︎";
 
       button.setAttribute(
         "aria-label",
