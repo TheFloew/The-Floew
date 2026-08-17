@@ -1,3 +1,7 @@
+Beta Versiyon 1.7.2
+- Flöw üzerinden sosyal medya site/uygulamalarında haber paylaşma özelliği eklendi.
+- Şikayet / geri bildirim özelliği eklendi.
+
 Beta Versiyon 1.7.1
 - "Flöw hakkında bazı bilgiler" ekranı güncellendi.
 - Kullanım koşulları, gizlilik ve çerez politikası, iletişim ekranları eklendi.
