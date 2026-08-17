@@ -7,6 +7,7 @@ Beta Versiyon 1.7.5
 - Flöra puanı tıklanabilir oldu. Geçerli haberin Flöra değerlerini ve istatistiklerini gösteren ekran eklendi.
 - Legal yazılarda dizgi düzeltmeleri.
 - Loading ekranın yükleme barı eklendi.
+- Kaydırma iyileştirmeleri.
 
 Beta Versiyon 1.7.2
 - Flöw üzerinden sosyal medya site/uygulamalarında haber paylaşma özelliği eklendi.
