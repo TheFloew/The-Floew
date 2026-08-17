@@ -3749,3 +3749,219 @@ body.foreign-mode #time-range-button{
     animation:none !important;
   }
 }
+
+/* =====================================================================
+   V31.25.0 — media hygiene / Flöra details / legal text / loader progress
+   ===================================================================== */
+
+/* Safari/iOS ve bazı Chromium türevlerinin controls=false olsa bile kısa süre
+   gösterebildiği ses/oynatma katmanlarını mümkün olduğunca bastır. */
+.slide-video::-webkit-media-controls,
+#ad-video::-webkit-media-controls,
+.slide-video::-webkit-media-controls-panel,
+#ad-video::-webkit-media-controls-panel,
+.slide-video::-webkit-media-controls-overlay-play-button,
+#ad-video::-webkit-media-controls-overlay-play-button,
+.slide-video::-webkit-media-controls-start-playback-button,
+#ad-video::-webkit-media-controls-start-playback-button,
+.slide-video::-webkit-media-controls-play-button,
+#ad-video::-webkit-media-controls-play-button,
+.slide-video::-webkit-media-controls-mute-button,
+#ad-video::-webkit-media-controls-mute-button,
+.slide-video::-webkit-media-controls-volume-slider,
+#ad-video::-webkit-media-controls-volume-slider,
+.slide-video::-webkit-media-controls-current-time-display,
+#ad-video::-webkit-media-controls-current-time-display,
+.slide-video::-webkit-media-controls-time-remaining-display,
+#ad-video::-webkit-media-controls-time-remaining-display,
+.slide-video::-webkit-media-controls-timeline,
+#ad-video::-webkit-media-controls-timeline,
+.slide-video::-webkit-media-controls-fullscreen-button,
+#ad-video::-webkit-media-controls-fullscreen-button{
+  display:none !important;
+  opacity:0 !important;
+  visibility:hidden !important;
+  -webkit-appearance:none !important;
+}
+
+/* Flöra puanı artık küçük bir bilgi kontrolü. */
+.flora-inline{
+  cursor:pointer;
+  pointer-events:auto;
+  border-radius:999px;
+  padding:2px 3px;
+  transition:background .18s ease,opacity .18s ease;
+  -webkit-tap-highlight-color:transparent;
+}
+.flora-inline:hover,
+.flora-inline:focus-visible{
+  background:rgba(255,255,255,.08);
+  outline:none;
+}
+.flora-inline:focus-visible{
+  box-shadow:0 0 0 1px rgba(255,255,255,.42);
+}
+
+.flora-story-popover{
+  position:fixed;
+  z-index:1760;
+  width:min(318px,calc(100vw - 24px));
+  box-sizing:border-box;
+  padding:14px 15px 15px;
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:14px;
+  background:rgba(15,15,15,.96);
+  color:#fff;
+  box-shadow:0 14px 44px rgba(0,0,0,.55);
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+  font-family:"Comfortaa",sans-serif;
+}
+.flora-story-popover[hidden]{display:none !important}
+.flora-story-popover-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+.flora-story-popover-title{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  font-size:12px;
+  font-weight:700;
+}
+.flora-story-popover-mark{
+  color:#ffa37b;
+  font:400 22px/.8 Georgia,"Times New Roman",serif;
+}
+.flora-story-popover-close{
+  width:28px;
+  height:28px;
+  padding:0;
+  border:0;
+  background:transparent;
+  color:rgba(255,255,255,.7);
+  cursor:pointer;
+  font:300 23px/28px Arial,sans-serif;
+}
+.flora-story-popover-close:hover{color:#fff}
+.flora-story-popover-score{
+  margin-top:8px;
+  font-size:24px;
+  line-height:1;
+  font-weight:700;
+  letter-spacing:-.03em;
+}
+.flora-story-popover-status{
+  margin-top:6px;
+  color:rgba(255,255,255,.55);
+  font-size:9px;
+  line-height:1.45;
+}
+.flora-story-popover-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:7px;
+  margin-top:12px;
+}
+.flora-story-popover-metric{
+  min-width:0;
+  padding:8px 9px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:9px;
+  background:rgba(255,255,255,.035);
+}
+.flora-story-popover-metric span,
+.flora-story-popover-metric strong{
+  display:block;
+}
+.flora-story-popover-metric span{
+  color:rgba(255,255,255,.52);
+  font-size:8px;
+  line-height:1.3;
+}
+.flora-story-popover-metric strong{
+  margin-top:4px;
+  font-size:11px;
+  line-height:1.2;
+}
+
+/* Legal TXT belgelerindeki basit başlık işaretleri. */
+.about-doc-heading{
+  margin:22px 0 12px;
+  font-size:16px;
+  line-height:1.35;
+  font-weight:700;
+  letter-spacing:-.015em;
+}
+.about-doc-heading:first-child{margin-top:0}
+.about-doc-strong{
+  margin:14px 0 7px;
+  font-weight:700;
+  color:#fff;
+}
+.about-doc-line{
+  min-height:1em;
+}
+.about-doc-spacer{
+  height:.8em;
+}
+
+/* Logo animasyonunun altında ince, sakin bir indeterminate ilerleme çizgisi. */
+.loading-progress{
+  position:absolute;
+  left:50%;
+  top:calc(50% + clamp(42px,6vw,66px));
+  width:clamp(92px,13vw,164px);
+  height:2px;
+  overflow:hidden;
+  border-radius:999px;
+  background:rgba(255,255,255,.12);
+  transform:translateX(-50%);
+  pointer-events:none;
+}
+.loading-progress span{
+  position:absolute;
+  inset:0 auto 0 0;
+  width:42%;
+  border-radius:inherit;
+  background:rgba(255,255,255,.72);
+  animation:floewLoadingProgress 1.35s cubic-bezier(.45,0,.55,1) infinite;
+}
+@keyframes floewLoadingProgress{
+  0%{transform:translateX(-115%);opacity:.35}
+  45%{opacity:1}
+  100%{transform:translateX(270%);opacity:.35}
+}
+@media(max-width:520px){
+  .loading-progress{
+    top:calc(50% + 39px);
+    width:116px;
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  .loading-progress span{
+    animation-duration:2.4s;
+  }
+}
+
+/* Dailymotion'ın yayıncı Player konfigürasyonundan gelebilen sol üst
+   click-to-unmute rozetini dış iframe'e müdahale edemediğimiz için Flöw
+   yüzeyinde küçük, yumuşak bir blur maskesiyle görünmezleştir. */
+@supports selector(.slide:has(.slide-dailymotion)){
+  .slide:has(.slide-dailymotion.media-visible) .shade::before,
+  .slide:has(.slide-embed[data-provider="dailymotion"].media-visible) .shade::before{
+    content:"";
+    position:absolute;
+    top:0;
+    left:0;
+    width:66px;
+    height:58px;
+    border-radius:0 0 18px 0;
+    background:linear-gradient(135deg,rgba(0,0,0,.28),rgba(0,0,0,.06) 62%,rgba(0,0,0,0));
+    backdrop-filter:blur(13px);
+    -webkit-backdrop-filter:blur(13px);
+    pointer-events:none;
+  }
+}
