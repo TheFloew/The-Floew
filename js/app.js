@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.25.0";
+window.__floewAppVersion="31.26.1";
 const API="https://thefloew.thefloewback.workers.dev/news";
 const VIDEO_API="https://thefloew.thefloewback.workers.dev/video";
 const META_API="https://thefloew.thefloewback.workers.dev/meta";
@@ -625,6 +625,22 @@ let adEntryDirection=1;
 */
 let skippedAdHistory=null;
 let historicalAdContext=null;
+
+/*
+  V31.26.1 — mobil reklam direct-drag durumu.
+  Reklam, haberlerdekiyle aynı biçimde parmağı takip eder. Commit sonrası
+  mevcut reklam/history akışı korunur; yalnız görsel geçiş ikinci kez
+  animasyonlandırılmaz.
+*/
+let touchAdDragActive=false;
+let touchAdDragDirection=0;
+let touchAdDragTargetIndex=-1;
+let touchAdDragTargetSlide=null;
+let touchAdDragDy=0;
+let touchAdDragLastY=0;
+let touchAdDragLastT=0;
+let touchAdDragVelocityY=0;
+let touchAdDragCommitted=null;
 
 const state={
   stories:[],
@@ -4452,6 +4468,14 @@ function showAdOverlay(){
 function hideAdOverlay(){
   document.body.classList.remove("ad-mode");
 
+  if(touchAdDragActive || touchAdDragCommitted){
+    /* Reklam parmak ekrandayken doğal olarak biterse aynı pointerup ikinci
+       bir haber hareketine dönüşmesin. */
+    state.swipeHandled=true;
+    clearTouchAdDragVisuals();
+    resetTouchAdDragState();
+  }
+
   if(adOverlay){
     adOverlay.hidden=true;
     adOverlay.setAttribute("aria-hidden","true");
@@ -5482,6 +5506,15 @@ async function move(dir,options={}){
 async function transitionFromAdTo(nextIndex,fromHistory,dir=1){
   if(state.busy)return;
 
+  if(consumeTouchAdCommit(nextIndex,dir)){
+    const previousIndex=state.index;
+    const ok=await finalizeCommittedAdDragToStory(nextIndex,dir);
+    if(ok && dir>0 && nextIndex!==previousIndex){
+      newsShownSinceAd++;
+    }
+    return;
+  }
+
   state.busy=true;
   clearTimeout(state.timer);
 
@@ -5555,6 +5588,11 @@ async function transitionFromAdTo(nextIndex,fromHistory,dir=1){
 
 async function transitionAdBackToCurrent(dir=-1){
   if(state.busy)return;
+
+  if(consumeTouchAdCommit(state.index,dir)){
+    await finalizeCommittedAdDragToStory(state.index,dir);
+    return;
+  }
 
   state.busy=true;
   clearTimeout(state.timer);
@@ -9030,11 +9068,328 @@ window.addEventListener("keydown",e=>{
 
   if(menuOpen || statsOpen || timeOpen || keywordFilterOpen || keywordWatchOpen)return;
 
+  const target=e.target;
+  const typingTarget=Boolean(
+    target &&
+    (
+      target.isContentEditable ||
+      /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName||"")
+    )
+  );
+
   if(e.key==="ArrowDown"||e.key==="PageDown"){e.preventDefault();move(1)}
   else if(e.key==="ArrowUp"||e.key==="PageUp"){e.preventDefault();move(-1)}
+  else if(
+    (e.key===" " || e.code==="Space") &&
+    !e.repeat &&
+    !typingTarget
+  ){
+    e.preventDefault();
+    move(1,{origin:"keyboard_space"});
+  }
   else if(e.key==="f"||e.key==="F"){toggleFullscreen()}
 });
 
+
+function resetTouchAdDragState(options={}){
+  touchAdDragActive=false;
+  touchAdDragDirection=0;
+  touchAdDragTargetIndex=-1;
+  touchAdDragTargetSlide=null;
+  touchAdDragDy=0;
+  touchAdDragLastY=0;
+  touchAdDragLastT=0;
+  touchAdDragVelocityY=0;
+  if(!options.keepCommit){
+    touchAdDragCommitted=null;
+  }
+}
+
+function clearTouchAdDragVisuals(options={}){
+  if(adOverlay){
+    adOverlay.classList.remove("touch-dragging");
+    adOverlay.style.removeProperty("transform");
+    adOverlay.style.removeProperty("transition");
+  }
+
+  slides.forEach((slide,index)=>{
+    slide.classList.remove("ad-touch-target");
+    slide.style.removeProperty("transform");
+    slide.style.removeProperty("transition");
+    slide.style.removeProperty("z-index");
+
+    if(options.restoreClasses!==false){
+      slide.className=index===state.active ? "slide active" : "slide";
+    }
+  });
+}
+
+function adDragTargetForDirection(direction){
+  if(!adActive || !adHasEntered)return null;
+
+  if(historicalAdContext){
+    const index=direction<0
+      ? historicalAdContext.beforeIndex
+      : historicalAdContext.afterIndex;
+
+    return Number.isInteger(index)
+      ? {index,fromHistory:true}
+      : null;
+  }
+
+  if(direction<0){
+    return Number.isInteger(state.index)
+      ? {index:state.index,fromHistory:true}
+      : null;
+  }
+
+  if(state.historyPos<state.history.length-1){
+    const index=state.history[state.historyPos+1];
+    return Number.isInteger(index)
+      ? {index,fromHistory:true}
+      : null;
+  }
+
+  const index=nextStoryIndexForPreload();
+  return index>=0
+    ? {index,fromHistory:false}
+    : null;
+}
+
+function prepareTouchAdDragTarget(direction){
+  const target=adDragTargetForDirection(direction);
+  if(!target)return false;
+
+  const sameDirection=
+    touchAdDragActive &&
+    touchAdDragDirection===direction &&
+    touchAdDragTargetIndex===target.index &&
+    touchAdDragTargetSlide;
+
+  if(sameDirection)return true;
+
+  /* Yön değiştiğinde eski preview slaytını temizle. */
+  clearTouchAdDragVisuals();
+
+  const story=state.stories[target.index];
+  if(!story)return false;
+
+  const targetSlide=
+    target.index===state.index
+      ? slides[state.active]
+      : slides[1-state.active];
+
+  if(target.index!==state.index){
+    preloadStoryAssets(story);
+    preloadImage(story.image).catch(()=>{});
+    prepareTransitionSlide(targetSlide,story);
+
+    const image=targetSlide.querySelector(".slide-image");
+    if(image){
+      lockSmartFocalPoint(image,story,180).catch(()=>{});
+    }
+  }
+
+  touchAdDragActive=true;
+  touchAdDragDirection=direction;
+  touchAdDragTargetIndex=target.index;
+  touchAdDragTargetSlide=targetSlide;
+
+  targetSlide.classList.add("ad-touch-target");
+  targetSlide.style.zIndex="1189";
+  adOverlay?.classList.add("touch-dragging");
+  return true;
+}
+
+function updateTouchAdDrag(dy,e){
+  if(!adActive || !adHasEntered || !adOverlay)return false;
+
+  const direction=dy<0 ? 1 : -1;
+  const height=Math.max(1,window.innerHeight||document.documentElement.clientHeight||1);
+
+  if(!prepareTouchAdDragTarget(direction))return false;
+
+  const targetSlide=touchAdDragTargetSlide;
+  if(!targetSlide)return false;
+
+  const now=performance.now();
+  if(touchAdDragLastT>0){
+    const dt=Math.max(1,now-touchAdDragLastT);
+    touchAdDragVelocityY=(e.clientY-touchAdDragLastY)/dt;
+  }
+  touchAdDragLastY=e.clientY;
+  touchAdDragLastT=now;
+  touchAdDragDy=dy;
+
+  const clamped=Math.max(-height,Math.min(height,dy));
+  const targetOffset=direction>0 ? height : -height;
+
+  adOverlay.style.transition="none";
+  targetSlide.style.transition="none";
+  adOverlay.style.transform=`translate3d(0,${clamped}px,0)`;
+  targetSlide.style.transform=`translate3d(0,${targetOffset+clamped}px,0)`;
+  return true;
+}
+
+function animateTouchAdPair(adY,targetY,duration=250){
+  return new Promise(resolve=>{
+    if(!adOverlay || !touchAdDragTargetSlide){resolve();return;}
+
+    const targetSlide=touchAdDragTargetSlide;
+    let done=false;
+    const finish=()=>{
+      if(done)return;
+      done=true;
+      adOverlay.removeEventListener("transitionend",onEnd);
+      clearTimeout(timeout);
+      resolve();
+    };
+    const onEnd=e=>{
+      if(e.target===adOverlay && e.propertyName==="transform")finish();
+    };
+    const timeout=setTimeout(finish,duration+120);
+
+    adOverlay.addEventListener("transitionend",onEnd);
+    const transition=`transform ${duration}ms cubic-bezier(.22,.61,.36,1)`;
+    adOverlay.style.transition=transition;
+    targetSlide.style.transition=transition;
+
+    requestAnimationFrame(()=>{
+      adOverlay.style.transform=`translate3d(0,${adY}px,0)`;
+      targetSlide.style.transform=`translate3d(0,${targetY}px,0)`;
+    });
+  });
+}
+
+async function cancelTouchAdDrag(){
+  if(!touchAdDragActive)return;
+
+  const direction=touchAdDragDirection || (touchAdDragDy<0?1:-1);
+  const height=Math.max(1,window.innerHeight||document.documentElement.clientHeight||1);
+
+  await animateTouchAdPair(
+    0,
+    direction>0 ? height : -height,
+    210
+  );
+
+  clearTouchAdDragVisuals();
+  resetTouchAdDragState();
+}
+
+async function finishTouchAdDrag(){
+  if(!touchAdDragActive)return false;
+
+  const height=Math.max(1,window.innerHeight||document.documentElement.clientHeight||1);
+  const distance=Math.abs(touchAdDragDy);
+  const velocity=Math.abs(touchAdDragVelocityY);
+  const threshold=Math.max(TOUCH_DRAG_MIN_COMMIT_PX,height*TOUCH_DRAG_COMMIT_RATIO);
+  const direction=touchAdDragDirection;
+
+  const strongGesture=
+    distance>=threshold ||
+    (distance>=24 && velocity>=TOUCH_DRAG_VELOCITY_PX_MS);
+
+  const canSkip=
+    adActive &&
+    adHasEntered &&
+    performance.now()>=adSkipEnabledAt;
+
+  if(!strongGesture || !canSkip || touchAdDragTargetIndex<0){
+    await cancelTouchAdDrag();
+    return true;
+  }
+
+  const targetIndex=touchAdDragTargetIndex;
+
+  await animateTouchAdPair(
+    direction>0 ? -height : height,
+    0,
+    250
+  );
+
+  /* Reklam bu 250 ms içinde doğal olarak bittiyse eski gesture state'ini
+     yeni ekrana taşımıyoruz. */
+  if(!adActive || !adHasEntered){
+    clearTouchAdDragVisuals();
+    resetTouchAdDragState();
+    return true;
+  }
+
+  touchAdDragCommitted={
+    direction:direction<0?-1:1,
+    targetIndex
+  };
+
+  /*
+    Mevcut reklam promise/history mekanizmasını kullan. requestAdSkip sonucu
+    resolve olduğunda transitionFromAdTo/transitionAdBackToCurrent commit
+    bilgisini görüp ikinci bir animasyon yapmadan state'i tamamlayacak.
+  */
+  const accepted=requestAdSkip(direction);
+  if(!accepted){
+    touchAdDragCommitted=null;
+    await cancelTouchAdDrag();
+  }
+
+  return true;
+}
+
+function consumeTouchAdCommit(nextIndex,dir){
+  const commit=touchAdDragCommitted;
+  if(!commit)return false;
+  if(commit.direction!==(dir<0?-1:1))return false;
+  if(Number.isInteger(nextIndex) && commit.targetIndex!==nextIndex)return false;
+
+  touchAdDragCommitted=null;
+  return true;
+}
+
+async function finalizeCommittedAdDragToStory(nextIndex,dir=1){
+  const story=state.stories[nextIndex];
+  if(!story)return false;
+
+  state.busy=true;
+  clearTimeout(state.timer);
+  state.timer=null;
+
+  const previousSlide=slides[state.active];
+  const targetSlide=
+    nextIndex===state.index
+      ? previousSlide
+      : slides[1-state.active];
+
+  if(nextIndex!==state.index){
+    if(!slidePreloadedForStory(targetSlide,story)){
+      prepareTransitionSlide(targetSlide,story);
+    }
+    targetSlide.className="slide active";
+    previousSlide.className="slide";
+    stopSlideMedia(previousSlide);
+    state.active=1-state.active;
+    state.index=nextIndex;
+  }else{
+    previousSlide.className="slide active";
+  }
+
+  clearTouchAdDragVisuals({restoreClasses:false});
+  activateSlideMedia(slides[state.active],story);
+  updateKeywordAlert(story);
+
+  clearFlowTransitionClasses(adOverlay);
+  hideAdOverlay();
+  adActive=false;
+  adHasEntered=false;
+  adSkipRequestedDirection=0;
+  adSkipEnabledAt=0;
+  adPlaybackFinish=null;
+  currentAd=null;
+  historicalAdContext=null;
+  resetTouchAdDragState();
+  state.busy=false;
+  timer();
+  return true;
+}
 
 function resetTouchDragState(){
   state.touchDragActive=false;
@@ -9356,8 +9711,13 @@ window.addEventListener("pointerdown",e=>{
   state.x=e.clientX;state.y=e.clientY;state.t=performance.now();
   state.pointerId=e.pointerId;
   resetTouchDragState();
+  if(!touchAdDragCommitted){
+    resetTouchAdDragState();
+  }
   state.touchDragLastY=e.clientY;
   state.touchDragLastT=state.t;
+  touchAdDragLastY=e.clientY;
+  touchAdDragLastT=state.t;
   try{e.target?.setPointerCapture?.(e.pointerId);}catch(_){}
   state.swipeTouch=
     e.pointerType==="touch" ||
@@ -9377,8 +9737,7 @@ window.addEventListener("pointermove",e=>{
     !state.swipeTouch ||
     state.pointerId===null ||
     e.pointerId!==state.pointerId ||
-    state.busy ||
-    adActive
+    state.busy
   )return;
 
   if(navigationBlockingPanelOpen())return;
@@ -9387,6 +9746,17 @@ window.addEventListener("pointermove",e=>{
   const dy=e.clientY-state.y;
   const absX=Math.abs(dx);
   const absY=Math.abs(dy);
+
+  if(adActive){
+    if(
+      !state.swipeHandled &&
+      (touchAdDragActive || (absY>=TOUCH_DRAG_START_PX && absY>=absX))
+    ){
+      e.preventDefault();
+      updateTouchAdDrag(dy,e);
+    }
+    return;
+  }
 
   if(
     !state.touchDragActive &&
@@ -9422,10 +9792,13 @@ window.addEventListener("pointermove",e=>{
 window.addEventListener("pointercancel",e=>{
   if(e.pointerId!==state.pointerId)return;
 
-  if(state.touchDragActive){
+  if(touchAdDragActive){
+    cancelTouchAdDrag();
+  }else if(state.touchDragActive){
     cancelTouchStoryDrag();
   }else{
     resetTouchDragState();
+    resetTouchAdDragState();
   }
 
   state.pointerId=null;
@@ -9435,6 +9808,18 @@ window.addEventListener("pointercancel",e=>{
 
 window.addEventListener("pointerup",e=>{
   if(e.button!==0)return;
+
+  /* Reklam da haberlerle aynı direct-drag davranışını kullanır. */
+  if(
+    touchAdDragActive &&
+    e.pointerId===state.pointerId
+  ){
+    finishTouchAdDrag();
+    state.pointerId=null;
+    state.swipeHandled=false;
+    state.swipeTouch=false;
+    return;
+  }
 
   /* Pointer capture desteklenmeyen bir cihazda parmak bir kontrolün üstünde
      bırakılmış olsa bile aktif doğrudan sürüklemeyi mutlaka sonlandır. */
