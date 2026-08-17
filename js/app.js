@@ -1,11 +1,12 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.23.1";
+window.__floewAppVersion="31.25.0";
 const API="https://thefloew.thefloewback.workers.dev/news";
 const VIDEO_API="https://thefloew.thefloewback.workers.dev/video";
 const META_API="https://thefloew.thefloewback.workers.dev/meta";
 const IMAGE_PROXY_API="https://thefloew.thefloewback.workers.dev/image";
 const CUSTOM_RSS_API="https://thefloew.thefloewback.workers.dev/custom-rss";
 const FLORA_SCORES_API="https://thefloew.thefloewback.workers.dev/stats/flora-scores";
+const FLORA_STORY_API="https://thefloew.thefloewback.workers.dev/stats/flora-story";
 const NEWS_REQUEST_SESSION=
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`;
 const NEWS_BATCH_CACHE_PREFIX="thefloew.newsBatchCache.v1.";
@@ -773,6 +774,21 @@ function storyIdentity(story){
   return `${String(story.source||"").trim().toLocaleLowerCase("tr-TR")}|${String(story.title||"").trim()}`;
 }
 
+/*
+  Aynı kaynağın aynı haberi birden fazla RSS/feed URL'sinden farklı link
+  varyasyonlarıyla getirmesi mümkündür. History ve algoritmik seçimde bunları
+  farklı haber saymamak için kaynak + normalize başlık tabanlı ikincil kimlik.
+*/
+function exactDuplicateSignature(story){
+  if(!story)return "";
+  const source=String(story.source||"").trim().toLocaleLowerCase("tr-TR");
+  const title=normalizeText(story.title||"")
+    .replace(/[^a-z0-9çğıöşü]+/gi," ")
+    .replace(/\s+/g," ")
+    .trim();
+  return source && title ? `${source}|${title}` : "";
+}
+
 function pruneRecentSeenEntries(entries){
   const now=Date.now();
   return Object.entries(entries||{})
@@ -796,6 +812,7 @@ function loadRecentSeenStories(){
 
 const recentSeenStories=loadRecentSeenStories();
 const sessionSeenStories=new Set();
+const sessionSeenStorySignatures=new Set();
 
 function saveRecentSeenStories(){
   try{
@@ -818,6 +835,8 @@ function rememberSeenStory(story){
   if(!key)return;
   const now=Date.now();
   sessionSeenStories.add(key);
+  const signature=exactDuplicateSignature(story);
+  if(signature)sessionSeenStorySignatures.add(signature);
   recentSeenStories.set(key,now);
   saveRecentSeenStories();
 }
@@ -896,8 +915,11 @@ function orderStoriesForFeed(list,mode){
 }
 
 const floraScoreMap=new Map();
+const floraStatsMap=new Map();
+const floraStoryRequestCache=new Map();
 let floraScoresLoading=false;
 let floraScoresLoadedAt=0;
+let floraPopoverOpen=false;
 const FLORA_SCORES_REFRESH_MS=5*60*1000;
 
 function formatInlineFloraScore(value){
@@ -905,6 +927,298 @@ function formatInlineFloraScore(value){
   return Number.isFinite(number)
     ? number.toFixed(1)
     : "—";
+}
+
+function floraNumber(value){
+  const number=Number(value);
+  return Number.isFinite(number)?number:0;
+}
+
+function normalizeFloraStatsRow(row){
+  const key=String(row?.story_key||"").trim();
+  if(!key)return null;
+
+  return {
+    story_key:key,
+    flora:Number.isFinite(Number(row?.flora))?Number(row.flora):null,
+    views:floraNumber(row?.views),
+    avg_dwell_ms:floraNumber(row?.avg_dwell_ms),
+    avg_target_ms:floraNumber(row?.avg_target_ms),
+    completes:floraNumber(row?.completes),
+    skips:floraNumber(row?.skips),
+    backs:floraNumber(row?.backs),
+    source_opens:floraNumber(row?.source_opens),
+    video_starts:floraNumber(row?.video_starts),
+    video_completes:floraNumber(row?.video_completes)
+  };
+}
+
+function cacheFloraStatsRow(row){
+  const normalized=normalizeFloraStatsRow(row);
+  if(!normalized)return null;
+
+  floraStatsMap.set(normalized.story_key,normalized);
+  if(Number.isFinite(normalized.flora)){
+    floraScoreMap.set(normalized.story_key,normalized.flora);
+  }
+  return normalized;
+}
+
+function floraPercent(part,total){
+  const denominator=Math.max(0,Number(total)||0);
+  if(!denominator)return "—";
+  return `${Math.round((Math.max(0,Number(part)||0)/denominator)*100)}%`;
+}
+
+function floraDuration(ms){
+  const seconds=Math.max(0,Math.round((Number(ms)||0)/1000));
+  if(seconds<60)return `${seconds} sn`;
+  return `${Math.floor(seconds/60)} dk ${seconds%60} sn`;
+}
+
+function ensureFloraPopover(){
+  let popover=document.getElementById("flora-story-popover");
+  if(popover)return popover;
+
+  popover=document.createElement("div");
+  popover.id="flora-story-popover";
+  popover.className="flora-story-popover";
+  popover.hidden=true;
+  popover.setAttribute("role","dialog");
+  popover.setAttribute("aria-modal","false");
+  popover.setAttribute("aria-label","Flöra haber istatistikleri");
+  popover.innerHTML=`
+    <div class="flora-story-popover-head">
+      <div class="flora-story-popover-title">
+        <span class="flora-story-popover-mark" aria-hidden="true">𝒇</span>
+        <span>Flöra</span>
+      </div>
+      <button class="flora-story-popover-close" type="button" aria-label="Flöra kutusunu kapat">×</button>
+    </div>
+    <div class="flora-story-popover-score">—</div>
+    <div class="flora-story-popover-status">İstatistikler hazırlanıyor...</div>
+    <div class="flora-story-popover-grid"></div>
+  `;
+
+  popover.querySelector(".flora-story-popover-close")?.addEventListener("click",event=>{
+    event.preventDefault();
+    event.stopPropagation();
+    closeFloraPopover();
+  });
+
+  for(const eventName of ["pointerdown","pointerup","click","wheel"]){
+    popover.addEventListener(eventName,event=>event.stopPropagation(),{passive:eventName==="wheel"});
+  }
+
+  document.body.appendChild(popover);
+  return popover;
+}
+
+function positionFloraPopover(popover,anchor){
+  if(!popover || !anchor)return;
+
+  popover.style.left="12px";
+  popover.style.top="12px";
+  popover.style.visibility="hidden";
+  popover.hidden=false;
+
+  const anchorRect=anchor.getBoundingClientRect();
+  const box=popover.getBoundingClientRect();
+  const margin=12;
+
+  let left=anchorRect.right-box.width;
+  left=Math.max(margin,Math.min(left,innerWidth-box.width-margin));
+
+  let top=anchorRect.top-box.height-10;
+  if(top<margin){
+    top=anchorRect.bottom+10;
+  }
+  top=Math.max(margin,Math.min(top,innerHeight-box.height-margin));
+
+  popover.style.left=`${Math.round(left)}px`;
+  popover.style.top=`${Math.round(top)}px`;
+  popover.style.visibility="visible";
+}
+
+function renderFloraPopover(popover,story,stats){
+  if(!popover)return;
+
+  const scoreEl=popover.querySelector(".flora-story-popover-score");
+  const statusEl=popover.querySelector(".flora-story-popover-status");
+  const grid=popover.querySelector(".flora-story-popover-grid");
+
+  if(!stats){
+    if(scoreEl)scoreEl.textContent="—";
+    if(statusEl)statusEl.textContent="Bu haber için henüz yeterli Flöra verisi oluşmadı.";
+    if(grid)grid.replaceChildren();
+    return;
+  }
+
+  if(scoreEl){
+    scoreEl.textContent=Number.isFinite(stats.flora)
+      ? `${stats.flora.toFixed(1)} / 100`
+      : "—";
+  }
+
+  if(statusEl){
+    statusEl.textContent="Son 7 günlük anonim kullanım verileri";
+  }
+
+  if(!grid)return;
+  grid.replaceChildren();
+
+  const rows=[
+    ["Görüntülenme",String(Math.round(stats.views))],
+    ["Ort. bakma",floraDuration(stats.avg_dwell_ms)],
+    ["Tamamlama",floraPercent(stats.completes,stats.views)],
+    ["Erken geçiş",floraPercent(stats.skips,stats.views)],
+    ["Geri dönüş",String(Math.round(stats.backs))],
+    ["Kaynağa gidiş",String(Math.round(stats.source_opens))]
+  ];
+
+  if(stats.video_starts>0){
+    rows.push([
+      "Video tamamlama",
+      floraPercent(stats.video_completes,stats.video_starts)
+    ]);
+  }
+
+  for(const [label,value] of rows){
+    const item=document.createElement("div");
+    item.className="flora-story-popover-metric";
+
+    const labelEl=document.createElement("span");
+    labelEl.textContent=label;
+
+    const valueEl=document.createElement("strong");
+    valueEl.textContent=value;
+
+    item.append(labelEl,valueEl);
+    grid.appendChild(item);
+  }
+}
+
+function closeFloraPopover({resume=true}={}){
+  const popover=document.getElementById("flora-story-popover");
+  if(!popover || popover.hidden)return;
+
+  popover.hidden=true;
+  popover.style.visibility="";
+  floraPopoverOpen=false;
+
+  if(resume && !adActive && !autoAdvancePaused && !state.busy){
+    timer();
+  }
+}
+
+async function loadFloraStoryStats(story,{force=false}={}){
+  const key=storyIdentity(story);
+  if(!key || story?.customRss)return null;
+
+  if(!force && floraStatsMap.has(key)){
+    return floraStatsMap.get(key);
+  }
+
+  if(!force && floraStoryRequestCache.has(key)){
+    return floraStoryRequestCache.get(key);
+  }
+
+  const promise=(async()=>{
+    const url=new URL(FLORA_STORY_API);
+    url.searchParams.set("range","7d");
+    url.searchParams.set("stream",story?.flowForeign?"foreign":"main");
+    url.searchParams.set("story_key",key);
+    url.searchParams.set("_floew",`${NEWS_REQUEST_SESSION}-flora-story-${Date.now().toString(36)}`);
+
+    const response=await fetch(url.href,{
+      method:"GET",
+      mode:"cors",
+      credentials:"omit",
+      cache:"no-store",
+      headers:{"Accept":"application/json"}
+    });
+
+    if(!response.ok){
+      throw new Error(`Flöra detay: HTTP ${response.status}`);
+    }
+
+    const data=await response.json();
+    if(!data?.ok){
+      throw new Error(data?.error||"Flöra detay yanıtı okunamadı");
+    }
+
+    if(!data?.stats)return null;
+    return cacheFloraStatsRow(data.stats);
+  })()
+    .catch(error=>{
+      console.warn("Flöra story details:",error);
+      return null;
+    })
+    .finally(()=>{
+      floraStoryRequestCache.delete(key);
+    });
+
+  floraStoryRequestCache.set(key,promise);
+  return promise;
+}
+
+async function openFloraPopover(anchor,story){
+  if(!anchor || !story)return;
+
+  closeFloraPopover({resume:false});
+  clearTimeout(state.timer);
+  state.timer=null;
+  floraPopoverOpen=true;
+
+  const popover=ensureFloraPopover();
+  popover.dataset.storyKey=storyIdentity(story);
+
+  const cached=floraStatsMap.get(storyIdentity(story))||null;
+  renderFloraPopover(popover,story,cached);
+  positionFloraPopover(popover,anchor);
+
+  if(story.customRss){
+    const statusEl=popover.querySelector(".flora-story-popover-status");
+    if(statusEl)statusEl.textContent="Özel RSS haberleri Flöra hesaplamasına dahil edilmez.";
+    return;
+  }
+
+  const stats=await loadFloraStoryStats(story,{force:!cached});
+
+  if(
+    popover.hidden ||
+    popover.dataset.storyKey!==storyIdentity(story)
+  )return;
+
+  renderFloraPopover(popover,story,stats);
+  positionFloraPopover(popover,anchor);
+  refreshVisibleFloraScores();
+}
+
+function bindFloraScoreControl(scoreEl){
+  if(!scoreEl || scoreEl.dataset.floraBound==="1")return;
+  scoreEl.dataset.floraBound="1";
+  scoreEl.setAttribute("role","button");
+  scoreEl.tabIndex=0;
+
+  const stop=event=>event.stopPropagation();
+  scoreEl.addEventListener("pointerdown",stop);
+  scoreEl.addEventListener("pointerup",stop);
+  scoreEl.addEventListener("touchstart",stop,{passive:true});
+
+  const open=event=>{
+    event.preventDefault();
+    event.stopPropagation();
+    const key=scoreEl.dataset.floraStoryKey||"";
+    const story=state.stories.find(item=>storyIdentity(item)===key) ||
+      state.stories[state.index] || null;
+    if(story)openFloraPopover(scoreEl,story);
+  };
+
+  scoreEl.addEventListener("click",open);
+  scoreEl.addEventListener("keydown",event=>{
+    if(event.key==="Enter" || event.key===" ")open(event);
+  });
 }
 
 function setSlideFloraScore(el,story){
@@ -921,6 +1235,8 @@ function setSlideFloraScore(el,story){
     : undefined;
 
   valueEl.textContent=formatInlineFloraScore(score);
+  scoreEl.dataset.floraStoryKey=key;
+  bindFloraScoreControl(scoreEl);
 
   const hasScore=Number.isFinite(Number(score));
 
@@ -930,8 +1246,8 @@ function setSlideFloraScore(el,story){
   );
 
   scoreEl.title=hasScore
-    ? `Flöra: ${Number(score).toFixed(1)}/100`
-    : "Flöra puanı henüz oluşmadı";
+    ? `Flöra: ${Number(score).toFixed(1)}/100 · Ayrıntıları göster`
+    : "Flöra ayrıntılarını göster";
 
   scoreEl.setAttribute(
     "aria-label",
@@ -941,23 +1257,25 @@ function setSlideFloraScore(el,story){
 
 function refreshVisibleFloraScores(){
   const current=state.stories[state.index]||null;
+  const currentSlide=slides[state.active]||null;
+  const standbySlide=slides[1-state.active]||null;
 
-  if(activeSlide){
+  if(currentSlide && current){
     setSlideFloraScore(
-      activeSlide,
+      currentSlide,
       current
     );
   }
 
-  if(inactiveSlide){
-    const key=inactiveSlide.dataset.storyKey||"";
+  if(standbySlide){
+    const key=standbySlide.dataset.storyKey||"";
     const story=state.stories.find(
-      item=>storyIdentity(item)===key
+      item=>mediaKey(item)===key || storyIdentity(item)===key
     );
 
     if(story){
       setSlideFloraScore(
-        inactiveSlide,
+        standbySlide,
         story
       );
     }
@@ -980,7 +1298,7 @@ async function loadInlineFloraScores(force=false){
   try{
     const streams=["main","foreign"];
 
-    const payloads=await Promise.all(
+    const results=await Promise.allSettled(
       streams.map(async stream=>{
         const url=new URL(FLORA_SCORES_API);
         url.searchParams.set("range","7d");
@@ -1019,30 +1337,31 @@ async function loadInlineFloraScores(force=false){
       })
     );
 
-    floraScoreMap.clear();
-
-    for(const data of payloads){
-      for(const row of data?.scores||[]){
-        const key=String(
-          row?.story_key||""
-        ).trim();
-
-        const score=Number(row?.flora);
-
-        if(
-          key &&
-          Number.isFinite(score)
-        ){
-          floraScoreMap.set(
-            key,
-            score
-          );
-        }
+    const payloads=[];
+    for(const result of results){
+      if(result.status==="fulfilled"){
+        payloads.push(result.value);
+      }else{
+        console.warn("Inline Flöra stream:",result.reason);
       }
     }
 
-    floraScoresLoadedAt=Date.now();
-    refreshVisibleFloraScores();
+    /* Bir akış geçici hata verse bile diğer akışın geçerli skorlarını koru. */
+    if(payloads.length){
+      if(payloads.length===streams.length){
+        floraScoreMap.clear();
+        floraStatsMap.clear();
+      }
+
+      for(const data of payloads){
+        for(const row of data?.scores||[]){
+          cacheFloraStatsRow(row);
+        }
+      }
+
+      floraScoresLoadedAt=Date.now();
+      refreshVisibleFloraScores();
+    }
   }catch(error){
     console.warn(
       "Inline Flöra scores:",
@@ -1500,6 +1819,7 @@ function renderFeedMode(){
 }
 
 function switchFeedMode(nextMode){
+  closeFloraPopover({resume:false});
   const modeOrder=currentFeedModeOrder();
   const next=
     modeOrder.includes(nextMode)
@@ -1923,10 +2243,19 @@ function timeText(v){
 const storyMediaCache=new Map();
 
 function mediaKey(story){
-  return String(
-    story?.link ||
-    `${story?.source||""}|${story?.title||""}`
-  );
+  if(!story)return "";
+  const link=String(story?.link||"").trim();
+  const title=normalizeText(story?.title||"")
+    .replace(/\s+/g," ")
+    .trim();
+
+  /*
+    Bazı canlı/rolling haber URL'leri zaman içinde farklı içerik ve video ile
+    yeniden kullanılabiliyor. Video cache/async guard yalnız linke bağlı olursa
+    eski videonun yeni manşete sızması mümkün. Başlığı da medya kimliğine kat.
+  */
+  if(link)return `${link}|${title}`;
+  return `${String(story?.source||"").trim()}|${title}`;
 }
 
 function resetSlideMedia(el){
@@ -1973,6 +2302,7 @@ function resetSlideMedia(el){
     try{
       window.dailymotion?.destroy?.(dailymotionHost.id);
     }catch(e){}
+    dailymotionHost.removeAttribute("data-media-token");
     dailymotionHost.replaceChildren();
     dailymotionHost.classList.remove("media-visible");
     dailymotionHost.setAttribute("aria-hidden","true");
@@ -2010,10 +2340,13 @@ async function resolveStoryMedia(story){
     );
 
     try{
-      const url=
-        `${VIDEO_API}?url=${encodeURIComponent(story.link)}`;
+      const requestUrl=new URL(VIDEO_API);
+      requestUrl.searchParams.set("url",story.link);
+      requestUrl.searchParams.set("title",String(story.title||""));
+      /* Resolver sürümü yanlış/eskiden cache'lenmiş video eşleşmelerini kırar. */
+      requestUrl.searchParams.set("rv","20260818-2");
 
-      const r=await fetch(url,{
+      const r=await fetch(requestUrl.href,{
         method:"GET",
         mode:"cors",
         credentials:"omit",
@@ -2085,6 +2418,9 @@ function setMutedInlinePlaybackAttributes(video){
   video.autoplay=true;
   video.playsInline=true;
   video.controls=false;
+  video.disablePictureInPicture=true;
+  try{video.disableRemotePlayback=true}catch(e){}
+  video.setAttribute("controlslist","nodownload noplaybackrate noremoteplayback");
   video.setAttribute("muted","");
   video.setAttribute("autoplay","");
   video.setAttribute("playsinline","");
@@ -2166,7 +2502,18 @@ function showDirectVideo(el,story,media,token){
     }
 
     const played=await attemptMutedAutoplay(video,5);
-    if(!played){
+
+    /*
+      play() promise'i mobilde yüzlerce ms sonra çözülebilir. Bu sırada aynı
+      fiziksel slide başka bir habere atanmış olabilir. Geç kalan eski async
+      işlem yeni habere önceki videoyu sızdıramasın.
+    */
+    if(
+      !played ||
+      !videoEnabled ||
+      token!==el.dataset.mediaToken ||
+      mediaKey(story)!==el.dataset.storyKey
+    ){
       fallback();
       return;
     }
@@ -2466,6 +2813,7 @@ async function showDailymotionVideo(el,story,media,token){
 
   const image=el.querySelector(".slide-image");
   const host=ensureDailymotionHost(el);
+  host.dataset.mediaToken=token;
   const dm=await ensureDailymotionLibrary(parts.playerId);
 
   if(
@@ -2498,9 +2846,14 @@ async function showDailymotionVideo(el,story,media,token){
     if(
       !videoEnabled ||
       token!==el.dataset.mediaToken ||
+      host.dataset.mediaToken!==token ||
       mediaKey(story)!==el.dataset.storyKey
     ){
-      try{dm.destroy?.(host.id)}catch(e){}
+      /* Host başka habere yeniden atanmışsa aynı ID üzerinden destroy çağırıp
+         yeni habere ait player'ı yanlışlıkla kapatma. */
+      if(host.dataset.mediaToken===token){
+        try{dm.destroy?.(host.id)}catch(e){}
+      }
       return;
     }
 
@@ -2519,9 +2872,25 @@ async function showDailymotionVideo(el,story,media,token){
       }catch(innerError){}
     }
 
-    if(!played){
-      try{dm.destroy?.(host.id)}catch(e){}
-      showGenericEmbedVideo(el,story,media,token);
+    /*
+      Dailymotion play() da async: kullanıcı kaydırırken eski player geç
+      tamamlanırsa artık başka haberi taşıyan slaytı görünür yapmamalı.
+    */
+    const stillCurrent=Boolean(
+      videoEnabled &&
+      token===el.dataset.mediaToken &&
+      host.dataset.mediaToken===token &&
+      mediaKey(story)===el.dataset.storyKey
+    );
+
+    if(!played || !stillCurrent){
+      /* Stale işlemse host ID artık yeni habere ait olabilir. */
+      if(stillCurrent){
+        try{dm.destroy?.(host.id)}catch(e){}
+      }
+      if(!played && stillCurrent){
+        showGenericEmbedVideo(el,story,media,token);
+      }
       return;
     }
 
@@ -4432,6 +4801,7 @@ function chooseForwardCandidate(){
     .map((story,index)=>({story,index}))
     .filter(item=>
       item.index!==state.index &&
+      !item.story?._historyOnly &&
       storyIdentity(item.story)!==currentKey
     );
 
@@ -4442,9 +4812,12 @@ function chooseForwardCandidate(){
   if(differentSource.length)candidates=differentSource;
 
   /* Oturum içinde henüz gösterilmemiş haber varsa tekrarları havuzdan çıkar. */
-  const unseen=candidates.filter(item=>
-    !sessionSeenStories.has(storyIdentity(item.story))
-  );
+  const unseen=candidates.filter(item=>{
+    const key=storyIdentity(item.story);
+    const signature=exactDuplicateSignature(item.story);
+    return !sessionSeenStories.has(key) &&
+      (!signature || !sessionSeenStorySignatures.has(signature));
+  });
   if(unseen.length)candidates=unseen;
 
   /*
@@ -4834,6 +5207,8 @@ async function enterSkippedAdHistory(entryDir){
 }
 
 async function move(dir,options={}){
+  closeFloraPopover({resume:false});
+
   if(
     filterReturnStoryKey &&
     !options.fromAd &&
@@ -4897,8 +5272,10 @@ async function move(dir,options={}){
           skippedAdHistory={
             ad:adResult.ad,
             beforeIndex,
+            beforeKey:storyIdentity(state.stories[beforeIndex]),
             beforeHistoryPos,
             afterIndex:state.index,
+            afterKey:storyIdentity(state.stories[state.index]),
             afterHistoryPos:state.historyPos
           };
         }
@@ -5582,6 +5959,16 @@ function scheduleInitialNewsRetry(){
 let newsLoadInFlight=null;
 
 async function performNewsLoad(){
+  /*
+    Periyodik yenileme bir slide geçişinin tam ortasında state.stories'i
+    değiştirirse transition'ın tuttuğu sayısal index başka habere kayabilir.
+    Aktif geçiş/reklam varken mevcut akışı olduğu gibi bırak; sonraki refresh
+    turu güncel listeyi alır.
+  */
+  if((state.busy || adActive) && state.stories.length){
+    return;
+  }
+
   try{
     /*
       Worker kaynakları dört ayrı çağrıya böler. Böylece tek Worker
@@ -5604,6 +5991,12 @@ async function performNewsLoad(){
 
     await catalogPromise;
 
+    /* Fetch sürerken kullanıcı kaydırmaya başlamış olabilir. Eski refresh
+       sonucu geçişin kullandığı history/index yapısını değiştirmesin. */
+    if((state.busy || adActive) && state.stories.length){
+      return;
+    }
+
     const successful=[
       ...settled
         .filter(result=>result.status==="fulfilled")
@@ -5623,6 +6016,7 @@ async function performNewsLoad(){
     }
 
     const unique=new Map();
+    const uniqueSignatureKeys=new Map();
 
     function mergeDuplicateStory(existing,candidate){
       if(!existing)return candidate;
@@ -5651,9 +6045,13 @@ async function performNewsLoad(){
     for(const item of successful){
       if(!item||!item.title||!item.image)continue;
 
-      const key=
+      const signature=exactDuplicateSignature(item);
+      const naturalKey=
         item.link ||
         `${item.source||""}|${item.title}`;
+      const key=
+        (signature && uniqueSignatureKeys.get(signature)) ||
+        naturalKey;
 
       unique.set(
         key,
@@ -5662,6 +6060,8 @@ async function performNewsLoad(){
           item
         )
       );
+
+      if(signature)uniqueSignatureKeys.set(signature,key);
     }
 
     const incoming=[...unique.values()];
@@ -5815,36 +6215,142 @@ async function performNewsLoad(){
       return;
     }
 
-    const currentStory=
-      state.stories[state.index];
-
-    const link=currentStory?.link;
+    const oldStories=state.stories;
+    const oldHistory=Array.isArray(state.history)
+      ? [...state.history]
+      : [];
+    const oldHistoryPos=Number.isInteger(state.historyPos)
+      ? state.historyPos
+      : Math.max(0,oldHistory.length-1);
+    const currentStory=oldStories[state.index]||null;
+    const currentKey=storyIdentity(currentStory);
+    const currentSignature=exactDuplicateSignature(currentStory);
     const oldSource=sourceKey(currentStory?.source);
 
-    state.stories=list;
+    /*
+      Periyodik Worker yenilemesi state.stories sırasını değiştirebilir. History
+      yalnız sayısal indeks tutarsa eski indeks başka haberi işaret eder. Daha
+      önce gerçekten gösterilen haberleri yeni listeye history-only snapshot
+      olarak ekleyip tüm history indekslerini haber kimliğine göre yeniden
+      eşliyoruz. Böylece geri hareketi her zaman gerçek önceki habere döner.
+    */
+    const nextStories=[...list];
+    const nextKeys=new Set(nextStories.map(storyIdentity).filter(Boolean));
+    const nextSignatures=new Set(nextStories.map(exactDuplicateSignature).filter(Boolean));
 
-    if(link){
-      const idx=list.findIndex(x=>x.link===link);
+    for(const historyIndex of oldHistory){
+      if(!Number.isInteger(historyIndex))continue;
+      const story=oldStories[historyIndex];
+      if(!story)continue;
 
-      if(idx>=0){
-        state.index=idx;
+      const key=storyIdentity(story);
+      const signature=exactDuplicateSignature(story);
+      if(
+        (key && nextKeys.has(key)) ||
+        (signature && nextSignatures.has(signature))
+      )continue;
 
-        if(state.history.length){
-          state.history[state.historyPos]=idx;
-        }
-      }else{
-        const idx2=list.findIndex(
-          x=>sourceKey(x.source)!==oldSource
-        );
+      nextStories.push({...story,_historyOnly:true});
+      if(key)nextKeys.add(key);
+      if(signature)nextSignatures.add(signature);
+    }
 
-        if(idx2>=0){
-          state.index=idx2;
-          state.history=[idx2];
-          state.historyPos=0;
-          fill(slides[state.active],list[idx2]);
-          updateKeywordAlert(list[idx2]);
-        }
+    state.stories=nextStories;
+    plannedForwardStory=null;
+
+    const indexByKey=new Map();
+    const indexBySignature=new Map();
+    state.stories.forEach((story,index)=>{
+      const key=storyIdentity(story);
+      const signature=exactDuplicateSignature(story);
+      if(key && !indexByKey.has(key))indexByKey.set(key,index);
+      if(signature && !indexBySignature.has(signature))indexBySignature.set(signature,index);
+    });
+
+    const locateStory=story=>{
+      if(!story)return -1;
+      const key=storyIdentity(story);
+      if(key && indexByKey.has(key))return indexByKey.get(key);
+      const signature=exactDuplicateSignature(story);
+      if(signature && indexBySignature.has(signature))return indexBySignature.get(signature);
+      return -1;
+    };
+
+    let remappedHistory=[];
+    let remappedHistoryPos=-1;
+
+    oldHistory.forEach((oldIndex,position)=>{
+      const oldStory=oldStories[oldIndex];
+      const mapped=locateStory(oldStory);
+      if(mapped<0)return;
+
+      if(remappedHistory[remappedHistory.length-1]!==mapped){
+        remappedHistory.push(mapped);
       }
+
+      if(position<=oldHistoryPos){
+        remappedHistoryPos=remappedHistory.length-1;
+      }
+    });
+
+    let currentIndex=locateStory(currentStory);
+    let currentChanged=false;
+
+    if(currentIndex<0){
+      currentIndex=state.stories.findIndex(
+        story=>!story?._historyOnly && sourceKey(story.source)!==oldSource
+      );
+      if(currentIndex<0){
+        currentIndex=state.stories.findIndex(story=>!story?._historyOnly);
+      }
+      if(currentIndex<0)currentIndex=0;
+      currentChanged=true;
+    }
+
+    state.index=currentIndex;
+
+    if(!remappedHistory.length){
+      remappedHistory.push(currentIndex);
+      remappedHistoryPos=0;
+    }else{
+      remappedHistoryPos=Math.max(0,Math.min(
+        remappedHistoryPos,
+        remappedHistory.length-1
+      ));
+
+      if(remappedHistory[remappedHistoryPos]!==currentIndex){
+        remappedHistory=remappedHistory.slice(0,remappedHistoryPos+1);
+        if(remappedHistory[remappedHistory.length-1]!==currentIndex){
+          remappedHistory.push(currentIndex);
+        }
+        remappedHistoryPos=remappedHistory.length-1;
+      }
+    }
+
+    state.history=remappedHistory;
+    state.historyPos=remappedHistoryPos;
+
+    if(skippedAdHistory){
+      const beforeIndex=skippedAdHistory.beforeKey
+        ? indexByKey.get(skippedAdHistory.beforeKey)
+        : undefined;
+      const afterIndex=skippedAdHistory.afterKey
+        ? indexByKey.get(skippedAdHistory.afterKey)
+        : undefined;
+
+      if(Number.isInteger(beforeIndex) && Number.isInteger(afterIndex)){
+        skippedAdHistory.beforeIndex=beforeIndex;
+        skippedAdHistory.afterIndex=afterIndex;
+      }else{
+        skippedAdHistory=null;
+        historicalAdContext=null;
+      }
+    }
+
+    if(currentChanged){
+      fill(slides[state.active],state.stories[state.index]);
+      slides[state.active].className="slide active";
+      activateSlideMedia(slides[state.active],state.stories[state.index]);
     }
 
     updateKeywordAlert(state.stories[state.index]);
@@ -7739,7 +8245,54 @@ const ABOUT_LEGAL_DOCS={
   cookies:{title:"Çerezler",path:"docs/CEREZLER.txt"}
 };
 
-async function loadAboutDocument(path,target){
+function renderLegalDocumentText(target,text){
+  if(!target)return;
+  target.replaceChildren();
+
+  const clean=String(text||"").replace(/\r\n?/g,"\n").trim();
+  if(!clean){
+    target.textContent="Bu belge şu anda boş.";
+    return;
+  }
+
+  const fragment=document.createDocumentFragment();
+
+  for(const rawLine of clean.split("\n")){
+    const line=rawLine.trim();
+
+    if(!line){
+      const spacer=document.createElement("div");
+      spacer.className="about-doc-spacer";
+      fragment.appendChild(spacer);
+      continue;
+    }
+
+    if(line.startsWith("##")){
+      const heading=document.createElement("h2");
+      heading.className="about-doc-heading";
+      heading.textContent=line.replace(/^##+\s*/,"");
+      fragment.appendChild(heading);
+      continue;
+    }
+
+    if(line.startsWith("#")){
+      const strong=document.createElement("div");
+      strong.className="about-doc-strong";
+      strong.textContent=line.replace(/^#+\s*/,"");
+      fragment.appendChild(strong);
+      continue;
+    }
+
+    const paragraph=document.createElement("div");
+    paragraph.className="about-doc-line";
+    paragraph.textContent=rawLine.trimEnd();
+    fragment.appendChild(paragraph);
+  }
+
+  target.appendChild(fragment);
+}
+
+async function loadAboutDocument(path,target,{legal=false}={}){
   if(!path || !target)return;
   target.textContent="İçerik yükleniyor...";
   try{
@@ -7750,7 +8303,12 @@ async function loadAboutDocument(path,target){
       text=await response.text();
       aboutDocumentCache.set(path,text);
     }
-    target.textContent=text.trim()||"Bu belge şu anda boş.";
+
+    if(legal){
+      renderLegalDocumentText(target,text);
+    }else{
+      target.textContent=text.trim()||"Bu belge şu anda boş.";
+    }
   }catch(error){
     target.textContent=`İçerik yüklenemedi. (${error?.message||error})`;
   }
@@ -7771,7 +8329,7 @@ function openAboutDocumentViewer(kind){
   if(title)title.textContent=config.title;
   viewer?.classList.add("open");
   viewer?.setAttribute("aria-hidden","false");
-  loadAboutDocument(config.path,content);
+  loadAboutDocument(config.path,content,{legal:true});
 }
 
 function activateAboutTab(name="stats",{load=true}={}){
@@ -8005,6 +8563,7 @@ async function loadPublicStats(range=publicStatsRange){
 }
 
 function openStatsOverlay(){
+  closeFloraPopover({resume:false});
   closeQuickPanels();
   closeMenu();
 
@@ -8131,6 +8690,7 @@ function toggleKeywordWatchPanel(){
 }
 
 function openMenu(){
+  closeFloraPopover({resume:false});
   closeStatsOverlay();
   closeQuickPanels();
 

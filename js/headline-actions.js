@@ -12,7 +12,7 @@
 (function(){
   "use strict";
 
-  const FEATURE_VERSION="1.0.0";
+  const FEATURE_VERSION="1.0.1";
   const STYLE_ID="floew-headline-actions-v1-style";
   const BUTTON_CLASS="feedback-inline-link";
 
@@ -45,7 +45,7 @@
         outline:0;
         background:transparent;
         color:#fff;
-        font:400 18px/1 Arial,"Apple Symbols","Segoe UI Symbol",sans-serif;
+        font:400 18px/1 "Arial Unicode MS","Noto Sans Symbols 2","Segoe UI Symbol",Arial,sans-serif;
         opacity:.82;
         text-shadow:
           0 1px 3px rgba(0,0,0,.65),
@@ -131,7 +131,7 @@
     const button=document.createElement("button");
     button.type="button";
     button.className=BUTTON_CLASS;
-    button.textContent="⚑";
+    button.textContent="\u2691\uFE0E";
     button.setAttribute("aria-label","Geri bildirim");
     button.title="Geri bildirim";
 
