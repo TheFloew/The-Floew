@@ -3210,14 +3210,17 @@ body.foreign-mode #time-range-button{
    V31.19.0 — source feed / custom RSS / instant mobile swipe / autoplay
    ===================================================================== */
 
-/* Kaynak adı artık geçici kaynak sekmesini açan bir kontrol. */
-.source{
+/* Kaynak ve kategori adı artık geçici filtre sekmesini açan kontroller. */
+.source,
+.category{
   pointer-events:auto !important;
   cursor:pointer;
   text-underline-offset:3px;
 }
 .source:hover,
-.source:focus-visible{
+.source:focus-visible,
+.category:hover,
+.category:focus-visible{
   opacity:1;
   text-decoration:underline;
   outline:none;
@@ -3908,7 +3911,7 @@ body.foreign-mode #time-range-button{
   height:.8em;
 }
 
-/* Logo animasyonunun altında ince, sakin bir indeterminate ilerleme çizgisi. */
+/* Logo animasyonunun altında ilerleyen, tamamlanınca %100'e oturan loading bar. */
 .loading-progress{
   position:absolute;
   left:50%;
@@ -3924,15 +3927,26 @@ body.foreign-mode #time-range-button{
 .loading-progress span{
   position:absolute;
   inset:0 auto 0 0;
-  width:42%;
+  width:0;
+  height:100%;
   border-radius:inherit;
-  background:rgba(255,255,255,.72);
-  animation:floewLoadingProgress 1.35s cubic-bezier(.45,0,.55,1) infinite;
+  background:rgba(255,255,255,.78);
+  box-shadow:0 0 8px rgba(255,255,255,.18);
+  animation:floewLoadingFill 12s cubic-bezier(.16,.72,.22,1) forwards;
+  will-change:width;
 }
-@keyframes floewLoadingProgress{
-  0%{transform:translateX(-115%);opacity:.35}
-  45%{opacity:1}
-  100%{transform:translateX(270%);opacity:.35}
+.loading-progress.is-complete span{
+  animation:none;
+  width:100%;
+  transition:width .18s ease-out;
+}
+@keyframes floewLoadingFill{
+  0%{width:0}
+  16%{width:27%}
+  38%{width:48%}
+  66%{width:69%}
+  84%{width:81%}
+  100%{width:90%}
 }
 @media(max-width:520px){
   .loading-progress{
@@ -3942,7 +3956,7 @@ body.foreign-mode #time-range-button{
 }
 @media(prefers-reduced-motion:reduce){
   .loading-progress span{
-    animation-duration:2.4s;
+    animation-duration:14s;
   }
 }
 
@@ -3964,4 +3978,27 @@ body.foreign-mode #time-range-button{
     -webkit-backdrop-filter:blur(13px);
     pointer-events:none;
   }
+}
+
+
+/* =====================================================================
+   V31.26.0 — direct mobile drag / category tab / share text glyph
+   ===================================================================== */
+
+/* Mobilde aktif haber ve komşu haber parmakla birebir taşınır. */
+.slide.touch-dragging{
+  animation:none !important;
+  will-change:transform;
+}
+
+/* Paylaş ikonu mobil sistem emoji fontuna düşmesin. */
+.share-link{
+  font-variant-emoji:text !important;
+  font-family:Arial,"Helvetica Neue",Helvetica,sans-serif !important;
+  font-synthesis:none;
+}
+
+/* Kategori filtresi kaynak filtresiyle aynı yumuşak geçici sekme davranışını kullanır. */
+.category-feed-tab{
+  text-transform:none;
 }
