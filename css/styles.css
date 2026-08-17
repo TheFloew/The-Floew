@@ -4002,3 +4002,19 @@ body.foreign-mode #time-range-button{
 .category-feed-tab{
   text-transform:none;
 }
+
+
+/* =====================================================================
+   V31.26.1 — direct mobile drag for ads
+   ===================================================================== */
+
+/* Reklam ve açığa çıkan hedef haber parmak hareketini birebir takip eder. */
+#ad-overlay.touch-dragging,
+.slide.ad-touch-target{
+  animation:none !important;
+  will-change:transform;
+}
+
+#ad-overlay.touch-dragging{
+  touch-action:none;
+}
