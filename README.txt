@@ -1,3 +1,13 @@
+Beta Versiyon 1.7.5
+- Haberle ilgili olmayan videoların sızması problemi düzeltildi.
+- Bazı haberlerin arka arkaya bir defadan fazla gelmesi sorunu düzeltildi.
+- Önceki habere dönememe sorunu düzeltildi.
+- Gereksiz yüklenen "Haberler alınamadı. Lütfen biraz bekleyin veya sayfayı yenileyin." uyarısı düzeltildi.
+- Flöra puanı sorunu düzeltildi.
+- Flöra puanı tıklanabilir oldu. Geçerli haberin Flöra değerlerini ve istatistiklerini gösteren ekran eklendi.
+- Legal yazılarda dizgi düzeltmeleri.
+- Loading ekranın yükleme barı eklendi.
+
 Beta Versiyon 1.7.2
 - Flöw üzerinden sosyal medya site/uygulamalarında haber paylaşma özelliği eklendi.
 - Şikayet / geri bildirim özelliği eklendi.
