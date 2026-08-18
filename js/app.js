@@ -2398,6 +2398,46 @@ function mediaKey(story){
   return `${String(story?.source||"").trim()}|${title}`;
 }
 
+function retireDailymotionHost(host){
+  if(!host)return;
+
+  /*
+    Dailymotion Web SDK player instance'larını source/container ID ile kendi
+    registry'sinde tutuyor. Aynı fiziksel slide/container ID'sini tekrar tekrar
+    destroy -> create döngüsünde kullanmak bazı tarayıcılarda eski instance'ın
+    sonraki videoya taşınmasına yol açabiliyor. Eski player'ı önce pasifleştir,
+    sonra container'ı tamamen emekliye ayır; bir sonraki Dailymotion haberi
+    benzersiz yeni bir host ID alacak.
+  */
+  host.dataset.retired="1";
+  host.removeAttribute("data-media-token");
+
+  const player=host.__floewDailymotionPlayer;
+  host.__floewDailymotionPlayer=null;
+  host.__floewDailymotionPlayerId="";
+  host.__floewDailymotionVideoId="";
+
+  if(player){
+    try{
+      const r=player.pause?.();
+      if(r?.catch)r.catch(()=>{});
+    }catch(e){}
+    try{
+      const r=player.pipClose?.();
+      if(r?.catch)r.catch(()=>{});
+    }catch(e){}
+  }
+
+  try{
+    const r=window.dailymotion?.destroy?.(host.id);
+    if(r?.catch)r.catch(()=>{});
+  }catch(e){}
+
+  try{host.remove()}catch(e){
+    try{host.replaceChildren()}catch(innerError){}
+  }
+}
+
 function resetSlideMedia(el){
   el.dataset.mediaToken=String(
     (Number(el.dataset.mediaToken)||0)+1
@@ -2439,13 +2479,9 @@ function resetSlideMedia(el){
   }
 
   if(dailymotionHost){
-    try{
-      window.dailymotion?.destroy?.(dailymotionHost.id);
-    }catch(e){}
-    dailymotionHost.removeAttribute("data-media-token");
-    dailymotionHost.replaceChildren();
     dailymotionHost.classList.remove("media-visible");
     dailymotionHost.setAttribute("aria-hidden","true");
+    retireDailymotionHost(dailymotionHost);
   }
 }
 
@@ -2873,12 +2909,18 @@ function dailymotionMediaParts(media){
 }
 
 function ensureDailymotionHost(el){
-  let host=el.querySelector(".slide-dailymotion");
-  if(host)return host;
+  const existing=el.querySelector(".slide-dailymotion");
+  if(existing){
+    /*
+      Bir önceki Dailymotion haberi aynı fiziksel slide'ı kullanmış olabilir.
+      Source/container ID'yi asla yeniden kullanma.
+    */
+    retireDailymotionHost(existing);
+  }
 
-  host=document.createElement("div");
+  const host=document.createElement("div");
   host.className="slide-dailymotion";
-  host.id=`floew-dailymotion-${++dailymotionHostSequence}`;
+  host.id=`floew-dailymotion-${Date.now().toString(36)}-${++dailymotionHostSequence}`;
   host.setAttribute("aria-hidden","true");
 
   const embed=el.querySelector(".slide-embed");
@@ -2944,6 +2986,45 @@ function ensureDailymotionLibrary(playerId){
   return dailymotionLibraryPromise;
 }
 
+async function dailymotionStateVideoId(player){
+  if(!player?.getState)return "";
+  try{
+    const state=await player.getState();
+    return String(state?.videoId||"").trim();
+  }catch(e){
+    return "";
+  }
+}
+
+async function ensureDailymotionExactVideo(player,videoId){
+  const expected=String(videoId||"").trim();
+  if(!player || !expected)return false;
+
+  const readWithRetries=async()=>{
+    const delays=[0,90,180,320];
+    for(const delay of delays){
+      if(delay)await new Promise(resolve=>setTimeout(resolve,delay));
+      const current=await dailymotionStateVideoId(player);
+      if(current===expected)return true;
+    }
+    return false;
+  };
+
+  if(await readWithRetries())return true;
+
+  /*
+    SDK başka/önceki içeriği taşıyorsa beklenen xID'yi API üzerinden tekrar yükle.
+    Dailymotion PLAYER_VIDEOCHANGE olayı da loadContent({video}) ile tetiklenir.
+  */
+  try{
+    await player.loadContent?.({video:expected});
+  }catch(e){
+    return false;
+  }
+
+  return readWithRetries();
+}
+
 async function showDailymotionVideo(el,story,media,token){
   const parts=dailymotionMediaParts(media);
   if(!parts){
@@ -2954,25 +3035,30 @@ async function showDailymotionVideo(el,story,media,token){
   const image=el.querySelector(".slide-image");
   const host=ensureDailymotionHost(el);
   host.dataset.mediaToken=token;
+  host.dataset.dailymotionVideoId=parts.videoId;
+  host.dataset.dailymotionPlayerId=parts.playerId;
+
   const dm=await ensureDailymotionLibrary(parts.playerId);
 
-  if(
-    !dm?.createPlayer ||
-    !videoEnabled ||
-    token!==el.dataset.mediaToken ||
-    mediaKey(story)!==el.dataset.storyKey
-  ){
-    if(dm?.createPlayer){
-      return;
+  const isCurrent=()=>Boolean(
+    videoEnabled &&
+    token===el.dataset.mediaToken &&
+    host.isConnected &&
+    host.dataset.retired!=="1" &&
+    host.dataset.mediaToken===token &&
+    host.dataset.dailymotionVideoId===parts.videoId &&
+    mediaKey(story)===el.dataset.storyKey
+  );
+
+  if(!dm?.createPlayer || !isCurrent()){
+    if(!dm?.createPlayer && isCurrent()){
+      retireDailymotionHost(host);
+      showGenericEmbedVideo(el,story,media,token);
     }
-    showGenericEmbedVideo(el,story,media,token);
     return;
   }
 
   try{
-    try{dm.destroy?.(host.id)}catch(e){}
-    host.replaceChildren();
-
     const player=await dm.createPlayer(host.id,{
       player:parts.playerId,
       video:parts.videoId,
@@ -2983,22 +3069,40 @@ async function showDailymotionVideo(el,story,media,token){
       }
     });
 
-    if(
-      !videoEnabled ||
-      token!==el.dataset.mediaToken ||
-      host.dataset.mediaToken!==token ||
-      mediaKey(story)!==el.dataset.storyKey
-    ){
-      /* Host başka habere yeniden atanmışsa aynı ID üzerinden destroy çağırıp
-         yeni habere ait player'ı yanlışlıkla kapatma. */
-      if(host.dataset.mediaToken===token){
-        try{dm.destroy?.(host.id)}catch(e){}
-      }
+    host.__floewDailymotionPlayer=player;
+    host.__floewDailymotionPlayerId=parts.playerId;
+    host.__floewDailymotionVideoId=parts.videoId;
+
+    if(!isCurrent()){
+      retireDailymotionHost(host);
       return;
     }
 
     try{await player.setVolume?.(0)}catch(e){}
     try{await player.setScaleMode?.("fill")}catch(e){}
+
+    /*
+      Cumhuriyet/Dailymotion için kritik güvenlik kontrolü:
+      createPlayer promise'i çözülmüş olsa bile SDK registry'sinde eski bir
+      instance/content kalmış olabilir. Görünür yapmadan önce gerçekten bu
+      habere ait xID'nin yüklendiğini doğrula; değilse loadContent ile zorla.
+    */
+    const exactVideo=await ensureDailymotionExactVideo(
+      player,
+      parts.videoId
+    );
+
+    if(!exactVideo || !isCurrent()){
+      const storyStillCurrent=Boolean(
+        token===el.dataset.mediaToken &&
+        mediaKey(story)===el.dataset.storyKey
+      );
+      retireDailymotionHost(host);
+      if(!exactVideo && storyStillCurrent){
+        showGenericEmbedVideo(el,story,media,token);
+      }
+      return;
+    }
 
     let played=false;
     try{
@@ -3006,29 +3110,43 @@ async function showDailymotionVideo(el,story,media,token){
       played=true;
     }catch(e){
       await new Promise(resolve=>setTimeout(resolve,250));
-      try{
-        await player.play();
-        played=true;
-      }catch(innerError){}
+      if(isCurrent()){
+        try{
+          await player.play();
+          played=true;
+        }catch(innerError){}
+      }
+    }
+
+    if(!played || !isCurrent()){
+      const storyStillCurrent=Boolean(
+        token===el.dataset.mediaToken &&
+        mediaKey(story)===el.dataset.storyKey
+      );
+      retireDailymotionHost(host);
+      if(!played && storyStillCurrent){
+        showGenericEmbedVideo(el,story,media,token);
+      }
+      return;
     }
 
     /*
-      Dailymotion play() da async: kullanıcı kaydırırken eski player geç
-      tamamlanırsa artık başka haberi taşıyan slaytı görünür yapmamalı.
+      play() sonrasında da xID'yi tekrar kontrol et. SDK autonext/contextual
+      davranışı ya da stale registry yanlış içeriğe dönmüşse yanlış video tek
+      kare bile görünmesin.
     */
-    const stillCurrent=Boolean(
-      videoEnabled &&
-      token===el.dataset.mediaToken &&
-      host.dataset.mediaToken===token &&
-      mediaKey(story)===el.dataset.storyKey
+    const playingExpectedVideo=await ensureDailymotionExactVideo(
+      player,
+      parts.videoId
     );
 
-    if(!played || !stillCurrent){
-      /* Stale işlemse host ID artık yeni habere ait olabilir. */
-      if(stillCurrent){
-        try{dm.destroy?.(host.id)}catch(e){}
-      }
-      if(!played && stillCurrent){
+    if(!playingExpectedVideo || !isCurrent()){
+      const storyStillCurrent=Boolean(
+        token===el.dataset.mediaToken &&
+        mediaKey(story)===el.dataset.storyKey
+      );
+      retireDailymotionHost(host);
+      if(!playingExpectedVideo && storyStillCurrent){
         showGenericEmbedVideo(el,story,media,token);
       }
       return;
@@ -3039,7 +3157,14 @@ async function showDailymotionVideo(el,story,media,token){
     if(image)image.style.display="none";
   }catch(error){
     console.warn("Flöw video: Dailymotion SDK:",error);
-    showGenericEmbedVideo(el,story,media,token);
+    const stillCurrent=Boolean(
+      token===el.dataset.mediaToken &&
+      mediaKey(story)===el.dataset.storyKey
+    );
+    retireDailymotionHost(host);
+    if(stillCurrent){
+      showGenericEmbedVideo(el,story,media,token);
+    }
   }
 }
 
