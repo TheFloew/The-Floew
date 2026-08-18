@@ -1,3 +1,6 @@
+Beta Versiyon 1.7.6
+- Bazı videoların alakasız haberlere karışma sorunu düzeltildi.
+
 Beta Versiyon 1.7.5
 - Haberle ilgili olmayan videoların sızması problemi düzeltildi.
 - Bazı haberlerin arka arkaya bir defadan fazla gelmesi sorunu düzeltildi.
