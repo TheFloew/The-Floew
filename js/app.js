@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.28.0";
+window.__floewAppVersion="31.30.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -2753,6 +2753,12 @@ function showDirectVideo(el,story,media,token){
     video.setAttribute("aria-hidden","false");
 
     if(image)image.style.display="none";
+
+    /*
+      PiP bu haber için hazırlanmışsa, video hazır olduğu anda statik
+      görselden canlı video karesine geç.
+    */
+    attachStoryVideoToPiP(story,video);
   };
 
   video.addEventListener(
@@ -6920,6 +6926,7 @@ let pipTransition=null;
 let pipTransitionFinalizer=null;
 let pipRenderGeneration=0;
 const pipImageCache=new Map();
+const pipStoryVideoCanvasSafety=new WeakMap();
 
 function pipSupportMode(){
   const hasCanvasStream=
@@ -6996,6 +7003,121 @@ async function getPiPImage(url){
   return promise;
 }
 
+
+function pipStorySlide(story){
+  if(!story)return null;
+  const key=mediaKey(story);
+  return slides.find(slide=>slide?.dataset?.storyKey===key) || null;
+}
+
+function pipStoryVideoIsCanvasSafe(video){
+  if(
+    !video ||
+    video.readyState<2 ||
+    !video.videoWidth ||
+    !video.videoHeight
+  ){
+    return false;
+  }
+
+  const src=String(video.currentSrc||video.src||"");
+  const cached=pipStoryVideoCanvasSafety.get(video);
+
+  if(cached && cached.src===src){
+    return cached.safe;
+  }
+
+  let safe=false;
+
+  /*
+    Haber videoları farklı yayıncı origin'lerinden gelebilir. Cross-origin
+    izni olmayan bir video doğrudan PiP canvas'ına çizilirse canvas tainted
+    olur ve captureStream akışı susabilir. Önce ayrı, tek kullanımlık küçük
+    bir canvas üzerinde origin-clean kontrolü yapıyoruz; ana PiP canvas'ına
+    yalnız güvenli video karesi giriyor.
+  */
+  try{
+    const probe=document.createElement("canvas");
+    probe.width=2;
+    probe.height=2;
+    const ctx=probe.getContext("2d",{willReadFrequently:true});
+    ctx.drawImage(video,0,0,2,2);
+    ctx.getImageData(0,0,1,1);
+    safe=true;
+  }catch(e){
+    safe=false;
+  }
+
+  pipStoryVideoCanvasSafety.set(video,{src,safe});
+  return safe;
+}
+
+function currentPiPStoryVideo(story){
+  const slide=pipStorySlide(story);
+  const video=slide?.querySelector(".slide-video.media-visible");
+
+  if(
+    !video ||
+    video.getAttribute("aria-hidden")==="true" ||
+    video.readyState<2 ||
+    !video.videoWidth ||
+    !video.videoHeight
+  ){
+    return null;
+  }
+
+  return pipStoryVideoIsCanvasSafe(video)
+    ? video
+    : null;
+}
+
+function pipItemMatchesStory(item,story){
+  return Boolean(
+    item?.kind==="story" &&
+    mediaKey(item.story)===mediaKey(story)
+  );
+}
+
+function attachStoryVideoToPiP(story,video){
+  if(
+    !pipActive ||
+    !story ||
+    !video ||
+    !pipStoryVideoIsCanvasSafe(video)
+  ){
+    return;
+  }
+
+  let changed=false;
+
+  const attach=item=>{
+    if(!pipItemMatchesStory(item,story))return;
+    if(item.media!==video){
+      item.media=video;
+      changed=true;
+    }
+  };
+
+  attach(pipCurrent);
+  attach(pipTransition?.from);
+  attach(pipTransition?.to);
+
+  if(changed){
+    drawPiPScene();
+    schedulePiPRender();
+  }
+}
+
+function pipStoryMediaIsLive(item){
+  const media=item?.kind==="story" ? item.media : null;
+  return Boolean(
+    media &&
+    media.readyState>=2 &&
+    !media.paused &&
+    !media.ended
+  );
+}
+
 function wrapCanvasText(ctx,text,maxWidth,maxLines=3){
   const words=String(text||"").split(/\s+/);
   const lines=[];
@@ -7034,7 +7156,7 @@ function wrapCanvasText(ctx,text,maxWidth,maxLines=3){
   return lines;
 }
 
-function drawPiPStory(ctx,story,img,offsetX=0,offsetY=0){
+function drawPiPStory(ctx,story,img,media=null,offsetX=0,offsetY=0){
   if(!pipCanvas)return;
 
   const W=pipCanvas.width;
@@ -7049,20 +7171,62 @@ function drawPiPStory(ctx,story,img,offsetX=0,offsetY=0){
   ctx.fillStyle="#090909";
   ctx.fillRect(0,0,W,H);
 
-  if(img){
-    const iw=img.width||img.videoWidth||W;
-    const ih=img.height||img.videoHeight||H;
+  /*
+    Canlı ve origin-clean bir HTML5 haber videosu varsa PiP arka planında
+    gerçek video karesini kullan. Video hazır değilse/bitmişse güvenli
+    proxied haber görseline geri dön.
+  */
+  const visual=
+    media &&
+    media.readyState>=2 &&
+    media.videoWidth>0 &&
+    media.videoHeight>0
+      ? media
+      : img;
+
+  if(visual){
+    const iw=
+      visual.videoWidth ||
+      visual.naturalWidth ||
+      visual.width ||
+      W;
+
+    const ih=
+      visual.videoHeight ||
+      visual.naturalHeight ||
+      visual.height ||
+      H;
+
     const scale=Math.max(W/iw,H/ih);
     const dw=iw*scale;
     const dh=ih*scale;
 
-    ctx.drawImage(
-      img,
-      (W-dw)/2,
-      (H-dh)/2,
-      dw,
-      dh
-    );
+    try{
+      ctx.drawImage(
+        visual,
+        (W-dw)/2,
+        (H-dh)/2,
+        dw,
+        dh
+      );
+    }catch(e){
+      if(visual!==img && img){
+        try{
+          const fiw=img.width||img.naturalWidth||W;
+          const fih=img.height||img.naturalHeight||H;
+          const fscale=Math.max(W/fiw,H/fih);
+          const fdw=fiw*fscale;
+          const fdh=fih*fscale;
+          ctx.drawImage(
+            img,
+            (W-fdw)/2,
+            (H-fdh)/2,
+            fdw,
+            fdh
+          );
+        }catch(innerError){}
+      }
+    }
   }
 
   const grad=ctx.createLinearGradient(0,H*.34,0,H);
@@ -7187,6 +7351,7 @@ function drawPiPItem(ctx,item,offsetX=0,offsetY=0){
     ctx,
     item.story,
     item.image,
+    item.media||null,
     offsetX,
     offsetY
   );
@@ -7319,14 +7484,37 @@ function schedulePiPRender(){
       !pipCurrent.media.paused &&
       !pipCurrent.media.ended;
 
-    if(pipTransition || liveAdVideo){
-      pipAnimationFrame=requestAnimationFrame(tick);
+    const liveStoryVideo=
+      pipStoryMediaIsLive(pipCurrent) ||
+      pipStoryMediaIsLive(pipTransition?.from) ||
+      pipStoryMediaIsLive(pipTransition?.to);
+
+    const needsLiveFrames=
+      Boolean(pipTransition) ||
+      liveAdVideo ||
+      liveStoryVideo;
+
+    if(needsLiveFrames){
+      /*
+        Arka plandaki sekmelerde requestAnimationFrame tamamen durabilir.
+        PiP ekranda kalırken canlı video/reklamın donmaması için hidden
+        durumda timer ile canvas karelerini üretmeye devam et.
+      */
+      if(document.visibilityState==="visible"){
+        pipAnimationFrame=requestAnimationFrame(tick);
+      }else{
+        pipAnimationTimer=setTimeout(tick,120);
+      }
     }else{
       pipAnimationTimer=setTimeout(tick,500);
     }
   };
 
-  pipAnimationFrame=requestAnimationFrame(tick);
+  if(document.visibilityState==="visible"){
+    pipAnimationFrame=requestAnimationFrame(tick);
+  }else{
+    pipAnimationTimer=setTimeout(tick,0);
+  }
 }
 
 async function preparePiPStory(story){
@@ -7341,10 +7529,13 @@ async function preparePiPStory(story){
     pipCurrent?.image ||
     null;
 
+  const media=currentPiPStoryVideo(story);
+
   return {
     kind:"story",
     story,
-    image
+    image,
+    media
   };
 }
 
