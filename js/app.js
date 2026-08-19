@@ -5002,7 +5002,8 @@ function timer(durationMs=null){
   /* Otomatik ilerleme kapalı olsa bile sıradaki haber hazır tutulur. */
   scheduleNextStoryPreload();
 
-  const requested=Number(durationMs);
+  const hasExplicitDuration=(durationMs!==null && durationMs!==undefined);
+  const requested=hasExplicitDuration ? Number(durationMs) : NaN;
   const delay=Number.isFinite(requested)
     ? Math.max(250,requested)
     : Math.max(5,showDurationSeconds)*1000;
