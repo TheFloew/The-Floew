@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.33.0";
+window.__floewAppVersion="31.34.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -2945,6 +2945,10 @@ function showGenericEmbedVideo(el,story,media,token){
   );
 
   embed.src=cleanUrl;
+
+  if(provider==="vimeo"){
+    ensureVimeoLibrary();
+  }
 }
 
 
@@ -5450,9 +5454,12 @@ function warmEmbedMedia(media){
     }
   }catch(e){}
 
-  if(String(media?.provider||"").toLowerCase()==="dailymotion"){
+  const provider=String(media?.provider||"").toLowerCase();
+  if(provider==="dailymotion"){
     const parts=dailymotionMediaParts(media);
     if(parts?.playerId)ensureDailymotionLibrary(parts.playerId);
+  }else if(provider==="vimeo"){
+    ensureVimeoLibrary();
   }
 }
 
@@ -6953,8 +6960,216 @@ let pipDocumentRoot=null;
 let pipDocumentRenderGeneration=0;
 let pipDocumentHls=null;
 let pipDocumentHlsScriptPromise=null;
+let pipProviderSession=null;
+let pipFallbackNotice="";
+let vimeoLibraryPromise=null;
 const pipImageCache=new Map();
 const pipStoryVideoCanvasSafety=new WeakMap();
+
+function ensureVimeoLibrary(){
+  if(window.Vimeo?.Player)return Promise.resolve(window.Vimeo);
+  if(vimeoLibraryPromise)return vimeoLibraryPromise;
+
+  vimeoLibraryPromise=new Promise(resolve=>{
+    const existing=document.querySelector('script[data-floew-vimeo-player="1"]');
+
+    const finish=()=>resolve(window.Vimeo?.Player ? window.Vimeo : null);
+
+    if(existing){
+      if(window.Vimeo?.Player){
+        finish();
+      }else{
+        existing.addEventListener("load",finish,{once:true});
+        existing.addEventListener("error",()=>resolve(null),{once:true});
+      }
+      return;
+    }
+
+    const script=document.createElement("script");
+    script.src="https://player.vimeo.com/api/player.js";
+    script.async=true;
+    script.referrerPolicy="strict-origin-when-cross-origin";
+    script.dataset.floewVimeoPlayer="1";
+    script.addEventListener("load",finish,{once:true});
+    script.addEventListener("error",()=>{
+      vimeoLibraryPromise=null;
+      resolve(null);
+    },{once:true});
+    document.head.appendChild(script);
+  });
+
+  return vimeoLibraryPromise;
+}
+
+function currentStoryPiPMediaContext(story){
+  const slide=pipStorySlide(story);
+  if(!slide)return {kind:"none",provider:""};
+
+  const direct=slide.querySelector(".slide-video.media-visible");
+  if(
+    direct &&
+    direct.readyState>=2 &&
+    direct.videoWidth>0 &&
+    direct.videoHeight>0
+  ){
+    return {
+      kind:"direct",
+      provider:"direct",
+      element:direct,
+      descriptor:direct.__floewMediaDescriptor||null
+    };
+  }
+
+  const dm=slide.querySelector(".slide-dailymotion.media-visible");
+  if(dm){
+    return {
+      kind:"embed",
+      provider:"dailymotion",
+      element:dm,
+      player:dm.__floewDailymotionPlayer||null
+    };
+  }
+
+  const frame=slide.querySelector(".slide-embed.media-visible");
+  if(frame){
+    return {
+      kind:"embed",
+      provider:String(frame.dataset.provider||"generic").toLowerCase(),
+      element:frame
+    };
+  }
+
+  return {kind:"none",provider:""};
+}
+
+function clearProviderPiPSession(){
+  const session=pipProviderSession;
+  pipFallbackNotice="";
+  pipProviderSession=null;
+
+  if(session?.kind==="direct" && session.element){
+    try{session.element.disablePictureInPicture=true}catch(e){}
+  }
+}
+
+async function exitProviderPiP(){
+  const session=pipProviderSession;
+  if(!session)return false;
+
+  if(session.kind==="vimeo" && session.player?.exitPictureInPicture){
+    try{await session.player.exitPictureInPicture()}catch(e){}
+    clearProviderPiPSession();
+    pipActive=false;
+    return true;
+  }
+
+  if(
+    session.kind==="direct" &&
+    document.pictureInPictureElement===session.element &&
+    typeof document.exitPictureInPicture==="function"
+  ){
+    try{await document.exitPictureInPicture()}catch(e){}
+    clearProviderPiPSession();
+    pipActive=false;
+    return true;
+  }
+
+  clearProviderPiPSession();
+  return false;
+}
+
+async function requestDirectStoryPiP(context,story){
+  const video=context?.element;
+  if(
+    !video ||
+    typeof video.requestPictureInPicture!=="function" ||
+    !document.pictureInPictureEnabled
+  )return false;
+
+  try{
+    video.disablePictureInPicture=false;
+
+    const onLeave=()=>{
+      if(pipProviderSession?.element!==video)return;
+      clearProviderPiPSession();
+      pipActive=false;
+    };
+    video.addEventListener("leavepictureinpicture",onLeave,{once:true});
+
+    /*
+      Önemli: gerçek haber <video> öğesini doğrudan PiP'e sokuyoruz. Önceki
+      canvas/srcObject yaklaşımı Firefox'ta video kaynağı değişince statik
+      kalabiliyordu. Burada tarayıcının zaten oynattığı gerçek medya öğesi
+      kullanıldığı için MP4/native-HLS/MSE-HLS aynı kareleri göstermeye devam
+      eder.
+    */
+    await video.requestPictureInPicture();
+    pipProviderSession={
+      kind:"direct",
+      provider:"direct",
+      element:video,
+      storyKey:mediaKey(story)
+    };
+    pipActive=true;
+    return true;
+  }catch(error){
+    try{video.disablePictureInPicture=true}catch(e){}
+    return false;
+  }
+}
+
+function getVimeoPlayerForFrame(frame){
+  if(!frame || !window.Vimeo?.Player)return null;
+  if(frame.__floewVimeoPlayer)return frame.__floewVimeoPlayer;
+  try{
+    frame.__floewVimeoPlayer=new window.Vimeo.Player(frame);
+    return frame.__floewVimeoPlayer;
+  }catch(e){
+    return null;
+  }
+}
+
+async function requestVimeoStoryPiP(context,story){
+  const frame=context?.element;
+  const player=getVimeoPlayerForFrame(frame);
+  if(!frame || !player?.requestPictureInPicture)return false;
+
+  try{
+    const onLeave=()=>{
+      if(pipProviderSession?.player!==player)return;
+      clearProviderPiPSession();
+      pipActive=false;
+      try{player.off?.("leavepictureinpicture",onLeave)}catch(e){}
+    };
+    player.on?.("leavepictureinpicture",onLeave);
+
+    await player.requestPictureInPicture();
+    pipProviderSession={
+      kind:"vimeo",
+      provider:"vimeo",
+      element:frame,
+      player,
+      storyKey:mediaKey(story)
+    };
+    pipActive=true;
+    return true;
+  }catch(error){
+    return false;
+  }
+}
+
+function unsupportedPiPProviderMessage(provider){
+  if(provider==="dailymotion"){
+    return "Dailymotion videosu bu tarayıcıda Flöw PiP'e canlı aktarılamıyor; PiP'te haber görseli gösteriliyor.";
+  }
+  if(provider==="youtube"){
+    return "YouTube videosu bu tarayıcıda Flöw PiP'e canlı aktarılamıyor; PiP'te haber görseli gösteriliyor.";
+  }
+  if(provider && provider!=="generic"){
+    return `${provider} videosu bu tarayıcıda Flöw PiP'e canlı aktarılamıyor; PiP'te haber görseli gösteriliyor.`;
+  }
+  return "Bu harici video oynatıcısı Flöw PiP'e canlı aktarılamıyor; PiP'te haber görseli gösteriliyor.";
+}
 
 function pipSupportMode(){
   /*
@@ -7875,6 +8090,29 @@ function drawPiPStory(ctx,story,img,media=null,offsetX=0,offsetY=0){
     y+=40;
   }
 
+  if(pipFallbackNotice){
+    ctx.shadowBlur=0;
+    ctx.textAlign="left";
+    ctx.textBaseline="middle";
+    ctx.font='700 15px "Comfortaa", Arial, sans-serif';
+    const label=String(pipFallbackNotice);
+    const maxWidth=Math.min(W-56,560);
+    const labelLines=wrapCanvasText(ctx,label,maxWidth,2);
+    const boxH=labelLines.length>1 ? 64 : 42;
+    const boxW=Math.min(
+      maxWidth+24,
+      Math.max(...labelLines.map(line=>ctx.measureText(line).width),160)+24
+    );
+    ctx.fillStyle="rgba(0,0,0,.72)";
+    ctx.fillRect(24,22,boxW,boxH);
+    ctx.fillStyle="rgba(255,255,255,.92)";
+    let ly=22+(labelLines.length>1?20:21);
+    for(const line of labelLines){
+      ctx.fillText(line,36,ly);
+      ly+=24;
+    }
+  }
+
   ctx.shadowBlur=0;
   ctx.restore();
 }
@@ -8216,6 +8454,12 @@ async function setPiPInitialAd(ad){
 
 async function startPiPAdTransition(ad,dir=1){
   if(!pipActive || !ad)return;
+  if(pipProviderSession){
+    /* Sağlayıcı-native PiP bir sonraki Flöw kartına taşınamaz; donmuş/eski
+       görüntü bırakmak yerine haber değişiminde temiz biçimde kapat. */
+    exitProviderPiP().catch(()=>{});
+    return;
+  }
   if(pipDocumentIsActive()){
     await renderPiPDocumentAd(ad);
     return;
@@ -8276,6 +8520,12 @@ async function setPiPInitialStory(story){
 
 async function startPiPTransition(fromStory,toStory,dir){
   if(!pipActive || !toStory)return;
+  if(pipProviderSession){
+    /* Native direct/Vimeo PiP belirli bir medya öğesine bağlıdır. Flöw başka
+       habere geçtiğinde eski videoyu donmuş bırakmak yerine PiP'i kapatır. */
+    exitProviderPiP().catch(()=>{});
+    return;
+  }
   if(pipDocumentIsActive()){
     await renderPiPDocumentStory(toStory);
     return;
@@ -8409,6 +8659,8 @@ async function ensurePiPVideo(){
 }
 
 async function exitPiP(){
+  if(await exitProviderPiP())return true;
+
   if(pipDocumentIsActive()){
     closePiPDocumentWindow();
     pipActive=false;
@@ -8448,13 +8700,55 @@ async function togglePiP(){
   try{
     if(await exitPiP())return;
 
+    const story=state.stories[state.index]||null;
+
+    /*
+      Document PiP varsa iframe dahil bütün Flöw kartını taşıyabildiğimiz için
+      sağlayıcı ayrımı gerekmez. Firefox'ta bu API varsayılan olarak yoksa
+      aşağıdaki video-sağlayıcı yollarına düşeriz.
+    */
     if(mode==="document"){
       await openDocumentPiP();
       return;
     }
 
+    /* Reklam videosu mevcut çalışan composite PiP yolunu kullanır. */
+    pipFallbackNotice="";
+
+    if(!(adActive && adHasEntered && currentAd) && story){
+      const context=currentStoryPiPMediaContext(story);
+
+      /* Doğrudan MP4/HLS: gerçek, zaten oynayan <video> öğesini native PiP'e ver. */
+      if(context.kind==="direct"){
+        if(await requestDirectStoryPiP(context,story))return;
+      }
+
+      /* Vimeo: resmi Player API'nin requestPictureInPicture() metodunu kullan. */
+      if(context.kind==="embed" && context.provider==="vimeo"){
+        if(window.Vimeo?.Player){
+          if(await requestVimeoStoryPiP(context,story))return;
+        }else{
+          ensureVimeoLibrary();
+        }
+      }
+
+      /*
+        Dailymotion/YouTube/generic iframe'lerde programatik native PiP yok.
+        Bu durumda Flöw'ün statik kart PiP'i bilinçli fallback'tir.
+      */
+      if(
+        context.kind==="embed" &&
+        ["dailymotion","youtube","generic"].includes(context.provider)
+      ){
+        pipFallbackNotice="Harici oynatıcı: PiP'te canlı video desteklenmiyor";
+        status(unsupportedPiPProviderMessage(context.provider));
+      }else if(context.kind==="embed" && context.provider && context.provider!=="vimeo"){
+        pipFallbackNotice="Harici oynatıcı: PiP'te canlı video desteklenmiyor";
+        status(unsupportedPiPProviderMessage(context.provider));
+      }
+    }
+
     const video=await ensurePiPVideo();
-    const story=state.stories[state.index];
 
     if(adActive && adHasEntered && currentAd){
       await setPiPInitialAd(currentAd);
@@ -8468,7 +8762,6 @@ async function togglePiP(){
       await video.requestPictureInPicture();
       pipActive=true;
       schedulePiPRender();
-      syncCurrentDirectVideoToPiP().catch(()=>{});
       return;
     }
 
@@ -8476,10 +8769,10 @@ async function togglePiP(){
       video.webkitSetPresentationMode("picture-in-picture");
       pipActive=true;
       schedulePiPRender();
-      syncCurrentDirectVideoToPiP().catch(()=>{});
     }
   }catch(err){
     console.error("Video PiP:",err);
+    clearProviderPiPSession();
     pipActive=false;
     stopPiPRenderLoop();
 
@@ -8488,7 +8781,6 @@ async function togglePiP(){
     );
   }
 }
-
 
 
 function renderKeywordFilterControl(){
