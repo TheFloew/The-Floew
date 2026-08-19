@@ -123,7 +123,7 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
   background:rgba(255,255,255,.08);color:#fff;cursor:pointer;
   font:300 28px/34px Arial,sans-serif;
 }
-#menu-close:hover{background:rgba(255,255,255,.15)}
+
 .menu-tabs{display:flex;gap:6px;margin:24px 0 18px;border-bottom:1px solid rgba(255,255,255,.1)}
 .menu-tab{
   border:0;background:transparent;color:rgba(255,255,255,.55);
@@ -134,14 +134,8 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 .menu-tab.active{color:#fff;border-bottom-color:#fff}
 .menu-panel{display:none}
 .menu-panel.active{display:block}
-.menu-actions{display:flex;gap:8px;margin-bottom:14px}
-.menu-actions button{
-  border:1px solid rgba(255,255,255,.12);
-  background:rgba(255,255,255,.06);color:#fff;
-  padding:8px 11px;border-radius:7px;cursor:pointer;
-  font:400 11px "Comfortaa",sans-serif;
-}
-.menu-actions button:hover{background:rgba(255,255,255,.12)}
+
+
 .option-list{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .option{
   display:flex;align-items:center;justify-content:space-between;gap:10px;
@@ -150,8 +144,8 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
   border-radius:9px;background:rgba(255,255,255,.035);
   cursor:pointer;
 }
-.option:hover{background:rgba(255,255,255,.07)}
-.option-name{font-size:12px;font-weight:700}
+
+
 .option-check{
   flex:0 0 18px;width:18px;height:18px;border-radius:5px;
   border:1px solid rgba(255,255,255,.35);
@@ -362,7 +356,7 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 @media(max-width:900px){
   .headline{left:28px;right:28px;width:auto}
   .headline h1{font-size:clamp(28px,6vw,48px)}
-  #logo{width:min(5vw,80px)}
+  
   #clock{min-width:105px}
 }
 
@@ -370,7 +364,6 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
   .enter-up,.exit-up,.enter-down,.exit-down,.enter-left,.exit-left,.enter-right,.exit-right{animation-duration:1ms}
 }
 
-/* V27 — transparent background + bottom black message band + close button */
 #status{
   background:transparent !important;
   pointer-events:none !important;
@@ -478,18 +471,13 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 .source-link[aria-hidden="true"]{display:none}
 
 
-/* --- V30: responsive logo --- */
-#logo{
-  width:clamp(72px,5vw,105px) !important;
-}
 @media(max-width:900px){
-  #logo{width:clamp(64px,12vw,88px) !important}
+  
 }
 @media(max-width:480px){
-  #logo{width:clamp(58px,18vw,76px) !important}
+  
 }
 
-/* --- V30: simpler, darker menu without a card --- */
 #menu-overlay{
   background:rgba(0,0,0,.80) !important;
   backdrop-filter:blur(5px) !important;
@@ -584,12 +572,11 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 }
 .direction-option.active{color:#fff;font-weight:700}
 @media(max-width:700px){
-  #settings-menu{width:min(92vw,560px) !important}
+  
   .option-list,.direction-list{grid-template-columns:1fr !important}
-  .menu-tabs{gap:10px !important}
+  
 }
 
-/* --- V30: all warnings are dismissible bottom bands --- */
 #status{
   background:transparent !important;
   pointer-events:none !important;
@@ -629,7 +616,6 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 .status-close:hover{opacity:1}
 
 
-/* --- V31.2: story video layer --- */
 .slide-video,
 .slide-embed{
   position:absolute;
@@ -698,24 +684,14 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 }
 
 
-/* --- V31.3: supplied white Flöw logo --- */
-#logo{
-  width:clamp(110px,8vw,168px) !important;
-  height:auto !important;
-}
 @media(max-width:900px){
-  #logo{
-    width:clamp(96px,20vw,142px) !important;
-  }
+  
 }
 @media(max-width:480px){
-  #logo{
-    width:clamp(92px,27vw,126px) !important;
-  }
+  
 }
 
 
-/* --- V31.7 loading screen --- */
 #loading-screen{
   position:fixed;
   inset:0;
@@ -769,14 +745,7 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
     rgba(0,0,0,0) 100%
   );
 }
-.loading-marquee{
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  gap:18px;
-  animation:flowLoadingRise 2.15s linear infinite;
-  will-change:transform;
-}
+
 .loading-logo{
   width:clamp(170px,24vw,320px);
   height:auto;
@@ -793,22 +762,14 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
   to{transform:translateY(-34%)}
 }
 @media(prefers-reduced-motion:reduce){
-  .loading-marquee{animation-duration:5s}
+  
 }
 @media(max-width:520px){
-  .loading-stage{
-    width:clamp(150px,54vw,220px);
-    height:clamp(64px,22vw,88px);
-  }
-  .loading-logo{
-    width:clamp(150px,54vw,220px);
-  }
+  
+  
   .loading-marquee{gap:14px}
 }
 
-
-
-/* --- V31.10: safe feature rebuild --- */
 
 #menu-button{
   font-size:30px;
@@ -1120,8 +1081,6 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 }
 
 
-
-/* --- V31.11: interstitial ads --- */
 #ad-overlay{
   position:fixed;
   inset:0;
@@ -1171,7 +1130,6 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 }
 
 
-
 /*
   Reklam sırasında logo ve saat geri çekilir.
   Menü, PiP ve tam ekran düğmeleri reklam katmanının üstünde kalır,
@@ -1195,8 +1153,6 @@ body.ad-mode #fullscreen-button{
 }
 
 
-
-/* --- V31.12.7: clean external video embeds --- */
 /*
   Harici iframe oynatıcıları kullanıcı girdisi alamaz. YouTube/Vimeo URL
   parametreleri mümkün olan kontrolleri kapatır. Dailymotion 2026'dan beri
@@ -1231,46 +1187,23 @@ body.ad-mode #fullscreen-button{
 }
 
 /* Dailymotion yeni Player UI'sini Flöw kadrajının dışına kırp. */
-.slide-embed[data-provider="dailymotion"]{
-  width:112%;
-  height:112%;
-  left:-6%;
-  top:-6%;
-  right:auto;
-  bottom:auto;
-}
 
 
-/* --- V31.13.1: canonical Flöw logo size --- */
-#logo{
-  width:clamp(190px,12vw,250px) !important;
-  height:auto !important;
-}
 @media(max-width:900px){
-  #logo{
-    width:clamp(155px,30vw,210px) !important;
-  }
+  
 }
 @media(max-width:480px){
-  #logo{
-    width:clamp(145px,38vw,185px) !important;
-  }
+  
 }
 
 
-/* --- V31.13.1: loading animation guard --- */
 #loading-screen{
   display:grid !important;
 }
 #loading-screen.is-done{
   display:grid !important;
 }
-.loading-marquee{
-  animation:flowLoadingRise 2.15s linear infinite !important;
-}
 
-
-/* --- V31.13.2: stacked top-right controls + time-range filter --- */
 
 #menu-button,
 #time-range-button,
@@ -1281,9 +1214,6 @@ body.ad-mode #fullscreen-button{
   height:42px;
 }
 
-#menu-button{
-  top:max(2.2vh,env(safe-area-inset-top)) !important;
-}
 
 #time-range-button{
   position:fixed;
@@ -1323,13 +1253,6 @@ body.ad-mode #fullscreen-button{
 #time-range-button:hover{transform:scale(1.03)}
 #time-range-button:active{transform:scale(.95)}
 
-#pip-button{
-  top:calc(max(2.2vh,env(safe-area-inset-top)) + 100px) !important;
-}
-
-#fullscreen-button{
-  top:calc(max(2.2vh,env(safe-area-inset-top)) + 150px) !important;
-}
 
 /*
   Tercihler panelinin görsel diliyle aynı, ancak ekranı kapatmayan kompakt
@@ -1464,49 +1387,22 @@ body.ad-mode #time-range-button{
 }
 
 
-/* --- V31.13.3: final control order + logo size --- */
-
 /* Sağ üst sıra: Tam ekran -> Köşeye indir -> Zaman aralığı -> Tercihler */
-#fullscreen-button{
-  top:max(2.2vh,env(safe-area-inset-top)) !important;
-}
 
-#pip-button{
-  top:calc(max(2.2vh,env(safe-area-inset-top)) + 50px) !important;
-}
 
-#time-range-button{
-  top:calc(max(2.2vh,env(safe-area-inset-top)) + 100px) !important;
-}
-
-#menu-button{
-  top:calc(max(2.2vh,env(safe-area-inset-top)) + 150px) !important;
-}
-
-/*
-  V31.13.2'deki logonun yaklaşık üçte ikisi.
-  Önceki final clamp değerleri:
-  190–250 / 155–210 / 145–185 px
-*/
 #logo{
   width:clamp(127px,8vw,167px) !important;
   height:auto !important;
 }
 
 @media(max-width:900px){
-  #logo{
-    width:clamp(103px,20vw,140px) !important;
-  }
+  
 }
 
 @media(max-width:480px){
-  #logo{
-    width:clamp(97px,25.3vw,123px) !important;
-  }
+  
 }
 
-
-/* --- V31.14.0: Gündem / Son dakika top-level feeds --- */
 
 #feed-tabs{
   position:fixed;
@@ -1564,9 +1460,6 @@ body.breaking-mode #time-range-button{
   pointer-events:none !important;
 }
 
-body.breaking-mode #menu-button{
-  top:calc(max(2.2vh,env(safe-area-inset-top)) + 100px) !important;
-}
 
 body.breaking-mode #time-range-panel{
   opacity:0 !important;
@@ -1583,9 +1476,7 @@ body.ad-mode #feed-tabs{
 }
 
 @media(max-width:700px){
-  #feed-tabs{
-    top:max(1.7vh,env(safe-area-inset-top));
-  }
+  
 
   .feed-tab{
     min-width:0;
@@ -1596,8 +1487,6 @@ body.ad-mode #feed-tabs{
   }
 }
 
-
-/* --- V31.14.2: larger feed tabs + mouse-activity fade --- */
 
 #feed-tabs{
   gap:36px !important;
@@ -1633,9 +1522,7 @@ body.ad-mode #feed-tabs.is-visible{
 }
 
 @media(max-width:700px){
-  #feed-tabs{
-    gap:24px !important;
-  }
+  
 
   .feed-tab{
     padding:7px 0 !important;
@@ -1644,8 +1531,6 @@ body.ad-mode #feed-tabs.is-visible{
   }
 }
 
-
-/* --- V31.15.0: keyword filter / watch tools + cursor idle --- */
 
 #keyword-filter-button,
 #keyword-watch-button{
@@ -1713,9 +1598,7 @@ body.ad-mode #feed-tabs.is-visible{
 
 /* Final top-right order:
    Fullscreen -> PiP -> Time -> Filter -> Watch -> Preferences */
-#fullscreen-button{
-  top:max(2.2vh,env(safe-area-inset-top)) !important;
-}
+
 #pip-button{
   top:calc(max(2.2vh,env(safe-area-inset-top)) + 50px) !important;
 }
@@ -1776,21 +1659,6 @@ body.ad-mode #keyword-watch-button{
     visibility 0s linear .24s;
 }
 
-#keyword-filter-panel{
-  top:calc(max(2.2vh,env(safe-area-inset-top)) + 144px);
-}
-
-#keyword-watch-panel{
-  top:calc(max(2.2vh,env(safe-area-inset-top)) + 194px);
-}
-
-body.breaking-mode #keyword-filter-panel{
-  top:calc(max(2.2vh,env(safe-area-inset-top)) + 94px);
-}
-
-body.breaking-mode #keyword-watch-panel{
-  top:calc(max(2.2vh,env(safe-area-inset-top)) + 144px);
-}
 
 .keyword-tool-panel.open{
   opacity:1;
@@ -1933,8 +1801,6 @@ body.cursor-idle *{
 }
 
 
-/* --- V31.15.3: keyword clear buttons --- */
-
 .keyword-tool-clear{
   flex:0 0 34px;
   width:34px;
@@ -1975,7 +1841,6 @@ body.cursor-idle *{
 }
 
 
-/* --- V31.16.0: Flöra public analytics link --- */
 .flora-menu-link{
   margin-left:auto;
   color:rgba(255,255,255,.62);
@@ -2011,9 +1876,7 @@ body.cursor-idle *{
 }
 
 /* 2) Feed tabs: slightly smaller, especially on mobile. */
-#feed-tabs{
-  gap:28px !important;
-}
+
 
 .feed-tab{
   padding:6px 0 !important;
@@ -2357,12 +2220,6 @@ body.breaking-mode #keyword-watch-panel{
   gap:8px;
 }
 
-.public-stat-card{
-  padding:15px;
-  border:1px solid rgba(255,255,255,.08);
-  border-radius:11px;
-  background:rgba(255,255,255,.025);
-}
 
 .public-stat-card span{
   display:block;
@@ -2561,13 +2418,9 @@ body.breaking-mode #keyword-watch-panel{
     padding:18px;
   }
 
-  .public-stats-summary{
-    grid-template-columns:repeat(2,minmax(0,1fr));
-  }
+  
 
-  .public-stats-grid{
-    grid-template-columns:1fr;
-  }
+  
 
   .public-stats-footer{
     align-items:flex-start;
@@ -2790,9 +2643,7 @@ body.breaking-mode #keyword-watch-panel{
     max-width:92vw !important;
   }
 
-  .menu-tabs{
-    gap:7px !important;
-  }
+  
 
   .menu-tab{
     padding:8px 0 !important;
@@ -4018,3 +3869,131 @@ body.foreign-mode #time-range-button{
 #ad-overlay.touch-dragging{
   touch-action:none;
 }
+
+/* =====================================================================
+   Cleanup integration — static headline actions + feedback module styles
+   ===================================================================== */
+
+.share-link,
+.feedback-inline-link{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:0 0 auto;
+  margin:0;
+  padding:0;
+  border:0;
+  outline:0;
+  background:transparent;
+  color:#fff;
+  font:400 18px/1 "Arial Unicode MS","Noto Sans Symbols 2","Segoe UI Symbol",Arial,sans-serif;
+  opacity:.82;
+  text-shadow:
+    0 1px 3px rgba(0,0,0,.65),
+    0 2px 7px rgba(0,0,0,.42);
+  cursor:pointer;
+  pointer-events:auto;
+  appearance:none;
+  -webkit-appearance:none;
+  -webkit-tap-highlight-color:transparent;
+  user-select:none;
+  touch-action:manipulation;
+}
+
+.share-link{
+  font-family:Arial,"Helvetica Neue",Helvetica,sans-serif;
+}
+
+.share-link:hover,
+.share-link:focus-visible,
+.feedback-inline-link:hover,
+.feedback-inline-link:focus-visible{
+  opacity:1;
+}
+
+.share-link:focus-visible,
+.feedback-inline-link:focus-visible{
+  outline:1px solid rgba(255,255,255,.72);
+  outline-offset:5px;
+}
+
+.share-link[hidden],
+.share-link[aria-hidden="true"]{
+  display:none !important;
+}
+
+.share-link.share-done{opacity:1}
+.share-link.share-error{opacity:.72}
+
+.headline-actions{
+  gap:22px !important;
+}
+
+[data-about-panel="report"]{min-height:260px}
+.floew-feedback{width:min(700px,100%);margin:0 auto;padding:2px 0 18px;box-sizing:border-box;color:#fff}
+.floew-feedback *{box-sizing:border-box}
+.floew-feedback-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 18px}
+.floew-feedback-back{min-width:56px;padding:7px 0;border:0;background:transparent;color:rgba(255,255,255,.48);cursor:pointer;text-align:left;font:700 10px/1.2 "Comfortaa",sans-serif}
+.floew-feedback-back:hover{color:#fff}
+.floew-feedback-progress{display:flex;align-items:center;gap:5px;margin-left:auto}
+.floew-feedback-dot{width:5px;height:5px;border-radius:999px;background:rgba(255,255,255,.16)}
+.floew-feedback-dot.on{background:rgba(255,255,255,.78)}
+.floew-feedback-copy{text-align:center;margin:0 auto 18px;max-width:560px}
+.floew-feedback-title{margin:0;color:#fff;font:700 15px/1.35 "Comfortaa",sans-serif}
+.floew-feedback-hint{min-height:14px;margin:7px 0 0;color:rgba(255,255,255,.38);font:500 9px/1.45 "Comfortaa",sans-serif}
+.floew-feedback-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.floew-feedback-option{display:flex;align-items:center;gap:10px;min-height:48px;padding:12px 14px;border:1px solid rgba(255,255,255,.10);border-radius:11px;background:rgba(255,255,255,.025);color:rgba(255,255,255,.82);cursor:pointer;text-align:left;font:600 10px/1.35 "Comfortaa",sans-serif;transition:border-color .16s ease,background .16s ease,color .16s ease,transform .16s ease}
+.floew-feedback-option:hover,.floew-feedback-option:focus-visible{border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.065);color:#fff;outline:none}
+.floew-feedback-option:active{transform:scale(.985)}
+.floew-feedback-icon{display:grid;place-items:center;flex:0 0 24px;width:24px;height:24px;border-radius:8px;background:rgba(255,255,255,.055);color:rgba(255,255,255,.72);font:700 14px/1 Arial,sans-serif}
+.floew-feedback-summary{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:0 auto 16px}
+.floew-feedback-chip{padding:6px 8px;border-radius:999px;background:rgba(255,255,255,.06);color:rgba(255,255,255,.58);font:600 8px/1.2 "Comfortaa",sans-serif}
+.floew-feedback-field{display:block;margin:14px 0 0}
+.floew-feedback-field-label{display:block;margin:0 0 7px;color:rgba(255,255,255,.60);font:700 9px/1.3 "Comfortaa",sans-serif}
+.floew-feedback textarea,.floew-feedback input[type="text"]{width:100%;border:1px solid rgba(255,255,255,.11);border-radius:11px;background:rgba(255,255,255,.035);color:#fff;outline:none;font:500 10px/1.55 "Comfortaa",sans-serif;transition:border-color .16s ease,background .16s ease}
+.floew-feedback textarea:focus,.floew-feedback input[type="text"]:focus{border-color:rgba(255,255,255,.28);background:rgba(255,255,255,.055)}
+.floew-feedback textarea{min-height:88px;resize:vertical;padding:12px 13px}
+.floew-feedback input[type="text"]{height:44px;padding:0 13px}
+.floew-feedback-actions{display:flex;justify-content:center;margin-top:14px}
+.floew-feedback-submit,.floew-feedback-again{min-width:150px;min-height:42px;padding:10px 18px;border:1px solid rgba(255,255,255,.22);border-radius:10px;background:#fff;color:#080808;cursor:pointer;font:700 10px/1.2 "Comfortaa",sans-serif;transition:opacity .16s ease,transform .16s ease}
+.floew-feedback-submit:hover,.floew-feedback-again:hover{opacity:.88}
+.floew-feedback-submit:active,.floew-feedback-again:active{transform:scale(.985)}
+.floew-feedback-submit:disabled{opacity:.28;cursor:default;transform:none}
+.floew-feedback-tech{margin:13px auto 0;max-width:570px;color:rgba(255,255,255,.28);text-align:center;font:500 8px/1.55 "Comfortaa",sans-serif}
+.floew-feedback-tech details{margin-top:5px}
+.floew-feedback-tech summary{cursor:pointer;color:rgba(255,255,255,.38);list-style:none}
+.floew-feedback-tech summary::-webkit-details-marker{display:none}
+.floew-feedback-tech-line{margin-top:6px;overflow-wrap:anywhere}
+.floew-feedback-error{margin:10px 0 0;color:rgba(255,190,190,.78);text-align:center;font:600 9px/1.45 "Comfortaa",sans-serif}
+.floew-feedback-success{display:grid;place-items:center;min-height:250px;text-align:center;animation:floew-feedback-in .20s ease both}
+.floew-feedback-success-mark{font-size:27px;line-height:1;margin-bottom:13px}
+.floew-feedback-success h3{margin:0;color:#fff;font:700 17px/1.25 "Comfortaa",sans-serif}
+.floew-feedback-success p{margin:9px 0 18px;color:rgba(255,255,255,.42);font:500 9px/1.55 "Comfortaa",sans-serif}
+.floew-feedback-step{animation:floew-feedback-in .18s ease both}
+
+@keyframes floew-feedback-in{
+  from{opacity:0;transform:translateY(4px)}
+  to{opacity:1;transform:translateY(0)}
+}
+
+@media(max-width:700px){
+  .headline-actions{gap:19px !important}
+  .share-link,.feedback-inline-link{font-size:18px}
+  [data-about-panel="report"]{min-height:220px}
+  .floew-feedback{padding-bottom:24px}
+  .floew-feedback-options{grid-template-columns:1fr;gap:7px}
+  .floew-feedback-option{min-height:46px;padding:11px 12px;font-size:10px}
+  .floew-feedback-copy{margin-bottom:15px}
+  .floew-feedback-title{font-size:14px}
+  .floew-feedback-head{margin-bottom:12px}
+  .floew-feedback textarea{min-height:78px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .floew-feedback-step,
+  .floew-feedback-success{animation:none!important}
+  .floew-feedback-option,
+  .floew-feedback-submit,
+  .floew-feedback-again{transition:none!important}
+}
+

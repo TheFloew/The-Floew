@@ -690,7 +690,6 @@ function currentFeedModeOrder(){
 }
 
 const NEW_CATEGORIES=["#Yaşam","#Sağlık","#Otomotiv","#Sinema","#Müzik","#Edebiyat","#Televizyon","#Bilim","#Moda","#Tarih","#Gezi"];
-const NEW_SOURCES=["shiftdelete.net","onedio","beyazperde","motor1 türkiye","evrim ağacı","bant mag.","bir baba indie","edebiyat haber","elle türkiye","marie claire türkiye","istanbul life","live to bloom","elele","arkeofili","işin detayı"];
 
 function loadPreferences(){
   try{
@@ -6530,8 +6529,6 @@ async function performNewsLoad(){
       ? state.historyPos
       : Math.max(0,oldHistory.length-1);
     const currentStory=oldStories[state.index]||null;
-    const currentKey=storyIdentity(currentStory);
-    const currentSignature=exactDuplicateSignature(currentStory);
     const oldSource=sourceKey(currentStory?.source);
 
     /*
@@ -6832,9 +6829,6 @@ function pipSupportMode(){
   return "none";
 }
 
-function pipSupported(){
-  return pipSupportMode()!=="none";
-}
 
 async function getPiPImage(url){
   if(!url)return null;
@@ -7829,112 +7823,7 @@ async function addCustomRssFromInput(){
   }
 }
 
-function ensureEnhancementUi(){
-  /* Cookie banner: current HTML lost the consent buttons; rebuild it in place. */
-  const cookieBand=document.querySelector("#cookie-notice .status-band");
-
-  if(cookieBand && !document.getElementById("cookie-accept")){
-    cookieBand.innerHTML=`
-      <span class="status-message cookie-info-message">Çerez politikası hakkında bilgi.</span>
-      <span class="status-message cookie-consent-message">The Flöw deneyimi ve anonim kullanım ölçümü için çerezleri kullanabilir.</span>
-      <div class="cookie-actions" aria-label="Çerez tercihi">
-        <button id="cookie-reject" class="cookie-action secondary" type="button">Reddet</button>
-        <button id="cookie-accept" class="cookie-action" type="button">Kabul et</button>
-      </div>
-      <button id="cookie-close" class="status-close" type="button" aria-label="Kapat" title="Kapat">×</button>
-    `;
-  }
-
-  /* Haber süresi yanına ayrı devam / duraklat düğmeleri. */
-  const durationControl=document.getElementById("duration-plus")?.parentElement;
-
-  if(durationControl && !document.getElementById("duration-play")){
-    const play=document.createElement("button");
-    play.id="duration-play";
-    play.type="button";
-    play.className="duration-auto-button";
-    play.textContent="▶︎";
-    play.title="Otomatik kaydırmayı devam ettir";
-    play.setAttribute("aria-label",play.title);
-
-    const pause=document.createElement("button");
-    pause.id="duration-pause";
-    pause.type="button";
-    pause.className="duration-auto-button";
-    pause.textContent="⏸";
-    pause.title="Otomatik kaydırmayı durdur";
-    pause.setAttribute("aria-label",pause.title);
-
-    durationControl.append(play,pause);
-  }
-
-  /* Kaynaklar'ın hemen yanına Özel kaynaklar sekmesi. */
-  const sourcesTab=document.querySelector('.menu-tab[data-tab="sources"]');
-  const sourcesPanel=document.querySelector('[data-panel="sources"]');
-
-  if(sourcesTab && !document.querySelector('.menu-tab[data-tab="custom-sources"]')){
-    const tab=document.createElement("button");
-    tab.type="button";
-    tab.className="menu-tab";
-    tab.dataset.tab="custom-sources";
-    tab.textContent="Özel kaynaklar";
-    sourcesTab.insertAdjacentElement("afterend",tab);
-  }
-
-  if(sourcesPanel && !document.querySelector('[data-panel="custom-sources"]')){
-    const panel=document.createElement("div");
-    panel.className="menu-panel";
-    panel.id="custom-sources-panel";
-    panel.dataset.panel="custom-sources";
-    panel.innerHTML=`
-      <div class="custom-rss-setting">
-        <div class="setting-copy custom-rss-copy">
-          <strong>Özel RSS kaynakları</strong>
-          <small>RSS adresini ekleyin. Kaynaklar bu cihazdaki çerezde saklanır.</small>
-        </div>
-        <div class="custom-rss-add-row">
-          <input id="custom-rss-input" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://ornek.com/rss.xml" aria-label="RSS adresi">
-          <button id="custom-rss-add" type="button" aria-label="RSS kaynağı ekle" title="RSS kaynağı ekle">+</button>
-        </div>
-        <div id="custom-rss-feedback" class="custom-rss-feedback" hidden></div>
-        <div id="custom-rss-list" class="custom-rss-list"></div>
-      </div>
-    `;
-    sourcesPanel.insertAdjacentElement("afterend",panel);
-  }
-
-  /* Gelişmiş ayarlar sekmesi, mevcut HTML'yi değiştirmeden son sekme olarak eklenir. */
-  const weatherTab=document.querySelector('.menu-tab[data-tab="weather"]');
-  const weatherPanel=document.querySelector('[data-panel="weather"]');
-
-  if(weatherTab && !document.querySelector('.menu-tab[data-tab="advanced"]')){
-    const tab=document.createElement("button");
-    tab.type="button";
-    tab.className="menu-tab";
-    tab.dataset.tab="advanced";
-    tab.textContent="Gelişmiş";
-    weatherTab.insertAdjacentElement("afterend",tab);
-  }
-
-  if(weatherPanel && !document.querySelector('[data-panel="advanced"]')){
-    const panel=document.createElement("div");
-    panel.className="menu-panel";
-    panel.id="advanced-panel";
-    panel.dataset.panel="advanced";
-    panel.innerHTML=`
-      <div class="media-setting-group advanced-setting-group">
-        <button id="near-duplicate-setting" class="media-setting" type="button" aria-pressed="true">
-          <span>
-            <strong>Benzer haberleri azalt</strong>
-            <small>Algoritmik akışta farklı kaynakların aynı olayı anlatan çok benzer haberlerini peş peşe göstermemeye çalışır. Kronolojik sıralamayı etkilemez.</small>
-          </span>
-          <span class="media-setting-state">Açık</span>
-        </button>
-      </div>
-    `;
-    weatherPanel.insertAdjacentElement("afterend",panel);
-  }
-
+function bindEnhancementUi(){
   renderCustomRssList();
   renderNearDuplicateSetting();
 
@@ -7988,6 +7877,8 @@ function ensureEnhancementUi(){
   });
 }
 
+bindEnhancementUi();
+
 function renderAutoAdvanceSetting(){
   const play=document.getElementById("duration-play");
   const pause=document.getElementById("duration-pause");
@@ -8014,7 +7905,6 @@ function setAutoAdvancePaused(paused){
   }
 }
 
-ensureEnhancementUi();
 
 function renderDurationSetting(){
   const value=document.getElementById("duration-value");

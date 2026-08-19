@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
 <link rel="manifest" href="site.webmanifest">
 
-<link rel="stylesheet" href="css/styles.css?h=e48219824016">
+<link rel="stylesheet" href="css/styles.css?h=238be37234e4">
 
 <style id="boot-black-style">
   html,body{background:#000}
@@ -181,8 +181,8 @@
 
       <div class="about-panel" data-about-panel="report">
         <div class="about-placeholder">
-          <strong>Hata bildir</strong>
-          <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+          <strong>Geri bildirim</strong>
+          <p>Geri bildirim ekranı hazırlanıyor...</p>
         </div>
       </div>
 
@@ -229,13 +229,30 @@
 
       <div class="menu-tabs" role="tablist">
         <button class="menu-tab active" data-tab="sources" type="button">Kaynaklar</button>
+        <button class="menu-tab" data-tab="custom-sources" type="button">Özel kaynaklar</button>
         <button class="menu-tab" data-tab="categories" type="button">Kategoriler</button>
         <button class="menu-tab" data-tab="motion" type="button">Görünüm</button>
         <button class="menu-tab" data-tab="weather" type="button">Hava &amp; Su</button>
+        <button class="menu-tab" data-tab="advanced" type="button">Gelişmiş</button>
       </div>
 
       <div class="menu-panel active" id="sources-panel" data-panel="sources">
         <div id="source-options" class="option-list"></div>
+      </div>
+
+      <div class="menu-panel" id="custom-sources-panel" data-panel="custom-sources">
+        <div class="custom-rss-setting">
+          <div class="setting-copy custom-rss-copy">
+            <strong>Özel RSS kaynakları</strong>
+            <small>RSS adresini ekleyin. Kaynaklar bu cihazdaki çerezde saklanır.</small>
+          </div>
+          <div class="custom-rss-add-row">
+            <input id="custom-rss-input" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://ornek.com/rss.xml" aria-label="RSS adresi">
+            <button id="custom-rss-add" type="button" aria-label="RSS kaynağı ekle" title="RSS kaynağı ekle">+</button>
+          </div>
+          <div id="custom-rss-feedback" class="custom-rss-feedback" hidden></div>
+          <div id="custom-rss-list" class="custom-rss-list"></div>
+        </div>
       </div>
 
       <div class="menu-panel" id="categories-panel" data-panel="categories">
@@ -258,6 +275,8 @@
             <button id="duration-minus" type="button" aria-label="Süreyi azalt">−</button>
             <span id="duration-value">10 sn</span>
             <button id="duration-plus" type="button" aria-label="Süreyi artır">+</button>
+            <button id="duration-play" class="duration-auto-button" type="button" aria-label="Otomatik kaydırmayı devam ettir" title="Otomatik kaydırmayı devam ettir">▶︎</button>
+            <button id="duration-pause" class="duration-auto-button" type="button" aria-label="Otomatik kaydırmayı durdur" title="Otomatik kaydırmayı durdur">⏸</button>
           </div>
         </div>
 
@@ -298,6 +317,18 @@
         </div>
       </div>
 
+      <div class="menu-panel" id="advanced-panel" data-panel="advanced">
+        <div class="media-setting-group advanced-setting-group">
+          <button id="near-duplicate-setting" class="media-setting" type="button" aria-pressed="true">
+            <span>
+              <strong>Benzer haberleri azalt</strong>
+              <small>Algoritmik akışta farklı kaynakların aynı olayı anlatan çok benzer haberlerini peş peşe göstermemeye çalışır. Kronolojik sıralamayı etkilemez.</small>
+            </span>
+            <span class="media-setting-state">Açık</span>
+          </button>
+        </div>
+      </div>
+
       <div class="menu-footer">
         <span id="filter-count"></span>
         <a class="flora-menu-link" href="flora.html" target="_blank" rel="noopener noreferrer">Flöra</a>
@@ -334,6 +365,8 @@
           <span class="flora-inline-mark" aria-hidden="true">𝒇</span>
           <span class="flora-inline-value">—</span>
         </span>
+        <button class="share-link" type="button" aria-label="Haberi paylaş" title="Haberi paylaş">⤴︎</button>
+        <button class="feedback-inline-link" type="button" aria-label="Geri bildirim" title="Geri bildirim">⚑︎</button>
         <a class="source-link" href="#" target="_blank" rel="noopener noreferrer" aria-label="Haber kaynağına git">⎋</a>
       </div>
     </div>
@@ -358,6 +391,8 @@
           <span class="flora-inline-mark" aria-hidden="true">𝒇</span>
           <span class="flora-inline-value">—</span>
         </span>
+        <button class="share-link" type="button" aria-label="Haberi paylaş" title="Haberi paylaş">⤴︎</button>
+        <button class="feedback-inline-link" type="button" aria-label="Geri bildirim" title="Geri bildirim">⚑︎</button>
         <a class="source-link" href="#" target="_blank" rel="noopener noreferrer" aria-label="Haber kaynağına git">⎋</a>
       </div>
     </div>
@@ -374,8 +409,13 @@
 
 <div id="cookie-notice" hidden>
   <div class="status-band">
-    <span class="status-message">Flöw; tercihlerinizi hatırlamak, kullanım istatistikleri oluşturmak ve Flöra haber ilgi skorunu hesaplamak için çerezler ve benzeri tarayıcı teknolojileri kullanır. Üyelik gerektirmez. Siteyi kullanmaya devam ederek bu kullanıma izin vermektesiniz.</span>
-    <button id="cookie-close" class="status-close" type="button" aria-label="Çerez uyarısını kapat">×</button>
+    <span class="status-message cookie-info-message">Çerez politikası hakkında bilgi.</span>
+    <span class="status-message cookie-consent-message">The Flöw deneyimi ve anonim kullanım ölçümü için çerezleri kullanabilir.</span>
+    <div class="cookie-actions" aria-label="Çerez tercihi">
+      <button id="cookie-reject" class="cookie-action secondary" type="button">Reddet</button>
+      <button id="cookie-accept" class="cookie-action" type="button">Kabul et</button>
+    </div>
+    <button id="cookie-close" class="status-close" type="button" aria-label="Kapat" title="Kapat">×</button>
   </div>
 </div>
 
@@ -398,7 +438,7 @@
 })();
 </script>
 
-<script src="js/app.js?h=aa504fbb5ae5" onerror="
+<script src="js/app.js?h=d82c344ee3b4" onerror="
   var loader=document.getElementById('loading-screen');
   if(loader)loader.remove();
   var status=document.getElementById('status');
@@ -411,7 +451,6 @@
 "></script>
 <script src="js/share.js?h=dd12693f04be"></script>
 <script src="js/feedback.js?h=e798cee066b1"></script>
-<script src="js/headline-actions.js?h=6696cfd8bd7f"></script>
 
 </body>
 </html>

@@ -1,5 +1,5 @@
 /*
-  Flöw — Haber paylaşımı v2.1.0
+  Flöw — Haber paylaşımı v2.1.1
   ------------------------------------------------------------
   - ⤴ Haberi paylaş düğmesi: Flöra ile Kaynağa Git arasına eklenir.
   - Paylaşım URL'si ayrı Flöw Share Worker üzerinden üretilir.
@@ -8,7 +8,7 @@
 (function(){
   "use strict";
 
-  const FEATURE_VERSION="2.1.0";
+  const FEATURE_VERSION="2.1.1";
   const SHARE_LABEL="Haberi paylaş";
   const SHARE_BASE=
     "https://thefloew-share.thefloewback.workers.dev/share/";
@@ -398,210 +398,54 @@
       available ? 0 : -1;
   }
 
-  function installForActions(
-    actions
-  ){
+  function installForActions(actions){
     if(!actions)return;
 
-    const sourceLink=
-      actions.querySelector(
-        ".source-link"
-      );
+    const sourceLink=actions.querySelector(".source-link");
+    const button=actions.querySelector(".share-link");
 
-    if(!sourceLink)return;
+    if(!sourceLink || !button)return;
 
-    let button=
-      actions.querySelector(
-        ".share-link"
-      );
-
-    if(!button){
-      button=
-        document.createElement(
-          "button"
-        );
-
-      button.type="button";
-      button.className=
-        "share-link";
-
-      button.textContent="⤴︎";
-
-      button.setAttribute(
-        "aria-label",
-        SHARE_LABEL
-      );
-
-      button.title=
-        SHARE_LABEL;
-
-      /*
-        Flöra → Paylaş → Kaynağa Git
-      */
-      actions.insertBefore(
-        button,
-        sourceLink
-      );
-    }
-
-    if(
-      button.dataset
-        .floewShareInstalled===
-      FEATURE_VERSION
-    ){
-      syncButton(
-        button,
-        sourceLink
-      );
-
+    if(button.dataset.floewShareInstalled===FEATURE_VERSION){
+      syncButton(button,sourceLink);
       return;
     }
 
-    button.dataset
-      .floewShareInstalled=
-      FEATURE_VERSION;
+    button.dataset.floewShareInstalled=FEATURE_VERSION;
 
-    for(
-      const eventName of [
-        "pointerdown",
-        "pointerup",
-        "dblclick",
-        "contextmenu",
-        "wheel"
-      ]
-    ){
+    for(const eventName of [
+      "pointerdown",
+      "pointerup",
+      "dblclick",
+      "contextmenu",
+      "wheel"
+    ]){
       button.addEventListener(
         eventName,
-        event=>{
-          event.stopPropagation();
-        },
-        eventName==="wheel"
-          ? {passive:true}
-          : false
+        event=>event.stopPropagation(),
+        eventName==="wheel" ? {passive:true} : false
       );
     }
 
-    button.addEventListener(
-      "click",
-      event=>{
-        event.preventDefault();
-        event.stopPropagation();
+    button.addEventListener("click",event=>{
+      event.preventDefault();
+      event.stopPropagation();
+      void shareStory(button);
+    });
 
-        void shareStory(button);
-      }
-    );
+    syncButton(button,sourceLink);
 
-    syncButton(
-      button,
-      sourceLink
-    );
+    const observer=new MutationObserver(()=>{
+      syncButton(button,sourceLink);
+    });
 
-    const observer=
-      new MutationObserver(()=>{
-        syncButton(
-          button,
-          sourceLink
-        );
-      });
-
-    observer.observe(
-      sourceLink,
-      {
-        attributes:true,
-        attributeFilter:[
-          "href",
-          "aria-hidden",
-          "style"
-        ]
-      }
-    );
-  }
-
-  function installStyles(){
-    if(
-      document.getElementById(
-        "floew-share-style"
-      )
-    ){
-      return;
-    }
-
-    const style=
-      document.createElement(
-        "style"
-      );
-
-    style.id=
-      "floew-share-style";
-
-    style.textContent=`
-      .share-link{
-        display:inline-flex;
-        align-items:center;
-        justify-content:center;
-        flex:0 0 auto;
-        margin:0;
-        padding:0;
-        border:0;
-        outline:0;
-        background:transparent;
-        color:#fff;
-        font:400 18px/1 Arial,sans-serif;
-        opacity:.82;
-        text-shadow:
-          0 1px 3px rgba(0,0,0,.65),
-          0 2px 7px rgba(0,0,0,.42);
-        cursor:pointer;
-        pointer-events:auto;
-        appearance:none;
-        -webkit-appearance:none;
-        -webkit-tap-highlight-color:transparent;
-        user-select:none;
-        touch-action:manipulation;
-      }
-
-      .share-link:hover,
-      .share-link:focus-visible{
-        opacity:1;
-      }
-
-      .share-link:focus-visible{
-        outline:
-          1px solid
-          rgba(255,255,255,.72);
-        outline-offset:5px;
-      }
-
-      .share-link[hidden],
-      .share-link[
-        aria-hidden="true"
-      ]{
-        display:none !important;
-      }
-
-      .share-link.share-done{
-        opacity:1;
-      }
-
-      .share-link.share-error{
-        opacity:.72;
-      }
-
-      @media(max-width:520px){
-        .share-link{
-          font-size:18px;
-        }
-      }
-    `;
-
-    document.head.appendChild(
-      style
-    );
+    observer.observe(sourceLink,{
+      attributes:true,
+      attributeFilter:["href","aria-hidden","style"]
+    });
   }
 
   function install(){
-    installStyles();
-
     document
       .querySelectorAll(
         ".headline-actions"
