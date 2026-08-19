@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.31.0";
+window.__floewAppVersion="31.33.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -2519,6 +2519,8 @@ function resetSlideMedia(el){
       video.__floewHls=null;
     }
     try{video.pause()}catch(e){}
+    video.__floewMediaDescriptor=null;
+    video.__floewMediaStoryKey="";
     video.removeAttribute("src");
     video.load();
     video.classList.remove("media-visible");
@@ -2689,6 +2691,8 @@ function showDirectVideo(el,story,media,token){
 
   setMutedInlinePlaybackAttributes(video);
   video.poster=story.image||"";
+  video.__floewMediaDescriptor=media;
+  video.__floewMediaStoryKey=mediaKey(story);
 
   let settled=false;
   let mediaRecoveryTried=false;
@@ -5028,6 +5032,14 @@ function timer(durationMs=null){
 }
 
 function pauseFlowForMouseMovement(){
+  /*
+    Hamburger menü bir izleme katmanıdır; açıkken haber akışını durdurmaz.
+    Menü içindeki fare hareketleri de otomatik akışı pause etmez.
+  */
+  if(document.getElementById("menu-overlay")?.classList.contains("open")){
+    return;
+  }
+
   if(
     !desktopMouseFlowEnabled() ||
     adActive ||
@@ -6862,8 +6874,7 @@ function navigationBlockingPanelOpen(){
     document.getElementById("time-range-panel")?.classList.contains("open") ||
     document.getElementById("keyword-filter-panel")?.classList.contains("open") ||
     document.getElementById("keyword-watch-panel")?.classList.contains("open") ||
-    document.getElementById("stats-overlay")?.classList.contains("open") ||
-    document.getElementById("menu-overlay")?.classList.contains("open")
+    document.getElementById("stats-overlay")?.classList.contains("open")
   );
 }
 
@@ -6933,10 +6944,31 @@ let pipCurrent=null;
 let pipTransition=null;
 let pipTransitionFinalizer=null;
 let pipRenderGeneration=0;
+let pipPlaybackMode="canvas";
+let pipDirectHls=null;
+let pipDirectSourceKey="";
+let pipDirectSwitchGeneration=0;
+let pipDocumentWindow=null;
+let pipDocumentRoot=null;
+let pipDocumentRenderGeneration=0;
+let pipDocumentHls=null;
+let pipDocumentHlsScriptPromise=null;
 const pipImageCache=new Map();
 const pipStoryVideoCanvasSafety=new WeakMap();
 
 function pipSupportMode(){
+  /*
+    Document PiP Flöw için ideal yol: yalnız bir <video> karesi değil, gerçek
+    HTML/iframe içeriğini de always-on-top pencereye koyabiliyoruz. Böylece
+    Dailymotion/YouTube/Vimeo videoları canvas güvenlik sınırına takılmıyor.
+  */
+  if(
+    window.documentPictureInPicture &&
+    typeof window.documentPictureInPicture.requestWindow==="function"
+  ){
+    return "document";
+  }
+
   const hasCanvasStream=
     typeof HTMLCanvasElement.prototype.captureStream==="function";
 
@@ -6961,6 +6993,396 @@ function pipSupportMode(){
   return "none";
 }
 
+
+
+function pipDocumentIsActive(){
+  return Boolean(
+    pipDocumentWindow &&
+    !pipDocumentWindow.closed &&
+    pipDocumentRoot?.isConnected
+  );
+}
+
+function destroyPiPDocumentHls(){
+  if(pipDocumentHls){
+    try{pipDocumentHls.destroy()}catch(e){}
+    pipDocumentHls=null;
+  }
+}
+
+function closePiPDocumentWindow(){
+  pipDocumentRenderGeneration++;
+  destroyPiPDocumentHls();
+  pipDocumentHlsScriptPromise=null;
+
+  const win=pipDocumentWindow;
+  pipDocumentWindow=null;
+  pipDocumentRoot=null;
+
+  if(win && !win.closed){
+    try{win.close()}catch(e){}
+  }
+}
+
+function absoluteMediaUrl(value){
+  if(!value)return "";
+  try{return new URL(value,location.href).href}catch(e){return String(value||"")}
+}
+
+function setupPiPDocument(win){
+  const doc=win.document;
+  doc.open();
+  doc.write(`<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Flöw PiP</title>
+<style>
+html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#090909;color:#fff}
+body{font-family:Comfortaa,"Trebuchet MS",Arial,sans-serif;user-select:none}
+#floew-document-pip-root{position:fixed;inset:0;background:#090909;overflow:hidden}
+.floew-dpip-stage{position:absolute;inset:0;background:#090909;overflow:hidden;opacity:0;transform:scale(1.015);transition:opacity .18s ease,transform .32s ease}
+.floew-dpip-stage.is-ready{opacity:1;transform:scale(1)}
+.floew-dpip-media{position:absolute;inset:0;background:#090909;overflow:hidden}
+.floew-dpip-media>img,.floew-dpip-media>video,.floew-dpip-media>iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.floew-dpip-media>img,.floew-dpip-media>video{object-fit:cover}
+.floew-dpip-media>iframe{background:#000}
+.floew-dpip-shade{position:absolute;inset:24% 0 0;background:linear-gradient(to bottom,rgba(0,0,0,0),rgba(0,0,0,.30) 34%,rgba(0,0,0,.92) 100%);pointer-events:none}
+.floew-dpip-copy{position:absolute;left:28px;right:28px;bottom:25px;z-index:4;text-align:right;text-shadow:0 2px 9px rgba(0,0,0,.85);pointer-events:none}
+.floew-dpip-cat{font-size:clamp(12px,3.2vw,18px);font-weight:700;opacity:.83;margin-bottom:7px}
+.floew-dpip-source{font-size:clamp(13px,3.6vw,20px);font-weight:700;margin-bottom:7px}
+.floew-dpip-title{font-size:clamp(19px,5.3vw,34px);font-weight:700;line-height:1.18;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
+.floew-dpip-ad-label{position:absolute;right:24px;top:20px;z-index:5;font-size:clamp(12px,3vw,18px);font-weight:700;opacity:.78;text-shadow:0 2px 8px rgba(0,0,0,.8);pointer-events:none}
+.floew-dpip-ad .floew-dpip-media>img,.floew-dpip-ad .floew-dpip-media>video{object-fit:contain;background:#000}
+@media (max-width:520px){.floew-dpip-copy{left:18px;right:18px;bottom:18px}}
+</style>
+</head>
+<body><div id="floew-document-pip-root"></div></body>
+</html>`);
+  doc.close();
+
+  pipDocumentRoot=doc.getElementById("floew-document-pip-root");
+
+  win.addEventListener("pagehide",()=>{
+    if(pipDocumentWindow!==win)return;
+    pipDocumentRenderGeneration++;
+    destroyPiPDocumentHls();
+    pipDocumentHlsScriptPromise=null;
+    pipDocumentWindow=null;
+    pipDocumentRoot=null;
+    pipActive=false;
+  },{once:true});
+}
+
+function ensurePiPDocumentHlsLibrary(){
+  const win=pipDocumentWindow;
+  if(!win || win.closed)return Promise.resolve(null);
+  if(win.Hls)return Promise.resolve(win.Hls);
+  if(pipDocumentHlsScriptPromise)return pipDocumentHlsScriptPromise;
+
+  pipDocumentHlsScriptPromise=new Promise(resolve=>{
+    const script=win.document.createElement("script");
+    script.src=HLS_JS_URL;
+    script.async=true;
+    script.crossOrigin="anonymous";
+    script.referrerPolicy="no-referrer";
+    script.addEventListener("load",()=>resolve(win.Hls||null),{once:true});
+    script.addEventListener("error",()=>resolve(null),{once:true});
+    win.document.head.appendChild(script);
+  });
+
+  return pipDocumentHlsScriptPromise;
+}
+
+function makePiPDocumentStage(extraClass=""){
+  const doc=pipDocumentWindow?.document;
+  if(!doc || !pipDocumentRoot)return null;
+
+  destroyPiPDocumentHls();
+  const stage=doc.createElement("div");
+  stage.className=`floew-dpip-stage ${extraClass}`.trim();
+  pipDocumentRoot.replaceChildren(stage);
+  const win=pipDocumentWindow;
+  if(win?.requestAnimationFrame){
+    win.requestAnimationFrame(()=>{
+      try{stage.classList.add("is-ready")}catch(e){}
+    });
+  }else{
+    try{stage.classList.add("is-ready")}catch(e){}
+  }
+  return stage;
+}
+
+function addPiPDocumentImage(mediaLayer,url){
+  const doc=pipDocumentWindow?.document;
+  if(!doc || !mediaLayer || !url)return null;
+  const img=doc.createElement("img");
+  img.alt="";
+  img.decoding="async";
+  img.referrerPolicy="no-referrer";
+  img.src=`${IMAGE_PROXY_API}?url=${encodeURIComponent(url)}`;
+  mediaLayer.appendChild(img);
+  return img;
+}
+
+async function currentDailymotionPiPTime(story){
+  const slide=pipStorySlide(story);
+  const host=slide?.querySelector(".slide-dailymotion.media-visible");
+  const player=host?.__floewDailymotionPlayer;
+  if(!player?.getState)return 0;
+  try{
+    const state=await player.getState();
+    return Number(state?.videoTime)||0;
+  }catch(e){
+    return 0;
+  }
+}
+
+function addPiPDocumentCopy(stage,story){
+  const doc=pipDocumentWindow?.document;
+  if(!doc || !stage)return;
+
+  const shade=doc.createElement("div");
+  shade.className="floew-dpip-shade";
+  stage.appendChild(shade);
+
+  const copy=doc.createElement("div");
+  copy.className="floew-dpip-copy";
+
+  const cat=doc.createElement("div");
+  cat.className="floew-dpip-cat";
+  cat.textContent=story?.flowCategory||"";
+
+  const source=doc.createElement("div");
+  source.className="floew-dpip-source";
+  source.textContent=story?.source||"";
+
+  const title=doc.createElement("div");
+  title.className="floew-dpip-title";
+  title.textContent=story?.title||"Flöw";
+
+  copy.append(cat,source,title);
+  stage.appendChild(copy);
+}
+
+async function addPiPDocumentDirectVideo(mediaLayer,story,media,startTime=0,generation=0){
+  const doc=pipDocumentWindow?.document;
+  if(!doc || !mediaLayer || !media?.url)return false;
+
+  const video=doc.createElement("video");
+  video.muted=true;
+  video.defaultMuted=true;
+  video.volume=0;
+  video.autoplay=true;
+  video.loop=true;
+  video.playsInline=true;
+  video.setAttribute("muted","");
+  video.setAttribute("autoplay","");
+  video.setAttribute("playsinline","");
+  video.setAttribute("webkit-playsinline","");
+  mediaLayer.appendChild(video);
+
+  const seek=()=>{
+    if(generation!==pipDocumentRenderGeneration)return;
+    const t=Number(startTime)||0;
+    if(t>0 && Number.isFinite(video.duration) && video.duration>t+.2){
+      try{video.currentTime=t}catch(e){}
+    }
+  };
+
+  const play=async()=>{
+    if(generation!==pipDocumentRenderGeneration)return;
+    seek();
+    try{
+      const result=video.play();
+      if(result?.then)await result;
+    }catch(e){}
+  };
+
+  const type=String(media.type||"").toLowerCase();
+  const isHls=type.includes("mpegurl") || /\.m3u8(?:[?#]|$)/i.test(media.url);
+
+  if(isHls){
+    if(
+      video.canPlayType("application/vnd.apple.mpegurl") ||
+      video.canPlayType("application/x-mpegURL")
+    ){
+      video.src=media.url;
+      video.addEventListener("loadedmetadata",play,{once:true});
+      video.load();
+      return true;
+    }
+
+    const HlsCtor=await ensurePiPDocumentHlsLibrary();
+    if(generation!==pipDocumentRenderGeneration || !pipDocumentIsActive())return false;
+    if(!HlsCtor?.isSupported?.())return false;
+
+    const hls=new HlsCtor({
+      enableWorker:true,
+      lowLatencyMode:false,
+      backBufferLength:30
+    });
+    pipDocumentHls=hls;
+    hls.on(HlsCtor.Events.MEDIA_ATTACHED,()=>{
+      if(generation!==pipDocumentRenderGeneration)return;
+      hls.loadSource(media.url);
+    });
+    hls.on(HlsCtor.Events.MANIFEST_PARSED,play);
+    hls.attachMedia(video);
+    return true;
+  }
+
+  video.src=media.url;
+  video.addEventListener("loadedmetadata",play,{once:true});
+  video.load();
+  return true;
+}
+
+async function addPiPDocumentEmbed(mediaLayer,story,media,generation=0){
+  const doc=pipDocumentWindow?.document;
+  if(!doc || !mediaLayer || !media?.url)return false;
+
+  let src=cleanEmbedUrl(media);
+  const provider=String(media.provider||"").toLowerCase();
+
+  if(provider==="dailymotion"){
+    const t=await currentDailymotionPiPTime(story);
+    if(generation!==pipDocumentRenderGeneration)return false;
+    if(t>1){
+      try{
+        const u=new URL(src);
+        u.searchParams.set("startTime",String(Math.max(0,Math.floor(t))));
+        src=u.href;
+      }catch(e){}
+    }
+  }
+
+  const frame=doc.createElement("iframe");
+  frame.src=src;
+  frame.title=story?.title||"Flöw video";
+  frame.allow="autoplay; encrypted-media; picture-in-picture; fullscreen; web-share";
+  frame.setAttribute("allowfullscreen","");
+  frame.referrerPolicy="strict-origin-when-cross-origin";
+  mediaLayer.appendChild(frame);
+  return true;
+}
+
+async function renderPiPDocumentStory(story){
+  if(!pipDocumentIsActive() || !story)return;
+  const generation=++pipDocumentRenderGeneration;
+  const stage=makePiPDocumentStage();
+  if(!stage)return;
+
+  const doc=pipDocumentWindow.document;
+  const mediaLayer=doc.createElement("div");
+  mediaLayer.className="floew-dpip-media";
+  stage.appendChild(mediaLayer);
+  if(story.image)addPiPDocumentImage(mediaLayer,story.image);
+  addPiPDocumentCopy(stage,story);
+
+  let media=null;
+  let startTime=0;
+  const direct=currentDirectVideoDescriptor(story);
+  if(direct){
+    media=direct.media;
+    startTime=direct.currentTime;
+  }else{
+    try{media=await resolveStoryMedia(story)}catch(e){media=null}
+  }
+
+  if(
+    generation!==pipDocumentRenderGeneration ||
+    !pipDocumentIsActive() ||
+    mediaKey(story)!==mediaKey(state.stories[state.index]||story)
+  )return;
+
+  if(media?.kind==="video"){
+    await addPiPDocumentDirectVideo(
+      mediaLayer,
+      story,
+      media,
+      startTime,
+      generation
+    );
+  }else if(media?.kind==="embed"){
+    await addPiPDocumentEmbed(
+      mediaLayer,
+      story,
+      media,
+      generation
+    );
+  }
+}
+
+async function renderPiPDocumentAd(ad){
+  if(!pipDocumentIsActive() || !ad)return;
+  const generation=++pipDocumentRenderGeneration;
+  const stage=makePiPDocumentStage("floew-dpip-ad");
+  if(!stage)return;
+
+  const doc=pipDocumentWindow.document;
+  const mediaLayer=doc.createElement("div");
+  mediaLayer.className="floew-dpip-media";
+  stage.appendChild(mediaLayer);
+
+  const src=absoluteMediaUrl(ad.src||"");
+  if(ad.type==="video"){
+    const video=doc.createElement("video");
+    video.src=src;
+    video.muted=true;
+    video.defaultMuted=true;
+    video.volume=0;
+    video.autoplay=true;
+    video.loop=false;
+    video.playsInline=true;
+    video.setAttribute("muted","");
+    video.setAttribute("autoplay","");
+    video.setAttribute("playsinline","");
+    mediaLayer.appendChild(video);
+    try{await video.play()}catch(e){}
+  }else{
+    const img=doc.createElement("img");
+    img.src=src;
+    img.alt="Reklam";
+    mediaLayer.appendChild(img);
+  }
+
+  if(generation!==pipDocumentRenderGeneration)return;
+
+  const label=doc.createElement("div");
+  label.className="floew-dpip-ad-label";
+  label.textContent="Reklam";
+  stage.appendChild(label);
+}
+
+async function renderCurrentPiPDocumentContent(){
+  if(!pipDocumentIsActive())return;
+  if(adActive && adHasEntered && currentAd){
+    await renderPiPDocumentAd(currentAd);
+    return;
+  }
+  const story=state.stories[state.index]||null;
+  if(story)await renderPiPDocumentStory(story);
+}
+
+async function openDocumentPiP(){
+  const api=window.documentPictureInPicture;
+  if(!api?.requestWindow)return false;
+
+  if(pipDocumentIsActive()){
+    closePiPDocumentWindow();
+    pipActive=false;
+    return true;
+  }
+
+  const win=await api.requestWindow({width:960,height:540});
+  pipDocumentWindow=win;
+  setupPiPDocument(win);
+  pipActive=true;
+  await renderCurrentPiPDocumentContent();
+  return true;
+}
 
 async function getPiPImage(url){
   if(!url)return null;
@@ -7011,6 +7433,172 @@ async function getPiPImage(url){
   return promise;
 }
 
+
+function destroyPiPDirectHls(){
+  if(pipDirectHls){
+    try{pipDirectHls.destroy()}catch(e){}
+    pipDirectHls=null;
+  }
+}
+
+function currentDirectVideoDescriptor(story){
+  const slide=pipStorySlide(story);
+  const video=slide?.querySelector(".slide-video.media-visible");
+  if(!video)return null;
+
+  const descriptor=video.__floewMediaDescriptor;
+  if(
+    !descriptor ||
+    descriptor.kind!=="video" ||
+    !descriptor.url ||
+    video.__floewMediaStoryKey!==mediaKey(story)
+  ){
+    return null;
+  }
+
+  return {
+    media:descriptor,
+    currentTime:Number.isFinite(video.currentTime) ? video.currentTime : 0
+  };
+}
+
+async function setPiPPlaybackToCanvas(){
+  if(!pipVideo || !pipStream)return;
+  if(pipPlaybackMode==="canvas" && pipVideo.srcObject===pipStream)return;
+
+  ++pipDirectSwitchGeneration;
+  destroyPiPDirectHls();
+  pipDirectSourceKey="";
+
+  try{pipVideo.pause()}catch(e){}
+  try{pipVideo.removeAttribute("src")}catch(e){}
+  pipVideo.srcObject=pipStream;
+  pipPlaybackMode="canvas";
+
+  try{
+    const result=pipVideo.play();
+    if(result?.catch)result.catch(()=>{});
+  }catch(e){}
+
+  drawPiPScene();
+  schedulePiPRender();
+}
+
+async function setPiPPlaybackToDirect(story,descriptor,startTime=0){
+  if(!pipActive || !pipVideo || !descriptor?.url)return false;
+
+  const sourceKey=`${mediaKey(story)}|${descriptor.url}`;
+  if(pipPlaybackMode==="direct" && pipDirectSourceKey===sourceKey){
+    return true;
+  }
+
+  const generation=++pipDirectSwitchGeneration;
+  destroyPiPDirectHls();
+
+  try{pipVideo.pause()}catch(e){}
+  pipVideo.srcObject=null;
+  pipVideo.removeAttribute("src");
+  pipPlaybackMode="direct";
+  pipDirectSourceKey=sourceKey;
+
+  const seekWhenReady=()=>{
+    if(generation!==pipDirectSwitchGeneration)return;
+    const t=Number(startTime)||0;
+    if(t>0 && Number.isFinite(pipVideo.duration) && pipVideo.duration>t+0.25){
+      try{pipVideo.currentTime=t}catch(e){}
+    }
+  };
+
+  const playNow=async()=>{
+    if(generation!==pipDirectSwitchGeneration)return false;
+    seekWhenReady();
+    try{
+      const result=pipVideo.play();
+      if(result?.then)await result;
+      return !pipVideo.paused;
+    }catch(e){
+      return false;
+    }
+  };
+
+  const type=String(descriptor.type||"").toLowerCase();
+  const isHls=
+    type.includes("mpegurl") ||
+    /\.m3u8(?:[?#]|$)/i.test(descriptor.url);
+
+  if(isHls){
+    const HlsCtor=await ensureHlsLibrary();
+    if(generation!==pipDirectSwitchGeneration || !pipActive)return false;
+
+    if(HlsCtor?.isSupported?.()){
+      const hls=new HlsCtor({
+        enableWorker:true,
+        lowLatencyMode:false,
+        backBufferLength:30
+      });
+      pipDirectHls=hls;
+
+      hls.on(HlsCtor.Events.MEDIA_ATTACHED,()=>{
+        if(generation!==pipDirectSwitchGeneration)return;
+        hls.loadSource(descriptor.url);
+      });
+      hls.on(HlsCtor.Events.MANIFEST_PARSED,()=>{
+        if(generation!==pipDirectSwitchGeneration)return;
+        playNow();
+      });
+      hls.on(HlsCtor.Events.ERROR,(_event,data)=>{
+        if(!data?.fatal || generation!==pipDirectSwitchGeneration)return;
+        setPiPPlaybackToCanvas();
+      });
+      hls.attachMedia(pipVideo);
+      return true;
+    }
+
+    if(
+      pipVideo.canPlayType("application/vnd.apple.mpegurl") ||
+      pipVideo.canPlayType("application/x-mpegURL")
+    ){
+      pipVideo.src=descriptor.url;
+      pipVideo.load();
+      pipVideo.addEventListener("loadedmetadata",()=>{
+        if(generation!==pipDirectSwitchGeneration)return;
+        playNow();
+      },{once:true});
+      return true;
+    }
+
+    await setPiPPlaybackToCanvas();
+    return false;
+  }
+
+  pipVideo.src=descriptor.url;
+  pipVideo.load();
+  pipVideo.addEventListener("loadedmetadata",()=>{
+    if(generation!==pipDirectSwitchGeneration)return;
+    playNow();
+  },{once:true});
+  pipVideo.addEventListener("error",()=>{
+    if(generation!==pipDirectSwitchGeneration)return;
+    setPiPPlaybackToCanvas();
+  },{once:true});
+
+  return true;
+}
+
+async function syncCurrentDirectVideoToPiP(){
+  if(!pipActive)return false;
+  const story=state.stories[state.index]||null;
+  if(!story)return false;
+
+  const direct=currentDirectVideoDescriptor(story);
+  if(!direct)return false;
+
+  return setPiPPlaybackToDirect(
+    story,
+    direct.media,
+    direct.currentTime
+  );
+}
 
 function pipStorySlide(story){
   if(!story)return null;
@@ -7087,17 +7675,35 @@ function pipItemMatchesStory(item,story){
 }
 
 function attachStoryVideoToPiP(story,video){
-  if(
-    !pipActive ||
-    !story ||
-    !video ||
-    !pipStoryVideoIsCanvasSafe(video)
-  ){
+  if(!pipActive || !story || !video)return;
+
+  if(pipDocumentIsActive()){
+    if(mediaKey(story)===mediaKey(state.stories[state.index]||null)){
+      renderPiPDocumentStory(story).catch(()=>{});
+    }
     return;
   }
 
-  let changed=false;
+  const descriptor=video.__floewMediaDescriptor;
+  if(
+    descriptor?.kind==="video" &&
+    descriptor.url &&
+    video.__floewMediaStoryKey===mediaKey(story)
+  ){
+    setPiPPlaybackToDirect(
+      story,
+      descriptor,
+      Number.isFinite(video.currentTime) ? video.currentTime : 0
+    ).catch(()=>{});
+    return;
+  }
 
+  /*
+    Canvas-safe medya varsa eski composite yolunu fallback olarak koru.
+  */
+  if(!pipStoryVideoIsCanvasSafe(video))return;
+
+  let changed=false;
   const attach=item=>{
     if(!pipItemMatchesStory(item,story))return;
     if(item.media!==video){
@@ -7105,11 +7711,9 @@ function attachStoryVideoToPiP(story,video){
       changed=true;
     }
   };
-
   attach(pipCurrent);
   attach(pipTransition?.from);
   attach(pipTransition?.to);
-
   if(changed){
     drawPiPScene();
     schedulePiPRender();
@@ -7471,6 +8075,8 @@ function finalizePiPTransitionSoon(generation){
 }
 
 function schedulePiPRender(){
+  if(pipDocumentIsActive())return;
+
   if(pipAnimationFrame){
     cancelAnimationFrame(pipAnimationFrame);
     pipAnimationFrame=null;
@@ -7482,6 +8088,11 @@ function schedulePiPRender(){
 
   const tick=()=>{
     if(!pipActive)return;
+
+    if(pipPlaybackMode==="direct"){
+      pipAnimationTimer=setTimeout(tick,500);
+      return;
+    }
 
     drawPiPScene();
 
@@ -7588,6 +8199,11 @@ async function preparePiPAd(ad){
 }
 
 async function setPiPInitialAd(ad){
+  if(pipDocumentIsActive()){
+    await renderPiPDocumentAd(ad);
+    return;
+  }
+
   const generation=++pipRenderGeneration;
   const prepared=await preparePiPAd(ad);
   if(generation!==pipRenderGeneration)return;
@@ -7600,6 +8216,11 @@ async function setPiPInitialAd(ad){
 
 async function startPiPAdTransition(ad,dir=1){
   if(!pipActive || !ad)return;
+  if(pipDocumentIsActive()){
+    await renderPiPDocumentAd(ad);
+    return;
+  }
+  await setPiPPlaybackToCanvas();
   const generation=++pipRenderGeneration;
 
   const to=await preparePiPAd(ad);
@@ -7638,6 +8259,11 @@ async function startPiPAdTransition(ad,dir=1){
 }
 
 async function setPiPInitialStory(story){
+  if(pipDocumentIsActive()){
+    await renderPiPDocumentStory(story);
+    return;
+  }
+
   const generation=++pipRenderGeneration;
   const prepared=await preparePiPStory(story);
   if(generation!==pipRenderGeneration)return;
@@ -7650,6 +8276,17 @@ async function setPiPInitialStory(story){
 
 async function startPiPTransition(fromStory,toStory,dir){
   if(!pipActive || !toStory)return;
+  if(pipDocumentIsActive()){
+    await renderPiPDocumentStory(toStory);
+    return;
+  }
+
+  /*
+    Haber değişirken önce composite canvas'a dön. Yeni haber doğrudan video
+    ise video görünür/oynar hale geldiği anda attachStoryVideoToPiP aynı PiP
+    elemanını yeniden gerçek medya kaynağına geçirir.
+  */
+  await setPiPPlaybackToCanvas();
   const generation=++pipRenderGeneration;
 
   const to=await preparePiPStory(toStory);
@@ -7732,13 +8369,18 @@ async function ensurePiPVideo(){
 
   pipStream=pipCanvas.captureStream(30);
   pipVideo.srcObject=pipStream;
+  pipPlaybackMode="canvas";
 
   pipVideo.addEventListener(
     "leavepictureinpicture",
     ()=>{
       pipActive=false;
       pipRenderGeneration++;
+      ++pipDirectSwitchGeneration;
+      destroyPiPDirectHls();
+      pipDirectSourceKey="";
       stopPiPRenderLoop();
+      setTimeout(()=>setPiPPlaybackToCanvas(),0);
     }
   );
 
@@ -7754,7 +8396,11 @@ async function ensurePiPVideo(){
         schedulePiPRender();
       }else{
         pipRenderGeneration++;
+        ++pipDirectSwitchGeneration;
+        destroyPiPDirectHls();
+        pipDirectSourceKey="";
         stopPiPRenderLoop();
+        setTimeout(()=>setPiPPlaybackToCanvas(),0);
       }
     }
   );
@@ -7763,6 +8409,12 @@ async function ensurePiPVideo(){
 }
 
 async function exitPiP(){
+  if(pipDocumentIsActive()){
+    closePiPDocumentWindow();
+    pipActive=false;
+    return true;
+  }
+
   if(
     document.pictureInPictureElement &&
     typeof document.exitPictureInPicture==="function"
@@ -7796,6 +8448,11 @@ async function togglePiP(){
   try{
     if(await exitPiP())return;
 
+    if(mode==="document"){
+      await openDocumentPiP();
+      return;
+    }
+
     const video=await ensurePiPVideo();
     const story=state.stories[state.index];
 
@@ -7811,6 +8468,7 @@ async function togglePiP(){
       await video.requestPictureInPicture();
       pipActive=true;
       schedulePiPRender();
+      syncCurrentDirectVideoToPiP().catch(()=>{});
       return;
     }
 
@@ -7818,6 +8476,7 @@ async function togglePiP(){
       video.webkitSetPresentationMode("picture-in-picture");
       pipActive=true;
       schedulePiPRender();
+      syncCurrentDirectVideoToPiP().catch(()=>{});
     }
   }catch(err){
     console.error("Video PiP:",err);
@@ -9370,6 +10029,35 @@ function toggleKeywordWatchPanel(){
   }
 }
 
+function ensureFlowRunsWhileHamburgerOpen(){
+  clearTimeout(mouseFlowResumeTimer);
+  mouseFlowResumeTimer=null;
+
+  if(mouseFlowPaused){
+    mouseFlowPaused=false;
+
+    if(!autoAdvancePaused && !adActive && !state.busy && state.stories.length){
+      const remaining=state.timerRemainingMs || Math.max(5,showDurationSeconds)*1000;
+      timer(remaining+MOUSE_FLOW_RESUME_BONUS_MS);
+    }
+    return;
+  }
+
+  /*
+    Timer başka bir UI etkileşimi tarafından temizlenmişse menüyü açmak onu
+    sonsuza kadar durmuş bırakmasın.
+  */
+  if(
+    !autoAdvancePaused &&
+    !adActive &&
+    !state.busy &&
+    state.stories.length &&
+    !state.timer
+  ){
+    timer(state.timerRemainingMs || Math.max(5,showDurationSeconds)*1000);
+  }
+}
+
 function openMenu(){
   closeFloraPopover({resume:false});
   closeStatsOverlay();
@@ -9378,6 +10066,7 @@ function openMenu(){
   const overlay=document.getElementById("menu-overlay");
   overlay.classList.add("open");
   overlay.setAttribute("aria-hidden","false");
+  ensureFlowRunsWhileHamburgerOpen();
   showFullscreenButton();
 }
 
@@ -11822,13 +12511,21 @@ document.addEventListener("visibilitychange",()=>{
   }
 
   if(pipActive){
-    /* Sekme görünürlük değişiminden sonra PiP'e güncel kareyi zorla bas. */
-    const story=state.stories[state.index]||null;
-    if(!adActive && story){
-      setPiPInitialStory(story).then(()=>schedulePiPRender()).catch(()=>{});
+    /* Sekme görünürlük değişiminden sonra PiP'i güncel medyayla senkronla. */
+    if(pipDocumentIsActive()){
+      renderCurrentPiPDocumentContent().catch(()=>{});
     }else{
-      drawPiPScene();
-      schedulePiPRender();
+      const story=state.stories[state.index]||null;
+      if(!adActive && story){
+        if(pipPlaybackMode==="direct"){
+          syncCurrentDirectVideoToPiP().catch(()=>{});
+        }else{
+          setPiPInitialStory(story).then(()=>schedulePiPRender()).catch(()=>{});
+        }
+      }else{
+        drawPiPScene();
+        schedulePiPRender();
+      }
     }
   }
 });
@@ -11836,6 +12533,7 @@ document.addEventListener("visibilitychange",()=>{
 window.addEventListener("pagehide",()=>{
   try{screenWakeLock?.release?.()}catch(e){}
   screenWakeLock=null;
+  if(pipDocumentIsActive())closePiPDocumentWindow();
 });
 
 setTimeout(requestDesktopWakeLock,0);
