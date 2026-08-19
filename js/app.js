@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.30.0";
+window.__floewAppVersion="31.31.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -5058,7 +5058,15 @@ function resumeFlowAfterMouseStops(){
   mouseFlowResumeTimer=null;
   if(!mouseFlowPaused)return;
 
-  if(anyControlPanelOpen?.() || state.busy || adActive){
+  /*
+    Açık menüler otomatik haber akışını bloke etmez.
+    Kullanıcı fareyi hareket ettirdiği sürece akış pause edilir; hareket
+    bittikten sonra hamburger/tercihler/quick panel açık olsa bile sayaç
+    kaldığı yer + 3 saniye ile devam eder.
+
+    Yalnız gerçek bir haber/reklam geçişi sürerken yeniden timer kurmayız.
+  */
+  if(state.busy || adActive){
     mouseFlowResumeTimer=setTimeout(
       resumeFlowAfterMouseStops,
       MOUSE_FLOW_IDLE_MS
