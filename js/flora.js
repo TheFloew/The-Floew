@@ -1,4 +1,4 @@
-const API="https://thefloew.thefloewback.workers.dev/stats/public";
+const API=`${String(window.FLOEW_CONFIG?.analyticsWorkerBase||"https://thefloew-analytics.thefloewback.workers.dev").replace(/\/$/,"")}/stats/public`;
 let currentRange="7d";
 
 const nf=new Intl.NumberFormat("tr-TR");

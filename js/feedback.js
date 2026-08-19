@@ -8,7 +8,7 @@
   "use strict";
 
   const FEEDBACK_VERSION="1.1.0";
-  const TRACK_ENDPOINT="https://thefloew.thefloewback.workers.dev/track";
+  const TRACK_ENDPOINT=`${String(window.FLOEW_CONFIG?.analyticsWorkerBase||"https://thefloew-analytics.thefloewback.workers.dev").replace(/\/$/,"")}/track`;
   const MAX_NOTE_LENGTH=1600;
 
   const FALLBACK_CATEGORIES=[

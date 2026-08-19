@@ -162,10 +162,11 @@ a{color:inherit}
   </div>
 </div>
 
+<script src="../js/config.js?h=2b15c52de3f7"></script>
 <script>
 (()=>{
 'use strict';
-const API_BASE='https://thefloew.thefloewback.workers.dev';
+const API_BASE=String(window.FLOEW_CONFIG?.analyticsWorkerBase||'https://thefloew-analytics.thefloewback.workers.dev').replace(/\/$/,'');
 const TOKEN_KEY='floew.feedbackAdminToken.session.v1';
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>Array.from(r.querySelectorAll(s));

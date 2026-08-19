@@ -10,8 +10,10 @@
 
   const FEATURE_VERSION="2.1.1";
   const SHARE_LABEL="Haberi paylaş";
-  const SHARE_BASE=
-    "https://thefloew-share.thefloewback.workers.dev/share/";
+  const SHARE_WORKER_BASE=String(
+    window.FLOEW_CONFIG?.shareWorkerBase||"https://thefloew-share.thefloewback.workers.dev"
+  ).replace(/\/$/,"");
+  const SHARE_BASE=`${SHARE_WORKER_BASE}/share/`;
 
   function clean(value){
     return String(value||"")

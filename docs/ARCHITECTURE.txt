@@ -1,0 +1,23 @@
+FLÖW SERVİS MİMARİSİ
+
+GitHub Pages / frontend
+- UI, akış algoritması ve kullanıcı tercihleri
+- js/config.js: servis adresleri ve statik kaynak kataloğu
+- data/ads-hor.json, data/ads-ver.json: reklam manifestleri
+- GitHub Action: reklam manifestlerini ads/ klasörlerinden üretir
+
+News Worker
+- /news: RSS kaynaklarını server-side alır, normalize eder ve sınıflandırır
+- /video: haber sayfasından video çözümleme
+- /image: görsel proxy / fallback çözümleme
+- /custom-rss: kullanıcı RSS'lerini güvenli server-side okuma
+
+Analytics Worker
+- /track: toplu telemetri ve geri bildirim olayları
+- /stats/*: Flöra ve public istatistikler
+- /analytics/*: GA4 yapılandırma / sağlık
+- /admin/*: özel analytics yönetim API'leri ve raporlar
+- D1 + GA4 binding/secret'leri yalnız burada
+
+Share Worker
+- /share/*: paylaşım landing/metadata işlemleri

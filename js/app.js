@@ -1,18 +1,24 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.26.1";
-const API="https://thefloew.thefloewback.workers.dev/news";
-const VIDEO_API="https://thefloew.thefloewback.workers.dev/video";
-const META_API="https://thefloew.thefloewback.workers.dev/meta";
-const IMAGE_PROXY_API="https://thefloew.thefloewback.workers.dev/image";
-const CUSTOM_RSS_API="https://thefloew.thefloewback.workers.dev/custom-rss";
-const FLORA_SCORES_API="https://thefloew.thefloewback.workers.dev/stats/flora-scores";
-const FLORA_STORY_API="https://thefloew.thefloewback.workers.dev/stats/flora-story";
+window.__floewAppVersion="31.27.0";
+const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
+const NEWS_WORKER_BASE=String(
+  FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
+).replace(/\/$/,"");
+const ANALYTICS_WORKER_BASE=String(
+  FLOEW_CONFIG.analyticsWorkerBase||"https://thefloew-analytics.thefloewback.workers.dev"
+).replace(/\/$/,"");
+const API=`${NEWS_WORKER_BASE}/news`;
+const VIDEO_API=`${NEWS_WORKER_BASE}/video`;
+const IMAGE_PROXY_API=`${NEWS_WORKER_BASE}/image`;
+const CUSTOM_RSS_API=`${NEWS_WORKER_BASE}/custom-rss`;
+const FLORA_SCORES_API=`${ANALYTICS_WORKER_BASE}/stats/flora-scores`;
+const FLORA_STORY_API=`${ANALYTICS_WORKER_BASE}/stats/flora-story`;
 const NEWS_REQUEST_SESSION=
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`;
 const NEWS_BATCH_CACHE_PREFIX="thefloew.newsBatchCache.v1.";
 const NEWS_BATCH_CACHE_MAX_AGE_MS=20*60*1000;
 
-const NEWS_BATCH_COUNT=12;
+const NEWS_BATCH_COUNT=Math.max(1,Number(FLOEW_CONFIG.newsBatchCount)||12);
 
 /*
   12 Worker batch'ini aynı anda ateşlemek özellikle mobil tarayıcılarda
@@ -58,8 +64,8 @@ const TOUCH_DRAG_COMMIT_RATIO=.18;
 const TOUCH_DRAG_MIN_COMMIT_PX=64;
 const TOUCH_DRAG_VELOCITY_PX_MS=.48;
 
-const ADS_API="https://thefloew.thefloewback.workers.dev/ads";
-const ADS_CACHE_KEY="thefloew.adsCatalog.v5";
+const ADS_MANIFESTS=FLOEW_CONFIG.adsManifest||{hor:"data/ads-hor.json",ver:"data/ads-ver.json"};
+const ADS_CACHE_KEY="thefloew.adsCatalog.v6";
 const ADS_TEST_MODE=new URLSearchParams(location.search).get("adtest")==="1";
 const ADS_INTERVAL_NEWS=10;
 const AD_IMAGE_MS=15000;
@@ -4282,9 +4288,11 @@ async function actuallyLoadAdsCatalog(layout=getAdsLayout()){
   );
 
   try{
-    const separator=ADS_API.includes("?")?"&":"?";
+    const manifestPath=ADS_MANIFESTS[layout]||`data/ads-${layout}.json`;
+    const manifestUrl=new URL(manifestPath,document.baseURI);
+    manifestUrl.searchParams.set("_floew",Date.now().toString(36));
     const response=await fetch(
-      `${ADS_API}${separator}layout=${encodeURIComponent(layout)}&t=${Date.now()}`,
+      manifestUrl.href,
       {
         method:"GET",
         mode:"cors",
@@ -4342,7 +4350,7 @@ async function actuallyLoadAdsCatalog(layout=getAdsLayout()){
 
     return adCatalog;
   }catch(err){
-    console.warn(`Flöw ads Worker (${layout}):`,err);
+    console.warn(`Flöw ads catalog (${layout}):`,err);
 
     if(layout===getAdsLayout()){
       const cached=loadCachedAdsCatalog(layout);
@@ -5863,66 +5871,30 @@ async function fetchSourceCatalog(){
     return knownSources;
   }
 
-  const controller=new AbortController();
-  const timeout=setTimeout(()=>controller.abort(),8000);
+  const sources=Array.isArray(FLOEW_CONFIG.sources)
+    ? FLOEW_CONFIG.sources.filter(Boolean)
+    : [];
+  const foreignSources=Array.isArray(FLOEW_CONFIG.foreignSources)
+    ? FLOEW_CONFIG.foreignSources.filter(Boolean)
+    : [];
 
-  try{
-    const metaUrl=new URL(META_API);
-    metaUrl.searchParams.set(
-      "_floew",
-      `${NEWS_REQUEST_SESSION}-meta-${Date.now().toString(36)}`
-    );
-
-    const r=await fetch(metaUrl.href,{
-      method:"GET",
-      mode:"cors",
-      credentials:"omit",
-      cache:"no-store",
-      signal:controller.signal,
-      headers:{
-        "Accept":"application/json"
-      }
-    });
-
-    if(!r.ok)throw new Error(`Meta HTTP ${r.status}`);
-
-    const data=await r.json();
-    const sources=Array.isArray(data?.sources)
-      ? data.sources.filter(Boolean)
-      : [];
-    const foreignSources=Array.isArray(data?.foreignSources)
-      ? data.foreignSources.filter(Boolean)
-      : [];
-
-    if(sources.length){
-      knownSources=[...new Map(
-        sources.map(source=>[
-          sourceKey(source),
-          source
-        ])
-      ).values()];
-    }
-
-    if(foreignSources.length){
-      knownForeignSources=[...new Map(
-        foreignSources.map(source=>[
-          sourceKey(source),
-          source
-        ])
-      ).values()];
-    }
-
-    if(sources.length || foreignSources.length){
-      sourceCatalogLoaded=true;
-    }
-
-    return knownSources;
-  }catch(err){
-    console.warn("Source catalog:",err);
-    return knownSources;
-  }finally{
-    clearTimeout(timeout);
+  if(sources.length){
+    knownSources=[...new Map(
+      sources.map(source=>[sourceKey(source),source])
+    ).values()];
   }
+
+  if(foreignSources.length){
+    knownForeignSources=[...new Map(
+      foreignSources.map(source=>[sourceKey(source),source])
+    ).values()];
+  }
+
+  sourceCatalogLoaded=Boolean(
+    knownSources.length || knownForeignSources.length
+  );
+
+  return knownSources;
 }
 
 function newsBatchCacheKey(batch){
@@ -6277,7 +6249,7 @@ async function performNewsLoad(){
 
   try{
     /*
-      Worker kaynakları dört ayrı çağrıya böler. Böylece tek Worker
+      Worker kaynakları batch çağrılarına böler. Böylece tek Worker
       invocation'ında Cloudflare'ın external subrequest sınırına yaklaşmayız.
       Bir batch geçici olarak hata verse bile diğer batch'lerin haberleri
       kullanılmaya devam eder.
@@ -6384,8 +6356,9 @@ async function performNewsLoad(){
     rawStories=enrichStories(incoming);
 
     /*
-      /meta yalnız yerleşik kaynakları bilir. Özel RSS kaynaklarını her yüklemede
-      canlı sonuçtan kataloğa ekleyip artık silinmiş özel kaynakları çıkarıyoruz.
+      Yerleşik kaynak kataloğu GitHub'daki config.js'den gelir. Özel RSS
+      kaynaklarını her yüklemede canlı sonuçtan ekleyip artık silinmiş özel
+      kaynakları çıkarıyoruz.
     */
     if(customRssSourceKeys.size){
       knownSources=knownSources.filter(
@@ -8431,7 +8404,7 @@ document.getElementById("video-setting")?.addEventListener("click",e=>{
   applyVideoSetting();
 });
 
-const PUBLIC_STATS_API="https://thefloew.thefloewback.workers.dev/stats/public";
+const PUBLIC_STATS_API=`${ANALYTICS_WORKER_BASE}/stats/public`;
 let publicStatsRange="7d";
 let controlMenuOpen=false;
 let aboutActiveTab="stats";
@@ -10041,7 +10014,7 @@ async function runAdTestOnce(){
    The frontend batches telemetry so normal news rendering never waits for it.
    ======================================================================== */
 
-const ANALYTICS_BASE="https://thefloew.thefloewback.workers.dev";
+const ANALYTICS_BASE=ANALYTICS_WORKER_BASE;
 const TRACK_API=`${ANALYTICS_BASE}/track`;
 const ANALYTICS_CONFIG_API=`${ANALYTICS_BASE}/analytics/config`;
 const GA4_CONSENT_KEY="thefloew.ga4Consent.v1";
@@ -10138,12 +10111,12 @@ function initGa4(){
 async function loadGa4Config(){
   try{
     const response=await fetch(
-      `${ANALYTICS_CONFIG_API}?t=${Date.now()}`,
+      ANALYTICS_CONFIG_API,
       {
         method:"GET",
         mode:"cors",
         credentials:"omit",
-        cache:"no-store",
+        cache:"default",
         headers:{"Accept":"application/json"}
       }
     );
@@ -10229,8 +10202,8 @@ function ga4TrackAdEvent(eventType,data={}){
 
 const FLOEW_VISITOR_KEY="thefloew.analyticsVisitor.v1";
 const FLOEW_SESSION_KEY="thefloew.analyticsSession.v1";
-const TELEMETRY_FLUSH_MS=10000;
-const TELEMETRY_MAX_BATCH=20;
+const TELEMETRY_FLUSH_MS=30000;
+const TELEMETRY_MAX_BATCH=50;
 
 function telemetryId(){
   try{

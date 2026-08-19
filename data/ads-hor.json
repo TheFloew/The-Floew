@@ -1,0 +1,27 @@
+{
+  "ok": true,
+  "layout": "hor",
+  "count": 4,
+  "ads": [
+    {
+      "name": "A0001__FLOW__REKLAM-VER__KIRMIZI.mp4",
+      "url": "ads/hor/A0001__FLOW__REKLAM-VER__KIRMIZI.mp4",
+      "layout": "hor"
+    },
+    {
+      "name": "A0002__FLOW__REKLAM-VER__MAVI.mp4",
+      "url": "ads/hor/A0002__FLOW__REKLAM-VER__MAVI.mp4",
+      "layout": "hor"
+    },
+    {
+      "name": "A0003__FLOW__REKLAM-VER__MOR.mp4",
+      "url": "ads/hor/A0003__FLOW__REKLAM-VER__MOR.mp4",
+      "layout": "hor"
+    },
+    {
+      "name": "A0004__FLOW__REKLAM-VER__SARI.mp4",
+      "url": "ads/hor/A0004__FLOW__REKLAM-VER__SARI.mp4",
+      "layout": "hor"
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-const BASE="https://thefloew.thefloewback.workers.dev";
+const BASE=String(window.FLOEW_CONFIG?.analyticsWorkerBase||"https://thefloew-analytics.thefloewback.workers.dev").replace(/\/$/,"");
 let token=sessionStorage.getItem("floew.adminToken.v1")||"";
 let range="7d";
 let activeTab="audience";
