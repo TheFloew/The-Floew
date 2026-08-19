@@ -21,3 +21,9 @@ Analytics Worker
 
 Share Worker
 - /share/*: paylaşım landing/metadata işlemleri
+
+
+V31.28 notes:
+- Feedback admin uses persistent /admin/feedback records and explicit delete.
+- Custom RSS uses localStorage.
+- Preferences can be exported/imported from Gelişmiş.

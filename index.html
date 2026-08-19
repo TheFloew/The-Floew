@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
 <link rel="manifest" href="site.webmanifest">
 
-<link rel="stylesheet" href="css/styles.css?h=238be37234e4">
+<link rel="stylesheet" href="css/styles.css?h=bcde90c34bc3">
 
 <style id="boot-black-style">
   html,body{background:#000}
@@ -244,7 +244,7 @@
         <div class="custom-rss-setting">
           <div class="setting-copy custom-rss-copy">
             <strong>Özel RSS kaynakları</strong>
-            <small>RSS adresini ekleyin. Kaynaklar bu cihazdaki çerezde saklanır.</small>
+            <small>RSS adresini ekleyin. Kaynaklar bu tarayıcıda localStorage içinde saklanır.</small>
           </div>
           <div class="custom-rss-add-row">
             <input id="custom-rss-input" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://ornek.com/rss.xml" aria-label="RSS adresi">
@@ -326,6 +326,19 @@
             </span>
             <span class="media-setting-state">Açık</span>
           </button>
+        </div>
+
+        <div class="preference-transfer-setting">
+          <div class="setting-copy">
+            <strong>Tercihleri aktarma</strong>
+            <small>Kaynak, kategori, görünüm, süre, hava durumu, anahtar kelime ve özel RSS tercihlerinizi tek bir Flöw dosyasıyla başka bir tarayıcıya taşıyın.</small>
+          </div>
+          <div class="preference-transfer-actions" role="group" aria-label="Tercihleri aktarma">
+            <button id="preferences-import" type="button">İçe aktar</button>
+            <button id="preferences-export" type="button">Dışa aktar</button>
+            <input id="preferences-import-file" type="file" accept="application/json,.json" hidden>
+          </div>
+          <div id="preference-transfer-feedback" class="preference-transfer-feedback" hidden aria-live="polite"></div>
         </div>
       </div>
 
@@ -439,7 +452,7 @@
 </script>
 
 <script src="js/config.js?h=2b15c52de3f7"></script>
-<script src="js/app.js?h=8d2cc8ae7196" onerror="
+<script src="js/app.js?h=d13c1b8c75dc" onerror="
   var loader=document.getElementById('loading-screen');
   if(loader)loader.remove();
   var status=document.getElementById('status');

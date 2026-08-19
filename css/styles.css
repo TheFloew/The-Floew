@@ -3997,3 +3997,51 @@ body.foreign-mode #time-range-button{
   .floew-feedback-again{transition:none!important}
 }
 
+
+
+/* V31.28 — preference transfer */
+.preference-transfer-setting{
+  margin-top:18px;
+  padding-top:18px;
+  border-top:1px solid rgba(255,255,255,.10);
+}
+.preference-transfer-setting .setting-copy{
+  display:grid;
+  gap:6px;
+}
+.preference-transfer-setting .setting-copy strong{
+  font-size:13px;
+}
+.preference-transfer-setting .setting-copy small{
+  color:rgba(255,255,255,.58);
+  font-size:11px;
+  line-height:1.55;
+}
+.preference-transfer-actions{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top:14px;
+}
+.preference-transfer-actions button{
+  min-width:112px;
+  padding:10px 14px;
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:9px;
+  background:rgba(255,255,255,.05);
+  color:#fff;
+  font:700 12px "Comfortaa",sans-serif;
+  cursor:pointer;
+}
+.preference-transfer-actions button:hover{
+  background:rgba(255,255,255,.10);
+}
+.preference-transfer-feedback{
+  margin-top:10px;
+  font-size:11px;
+  line-height:1.45;
+  color:rgba(255,255,255,.72);
+}
+.preference-transfer-feedback[data-state="error"]{
+  color:#ff9d9d;
+}

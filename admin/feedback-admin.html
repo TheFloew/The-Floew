@@ -109,7 +109,7 @@ a{color:inherit}
   <header class="topbar">
     <div class="brand">
       <h1>Geri Bildirimler</h1>
-      <p>Flöw yönetim görünümü · feedback_submit olayları</p>
+      <p>Flöw yönetim görünümü · saklanan feedback_submit kayıtları</p>
     </div>
     <div class="top-actions">
       <button id="refresh-btn" class="btn" type="button">Yenile</button>
@@ -130,7 +130,7 @@ a{color:inherit}
 
   <section class="metrics">
     <div class="metric"><span>Toplam geri bildirim</span><strong id="m-total">—</strong></div>
-    <div class="metric"><span>Detayı yüklenen</span><strong id="m-loaded">—</strong></div>
+    <div class="metric"><span>Saklanan toplam</span><strong id="m-loaded">—</strong></div>
     <div class="metric"><span>Yazılı not içeren</span><strong id="m-notes">—</strong></div>
     <div class="metric"><span>Tekil kullanıcı</span><strong id="m-users">—</strong></div>
   </section>
@@ -152,7 +152,7 @@ a{color:inherit}
     <div class="list-toolbar"><h2>Geri bildirim listesi</h2><span id="list-count">0 kayıt</span></div>
     <div id="feedback-list" class="feedback-list"></div>
   </section>
-  <div class="footer">Detaylar /admin/behavior üzerinden okunur. Yönetici anahtarı bu dosyanın içine kaydedilmez.</div>
+  <div class="footer">Geri bildirimler elle silinene kadar BEHAVIOR_DB içinde saklanır. Yönetici anahtarı bu dosyanın içine kaydedilmez.</div>
 </main>
 
 <div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="detail-title">
@@ -170,7 +170,7 @@ const API_BASE=String(window.FLOEW_CONFIG?.analyticsWorkerBase||'https://thefloe
 const TOKEN_KEY='floew.feedbackAdminToken.session.v1';
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
-const state={token:'',range:'7d',raw:null,feedbacks:[],filtered:[]};
+const state={token:'',range:'7d',raw:null,feedbacks:[],filtered:[],serverTotal:0};
 const nf=new Intl.NumberFormat('tr-TR');
 
 function esc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;')}
@@ -185,7 +185,8 @@ function noteFor(f){return text(f.note,f.required_text,'')}
 function normalize(row,index){
   const m=parseMeta(row.meta_json);
   return {
-    _id:`${Number(row.occurred_at)||0}-${index}`,
+    _id:String(row.event_id||`${Number(row.occurred_at)||0}-${index}`),
+    event_id:String(row.event_id||''),
     occurred_at:Number(row.occurred_at)||0,
     visitor_id:String(row.visitor_id||''),session_id:String(row.session_id||''),
     story_key:text(m.story_key,row.story_key),story_title:text(m.story_title),story_link:text(m.story_link),story_published:text(m.story_published),
@@ -212,10 +213,20 @@ function renderBars(el,entries){
   const max=Math.max(...entries.map(x=>x[1]),1);
   el.innerHTML=entries.slice(0,7).map(([name,count])=>`<div class="bar-row"><div><div class="bar-label" title="${esc(name)}">${esc(name)}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.max(4,(count/max)*100).toFixed(1)}%"></div></div></div><div class="bar-count">${nf.format(count)}</div></div>`).join('');
 }
+function rangeSince(){
+  const now=Date.now();
+  if(state.range==='24h')return now-86400000;
+  if(state.range==='7d')return now-7*86400000;
+  return 0;
+}
+function rangeFeedbacks(){
+  const since=rangeSince();
+  return since?state.feedbacks.filter(f=>f.occurred_at>=since):[...state.feedbacks];
+}
 function filterData(){
   const q=$('#search').value.trim().toLocaleLowerCase('tr-TR');
   const topic=$('#topic-filter').value,source=$('#source-filter').value,device=$('#device-filter').value;
-  state.filtered=state.feedbacks.filter(f=>{
+  state.filtered=rangeFeedbacks().filter(f=>{
     if(topic&&topicFor(f)!==topic)return false;
     if(source&&sourceFor(f)!==source)return false;
     if(device&&text(f.device_type,'Belirsiz')!==device)return false;
@@ -226,11 +237,11 @@ function filterData(){
   render();
 }
 function render(){
-  const total=eventCount(state.raw)||state.feedbacks.length;
-  $('#m-total').textContent=nf.format(total);
-  $('#m-loaded').textContent=nf.format(state.feedbacks.length);
-  $('#m-notes').textContent=nf.format(state.feedbacks.filter(f=>noteFor(f)).length);
-  $('#m-users').textContent=nf.format(new Set(state.feedbacks.map(f=>f.visitor_id).filter(Boolean)).size);
+  const ranged=rangeFeedbacks();
+  $('#m-total').textContent=nf.format(ranged.length);
+  $('#m-loaded').textContent=nf.format(state.serverTotal||state.feedbacks.length);
+  $('#m-notes').textContent=nf.format(ranged.filter(f=>noteFor(f)).length);
+  $('#m-users').textContent=nf.format(new Set(ranged.map(f=>f.visitor_id).filter(Boolean)).size);
   const visible=state.filtered;
   renderBars($('#topic-bars'),counts(visible,topicFor));
   renderBars($('#issue-bars'),counts(visible,labelFor));
@@ -255,37 +266,73 @@ function openDetail(id){
   const note=f.note,required=f.required_text;
   const storyTitle=text(f.story_title,'Haber başlığı kaydedilmemiş');
   const storyLink=isUrl(f.story_link)?`<a class="story-link" href="${esc(f.story_link)}" target="_blank" rel="noopener noreferrer">Haberi aç ↗</a>`:'';
-  $('#detail').innerHTML=`<h3 class="detail-summary">${esc(labelFor(f))}</h3><div class="detail-sub">${esc(fmtTime(f.occurred_at))} · ${esc(topicFor(f))}</div><div class="detail-grid">${detailItem('Konu',topicFor(f))}${detailItem('Alan',f.area_label)}${detailItem('Sorun',f.issue_label)}${detailItem('Öneri',f.suggestion_label)}${detailItem('Sıklık',f.frequency_label)}${detailItem('Ciddiyet',f.severity_label)}${detailItem('Yön',f.direction_label)}${detailItem('Seçilen kaynak',f.source)}${detailItem('Kategori hedefi',f.category_target)}${detailItem('Haber kaynağı',f.story_source)}${detailItem('Haber kategorisi',f.story_category)}${detailItem('Haber',storyTitle)}${detailItem('Flöw sürümü',f.app_version)}${detailItem('Cihaz',f.device_type)}${detailItem('Tarayıcı',f.browser)}${detailItem('İşletim sistemi',f.os)}${detailItem('Viewport',f.viewport_w&&f.viewport_h?`${f.viewport_w}×${f.viewport_h}`:'')}${detailItem('Ekran',f.screen_w&&f.screen_h?`${f.screen_w}×${f.screen_h}`:'')}${detailItem('Akış modu',f.feed_mode)}${detailItem('Story key',f.story_key)}</div>${required?`<div class="detail-text"><span>Zorunlu kısa yanıt</span><p>${esc(required)}</p></div>`:''}${note?`<div class="detail-text"><span>Kullanıcı notu</span><p>${esc(note)}</p></div>`:''}${!required&&!note&&f.value_text?`<div class="detail-text"><span>Gönderilen metin</span><p>${esc(f.value_text)}</p></div>`:''}${storyLink}`;
+  $('#detail').innerHTML=`<h3 class="detail-summary">${esc(labelFor(f))}</h3><div class="detail-sub">${esc(fmtTime(f.occurred_at))} · ${esc(topicFor(f))}</div><div class="detail-grid">${detailItem('Konu',topicFor(f))}${detailItem('Alan',f.area_label)}${detailItem('Sorun',f.issue_label)}${detailItem('Öneri',f.suggestion_label)}${detailItem('Sıklık',f.frequency_label)}${detailItem('Ciddiyet',f.severity_label)}${detailItem('Yön',f.direction_label)}${detailItem('Seçilen kaynak',f.source)}${detailItem('Kategori hedefi',f.category_target)}${detailItem('Haber kaynağı',f.story_source)}${detailItem('Haber kategorisi',f.story_category)}${detailItem('Haber',storyTitle)}${detailItem('Flöw sürümü',f.app_version)}${detailItem('Cihaz',f.device_type)}${detailItem('Tarayıcı',f.browser)}${detailItem('İşletim sistemi',f.os)}${detailItem('Viewport',f.viewport_w&&f.viewport_h?`${f.viewport_w}×${f.viewport_h}`:'')}${detailItem('Ekran',f.screen_w&&f.screen_h?`${f.screen_w}×${f.screen_h}`:'')}${detailItem('Akış modu',f.feed_mode)}${detailItem('Story key',f.story_key)}</div>${required?`<div class="detail-text"><span>Zorunlu kısa yanıt</span><p>${esc(required)}</p></div>`:''}${note?`<div class="detail-text"><span>Kullanıcı notu</span><p>${esc(note)}</p></div>`:''}${!required&&!note&&f.value_text?`<div class="detail-text"><span>Gönderilen metin</span><p>${esc(f.value_text)}</p></div>`:''}${storyLink}<div class="detail-actions"><button class="delete-feedback" type="button" data-delete-feedback="${esc(f.event_id)}">Bu geri bildirimi sil</button></div>`;
+  $('#detail').querySelector('[data-delete-feedback]')?.addEventListener('click',e=>deleteFeedback(e.currentTarget.dataset.deleteFeedback,e.currentTarget));
   $('#modal').classList.remove('hidden');document.body.style.overflow='hidden';
+}
+async function deleteFeedback(eventId,button){
+  if(!eventId||!state.token)return;
+  if(!confirm('Bu geri bildirim kalıcı olarak silinsin mi?'))return;
+  if(button)button.disabled=true;
+  try{
+    const r=await fetch(`${API_BASE}/admin/feedback-delete`,{method:'POST',mode:'cors',credentials:'omit',cache:'no-store',headers:{'Authorization':`Bearer ${state.token}`,'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({event_id:eventId})});
+    if(r.status===401)throw Object.assign(new Error('unauthorized'),{code:401});
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok||!data?.ok)throw new Error(data?.error||`HTTP ${r.status}`);
+    state.feedbacks=state.feedbacks.filter(f=>f.event_id!==eventId);
+    state.serverTotal=Math.max(0,(state.serverTotal||0)-Number(data.deleted||0));
+    closeDetail();
+    filterData();
+    $('#status').textContent='Geri bildirim silindi.';
+  }catch(err){
+    if(button)button.disabled=false;
+    if(err?.code===401||err?.message==='unauthorized'){sessionStorage.removeItem(TOKEN_KEY);state.token='';showLogin('ADMIN_TOKEN geçersiz veya Worker bu anahtarı kabul etmiyor.');return}
+    alert(`Geri bildirim silinemedi: ${err?.message||err}`);
+  }
 }
 function closeDetail(){ $('#modal').classList.add('hidden');document.body.style.overflow=''; }
 function download(name,type,content){const blob=new Blob([content],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),500)}
 function exportJson(){download(`floew-feedback-${state.range}.json`,'application/json;charset=utf-8',JSON.stringify(state.filtered,null,2))}
 function csvCell(v){const s=String(v??'');return `"${s.replace(/"/g,'""')}"`}
 function exportCsv(){const cols=[['occurred_at',f=>fmtTime(f.occurred_at)],['topic',topicFor],['feedback',labelFor],['frequency',f=>f.frequency_label],['severity',f=>f.severity_label],['source',sourceFor],['story_title',f=>f.story_title],['story_source',f=>f.story_source],['note',noteFor],['device',f=>f.device_type],['os',f=>f.os],['browser',f=>f.browser],['app_version',f=>f.app_version],['story_link',f=>f.story_link]];const rows=[cols.map(c=>csvCell(c[0])).join(',')].concat(state.filtered.map(f=>cols.map(c=>csvCell(c[1](f))).join(',')));download(`floew-feedback-${state.range}.csv`,'text/csv;charset=utf-8','\ufeff'+rows.join('\n'))}
-async function fetchData({silent=false}={}){
-  if(!state.token)return;
-  if(!silent)$('#status').textContent='Yükleniyor…';
-  try{
-    const r=await fetch(`${API_BASE}/admin/behavior?range=${encodeURIComponent(state.range)}`,{method:'GET',mode:'cors',credentials:'omit',cache:'no-store',headers:{'Authorization':`Bearer ${state.token}`,'Accept':'application/json'}});
+async function fetchFeedbackPages(){
+  const rows=[];
+  let cursor='';
+  let total=0;
+  for(let page=0;page<50;page++){
+    const qs=new URLSearchParams({limit:'250'});
+    if(cursor)qs.set('cursor',cursor);
+    const r=await fetch(`${API_BASE}/admin/feedback?${qs}`,{method:'GET',mode:'cors',credentials:'omit',cache:'no-store',headers:{'Authorization':`Bearer ${state.token}`,'Accept':'application/json'}});
     if(r.status===401)throw Object.assign(new Error('unauthorized'),{code:401});
     if(!r.ok)throw new Error(`HTTP ${r.status}`);
     const data=await r.json();
     if(!data?.ok)throw new Error(data?.error||'Veri alınamadı');
-    state.raw=data;
-    const latest=Array.isArray(data.latest)?data.latest:[];
-    state.feedbacks=latest.filter(x=>String(x?.event_type||'')==='feedback_submit').map(normalize).sort((a,b)=>b.occurred_at-a.occurred_at);
-    state.filtered=[...state.feedbacks];
+    total=Number(data.total)||total;
+    const items=Array.isArray(data.items)?data.items:[];
+    rows.push(...items);
+    cursor=String(data.nextCursor||'');
+    if(!cursor||!items.length)break;
+  }
+  return {rows,total};
+}
+async function fetchData({silent=false}={}){
+  if(!state.token)return;
+  if(!silent)$('#status').textContent='Yükleniyor…';
+  try{
+    const {rows,total}=await fetchFeedbackPages();
+    state.raw=null;
+    state.serverTotal=total;
+    state.feedbacks=rows.map(normalize).sort((a,b)=>b.occurred_at-a.occurred_at);
     setOptions($('#topic-filter'),unique(state.feedbacks,topicFor),'Tüm konular');
     setOptions($('#source-filter'),unique(state.feedbacks,sourceFor),'Tüm kaynaklar');
     setOptions($('#device-filter'),unique(state.feedbacks,f=>text(f.device_type,'Belirsiz')),'Tüm cihazlar');
     $('#search').value='';
-    const total=eventCount(data);
     const notice=$('#sample-notice');
-    if(total>state.feedbacks.length){notice.classList.remove('hidden');notice.textContent=`Bu dönem için toplam ${nf.format(total)} geri bildirim var. Mevcut /admin/behavior yanıtı yalnız son 150 davranış olayını ayrıntılı döndürdüğü için burada ${nf.format(state.feedbacks.length)} geri bildirimin detayı görülebiliyor. Toplam sayı doğru; detay kırılımları görünen örnek üzerinden hesaplanıyor.`}else{notice.classList.add('hidden');notice.textContent=''}
-    const generated=Number(data.generatedAt)||Date.now();
-    $('#status').textContent=`${data.label||state.range} · Güncellendi: ${fmtTime(generated)}`;
-    showApp();render();
+    notice.classList.remove('hidden');
+    notice.textContent='Geri bildirimler burada elle silinene kadar saklanır. Dönem düğmeleri yalnız görünümü filtreler; kayıtları silmez.';
+    $('#status').textContent=`${nf.format(state.feedbacks.length)} kayıt yüklendi · Güncellendi: ${fmtTime(Date.now())}`;
+    showApp();
+    filterData();
   }catch(err){
     if(err?.code===401||err?.message==='unauthorized'){sessionStorage.removeItem(TOKEN_KEY);state.token='';showLogin('ADMIN_TOKEN geçersiz veya Worker bu anahtarı kabul etmiyor.');return}
     $('#status').textContent=`Veri alınamadı: ${err?.message||err}`;
@@ -296,11 +343,11 @@ function showApp(){$('#login-view').classList.add('hidden');$('#app-view').class
 function showLogin(message=''){$('#app-view').classList.add('hidden');$('#login-view').classList.remove('hidden');const e=$('#login-error');if(message){e.textContent=message;e.classList.remove('hidden')}else{e.classList.add('hidden');e.textContent=''}setTimeout(()=>$('#token-input').focus(),0)}
 async function login(token){state.token=String(token||'').trim();if(!state.token){showLogin('ADMIN_TOKEN boş olamaz.');return}sessionStorage.setItem(TOKEN_KEY,state.token);await fetchData()}
 $('#login-form').addEventListener('submit',e=>{e.preventDefault();login($('#token-input').value)});
-$('#logout-btn').addEventListener('click',()=>{sessionStorage.removeItem(TOKEN_KEY);state.token='';state.raw=null;state.feedbacks=[];state.filtered=[];$('#token-input').value='';showLogin()});
+$('#logout-btn').addEventListener('click',()=>{sessionStorage.removeItem(TOKEN_KEY);state.token='';state.raw=null;state.feedbacks=[];state.filtered=[];state.serverTotal=0;$('#token-input').value='';showLogin()});
 $('#refresh-btn').addEventListener('click',()=>fetchData());
 $('#csv-btn').addEventListener('click',exportCsv);$('#json-btn').addEventListener('click',exportJson);
 ['search','topic-filter','source-filter','device-filter'].forEach(id=>$('#'+id).addEventListener(id==='search'?'input':'change',filterData));
-$$('.range-btn').forEach(btn=>btn.addEventListener('click',()=>{state.range=btn.dataset.range;$$('.range-btn').forEach(x=>x.classList.toggle('active',x===btn));fetchData()}));
+$$('.range-btn').forEach(btn=>btn.addEventListener('click',()=>{state.range=btn.dataset.range;$$('.range-btn').forEach(x=>x.classList.toggle('active',x===btn));filterData()}));
 $('#modal-close').addEventListener('click',closeDetail);$('#modal').addEventListener('click',e=>{if(e.target===$('#modal'))closeDetail()});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#modal').classList.contains('hidden'))closeDetail()});
 const saved=sessionStorage.getItem(TOKEN_KEY)||'';if(saved){state.token=saved;fetchData()}else{showLogin()}
 })();

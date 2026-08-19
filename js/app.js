@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.27.0";
+window.__floewAppVersion="31.28.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -42,7 +42,8 @@ const KEYWORD_FILTER_KEY="thefloew.keywordFilter.v1";
 const KEYWORD_WATCH_KEY="thefloew.keywordWatch.v1";
 const WEATHER_PREFS_KEY="thefloew.weather.v1";
 const COOKIE_NOTICE_KEY="thefloew.cookieNotice.v1";
-const CUSTOM_RSS_COOKIE_KEY="thefloew.customRss.v1";
+const CUSTOM_RSS_STORAGE_KEY="thefloew.customRss.v1";
+const CUSTOM_RSS_LEGACY_COOKIE_KEY="thefloew.customRss.v1";
 const CUSTOM_RSS_MAX_FEEDS=8;
 const CUSTOM_RSS_MAX_URL_LENGTH=320;
 const CUSTOM_RSS_FALLBACK_IMAGE="assets/defaultrss.jpg";
@@ -53,10 +54,10 @@ const CUSTOM_RSS_FALLBACK_IMAGE="assets/defaultrss.jpg";
 */
 const NEAR_DUPLICATE_PREF_KEY="thefloew.nearDuplicateDedup.v1";
 const NEAR_DUPLICATE_WINDOW_MS=8*60*60*1000;
-const NEAR_DUPLICATE_HISTORY_DEPTH=12;
+const NEAR_DUPLICATE_HISTORY_DEPTH=20;
 const NEAR_DUPLICATE_MIN_COMMON_TOKENS=3;
-const NEAR_DUPLICATE_OVERLAP_THRESHOLD=.74;
-const NEAR_DUPLICATE_JACCARD_THRESHOLD=.42;
+const NEAR_DUPLICATE_OVERLAP_THRESHOLD=.70;
+const NEAR_DUPLICATE_JACCARD_THRESHOLD=.38;
 const REFRESH_MS=120000;
 const SWIPE=44;
 const TOUCH_DRAG_START_PX=7;
@@ -144,32 +145,52 @@ function normalizeCustomRssUrl(value){
   }
 }
 
+function normalizeCustomRssCollection(parsed){
+  if(!Array.isArray(parsed))return [];
+
+  const seen=new Set();
+  const feeds=[];
+
+  for(const entry of parsed){
+    const url=normalizeCustomRssUrl(
+      typeof entry==="string" ? entry : entry?.url
+    );
+
+    if(!url || seen.has(url))continue;
+    seen.add(url);
+    feeds.push({url});
+
+    if(feeds.length>=CUSTOM_RSS_MAX_FEEDS)break;
+  }
+
+  return feeds;
+}
+
 function loadCustomRssFeeds(){
   try{
-    const raw=readCookieValue(CUSTOM_RSS_COOKIE_KEY);
-    if(!raw)return [];
-
-    const parsed=JSON.parse(raw);
-    if(!Array.isArray(parsed))return [];
-
-    const seen=new Set();
-    const feeds=[];
-
-    for(const entry of parsed){
-      const url=normalizeCustomRssUrl(
-        typeof entry==="string" ? entry : entry?.url
-      );
-
-      if(!url || seen.has(url))continue;
-      seen.add(url);
-      feeds.push({url});
-
-      if(feeds.length>=CUSTOM_RSS_MAX_FEEDS)break;
+    const stored=localStorage.getItem(CUSTOM_RSS_STORAGE_KEY);
+    if(stored){
+      return normalizeCustomRssCollection(JSON.parse(stored));
     }
 
+    /*
+      V31.28: önceki sürümlerde özel RSS listesi cookie'de tutuluyordu.
+      Bir kez okuyup localStorage'a taşı; mevcut kullanıcı listesi kaybolmasın.
+    */
+    const legacy=readCookieValue(CUSTOM_RSS_LEGACY_COOKIE_KEY);
+    if(!legacy)return [];
+
+    const feeds=normalizeCustomRssCollection(JSON.parse(legacy));
+    if(feeds.length){
+      localStorage.setItem(
+        CUSTOM_RSS_STORAGE_KEY,
+        JSON.stringify(feeds)
+      );
+    }
+    writeCookieValue(CUSTOM_RSS_LEGACY_COOKIE_KEY,"",0);
     return feeds;
   }catch(e){
-    console.warn("Custom RSS cookie:",e);
+    console.warn("Custom RSS storage:",e);
     return [];
   }
 }
@@ -179,18 +200,9 @@ let customRssSourceKeys=new Set();
 
 function saveCustomRssFeeds(){
   try{
-    const payload=JSON.stringify(
-      customRssFeeds.map(feed=>({url:feed.url}))
-    );
-
-    /* Keep comfortably below the practical ~4 KB per-cookie limit. */
-    if(encodeURIComponent(payload).length>3500){
-      return false;
-    }
-
-    writeCookieValue(
-      CUSTOM_RSS_COOKIE_KEY,
-      payload
+    localStorage.setItem(
+      CUSTOM_RSS_STORAGE_KEY,
+      JSON.stringify(customRssFeeds.map(feed=>({url:feed.url})))
     );
     return true;
   }catch(e){
@@ -654,6 +666,8 @@ const state={
   active:0,
   busy:false,
   timer:null,
+  timerDeadline:0,
+  timerRemainingMs:0,
   x:0,y:0,t:0,
   pointerId:null,
   swipeHandled:false,
@@ -809,9 +823,44 @@ function normalizeText(v){
     .replace(/[\u0300-\u036f]/g,"");
 }
 
+function canonicalStoryLink(value){
+  const raw=String(value||"").trim();
+  if(!raw)return "";
+
+  try{
+    const url=new URL(raw,location.href);
+    url.hash="";
+
+    const removable=[];
+    for(const key of url.searchParams.keys()){
+      const lower=key.toLowerCase();
+      if(
+        lower.startsWith("utm_") ||
+        [
+          "fbclid","gclid","dclid","msclkid","mc_cid","mc_eid",
+          "ref","ref_src","ref_url","ocid","cmpid","campaign",
+          "partner","output","amp"
+        ].includes(lower)
+      ){
+        removable.push(key);
+      }
+    }
+    removable.forEach(key=>url.searchParams.delete(key));
+    url.searchParams.sort();
+
+    if(url.pathname.length>1){
+      url.pathname=url.pathname.replace(/\/+$/g,"");
+    }
+
+    return url.href;
+  }catch(e){
+    return raw;
+  }
+}
+
 function storyIdentity(story){
   if(!story)return "";
-  if(story.link)return String(story.link);
+  if(story.link)return canonicalStoryLink(story.link);
   return `${String(story.source||"").trim().toLocaleLowerCase("tr-TR")}|${String(story.title||"").trim()}`;
 }
 
@@ -4934,20 +4983,91 @@ async function tryPlayDueAd(){
   return playAdBreak();
 }
 
-function timer(){
+let mouseFlowPaused=false;
+let mouseFlowResumeTimer=null;
+const MOUSE_FLOW_IDLE_MS=450;
+const MOUSE_FLOW_RESUME_BONUS_MS=3000;
+
+function desktopMouseFlowEnabled(){
+  return Boolean(
+    window.matchMedia?.("(hover: hover) and (pointer: fine)")?.matches
+  );
+}
+
+function timer(durationMs=null){
   clearTimeout(state.timer);
   state.timer=null;
+  state.timerDeadline=0;
 
   /* Otomatik ilerleme kapalı olsa bile sıradaki haber hazır tutulur. */
   scheduleNextStoryPreload();
 
-  if(autoAdvancePaused)return;
+  const requested=Number(durationMs);
+  const delay=Number.isFinite(requested)
+    ? Math.max(250,requested)
+    : Math.max(5,showDurationSeconds)*1000;
 
-  state.timer=setTimeout(
-    ()=>move(1,{origin:"auto"}),
-    Math.max(5,showDurationSeconds)*1000
+  state.timerRemainingMs=delay;
+
+  if(autoAdvancePaused || mouseFlowPaused)return;
+
+  state.timerDeadline=Date.now()+delay;
+  state.timer=setTimeout(()=>{
+    state.timer=null;
+    state.timerDeadline=0;
+    state.timerRemainingMs=0;
+    move(1,{origin:"auto"});
+  },delay);
+}
+
+function pauseFlowForMouseMovement(){
+  if(
+    !desktopMouseFlowEnabled() ||
+    adActive ||
+    autoAdvancePaused ||
+    !state.stories.length
+  ) return;
+
+  if(!mouseFlowPaused){
+    const remaining=state.timerDeadline
+      ? Math.max(0,state.timerDeadline-Date.now())
+      : (state.timerRemainingMs || Math.max(5,showDurationSeconds)*1000);
+
+    clearTimeout(state.timer);
+    state.timer=null;
+    state.timerDeadline=0;
+    state.timerRemainingMs=remaining;
+    mouseFlowPaused=true;
+  }
+
+  clearTimeout(mouseFlowResumeTimer);
+  mouseFlowResumeTimer=setTimeout(
+    resumeFlowAfterMouseStops,
+    MOUSE_FLOW_IDLE_MS
   );
 }
+
+function resumeFlowAfterMouseStops(){
+  mouseFlowResumeTimer=null;
+  if(!mouseFlowPaused)return;
+
+  if(anyControlPanelOpen?.() || state.busy || adActive){
+    mouseFlowResumeTimer=setTimeout(
+      resumeFlowAfterMouseStops,
+      MOUSE_FLOW_IDLE_MS
+    );
+    return;
+  }
+
+  mouseFlowPaused=false;
+
+  if(autoAdvancePaused || !state.stories.length)return;
+
+  const remaining=state.timerRemainingMs || Math.max(5,showDurationSeconds)*1000;
+  timer(remaining+MOUSE_FLOW_RESUME_BONUS_MS);
+}
+
+window.addEventListener("mousemove",pauseFlowForMouseMovement,{passive:true});
 
 /*
   Her geçişte mümkünse mevcut kaynaktan farklı
@@ -4957,6 +5077,8 @@ function timer(){
 function sourceKey(source){
   return String(source||"").trim().toLocaleLowerCase("tr-TR");
 }
+
+const nearDuplicateTokenCache=new WeakMap();
 
 const NEAR_DUPLICATE_STOPWORDS=new Set([
   "ve","veya","ile","icin","ama","fakat","ancak","bir","bu","su","o",
@@ -4981,6 +5103,10 @@ function nearDuplicateStem(token){
 }
 
 function nearDuplicateTokens(story){
+  if(story && typeof story==="object" && nearDuplicateTokenCache.has(story)){
+    return nearDuplicateTokenCache.get(story);
+  }
+
   const normalized=normalizeNearDuplicateTitle(story?.title||"");
   if(!normalized)return [];
 
@@ -4996,6 +5122,10 @@ function nearDuplicateTokens(story){
     if(!token || seen.has(token))continue;
     seen.add(token);
     tokens.push(token);
+  }
+
+  if(story && typeof story==="object"){
+    nearDuplicateTokenCache.set(story,tokens);
   }
 
   return tokens;
@@ -5034,6 +5164,15 @@ function areNearDuplicateStories(a,b){
   const union=tokensA.length+tokensB.length-common;
   const overlap=smaller ? common/smaller : 0;
   const jaccard=union ? common/union : 0;
+
+  /*
+    Dört veya daha fazla ortak anlamlı kelime varsa farklı haber sitelerinin
+    başlığa eklediği kısa editoryal parçalar yüzünden Jaccard'ı biraz daha
+    toleranslı tut. Üç ortak kelimede ise daha sıkı eşik korunur.
+  */
+  if(common>=4){
+    return overlap>=.60 && jaccard>=.32;
+  }
 
   return overlap>=NEAR_DUPLICATE_OVERLAP_THRESHOLD &&
     jaccard>=NEAR_DUPLICATE_JACCARD_THRESHOLD;
@@ -5105,13 +5244,11 @@ function chooseForwardCandidate(){
       storyIdentity(item.story)!==currentKey
     );
 
-  /* Aynı kaynak arka arkaya gelmesin; başka kaynak yoksa mecburen izin ver. */
-  const differentSource=candidates.filter(item=>
-    sourceKey(item.story?.source)!==currentSource
-  );
-  if(differentSource.length)candidates=differentSource;
-
-  /* Oturum içinde henüz gösterilmemiş haber varsa tekrarları havuzdan çıkar. */
+  /*
+    Önce oturum içinde hiç gösterilmemiş haberleri koru. Eski sıra önce
+    "farklı kaynak" filtresini uyguladığı için, başka kaynaklarda yalnız
+    görülmüş haber kaldığında aynı haberi birkaç adım sonra tekrar seçebiliyordu.
+  */
   const unseen=candidates.filter(item=>{
     const key=storyIdentity(item.story);
     const signature=exactDuplicateSignature(item.story);
@@ -5119,6 +5256,12 @@ function chooseForwardCandidate(){
       (!signature || !sessionSeenStorySignatures.has(signature));
   });
   if(unseen.length)candidates=unseen;
+
+  /* Ardından mümkünse aynı kaynak arka arkaya gelmesin. */
+  const differentSource=candidates.filter(item=>
+    sourceKey(item.story?.source)!==currentSource
+  );
+  if(differentSource.length)candidates=differentSource;
 
   /*
     Yalnız algoritmik mod: son 12 haberde gösterilen farklı kaynaklı ve
@@ -5564,21 +5707,19 @@ async function move(dir,options={}){
         });
 
         /*
-          Yalnızca kullanıcı reklamı bitmeden ileri geçtiyse history bağlantısı
-          kurulur. Reklam doğal olarak bittiyse sonradan geri dönmek zorunlu
-          değildir.
+          Reklam kullanıcı tarafından atlanmış olsun ya da doğal olarak sonuna
+          kadar oynasın, gerçek bir history durağıdır. Böylece reklamdan sonraki
+          haberde geri gidildiğinde aynı reklam yeniden ziyaret edilebilir.
         */
-        if(adResult.skipped){
-          skippedAdHistory={
-            ad:adResult.ad,
-            beforeIndex,
-            beforeKey:storyIdentity(state.stories[beforeIndex]),
-            beforeHistoryPos,
-            afterIndex:state.index,
-            afterKey:storyIdentity(state.stories[state.index]),
-            afterHistoryPos:state.historyPos
-          };
-        }
+        skippedAdHistory={
+          ad:adResult.ad,
+          beforeIndex,
+          beforeKey:storyIdentity(state.stories[beforeIndex]),
+          beforeHistoryPos,
+          afterIndex:state.index,
+          afterKey:storyIdentity(state.stories[state.index]),
+          afterHistoryPos:state.historyPos
+        };
       }
 
       return;
@@ -6775,6 +6916,8 @@ let pipAnimationTimer=null;
 let pipActive=false;
 let pipCurrent=null;
 let pipTransition=null;
+let pipTransitionFinalizer=null;
+let pipRenderGeneration=0;
 const pipImageCache=new Map();
 
 function pipSupportMode(){
@@ -7132,10 +7275,36 @@ function stopPiPRenderLoop(){
     clearTimeout(pipAnimationTimer);
     pipAnimationTimer=null;
   }
+
+  if(pipTransitionFinalizer){
+    clearTimeout(pipTransitionFinalizer);
+    pipTransitionFinalizer=null;
+  }
+}
+
+function finalizePiPTransitionSoon(generation){
+  if(pipTransitionFinalizer){
+    clearTimeout(pipTransitionFinalizer);
+  }
+
+  pipTransitionFinalizer=setTimeout(()=>{
+    pipTransitionFinalizer=null;
+    if(!pipActive || generation!==pipRenderGeneration || !pipTransition)return;
+    pipCurrent=pipTransition.to;
+    pipTransition=null;
+    drawPiPScene();
+  },780);
 }
 
 function schedulePiPRender(){
-  stopPiPRenderLoop();
+  if(pipAnimationFrame){
+    cancelAnimationFrame(pipAnimationFrame);
+    pipAnimationFrame=null;
+  }
+  if(pipAnimationTimer){
+    clearTimeout(pipAnimationTimer);
+    pipAnimationTimer=null;
+  }
 
   const tick=()=>{
     if(!pipActive)return;
@@ -7219,7 +7388,9 @@ async function preparePiPAd(ad){
 }
 
 async function setPiPInitialAd(ad){
+  const generation=++pipRenderGeneration;
   const prepared=await preparePiPAd(ad);
+  if(generation!==pipRenderGeneration)return;
   if(!prepared)return;
 
   pipCurrent=prepared;
@@ -7229,10 +7400,11 @@ async function setPiPInitialAd(ad){
 
 async function startPiPAdTransition(ad,dir=1){
   if(!pipActive || !ad)return;
+  const generation=++pipRenderGeneration;
 
   const to=await preparePiPAd(ad);
 
-  if(!pipActive || !to)return;
+  if(!pipActive || !to || generation!==pipRenderGeneration)return;
 
   let from=pipCurrent;
 
@@ -7240,11 +7412,13 @@ async function startPiPAdTransition(ad,dir=1){
     from=await preparePiPStory(
       state.stories[state.index]
     );
+    if(generation!==pipRenderGeneration)return;
   }
 
-  if(!from){
+  if(!from || document.visibilityState!=="visible"){
     pipCurrent=to;
     pipTransition=null;
+    drawPiPScene();
     schedulePiPRender();
     return;
   }
@@ -7259,11 +7433,14 @@ async function startPiPAdTransition(ad,dir=1){
     startedAt:performance.now()
   };
 
+  finalizePiPTransitionSoon(generation);
   schedulePiPRender();
 }
 
 async function setPiPInitialStory(story){
+  const generation=++pipRenderGeneration;
   const prepared=await preparePiPStory(story);
+  if(generation!==pipRenderGeneration)return;
   if(!prepared)return;
 
   pipCurrent=prepared;
@@ -7273,10 +7450,11 @@ async function setPiPInitialStory(story){
 
 async function startPiPTransition(fromStory,toStory,dir){
   if(!pipActive || !toStory)return;
+  const generation=++pipRenderGeneration;
 
   const to=await preparePiPStory(toStory);
 
-  if(!pipActive || !to)return;
+  if(!pipActive || !to || generation!==pipRenderGeneration)return;
 
   let from=pipCurrent;
 
@@ -7292,11 +7470,18 @@ async function startPiPTransition(fromStory,toStory,dir){
     )
   ){
     from=await preparePiPStory(fromStory);
+    if(generation!==pipRenderGeneration)return;
   }
 
-  if(!from){
+  /*
+    Arka plandaki sekmeler requestAnimationFrame'i ciddi biçimde kısabilir.
+    PiP görünürken ana sekme gizliyse animasyonu beklemek yerine yeni kareyi
+    hemen commit et; böylece PiP eski haberde donmuş görünmez.
+  */
+  if(!from || document.visibilityState!=="visible"){
     pipCurrent=to;
     pipTransition=null;
+    drawPiPScene();
     schedulePiPRender();
     return;
   }
@@ -7311,6 +7496,7 @@ async function startPiPTransition(fromStory,toStory,dir){
     startedAt:performance.now()
   };
 
+  finalizePiPTransitionSoon(generation);
   schedulePiPRender();
 }
 
@@ -7351,6 +7537,7 @@ async function ensurePiPVideo(){
     "leavepictureinpicture",
     ()=>{
       pipActive=false;
+      pipRenderGeneration++;
       stopPiPRenderLoop();
     }
   );
@@ -7366,6 +7553,7 @@ async function ensurePiPVideo(){
       if(active){
         schedulePiPRender();
       }else{
+        pipRenderGeneration++;
         stopPiPRenderLoop();
       }
     }
@@ -7767,8 +7955,8 @@ async function addCustomRssFromInput(){
 
     if(!saveCustomRssFeeds()){
       customRssFeeds.pop();
-      setCustomRssFeedback("Özel RSS listesi çerez sınırına ulaştı.",true);
-      telemetryCustomRssAddFailed("cookie_limit");
+      setCustomRssFeedback("Özel RSS listesi tarayıcıya kaydedilemedi.",true);
+      telemetryCustomRssAddFailed("storage_error");
       return;
     }
 
@@ -7796,6 +7984,110 @@ async function addCustomRssFromInput(){
   }
 }
 
+const PREFERENCE_TRANSFER_FORMAT="thefloew-preferences";
+const PREFERENCE_TRANSFER_VERSION=1;
+
+function preferenceTransferKeys(){
+  return [
+    PREFS_KEY,
+    FOREIGN_SOURCE_PREFS_KEY,
+    SHOW_SECONDS_KEY,
+    TIME_RANGE_KEY,
+    FEED_ORDER_KEY,
+    KEYWORD_FILTER_KEY,
+    KEYWORD_WATCH_KEY,
+    WEATHER_PREFS_KEY,
+    CUSTOM_RSS_STORAGE_KEY,
+    NEAR_DUPLICATE_PREF_KEY
+  ];
+}
+
+function setPreferenceTransferFeedback(message="",isError=false){
+  const el=document.getElementById("preference-transfer-feedback");
+  if(!el)return;
+  el.textContent=message;
+  el.dataset.state=isError?"error":"ok";
+  el.hidden=!message;
+}
+
+function exportPreferences(){
+  try{
+    /* En güncel source/category durumu dosyaya girmeden hemen önce yazılsın. */
+    savePreferences();
+    saveForeignSourcePreferences();
+    saveCustomRssFeeds();
+
+    const settings={};
+    for(const key of preferenceTransferKeys()){
+      const value=localStorage.getItem(key);
+      if(value!==null)settings[key]=value;
+    }
+
+    const payload={
+      format:PREFERENCE_TRANSFER_FORMAT,
+      version:PREFERENCE_TRANSFER_VERSION,
+      exportedAt:new Date().toISOString(),
+      appVersion:window.__floewAppVersion||"",
+      settings
+    };
+
+    const blob=new Blob(
+      [JSON.stringify(payload,null,2)],
+      {type:"application/json;charset=utf-8"}
+    );
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;
+    a.download=`floew-tercihler-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),600);
+    setPreferenceTransferFeedback("Tercihler dosyası hazırlandı.");
+  }catch(error){
+    console.warn("Preference export:",error);
+    setPreferenceTransferFeedback("Tercihler dışa aktarılamadı.",true);
+  }
+}
+
+async function importPreferencesFile(file){
+  if(!file)return;
+
+  try{
+    const text=await file.text();
+    const payload=JSON.parse(text);
+
+    if(
+      payload?.format!==PREFERENCE_TRANSFER_FORMAT ||
+      Number(payload?.version)!==PREFERENCE_TRANSFER_VERSION ||
+      !payload?.settings ||
+      typeof payload.settings!=="object" ||
+      Array.isArray(payload.settings)
+    ){
+      throw new Error("invalid_format");
+    }
+
+    const allowed=new Set(preferenceTransferKeys());
+
+    /* İçe aktarma, tercih kümesini dosyadaki haline birebir taşır. */
+    for(const key of allowed){
+      if(Object.prototype.hasOwnProperty.call(payload.settings,key)){
+        const value=payload.settings[key];
+        if(typeof value!=="string")throw new Error("invalid_value");
+        localStorage.setItem(key,value);
+      }else{
+        localStorage.removeItem(key);
+      }
+    }
+
+    setPreferenceTransferFeedback("Tercihler içe aktarıldı. Flöw yeniden yükleniyor…");
+    setTimeout(()=>location.reload(),650);
+  }catch(error){
+    console.warn("Preference import:",error);
+    setPreferenceTransferFeedback("Bu dosya geçerli bir Flöw tercih dosyası değil.",true);
+  }
+}
+
 function bindEnhancementUi(){
   renderCustomRssList();
   renderNearDuplicateSetting();
@@ -7813,6 +8105,23 @@ function bindEnhancementUi(){
   document.getElementById("near-duplicate-setting")?.addEventListener("click",e=>{
     e.stopPropagation();
     setNearDuplicateDedupEnabled(!nearDuplicateDedupEnabled);
+  });
+
+  document.getElementById("preferences-export")?.addEventListener("click",e=>{
+    e.stopPropagation();
+    exportPreferences();
+  });
+
+  document.getElementById("preferences-import")?.addEventListener("click",e=>{
+    e.stopPropagation();
+    document.getElementById("preferences-import-file")?.click();
+  });
+
+  document.getElementById("preferences-import-file")?.addEventListener("change",e=>{
+    e.stopPropagation();
+    const file=e.target.files?.[0]||null;
+    e.target.value="";
+    importPreferencesFile(file);
   });
 
   document.getElementById("custom-rss-add")?.addEventListener("click",e=>{
@@ -7871,6 +8180,8 @@ function setAutoAdvancePaused(paused){
   autoAdvancePaused=Boolean(paused);
   clearTimeout(state.timer);
   state.timer=null;
+  state.timerDeadline=0;
+  state.timerRemainingMs=0;
   renderAutoAdvanceSetting();
 
   if(!autoAdvancePaused && state.stories.length){
@@ -11265,6 +11576,69 @@ window.FloewAnalytics={
   })
 };
 
+
+let screenWakeLock=null;
+let wakeLockRetryArmed=false;
+
+function desktopWakeLockEligible(){
+  return Boolean(
+    navigator.wakeLock?.request &&
+    window.matchMedia?.("(hover: hover) and (pointer: fine)")?.matches
+  );
+}
+
+async function requestDesktopWakeLock(){
+  if(
+    !desktopWakeLockEligible() ||
+    document.visibilityState!=="visible" ||
+    screenWakeLock
+  ) return;
+
+  try{
+    const lock=await navigator.wakeLock.request("screen");
+    screenWakeLock=lock;
+    wakeLockRetryArmed=false;
+    lock.addEventListener("release",()=>{
+      if(screenWakeLock===lock)screenWakeLock=null;
+    },{once:true});
+  }catch(error){
+    /* Bazı tarayıcılar ilk kullanıcı etkileşimine kadar isteği reddedebilir. */
+    wakeLockRetryArmed=true;
+  }
+}
+
+function retryDesktopWakeLockAfterGesture(){
+  if(wakeLockRetryArmed || !screenWakeLock){
+    requestDesktopWakeLock();
+  }
+}
+
+window.addEventListener("pointerdown",retryDesktopWakeLockAfterGesture,{passive:true});
+window.addEventListener("keydown",retryDesktopWakeLockAfterGesture,{passive:true});
+
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="visible"){
+    requestDesktopWakeLock();
+  }
+
+  if(pipActive){
+    /* Sekme görünürlük değişiminden sonra PiP'e güncel kareyi zorla bas. */
+    const story=state.stories[state.index]||null;
+    if(!adActive && story){
+      setPiPInitialStory(story).then(()=>schedulePiPRender()).catch(()=>{});
+    }else{
+      drawPiPScene();
+      schedulePiPRender();
+    }
+  }
+});
+
+window.addEventListener("pagehide",()=>{
+  try{screenWakeLock?.release?.()}catch(e){}
+  screenWakeLock=null;
+});
+
+setTimeout(requestDesktopWakeLock,0);
 
 setFullscreenIcon();
 startAdsCatalogRefresh();
