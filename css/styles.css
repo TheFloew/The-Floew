@@ -4633,98 +4633,6 @@ body.ad-mode #market-ticker{
 
 
 /* =====================================================================
-   V31.46 — restore stable mobile Flöw loading animation
-   Desktop keeps the current seamless loader loop.
-   ===================================================================== */
-
-@media(max-width:520px){
-  /*
-    Mobilde iki setli / altı logolu sonsuz marquee yerine daha önce stabil
-    çalışan üç logolu akış kullanılır. İkinci kopya yalnız desktop loop için
-    DOM'da kalır ama mobilde render edilmez.
-  */
-  .loading-stage{
-    width:clamp(150px,54vw,220px) !important;
-    height:clamp(64px,22vw,88px) !important;
-    display:grid !important;
-    place-items:center !important;
-    overflow:hidden !important;
-  }
-
-  .loading-marquee{
-    position:static !important;
-    width:auto !important;
-    display:flex !important;
-    flex-direction:column !important;
-    align-items:center !important;
-    gap:0 !important;
-    animation:flowLoadingRiseMobile 2.15s linear infinite !important;
-    will-change:transform;
-    backface-visibility:hidden;
-  }
-
-  .loading-set:first-child{
-    display:flex !important;
-    flex-direction:column !important;
-    align-items:center !important;
-    gap:14px !important;
-    padding:0 !important;
-  }
-
-  .loading-set:nth-child(2){
-    display:none !important;
-  }
-
-  .loading-logo{
-    width:clamp(150px,54vw,220px) !important;
-    height:auto !important;
-    flex:0 0 auto !important;
-    opacity:.14 !important;
-    filter:none !important;
-  }
-
-  /*
-    Mevcut HTML'de ilk logo loading-logo-active sınıfını taşıyor.
-    Stabil eski görünümde ortadaki (2.) logo aktif olduğundan mobilde
-    active class'ı nötrlenir ve 2. logo öne çıkarılır.
-  */
-  .loading-set:first-child .loading-logo-active{
-    opacity:.14 !important;
-    filter:none !important;
-  }
-
-  .loading-set:first-child .loading-logo:nth-child(2){
-    opacity:1 !important;
-    filter:drop-shadow(0 0 8px rgba(255,255,255,.10)) !important;
-  }
-
-  /*
-    Daha yüksek mobil loading-stage ile progress çizgisi arasında
-    görünür boşluk bırak.
-  */
-  .loading-progress{
-    top:calc(50% + 54px) !important;
-    width:116px !important;
-  }
-}
-
-@keyframes flowLoadingRiseMobile{
-  from{
-    transform:translate3d(0,34%,0);
-  }
-  to{
-    transform:translate3d(0,-34%,0);
-  }
-}
-
-@media(max-width:520px) and (prefers-reduced-motion:reduce){
-  .loading-marquee{
-    animation-duration:5s !important;
-  }
-}
-
-
-/* =====================================================================
    V31.47 — stable Unicode text presentation
    ===================================================================== */
 
@@ -4773,5 +4681,102 @@ html{
     "Arial Unicode MS",
     sans-serif;
   font-variant-emoji:text;
+}
+
+
+/* =====================================================================
+   V31.48 — seamless loader parity on mobile
+   Mobile uses the same two-set flowLoadingLoop animation as desktop.
+   ===================================================================== */
+
+@media(max-width:520px){
+  .loading-stage{
+    /*
+      Keep the compact dimensions from the new loader design, but isolate
+      its paint/compositing layer on mobile browsers.
+    */
+    width:clamp(118px,43vw,178px) !important;
+    height:clamp(50px,17vw,70px) !important;
+    display:block !important;
+    overflow:hidden !important;
+    contain:layout paint;
+    isolation:isolate;
+    transform:translateZ(0);
+    backface-visibility:hidden;
+  }
+
+  .loading-marquee{
+    /*
+      Same architecture and timing as desktop:
+      two identical sets, one continuous -50% loop.
+      translate3d keeps the movement on the compositor layer on mobile.
+    */
+    position:absolute !important;
+    top:0 !important;
+    left:0 !important;
+    width:100% !important;
+    display:flex !important;
+    flex-direction:column !important;
+    align-items:stretch !important;
+    gap:0 !important;
+    animation:flowLoadingLoopMobile 3.2s linear infinite !important;
+    will-change:transform;
+    backface-visibility:hidden;
+    transform-origin:50% 0;
+  }
+
+  .loading-set,
+  .loading-set:first-child,
+  .loading-set:nth-child(2){
+    display:flex !important;
+    flex:0 0 auto !important;
+    flex-direction:column !important;
+    align-items:center !important;
+    gap:10px !important;
+    padding:0 0 10px !important;
+  }
+
+  .loading-logo,
+  .loading-set:first-child .loading-logo,
+  .loading-set:nth-child(2) .loading-logo{
+    width:clamp(118px,43vw,178px) !important;
+    height:auto !important;
+    flex:0 0 auto !important;
+    opacity:.14 !important;
+    filter:none !important;
+    transform:translateZ(0);
+    backface-visibility:hidden;
+  }
+
+  .loading-logo-active,
+  .loading-set:first-child .loading-logo-active,
+  .loading-set:nth-child(2) .loading-logo-active{
+    opacity:1 !important;
+    filter:drop-shadow(0 0 7px rgba(255,255,255,.10)) !important;
+  }
+
+  /*
+    Return the progress bar to the position designed for the compact
+    seamless loader instead of the larger old mobile animation.
+  */
+  .loading-progress{
+    top:calc(50% + 39px) !important;
+    width:116px !important;
+  }
+}
+
+@keyframes flowLoadingLoopMobile{
+  from{
+    transform:translate3d(0,0,0);
+  }
+  to{
+    transform:translate3d(0,-50%,0);
+  }
+}
+
+@media(max-width:520px) and (prefers-reduced-motion:reduce){
+  .loading-marquee{
+    animation-duration:6s !important;
+  }
 }
 
