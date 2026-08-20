@@ -4457,3 +4457,88 @@ body.ad-mode #market-ticker{
   }
 }
 
+
+/* =====================================================================
+   V31.42 — mobile headline safe area for clock / FX / market bands
+   ===================================================================== */
+
+@media(max-width:700px){
+  /*
+    Haber metni sağ-alt köşede kalır ama saat/kur bloğunun üzerine inmez.
+    Varsayılan: yalnız saat için güvenli alan.
+  */
+  .headline{
+    bottom:86px !important;
+    max-height:calc(100dvh - 150px);
+  }
+
+  /*
+    Döviz görünürse üç satırlık kur bloğuna ayrıca alan ayır.
+  */
+  body.fx-rates-visible .headline{
+    bottom:140px !important;
+    max-height:calc(100dvh - 204px);
+  }
+
+  /*
+    Borsa iki bantla görünürken saat zaten 50px yukarı taşınıyor.
+  */
+  body.market-ticker-visible .headline{
+    bottom:136px !important;
+    max-height:calc(100dvh - 200px);
+  }
+
+  /*
+    Hem döviz hem borsa açıksa iki güvenli alan birlikte hesaplanır.
+  */
+  body.market-ticker-visible.fx-rates-visible .headline{
+    bottom:190px !important;
+    max-height:calc(100dvh - 254px);
+  }
+
+  /*
+    Mobilde uzun açıklamanın ilk görünümde saat alanına doğru büyümesini
+    engelle. Açıklama genişletildiğinde aşağı değil, headline'ın sabit alt
+    sınırı sayesinde yukarı doğru alan kullanır.
+  */
+  .description:not(.is-expanded){
+    max-height:4.2em !important;
+  }
+
+  .description.is-expanded{
+    max-height:min(30dvh,12em) !important;
+    overflow:auto !important;
+    overscroll-behavior:contain;
+    scrollbar-width:none;
+  }
+
+  .description.is-expanded::-webkit-scrollbar{
+    display:none;
+  }
+}
+
+@media(max-width:420px){
+  .headline{
+    left:20px !important;
+    right:20px !important;
+  }
+
+  .description:not(.is-expanded){
+    max-height:4.15em !important;
+  }
+}
+
+@media(max-height:680px) and (max-width:700px){
+  /*
+    Kısa ekranlarda manşete daha fazla düşey alan bırakmak için açıklama
+    önizlemesini iki-üç satır civarında tut.
+  */
+  .description:not(.is-expanded){
+    max-height:3.05em !important;
+  }
+
+  .description.is-expanded{
+    max-height:24dvh !important;
+  }
+}
+

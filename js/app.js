@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.41.0";
+window.__floewAppVersion="31.42.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -6940,6 +6940,8 @@ function renderFxRates(data=marketDataSnapshot){
   if(!box)return;
 
   box.hidden=!fxRatesVisible;
+  document.body.classList.toggle("fx-rates-visible",fxRatesVisible);
+
   if(!fxRatesVisible)return;
 
   const rows=Array.isArray(data?.fx)?data.fx:[];
