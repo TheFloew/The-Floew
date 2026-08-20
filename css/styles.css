@@ -5065,7 +5065,6 @@ body.iddqd-mode #iddqd-grid{
 
 body.iddqd-mode .slide,
 body.iddqd-mode #ad-overlay,
-body.iddqd-mode #logo,
 body.iddqd-mode #feed-tabs,
 body.iddqd-mode #clock,
 body.iddqd-mode #market-ticker,
@@ -5125,5 +5124,13 @@ body.iddqd-mode #keyword-filter-panel{
     margin-top:5px;
     font-size:9px;
   }
+}
+
+/* v31.60 — ADHD mode logo must sit above the six-panel wall. */
+body.iddqd-mode #logo{
+  z-index:1301 !important;
+  opacity:1 !important;
+  visibility:visible !important;
+  pointer-events:none !important;
 }
 
