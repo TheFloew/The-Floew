@@ -1,5 +1,5 @@
 /*
-  Flöw — Haber paylaşımı v2.1.1
+  Flöw — Haber paylaşımı v3.0.0
   ------------------------------------------------------------
   - ⤴︎ Haberi paylaş düğmesi: Flöra ile Kaynağa Git arasına eklenir.
   - Paylaşım URL'si ayrı Flöw Share Worker üzerinden üretilir.
@@ -8,12 +8,21 @@
 (function(){
   "use strict";
 
-  const FEATURE_VERSION="2.1.1";
+  const FEATURE_VERSION="3.0.0";
   const SHARE_LABEL="Haberi paylaş";
   const SHARE_WORKER_BASE=String(
     window.FLOEW_CONFIG?.shareWorkerBase||"https://thefloew-share.thefloewback.workers.dev"
   ).replace(/\/$/,"");
-  const SHARE_BASE=`${SHARE_WORKER_BASE}/share/`;
+  const SHARE_PUBLIC_ORIGIN=String(
+    window.FLOEW_CONFIG?.sharePublicOrigin||"https://flöw.tr"
+  ).replace(/\/$/,"");
+  const LEGACY_SHARE_BASE=`${SHARE_WORKER_BASE}/share/`;
+  const SHORT_CREATE_ENDPOINTS=[
+    `${SHARE_PUBLIC_ORIGIN}/s/create`,
+    `${SHARE_WORKER_BASE}/s/create`
+  ];
+  const SHORT_LINK_TIMEOUT_MS=6500;
+  const shortLinkCache=new Map();
 
   function clean(value){
     return String(value||"")
@@ -68,14 +77,76 @@
       .replace(/=+$/g,"");
   }
 
-  function shareUrlForArticle(articleUrl){
+  function legacyShareUrlForArticle(articleUrl){
     const safe=validHttpUrl(articleUrl);
     if(!safe)return "";
 
     return (
-      SHARE_BASE+
+      LEGACY_SHARE_BASE+
       base64UrlUtf8(safe)
     );
+  }
+
+  async function requestShortShareUrl(articleUrl){
+    const safe=validHttpUrl(articleUrl);
+    if(!safe)return "";
+
+    if(shortLinkCache.has(safe)){
+      return shortLinkCache.get(safe)||"";
+    }
+
+    for(const endpoint of SHORT_CREATE_ENDPOINTS){
+      const controller=
+        typeof AbortController==="function"
+          ? new AbortController()
+          : null;
+
+      const timer=setTimeout(()=>{
+        try{controller?.abort()}catch(e){}
+      },SHORT_LINK_TIMEOUT_MS);
+
+      try{
+        const response=await fetch(endpoint,{
+          method:"POST",
+          headers:{
+            "Content-Type":"application/json"
+          },
+          body:JSON.stringify({url:safe}),
+          cache:"no-store",
+          credentials:"omit",
+          signal:controller?.signal
+        });
+
+        if(!response.ok)continue;
+
+        const data=await response.json();
+        const shortUrl=validHttpUrl(data?.shareUrl);
+
+        if(
+          data?.ok===true &&
+          shortUrl &&
+          /^https:\/\/(?:flöw\.tr|xn--flw-tna\.tr)\/s\/[A-Za-z0-9_-]+\/?$/i.test(shortUrl)
+        ){
+          shortLinkCache.set(safe,shortUrl);
+          return shortUrl;
+        }
+      }catch(e){}
+      finally{
+        clearTimeout(timer);
+      }
+    }
+
+    return "";
+  }
+
+  async function shareUrlForArticle(articleUrl){
+    const safe=validHttpUrl(articleUrl);
+    if(!safe)return "";
+
+    const shortUrl=await requestShortShareUrl(safe);
+    if(shortUrl)return shortUrl;
+
+    return legacyShareUrlForArticle(safe);
   }
 
   function storyFromButton(button){
@@ -104,13 +175,7 @@
           ?.textContent
       );
 
-    const shareUrl=
-      shareUrlForArticle(articleUrl);
-
-    if(
-      !articleUrl ||
-      !shareUrl
-    ){
+    if(!articleUrl){
       return null;
     }
 
@@ -120,7 +185,7 @@
         "Flöw'de bir haber",
       source,
       articleUrl,
-      shareUrl
+      shareUrl:""
     };
   }
 
@@ -281,6 +346,8 @@
           share_feature_version:
             FEATURE_VERSION,
           branded_card:true,
+          short_link:
+            /\/s\/[A-Za-z0-9_-]+\/?$/i.test(story.shareUrl),
           share_worker:
             "standalone"
         }
@@ -311,6 +378,22 @@
       storyFromButton(button);
 
     if(!story)return;
+
+    button?.setAttribute("aria-busy","true");
+
+    try{
+      story.shareUrl=
+        await shareUrlForArticle(
+          story.articleUrl
+        );
+    }finally{
+      button?.removeAttribute("aria-busy");
+    }
+
+    if(!story.shareUrl){
+      flashButton(button,false);
+      return;
+    }
 
     const text=
       shareText(story);
