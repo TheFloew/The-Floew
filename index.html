@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
 <link rel="manifest" href="site.webmanifest">
 
-<link rel="stylesheet" href="css/styles.css?h=bcde90c34bc3">
+<link rel="stylesheet" href="css/styles.css?h=043561fcbece">
 
 <style id="boot-black-style">
   html,body{background:#000}
@@ -289,6 +289,26 @@
             <span class="media-setting-state">Açık</span>
           </button>
         </div>
+
+        <div class="media-setting-group market-visibility-settings">
+          <button id="fx-rates-setting" class="media-setting" type="button" aria-pressed="true">
+            <span>
+              <strong>Döviz kurları</strong>
+              <small>Saatin yanında USD, EUR ve GBP kurlarını göster</small>
+            </span>
+            <span class="media-setting-state">Açık</span>
+          </button>
+
+          <button id="stock-ticker-setting" class="media-setting" type="button" aria-pressed="false">
+            <span>
+              <strong>Borsa bandı</strong>
+              <small>BIST endekslerini ekranın altındaki kayan bantta göster</small>
+            </span>
+            <span class="media-setting-state">Kapalı</span>
+          </button>
+
+          <div class="market-data-note">Piyasa verileri gecikmeli olabilir.</div>
+        </div>
       </div>
 
       <div class="menu-panel" id="weather-panel" data-panel="weather">
@@ -357,6 +377,15 @@
     </div>
     <div id="clock-time">00:00</div>
     <div id="clock-date"></div>
+    <div id="fx-rates" hidden title="Piyasa verileri gecikmeli olabilir.">
+      <span class="fx-rate" data-fx="USD"><strong>USD</strong><span>—</span></span>
+      <span class="fx-rate" data-fx="EUR"><strong>EUR</strong><span>—</span></span>
+      <span class="fx-rate" data-fx="GBP"><strong>GBP</strong><span>—</span></span>
+    </div>
+  </div>
+
+  <div id="market-ticker" hidden aria-hidden="true" title="Piyasa verileri gecikmeli olabilir.">
+    <div class="market-ticker-track"></div>
   </div>
 
   <article class="slide active" id="a">
@@ -451,8 +480,8 @@
 })();
 </script>
 
-<script src="js/config.js?h=2b15c52de3f7"></script>
-<script src="js/app.js?v=de1c9d62afeb" onerror="
+<script src="js/config.js?h=d84488edfaa0"></script>
+<script src="js/app.js?v=6d61be9f0795" onerror="
   var loader=document.getElementById('loading-screen');
   if(loader)loader.remove();
   var status=document.getElementById('status');

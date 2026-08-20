@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.36.0";
+window.__floewAppVersion="31.37.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -7,10 +7,14 @@ const NEWS_WORKER_BASE=String(
 const ANALYTICS_WORKER_BASE=String(
   FLOEW_CONFIG.analyticsWorkerBase||"https://thefloew-analytics.thefloewback.workers.dev"
 ).replace(/\/$/,"");
+const MARKET_WORKER_BASE=String(
+  FLOEW_CONFIG.marketWorkerBase||"https://thefloew-market.thefloewback.workers.dev"
+).replace(/\/$/,"");
 const API=`${NEWS_WORKER_BASE}/news`;
 const VIDEO_API=`${NEWS_WORKER_BASE}/video`;
 const IMAGE_PROXY_API=`${NEWS_WORKER_BASE}/image`;
 const CUSTOM_RSS_API=`${NEWS_WORKER_BASE}/custom-rss`;
+const MARKET_API=`${MARKET_WORKER_BASE}/market`;
 const FLORA_SCORES_API=`${ANALYTICS_WORKER_BASE}/stats/flora-scores`;
 const FLORA_STORY_API=`${ANALYTICS_WORKER_BASE}/stats/flora-story`;
 const NEWS_REQUEST_SESSION=
@@ -41,6 +45,11 @@ const ALGO_SESSION_SEED=`${Date.now().toString(36)}-${Math.random().toString(36)
 const KEYWORD_FILTER_KEY="thefloew.keywordFilter.v1";
 const KEYWORD_WATCH_KEY="thefloew.keywordWatch.v1";
 const WEATHER_PREFS_KEY="thefloew.weather.v1";
+const FX_RATES_VISIBLE_KEY="thefloew.fxRatesVisible.v1";
+const STOCK_TICKER_VISIBLE_KEY="thefloew.stockTickerVisible.v1";
+const MARKET_DATA_CACHE_KEY="thefloew.marketDataCache.v1";
+const MARKET_REFRESH_MS=60*1000;
+const MARKET_CACHE_MAX_AGE_MS=6*60*60*1000;
 const COOKIE_NOTICE_KEY="thefloew.cookieNotice.v1";
 const CUSTOM_RSS_STORAGE_KEY="thefloew.customRss.v1";
 const CUSTOM_RSS_LEGACY_COOKIE_KEY="thefloew.customRss.v1";
@@ -107,6 +116,24 @@ function saveNearDuplicateDedupPreference(){
       NEAR_DUPLICATE_PREF_KEY,
       nearDuplicateDedupEnabled ? "1" : "0"
     );
+  }catch(e){}
+}
+
+function loadBooleanUiPreference(key,defaultValue){
+  try{
+    const raw=localStorage.getItem(key);
+    return raw===null ? Boolean(defaultValue) : raw!=="0";
+  }catch(e){
+    return Boolean(defaultValue);
+  }
+}
+
+let fxRatesVisible=loadBooleanUiPreference(FX_RATES_VISIBLE_KEY,true);
+let stockTickerVisible=loadBooleanUiPreference(STOCK_TICKER_VISIBLE_KEY,false);
+
+function saveBooleanUiPreference(key,value){
+  try{
+    localStorage.setItem(key,value?"1":"0");
   }catch(e){}
 }
 
@@ -6837,6 +6864,230 @@ function load(){
 }
 
 
+
+let marketRefreshTimer=null;
+let marketFetchInFlight=null;
+let marketDataSnapshot=null;
+
+function readMarketDataCache(){
+  try{
+    const parsed=JSON.parse(localStorage.getItem(MARKET_DATA_CACHE_KEY)||"null");
+    if(
+      !parsed ||
+      typeof parsed!=="object" ||
+      !Number.isFinite(Number(parsed.cachedAt)) ||
+      Date.now()-Number(parsed.cachedAt)>MARKET_CACHE_MAX_AGE_MS
+    ){
+      return null;
+    }
+    return parsed.data||null;
+  }catch(e){
+    return null;
+  }
+}
+
+function writeMarketDataCache(data){
+  try{
+    localStorage.setItem(
+      MARKET_DATA_CACHE_KEY,
+      JSON.stringify({cachedAt:Date.now(),data})
+    );
+  }catch(e){}
+}
+
+function formatMarketNumber(value,digits=2){
+  const number=Number(value);
+  if(!Number.isFinite(number))return "—";
+  return number.toLocaleString("tr-TR",{
+    minimumFractionDigits:digits,
+    maximumFractionDigits:digits
+  });
+}
+
+function formatMarketPercent(value){
+  const number=Number(value);
+  if(!Number.isFinite(number))return "";
+  const prefix=number>0?"+":"";
+  return `${prefix}${number.toLocaleString("tr-TR",{
+    minimumFractionDigits:2,
+    maximumFractionDigits:2
+  })}%`;
+}
+
+function renderMarketPreferenceButton(id,enabled){
+  const button=document.getElementById(id);
+  if(!button)return;
+  button.classList.toggle("active",Boolean(enabled));
+  button.setAttribute("aria-pressed",enabled?"true":"false");
+  const stateEl=button.querySelector(".media-setting-state");
+  if(stateEl)stateEl.textContent=enabled?"Açık":"Kapalı";
+}
+
+function renderMarketPreferences(){
+  renderMarketPreferenceButton("fx-rates-setting",fxRatesVisible);
+  renderMarketPreferenceButton("stock-ticker-setting",stockTickerVisible);
+}
+
+function renderFxRates(data=marketDataSnapshot){
+  const box=document.getElementById("fx-rates");
+  if(!box)return;
+
+  box.hidden=!fxRatesVisible;
+  if(!fxRatesVisible)return;
+
+  const rows=Array.isArray(data?.fx)?data.fx:[];
+  const map=new Map(rows.map(item=>[String(item?.key||"").toUpperCase(),item]));
+
+  for(const key of ["USD","EUR","GBP"]){
+    const row=box.querySelector(`[data-fx="${key}"]`);
+    const value=row?.querySelector("span");
+    if(!row || !value)continue;
+    const item=map.get(key);
+    value.textContent=item?formatMarketNumber(item.value,2):"—";
+    row.dataset.direction=
+      Number(item?.changePercent)>0?"up":
+      Number(item?.changePercent)<0?"down":"flat";
+  }
+
+  box.dataset.stale=data?.stale?"1":"0";
+}
+
+function marketTickerItemHtml(item){
+  const change=Number(item?.changePercent);
+  const direction=change>0?"up":change<0?"down":"flat";
+  return `<span class="market-ticker-item" data-direction="${direction}">`+
+    `<strong>${String(item?.label||item?.key||"")}</strong>`+
+    `<span class="market-ticker-value">${formatMarketNumber(item?.value,2)}</span>`+
+    `<span class="market-ticker-change">${formatMarketPercent(change)}</span>`+
+    `</span>`;
+}
+
+function renderStockTicker(data=marketDataSnapshot){
+  const ticker=document.getElementById("market-ticker");
+  const track=ticker?.querySelector(".market-ticker-track");
+  if(!ticker || !track)return;
+
+  ticker.hidden=!stockTickerVisible;
+  document.body.classList.toggle("market-ticker-visible",stockTickerVisible);
+
+  if(!stockTickerVisible){
+    track.replaceChildren();
+    return;
+  }
+
+  const items=Array.isArray(data?.stocks)?data.stocks:[];
+  if(!items.length){
+    track.innerHTML='<span class="market-ticker-set"><span class="market-ticker-item market-ticker-loading">Piyasa verisi yükleniyor…</span></span>';
+    return;
+  }
+
+  const html=items.map(marketTickerItemHtml).join("");
+  track.innerHTML=
+    `<span class="market-ticker-set">${html}</span>`+
+    `<span class="market-ticker-set" aria-hidden="true">${html}</span>`;
+  ticker.dataset.stale=data?.stale?"1":"0";
+}
+
+function renderMarketData(data=marketDataSnapshot){
+  if(data)marketDataSnapshot=data;
+  renderFxRates(marketDataSnapshot);
+  renderStockTicker(marketDataSnapshot);
+}
+
+async function refreshMarketData(force=false){
+  if(!fxRatesVisible && !stockTickerVisible)return null;
+  if(!force && document.visibilityState!=="visible")return marketDataSnapshot;
+  if(marketFetchInFlight)return marketFetchInFlight;
+
+  const url=new URL(MARKET_API);
+  url.searchParams.set("fx",fxRatesVisible?"1":"0");
+  url.searchParams.set("stocks",stockTickerVisible?"1":"0");
+
+  marketFetchInFlight=(async()=>{
+    try{
+      const controller=new AbortController();
+      const timeout=setTimeout(()=>controller.abort(),8000);
+      let response;
+      try{
+        response=await fetch(url.href,{cache:"no-store",signal:controller.signal});
+      }finally{
+        clearTimeout(timeout);
+      }
+
+      if(!response.ok)throw new Error(`market_http_${response.status}`);
+      const payload=await response.json();
+      if(!payload?.ok)throw new Error("market_invalid_payload");
+
+      const data={
+        fx:Array.isArray(payload.fx)?payload.fx:[],
+        stocks:Array.isArray(payload.stocks)?payload.stocks:[],
+        generatedAt:Number(payload.generatedAt)||Date.now(),
+        source:String(payload.source||""),
+        stale:false
+      };
+
+      marketDataSnapshot=data;
+      writeMarketDataCache(data);
+      renderMarketData(data);
+      return data;
+    }catch(error){
+      console.warn("Flöw market data:",error);
+      const cached=marketDataSnapshot||readMarketDataCache();
+      if(cached){
+        marketDataSnapshot={...cached,stale:true};
+        renderMarketData(marketDataSnapshot);
+      }
+      return marketDataSnapshot;
+    }finally{
+      marketFetchInFlight=null;
+    }
+  })();
+
+  return marketFetchInFlight;
+}
+
+function restartMarketRefreshTimer(){
+  if(marketRefreshTimer){
+    clearInterval(marketRefreshTimer);
+    marketRefreshTimer=null;
+  }
+  if(!fxRatesVisible && !stockTickerVisible)return;
+  marketRefreshTimer=setInterval(()=>refreshMarketData(false),MARKET_REFRESH_MS);
+}
+
+function applyMarketVisibility({refresh=true}={}){
+  renderMarketPreferences();
+  renderMarketData(marketDataSnapshot);
+
+  if(fxRatesVisible || stockTickerVisible){
+    restartMarketRefreshTimer();
+    if(refresh)refreshMarketData(true);
+  }else if(marketRefreshTimer){
+    clearInterval(marketRefreshTimer);
+    marketRefreshTimer=null;
+  }
+}
+
+function setFxRatesVisible(enabled){
+  fxRatesVisible=Boolean(enabled);
+  saveBooleanUiPreference(FX_RATES_VISIBLE_KEY,fxRatesVisible);
+  applyMarketVisibility();
+}
+
+function setStockTickerVisible(enabled){
+  stockTickerVisible=Boolean(enabled);
+  saveBooleanUiPreference(STOCK_TICKER_VISIBLE_KEY,stockTickerVisible);
+  applyMarketVisibility();
+}
+
+function initMarketData(){
+  marketDataSnapshot=readMarketDataCache();
+  renderMarketPreferences();
+  renderMarketData(marketDataSnapshot);
+  restartMarketRefreshTimer();
+  if(fxRatesVisible || stockTickerVisible)refreshMarketData(true);
+}
+
 function updateClock(){
   const now=new Date();
   document.getElementById("clock-time").textContent=
@@ -7978,7 +8229,9 @@ function preferenceTransferKeys(){
     KEYWORD_WATCH_KEY,
     WEATHER_PREFS_KEY,
     CUSTOM_RSS_STORAGE_KEY,
-    NEAR_DUPLICATE_PREF_KEY
+    NEAR_DUPLICATE_PREF_KEY,
+    FX_RATES_VISIBLE_KEY,
+    STOCK_TICKER_VISIBLE_KEY
   ];
 }
 
@@ -8085,6 +8338,18 @@ function bindEnhancementUi(){
   document.getElementById("near-duplicate-setting")?.addEventListener("click",e=>{
     e.stopPropagation();
     setNearDuplicateDedupEnabled(!nearDuplicateDedupEnabled);
+  });
+
+  document.getElementById("fx-rates-setting")?.addEventListener("click",e=>{
+    e.stopPropagation();
+    setFxRatesVisible(!fxRatesVisible);
+    telemetryQueueEvent("fx_rates_toggle",{story:null,mode:fxRatesVisible?"on":"off"});
+  });
+
+  document.getElementById("stock-ticker-setting")?.addEventListener("click",e=>{
+    e.stopPropagation();
+    setStockTickerVisible(!stockTickerVisible);
+    telemetryQueueEvent("stock_ticker_toggle",{story:null,mode:stockTickerVisible?"on":"off"});
   });
 
   document.getElementById("preferences-export")?.addEventListener("click",e=>{
@@ -10246,6 +10511,7 @@ window.addEventListener(
 
 updateClock();
 setInterval(updateClock,1000);
+initMarketData();
 
 if(new URLSearchParams(location.search).get("pip")==="1"){
   document.body.classList.add("pip-mode");
@@ -11665,11 +11931,9 @@ window.addEventListener("pageshow",()=>{
 });
 
 document.addEventListener("visibilitychange",()=>{
-  if(
-    document.visibilityState==="visible" &&
-    !state.stories.length
-  ){
-    load();
+  if(document.visibilityState==="visible"){
+    if(!state.stories.length)load();
+    if(fxRatesVisible || stockTickerVisible)refreshMarketData(true);
   }
 });
 setInterval(
