@@ -1,5 +1,5 @@
 /*
-  Flöw — Haber paylaşımı v3.0.0
+  Flöw — Haber paylaşımı v3.0.1
   ------------------------------------------------------------
   - ⤴︎ Haberi paylaş düğmesi: Flöra ile Kaynağa Git arasına eklenir.
   - Paylaşım URL'si ayrı Flöw Share Worker üzerinden üretilir.
@@ -8,7 +8,7 @@
 (function(){
   "use strict";
 
-  const FEATURE_VERSION="3.0.0";
+  const FEATURE_VERSION="3.0.1";
   const SHARE_LABEL="Haberi paylaş";
   const SHARE_WORKER_BASE=String(
     window.FLOEW_CONFIG?.shareWorkerBase||"https://thefloew-share.thefloewback.workers.dev"
@@ -28,6 +28,44 @@
     return String(value||"")
       .replace(/\s+/g," ")
       .trim();
+  }
+
+  function normalizeDisplayShareUrl(value){
+    const raw=String(value||"").trim();
+    if(!raw)return "";
+
+    try{
+      const url=new URL(raw,location.href);
+
+      if(
+        url.protocol!=="http:" &&
+        url.protocol!=="https:"
+      ){
+        return "";
+      }
+
+      /*
+        URL.href alan adı Unicode olduğunda host'u punycode'a çevirir.
+        Kopyalanan/paylaşılan Flöw kısa linki kullanıcıya tekrar Unicode
+        gösterelim: https://flöw.tr/s/AbCd123
+      */
+      const path=url.pathname||"";
+      const codeMatch=/^\/s\/([A-Za-z0-9_-]+)\/?$/i.exec(path);
+
+      if(
+        codeMatch &&
+        /^(?:flöw\.tr|xn--flw-tna\.tr)$/i.test(url.hostname)
+      ){
+        return (
+          `${SHARE_PUBLIC_ORIGIN}/s/`+
+          encodeURIComponent(codeMatch[1])
+        );
+      }
+
+      return url.href;
+    }catch(e){
+      return "";
+    }
   }
 
   function validHttpUrl(value){
@@ -92,7 +130,9 @@
     if(!safe)return "";
 
     if(shortLinkCache.has(safe)){
-      return shortLinkCache.get(safe)||"";
+      return normalizeDisplayShareUrl(
+        shortLinkCache.get(safe)||""
+      );
     }
 
     for(const endpoint of SHORT_CREATE_ENDPOINTS){
@@ -120,7 +160,7 @@
         if(!response.ok)continue;
 
         const data=await response.json();
-        const shortUrl=validHttpUrl(data?.shareUrl);
+        const shortUrl=normalizeDisplayShareUrl(data?.shareUrl);
 
         if(
           data?.ok===true &&
