@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.54.0";
+window.__floewAppVersion="31.55.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -2924,9 +2924,6 @@ function syncActiveVideoAudioUi(){
   button.setAttribute("aria-pressed",videoAudioEnabled?"true":"false");
   button.setAttribute("aria-label",videoAudioEnabled?"Videonun sesini kapat":"Videonun sesini aç");
   button.title=videoAudioEnabled?"Sesi kapat":"Sesi aç";
-  button.querySelector(".video-audio-label")?.replaceChildren(
-    document.createTextNode("🔊︎")
-  );
 }
 
 function queueVideoAudioUiSync(){

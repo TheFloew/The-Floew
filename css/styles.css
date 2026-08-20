@@ -4874,21 +4874,6 @@ html{
   user-select:none;
   -webkit-user-select:none;
 
-  /*
-    Speaker uses U+FE0E (text presentation) just like the other flat
-    Flöw UI symbols. Prefer monochrome symbol fonts over emoji fonts.
-  */
-  font-family:
-    "Apple Symbols",
-    "Segoe UI Symbol",
-    "Noto Sans Symbols 2",
-    "Noto Sans Symbols",
-    "Arial Unicode MS",
-    sans-serif;
-  font-variant-emoji:text;
-  font-size:23px;
-  line-height:1;
-
   opacity:.48;
   filter:saturate(.55);
   text-shadow:0 1px 3px rgba(0,0,0,.72),0 2px 7px rgba(0,0,0,.48);
@@ -4921,19 +4906,14 @@ html{
   outline-offset:2px;
 }
 
-#video-audio-toggle .video-audio-label{
+#video-audio-toggle .video-audio-icon{
   display:block;
-  width:1em;
-  height:1em;
-  line-height:1;
-  font-family:
-    "Apple Symbols",
-    "Segoe UI Symbol",
-    "Noto Sans Symbols 2",
-    "Noto Sans Symbols",
-    "Arial Unicode MS",
-    sans-serif;
-  font-variant-emoji:text;
+  width:27px;
+  height:27px;
+  object-fit:contain;
+  pointer-events:none;
+  user-select:none;
+  -webkit-user-drag:none;
 }
 
 body.ad-mode #video-audio-toggle,
@@ -4951,7 +4931,11 @@ body.ad-mode #video-audio-toggle,
     right:calc(max(2.2vw,env(safe-area-inset-right)) + 44px);
     width:38px;
     height:38px;
-    font-size:21px;
+  }
+
+  #video-audio-toggle .video-audio-icon{
+    width:24px;
+    height:24px;
   }
 }
 
