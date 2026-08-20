@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.38.0";
+window.__floewAppVersion="31.40.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -6907,8 +6907,15 @@ function formatMarketNumber(value,digits=2){
 function formatMarketPercent(value){
   const number=Number(value);
   if(!Number.isFinite(number))return "";
+
+  const direction=
+    number>0 ? "▲ " :
+    number<0 ? "▼ " :
+    "";
+
   const prefix=number>0?"+":"";
-  return `${prefix}${number.toLocaleString("tr-TR",{
+
+  return `${direction}${prefix}${number.toLocaleString("tr-TR",{
     minimumFractionDigits:2,
     maximumFractionDigits:2
   })}%`;
@@ -6969,21 +6976,196 @@ function marketTickerItemHtml(item,{company=false}={}){
     `</span>`;
 }
 
-function fillMarketTrack(track,items,{company=false}={}){
+const marketTrackState=new WeakMap();
+
+function marketTrackReducedMotion(){
+  return Boolean(
+    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches
+  );
+}
+
+function marketTrackSignature(items,{company=false}={}){
+  return JSON.stringify(
+    (Array.isArray(items)?items:[]).map(item=>[
+      String(item?.key||item?.label||""),
+      Number.isFinite(Number(item?.value))
+        ? Number(item.value).toFixed(4)
+        : "",
+      Number.isFinite(Number(item?.changePercent))
+        ? Number(item.changePercent).toFixed(4)
+        : "",
+      company?"1":"0"
+    ])
+  );
+}
+
+function marketTrackSpeedPxPerSecond(company){
+  return company ? 30 : 34;
+}
+
+function configureMarketTrackLoop(track,{company=false}={}){
   if(!track)return;
 
-  if(!items.length){
+  const firstSet=track.querySelector(".market-ticker-set");
+  const windowEl=track.closest(".market-ticker-window");
+
+  if(!firstSet || !windowEl)return;
+
+  const baseWidth=Math.max(1,Math.ceil(firstSet.getBoundingClientRect().width));
+  const viewportWidth=Math.max(
+    1,
+    Math.ceil(windowEl.getBoundingClientRect().width)
+  );
+
+  /*
+    Ekran geniş olsa bile boşluk oluşmaması için bir veri setini,
+    görünen alan + bir tam loop genişliğini kaplayacak kadar çoğalt.
+    Animasyon ise yalnızca BİR veri seti kadar ilerler; böylece bitiş
+    ile başlangıç geometrik olarak aynı noktaya denk gelir.
+  */
+  const neededCopies=Math.max(
+    2,
+    Math.ceil((viewportWidth+baseWidth)/baseWidth)+1
+  );
+
+  while(track.children.length<neededCopies){
+    const clone=firstSet.cloneNode(true);
+    clone.setAttribute("aria-hidden","true");
+    track.appendChild(clone);
+  }
+
+  while(track.children.length>neededCopies){
+    track.lastElementChild?.remove();
+  }
+
+  const duration=Math.max(
+    18,
+    baseWidth/marketTrackSpeedPxPerSecond(company)
+  );
+
+  track.style.setProperty("--market-loop-distance",`${baseWidth}px`);
+  track.style.setProperty("--market-loop-duration",`${duration.toFixed(2)}s`);
+}
+
+function commitMarketTrackContent(track,items,{company=false}={}){
+  if(!track)return;
+
+  const safeItems=Array.isArray(items)?items:[];
+  const signature=marketTrackSignature(safeItems,{company});
+
+  if(!safeItems.length){
     track.innerHTML=
       '<span class="market-ticker-set"><span class="market-ticker-item market-ticker-loading">Piyasa verisi yükleniyor…</span></span>';
+    track.style.removeProperty("--market-loop-distance");
+    track.style.removeProperty("--market-loop-duration");
+
+    marketTrackState.set(track,{
+      signature,
+      items:safeItems,
+      company,
+      pending:null
+    });
     return;
   }
 
-  const html=items.map(item=>marketTickerItemHtml(item,{company})).join("");
+  const html=safeItems
+    .map(item=>marketTickerItemHtml(item,{company}))
+    .join("");
 
   track.innerHTML=
-    `<span class="market-ticker-set">${html}</span>`+
-    `<span class="market-ticker-set" aria-hidden="true">${html}</span>`;
+    `<span class="market-ticker-set">${html}</span>`;
+
+  /*
+    DOM ölçümü ilk frame'de kesinleşsin. Sonra gerekli kopya sayısını
+    ve gerçek loop mesafesini hesapla.
+  */
+  requestAnimationFrame(()=>{
+    configureMarketTrackLoop(track,{company});
+  });
+
+  marketTrackState.set(track,{
+    signature,
+    items:safeItems,
+    company,
+    pending:null
+  });
+
+  if(!track.dataset.marketLoopBound){
+    track.dataset.marketLoopBound="1";
+
+    track.addEventListener("animationiteration",()=>{
+      const state=marketTrackState.get(track);
+      if(!state?.pending)return;
+
+      const pending=state.pending;
+      commitMarketTrackContent(
+        track,
+        pending.items,
+        {company:pending.company}
+      );
+    });
+  }
 }
+
+function fillMarketTrack(track,items,{company=false}={}){
+  if(!track)return;
+
+  const safeItems=Array.isArray(items)?items:[];
+  const signature=marketTrackSignature(safeItems,{company});
+  const state=marketTrackState.get(track);
+
+  if(!state){
+    commitMarketTrackContent(track,safeItems,{company});
+    return;
+  }
+
+  if(state.signature===signature){
+    return;
+  }
+
+  /*
+    Yeni piyasa verisini animasyonun ortasında DOM'a basmak kayışı bir anda
+    başa sarıyordu. Veri varsa, yeni rakamları bir sonraki loop sınırına
+    kadar beklet; o noktada değişim görsel olarak fark edilmez.
+    Reduced-motion veya ilk yükleme durumunda doğrudan uygula.
+  */
+  if(
+    !state.items?.length ||
+    !safeItems.length ||
+    marketTrackReducedMotion()
+  ){
+    commitMarketTrackContent(track,safeItems,{company});
+    return;
+  }
+
+  state.pending={
+    items:safeItems,
+    company,
+    signature
+  };
+  marketTrackState.set(track,state);
+}
+
+let marketTrackResizeTimer=null;
+window.addEventListener("resize",()=>{
+  if(marketTrackResizeTimer){
+    clearTimeout(marketTrackResizeTimer);
+  }
+
+  marketTrackResizeTimer=setTimeout(()=>{
+    marketTrackResizeTimer=null;
+
+    document
+      .querySelectorAll(".market-ticker-track")
+      .forEach(track=>{
+        const state=marketTrackState.get(track);
+        if(!state?.items?.length)return;
+        configureMarketTrackLoop(track,{
+          company:Boolean(state.company)
+        });
+      });
+  },160);
+});
 
 function renderStockTicker(data=marketDataSnapshot){
   const ticker=document.getElementById("market-ticker");
