@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
 <link rel="manifest" href="site.webmanifest">
 
-<link rel="stylesheet" href="css/styles.css?h=043561fcbece">
+<link rel="stylesheet" href="css/styles.css?h=692109d6b848">
 
 <style id="boot-black-style">
   html,body{background:#000}
@@ -302,7 +302,7 @@
           <button id="stock-ticker-setting" class="media-setting" type="button" aria-pressed="false">
             <span>
               <strong>Borsa bandı</strong>
-              <small>BIST endekslerini ekranın altındaki kayan bantta göster</small>
+              <small>BIST endeksleri ve seçili hisseleri iki bant halinde göster</small>
             </span>
             <span class="media-setting-state">Kapalı</span>
           </button>
@@ -378,14 +378,25 @@
     <div id="clock-time">00:00</div>
     <div id="clock-date"></div>
     <div id="fx-rates" hidden title="Piyasa verileri gecikmeli olabilir.">
-      <span class="fx-rate" data-fx="USD"><strong>USD</strong><span>—</span></span>
-      <span class="fx-rate" data-fx="EUR"><strong>EUR</strong><span>—</span></span>
-      <span class="fx-rate" data-fx="GBP"><strong>GBP</strong><span>—</span></span>
+      <span class="fx-rate" data-fx="USD"><span class="fx-flag" aria-hidden="true">🇺🇸</span><strong>USD</strong><span class="fx-value">—</span></span>
+      <span class="fx-rate" data-fx="EUR"><span class="fx-flag" aria-hidden="true">🇪🇺</span><strong>EUR</strong><span class="fx-value">—</span></span>
+      <span class="fx-rate" data-fx="GBP"><span class="fx-flag" aria-hidden="true">🇬🇧</span><strong>GBP</strong><span class="fx-value">—</span></span>
     </div>
   </div>
 
   <div id="market-ticker" hidden aria-hidden="true" title="Piyasa verileri gecikmeli olabilir.">
-    <div class="market-ticker-track"></div>
+    <div class="market-band market-index-band">
+      <span class="market-band-label">BIST</span>
+      <div class="market-ticker-window">
+        <div class="market-ticker-track" data-market-track="indices"></div>
+      </div>
+    </div>
+    <div class="market-band market-company-band">
+      <span class="market-band-label">HİSSE</span>
+      <div class="market-ticker-window">
+        <div class="market-ticker-track market-company-track" data-market-track="companies"></div>
+      </div>
+    </div>
   </div>
 
   <article class="slide active" id="a">
@@ -481,7 +492,7 @@
 </script>
 
 <script src="js/config.js?h=d84488edfaa0"></script>
-<script src="js/app.js?v=6d61be9f0795" onerror="
+<script src="js/app.js?v=4b9ec4edf9ee" onerror="
   var loader=document.getElementById('loading-screen');
   if(loader)loader.remove();
   var status=document.getElementById('status');

@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.37.0";
+window.__floewAppVersion="31.38.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -6940,7 +6940,7 @@ function renderFxRates(data=marketDataSnapshot){
 
   for(const key of ["USD","EUR","GBP"]){
     const row=box.querySelector(`[data-fx="${key}"]`);
-    const value=row?.querySelector("span");
+    const value=row?.querySelector(".fx-value");
     if(!row || !value)continue;
     const item=map.get(key);
     value.textContent=item?formatMarketNumber(item.value,2):"—";
@@ -6952,39 +6952,70 @@ function renderFxRates(data=marketDataSnapshot){
   box.dataset.stale=data?.stale?"1":"0";
 }
 
-function marketTickerItemHtml(item){
+function marketTickerItemHtml(item,{company=false}={}){
   const change=Number(item?.changePercent);
   const direction=change>0?"up":change<0?"down":"flat";
-  return `<span class="market-ticker-item" data-direction="${direction}">`+
-    `<strong>${String(item?.label||item?.key||"")}</strong>`+
+
+  const label=String(
+    company
+      ? (item?.shortLabel||item?.key||item?.label||"")
+      : (item?.label||item?.key||"")
+  );
+
+  return `<span class="market-ticker-item${company?" market-company-item":""}" data-direction="${direction}">`+
+    `<strong>${label}</strong>`+
     `<span class="market-ticker-value">${formatMarketNumber(item?.value,2)}</span>`+
     `<span class="market-ticker-change">${formatMarketPercent(change)}</span>`+
     `</span>`;
 }
 
+function fillMarketTrack(track,items,{company=false}={}){
+  if(!track)return;
+
+  if(!items.length){
+    track.innerHTML=
+      '<span class="market-ticker-set"><span class="market-ticker-item market-ticker-loading">Piyasa verisi yükleniyor…</span></span>';
+    return;
+  }
+
+  const html=items.map(item=>marketTickerItemHtml(item,{company})).join("");
+
+  track.innerHTML=
+    `<span class="market-ticker-set">${html}</span>`+
+    `<span class="market-ticker-set" aria-hidden="true">${html}</span>`;
+}
+
 function renderStockTicker(data=marketDataSnapshot){
   const ticker=document.getElementById("market-ticker");
-  const track=ticker?.querySelector(".market-ticker-track");
-  if(!ticker || !track)return;
+  const indexTrack=ticker?.querySelector('[data-market-track="indices"]');
+  const companyTrack=ticker?.querySelector('[data-market-track="companies"]');
+
+  if(!ticker || !indexTrack || !companyTrack)return;
 
   ticker.hidden=!stockTickerVisible;
   document.body.classList.toggle("market-ticker-visible",stockTickerVisible);
 
   if(!stockTickerVisible){
-    track.replaceChildren();
+    indexTrack.replaceChildren();
+    companyTrack.replaceChildren();
     return;
   }
 
-  const items=Array.isArray(data?.stocks)?data.stocks:[];
-  if(!items.length){
-    track.innerHTML='<span class="market-ticker-set"><span class="market-ticker-item market-ticker-loading">Piyasa verisi yükleniyor…</span></span>';
-    return;
-  }
+  const indices=
+    Array.isArray(data?.indices)
+      ? data.indices
+      : Array.isArray(data?.stocks)
+        ? data.stocks
+        : [];
 
-  const html=items.map(marketTickerItemHtml).join("");
-  track.innerHTML=
-    `<span class="market-ticker-set">${html}</span>`+
-    `<span class="market-ticker-set" aria-hidden="true">${html}</span>`;
+  const companies=
+    Array.isArray(data?.companies)
+      ? data.companies
+      : [];
+
+  fillMarketTrack(indexTrack,indices,{company:false});
+  fillMarketTrack(companyTrack,companies,{company:true});
+
   ticker.dataset.stale=data?.stale?"1":"0";
 }
 
@@ -7001,7 +7032,8 @@ async function refreshMarketData(force=false){
 
   const url=new URL(MARKET_API);
   url.searchParams.set("fx",fxRatesVisible?"1":"0");
-  url.searchParams.set("stocks",stockTickerVisible?"1":"0");
+  url.searchParams.set("indices",stockTickerVisible?"1":"0");
+  url.searchParams.set("companies",stockTickerVisible?"1":"0");
 
   marketFetchInFlight=(async()=>{
     try{
@@ -7020,7 +7052,12 @@ async function refreshMarketData(force=false){
 
       const data={
         fx:Array.isArray(payload.fx)?payload.fx:[],
-        stocks:Array.isArray(payload.stocks)?payload.stocks:[],
+        indices:Array.isArray(payload.indices)
+          ? payload.indices
+          : Array.isArray(payload.stocks)
+            ? payload.stocks
+            : [],
+        companies:Array.isArray(payload.companies)?payload.companies:[],
         generatedAt:Number(payload.generatedAt)||Date.now(),
         source:String(payload.source||""),
         stale:false
