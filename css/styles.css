@@ -4045,3 +4045,11 @@ body.foreign-mode #time-range-button{
 .preference-transfer-feedback[data-state="error"]{
   color:#ff9d9d;
 }
+
+
+/* Mobile: PiP is intentionally unavailable from the hamburger tool menu. */
+@media (max-width:700px), (hover:none) and (pointer:coarse){
+  #control-menu-panel #pip-button{
+    display:none !important;
+  }
+}

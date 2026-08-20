@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.35.0";
+window.__floewAppVersion="31.36.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -2757,12 +2757,6 @@ function showDirectVideo(el,story,media,token){
     video.setAttribute("aria-hidden","false");
 
     if(image)image.style.display="none";
-
-    /*
-      PiP bu haber için hazırlanmışsa, video hazır olduğu anda statik
-      görselden canlı video karesine geç.
-    */
-    attachStoryVideoToPiP(story,video);
   };
 
   video.addEventListener(
@@ -6949,235 +6943,9 @@ let pipAnimationTimer=null;
 let pipActive=false;
 let pipCurrent=null;
 let pipTransition=null;
-let pipTransitionFinalizer=null;
-let pipRenderGeneration=0;
-let pipPlaybackMode="canvas";
-let pipDirectHls=null;
-let pipDirectSourceKey="";
-let pipDirectSwitchGeneration=0;
-let pipDocumentWindow=null;
-let pipDocumentRoot=null;
-let pipDocumentRenderGeneration=0;
-let pipDocumentHls=null;
-let pipDocumentHlsScriptPromise=null;
-let pipProviderSession=null;
-let pipFallbackNotice="";
-let vimeoLibraryPromise=null;
 const pipImageCache=new Map();
-const pipStoryVideoCanvasSafety=new WeakMap();
-
-function ensureVimeoLibrary(){
-  if(window.Vimeo?.Player)return Promise.resolve(window.Vimeo);
-  if(vimeoLibraryPromise)return vimeoLibraryPromise;
-
-  vimeoLibraryPromise=new Promise(resolve=>{
-    const existing=document.querySelector('script[data-floew-vimeo-player="1"]');
-
-    const finish=()=>resolve(window.Vimeo?.Player ? window.Vimeo : null);
-
-    if(existing){
-      if(window.Vimeo?.Player){
-        finish();
-      }else{
-        existing.addEventListener("load",finish,{once:true});
-        existing.addEventListener("error",()=>resolve(null),{once:true});
-      }
-      return;
-    }
-
-    const script=document.createElement("script");
-    script.src="https://player.vimeo.com/api/player.js";
-    script.async=true;
-    script.referrerPolicy="strict-origin-when-cross-origin";
-    script.dataset.floewVimeoPlayer="1";
-    script.addEventListener("load",finish,{once:true});
-    script.addEventListener("error",()=>{
-      vimeoLibraryPromise=null;
-      resolve(null);
-    },{once:true});
-    document.head.appendChild(script);
-  });
-
-  return vimeoLibraryPromise;
-}
-
-function currentStoryPiPMediaContext(story){
-  const slide=pipStorySlide(story);
-  if(!slide)return {kind:"none",provider:""};
-
-  const direct=slide.querySelector(".slide-video.media-visible");
-  if(
-    direct &&
-    direct.readyState>=2 &&
-    direct.videoWidth>0 &&
-    direct.videoHeight>0
-  ){
-    return {
-      kind:"direct",
-      provider:"direct",
-      element:direct,
-      descriptor:direct.__floewMediaDescriptor||null
-    };
-  }
-
-  const dm=slide.querySelector(".slide-dailymotion.media-visible");
-  if(dm){
-    return {
-      kind:"embed",
-      provider:"dailymotion",
-      element:dm,
-      player:dm.__floewDailymotionPlayer||null
-    };
-  }
-
-  const frame=slide.querySelector(".slide-embed.media-visible");
-  if(frame){
-    return {
-      kind:"embed",
-      provider:String(frame.dataset.provider||"generic").toLowerCase(),
-      element:frame
-    };
-  }
-
-  return {kind:"none",provider:""};
-}
-
-function clearProviderPiPSession(){
-  const session=pipProviderSession;
-  pipFallbackNotice="";
-  pipProviderSession=null;
-
-  if(session?.kind==="direct" && session.element){
-    try{session.element.disablePictureInPicture=true}catch(e){}
-  }
-}
-
-async function exitProviderPiP(){
-  const session=pipProviderSession;
-  if(!session)return false;
-
-  if(session.kind==="vimeo" && session.player?.exitPictureInPicture){
-    try{await session.player.exitPictureInPicture()}catch(e){}
-    clearProviderPiPSession();
-    pipActive=false;
-    return true;
-  }
-
-  if(
-    session.kind==="direct" &&
-    document.pictureInPictureElement===session.element &&
-    typeof document.exitPictureInPicture==="function"
-  ){
-    try{await document.exitPictureInPicture()}catch(e){}
-    clearProviderPiPSession();
-    pipActive=false;
-    return true;
-  }
-
-  clearProviderPiPSession();
-  return false;
-}
-
-async function requestDirectStoryPiP(context,story){
-  const video=context?.element;
-  if(
-    !video ||
-    typeof video.requestPictureInPicture!=="function" ||
-    !document.pictureInPictureEnabled
-  )return false;
-
-  try{
-    video.disablePictureInPicture=false;
-
-    const onLeave=()=>{
-      if(pipProviderSession?.element!==video)return;
-      clearProviderPiPSession();
-      pipActive=false;
-    };
-    video.addEventListener("leavepictureinpicture",onLeave,{once:true});
-
-    /*
-      Önemli: gerçek haber <video> öğesini doğrudan PiP'e sokuyoruz. Önceki
-      canvas/srcObject yaklaşımı Firefox'ta video kaynağı değişince statik
-      kalabiliyordu. Burada tarayıcının zaten oynattığı gerçek medya öğesi
-      kullanıldığı için MP4/native-HLS/MSE-HLS aynı kareleri göstermeye devam
-      eder.
-    */
-    await video.requestPictureInPicture();
-    pipProviderSession={
-      kind:"direct",
-      provider:"direct",
-      element:video,
-      storyKey:mediaKey(story)
-    };
-    pipActive=true;
-    return true;
-  }catch(error){
-    try{video.disablePictureInPicture=true}catch(e){}
-    return false;
-  }
-}
-
-function getVimeoPlayerForFrame(frame){
-  if(!frame || !window.Vimeo?.Player)return null;
-  if(frame.__floewVimeoPlayer)return frame.__floewVimeoPlayer;
-  try{
-    frame.__floewVimeoPlayer=new window.Vimeo.Player(frame);
-    return frame.__floewVimeoPlayer;
-  }catch(e){
-    return null;
-  }
-}
-
-async function requestVimeoStoryPiP(context,story){
-  const frame=context?.element;
-  const player=getVimeoPlayerForFrame(frame);
-  if(!frame || !player?.requestPictureInPicture)return false;
-
-  try{
-    const onLeave=()=>{
-      if(pipProviderSession?.player!==player)return;
-      clearProviderPiPSession();
-      pipActive=false;
-      try{player.off?.("leavepictureinpicture",onLeave)}catch(e){}
-    };
-    player.on?.("leavepictureinpicture",onLeave);
-
-    await player.requestPictureInPicture();
-    pipProviderSession={
-      kind:"vimeo",
-      provider:"vimeo",
-      element:frame,
-      player,
-      storyKey:mediaKey(story)
-    };
-    pipActive=true;
-    return true;
-  }catch(error){
-    return false;
-  }
-}
-
-function unsupportedPiPProviderMessage(provider){
-  if(provider==="dailymotion"){
-    return "Dailymotion videosu bu tarayıcıda Flöw PiP'e canlı aktarılamıyor; PiP'te haber görseli gösteriliyor.";
-  }
-  if(provider==="youtube"){
-    return "YouTube videosu bu tarayıcıda Flöw PiP'e canlı aktarılamıyor; PiP'te haber görseli gösteriliyor.";
-  }
-  if(provider && provider!=="generic"){
-    return `${provider} videosu bu tarayıcıda Flöw PiP'e canlı aktarılamıyor; PiP'te haber görseli gösteriliyor.`;
-  }
-  return "Bu harici video oynatıcısı Flöw PiP'e canlı aktarılamıyor; PiP'te haber görseli gösteriliyor.";
-}
 
 function pipSupportMode(){
-  /*
-    Flöw PiP yalnızca klasik native VIDEO Picture-in-Picture kullanır.
-    Document Picture-in-Picture bilinçli olarak kullanılmaz; o API ayrı bir
-    always-on-top belge/popup penceresi oluşturur ve Flöw'ün beklenen küçük
-    video PiP davranışı değildir.
-  */
   const hasCanvasStream=
     typeof HTMLCanvasElement.prototype.captureStream==="function";
 
@@ -7202,390 +6970,6 @@ function pipSupportMode(){
   return "none";
 }
 
-
-
-function pipDocumentIsActive(){
-  return Boolean(
-    pipDocumentWindow &&
-    !pipDocumentWindow.closed &&
-    pipDocumentRoot?.isConnected
-  );
-}
-
-function destroyPiPDocumentHls(){
-  if(pipDocumentHls){
-    try{pipDocumentHls.destroy()}catch(e){}
-    pipDocumentHls=null;
-  }
-}
-
-function closePiPDocumentWindow(){
-  pipDocumentRenderGeneration++;
-  destroyPiPDocumentHls();
-  pipDocumentHlsScriptPromise=null;
-
-  const win=pipDocumentWindow;
-  pipDocumentWindow=null;
-  pipDocumentRoot=null;
-
-  if(win && !win.closed){
-    try{win.close()}catch(e){}
-  }
-}
-
-function absoluteMediaUrl(value){
-  if(!value)return "";
-  try{return new URL(value,location.href).href}catch(e){return String(value||"")}
-}
-
-function setupPiPDocument(win){
-  const doc=win.document;
-  doc.open();
-  doc.write(`<!doctype html>
-<html lang="tr">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Flöw PiP</title>
-<style>
-html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#090909;color:#fff}
-body{font-family:Comfortaa,"Trebuchet MS",Arial,sans-serif;user-select:none}
-#floew-document-pip-root{position:fixed;inset:0;background:#090909;overflow:hidden}
-.floew-dpip-stage{position:absolute;inset:0;background:#090909;overflow:hidden;opacity:0;transform:scale(1.015);transition:opacity .18s ease,transform .32s ease}
-.floew-dpip-stage.is-ready{opacity:1;transform:scale(1)}
-.floew-dpip-media{position:absolute;inset:0;background:#090909;overflow:hidden}
-.floew-dpip-media>img,.floew-dpip-media>video,.floew-dpip-media>iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
-.floew-dpip-media>img,.floew-dpip-media>video{object-fit:cover}
-.floew-dpip-media>iframe{background:#000}
-.floew-dpip-shade{position:absolute;inset:24% 0 0;background:linear-gradient(to bottom,rgba(0,0,0,0),rgba(0,0,0,.30) 34%,rgba(0,0,0,.92) 100%);pointer-events:none}
-.floew-dpip-copy{position:absolute;left:28px;right:28px;bottom:25px;z-index:4;text-align:right;text-shadow:0 2px 9px rgba(0,0,0,.85);pointer-events:none}
-.floew-dpip-cat{font-size:clamp(12px,3.2vw,18px);font-weight:700;opacity:.83;margin-bottom:7px}
-.floew-dpip-source{font-size:clamp(13px,3.6vw,20px);font-weight:700;margin-bottom:7px}
-.floew-dpip-title{font-size:clamp(19px,5.3vw,34px);font-weight:700;line-height:1.18;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
-.floew-dpip-ad-label{position:absolute;right:24px;top:20px;z-index:5;font-size:clamp(12px,3vw,18px);font-weight:700;opacity:.78;text-shadow:0 2px 8px rgba(0,0,0,.8);pointer-events:none}
-.floew-dpip-ad .floew-dpip-media>img,.floew-dpip-ad .floew-dpip-media>video{object-fit:contain;background:#000}
-@media (max-width:520px){.floew-dpip-copy{left:18px;right:18px;bottom:18px}}
-</style>
-</head>
-<body><div id="floew-document-pip-root"></div></body>
-</html>`);
-  doc.close();
-
-  pipDocumentRoot=doc.getElementById("floew-document-pip-root");
-
-  win.addEventListener("pagehide",()=>{
-    if(pipDocumentWindow!==win)return;
-    pipDocumentRenderGeneration++;
-    destroyPiPDocumentHls();
-    pipDocumentHlsScriptPromise=null;
-    pipDocumentWindow=null;
-    pipDocumentRoot=null;
-    pipActive=false;
-  },{once:true});
-}
-
-function ensurePiPDocumentHlsLibrary(){
-  const win=pipDocumentWindow;
-  if(!win || win.closed)return Promise.resolve(null);
-  if(win.Hls)return Promise.resolve(win.Hls);
-  if(pipDocumentHlsScriptPromise)return pipDocumentHlsScriptPromise;
-
-  pipDocumentHlsScriptPromise=new Promise(resolve=>{
-    const script=win.document.createElement("script");
-    script.src=HLS_JS_URL;
-    script.async=true;
-    script.crossOrigin="anonymous";
-    script.referrerPolicy="no-referrer";
-    script.addEventListener("load",()=>resolve(win.Hls||null),{once:true});
-    script.addEventListener("error",()=>resolve(null),{once:true});
-    win.document.head.appendChild(script);
-  });
-
-  return pipDocumentHlsScriptPromise;
-}
-
-function makePiPDocumentStage(extraClass=""){
-  const doc=pipDocumentWindow?.document;
-  if(!doc || !pipDocumentRoot)return null;
-
-  destroyPiPDocumentHls();
-  const stage=doc.createElement("div");
-  stage.className=`floew-dpip-stage ${extraClass}`.trim();
-  pipDocumentRoot.replaceChildren(stage);
-  const win=pipDocumentWindow;
-  if(win?.requestAnimationFrame){
-    win.requestAnimationFrame(()=>{
-      try{stage.classList.add("is-ready")}catch(e){}
-    });
-  }else{
-    try{stage.classList.add("is-ready")}catch(e){}
-  }
-  return stage;
-}
-
-function addPiPDocumentImage(mediaLayer,url){
-  const doc=pipDocumentWindow?.document;
-  if(!doc || !mediaLayer || !url)return null;
-  const img=doc.createElement("img");
-  img.alt="";
-  img.decoding="async";
-  img.referrerPolicy="no-referrer";
-  img.src=`${IMAGE_PROXY_API}?url=${encodeURIComponent(url)}`;
-  mediaLayer.appendChild(img);
-  return img;
-}
-
-async function currentDailymotionPiPTime(story){
-  const slide=pipStorySlide(story);
-  const host=slide?.querySelector(".slide-dailymotion.media-visible");
-  const player=host?.__floewDailymotionPlayer;
-  if(!player?.getState)return 0;
-  try{
-    const state=await player.getState();
-    return Number(state?.videoTime)||0;
-  }catch(e){
-    return 0;
-  }
-}
-
-function addPiPDocumentCopy(stage,story){
-  const doc=pipDocumentWindow?.document;
-  if(!doc || !stage)return;
-
-  const shade=doc.createElement("div");
-  shade.className="floew-dpip-shade";
-  stage.appendChild(shade);
-
-  const copy=doc.createElement("div");
-  copy.className="floew-dpip-copy";
-
-  const cat=doc.createElement("div");
-  cat.className="floew-dpip-cat";
-  cat.textContent=story?.flowCategory||"";
-
-  const source=doc.createElement("div");
-  source.className="floew-dpip-source";
-  source.textContent=story?.source||"";
-
-  const title=doc.createElement("div");
-  title.className="floew-dpip-title";
-  title.textContent=story?.title||"Flöw";
-
-  copy.append(cat,source,title);
-  stage.appendChild(copy);
-}
-
-async function addPiPDocumentDirectVideo(mediaLayer,story,media,startTime=0,generation=0){
-  const doc=pipDocumentWindow?.document;
-  if(!doc || !mediaLayer || !media?.url)return false;
-
-  const video=doc.createElement("video");
-  video.muted=true;
-  video.defaultMuted=true;
-  video.volume=0;
-  video.autoplay=true;
-  video.loop=true;
-  video.playsInline=true;
-  video.setAttribute("muted","");
-  video.setAttribute("autoplay","");
-  video.setAttribute("playsinline","");
-  video.setAttribute("webkit-playsinline","");
-  mediaLayer.appendChild(video);
-
-  const seek=()=>{
-    if(generation!==pipDocumentRenderGeneration)return;
-    const t=Number(startTime)||0;
-    if(t>0 && Number.isFinite(video.duration) && video.duration>t+.2){
-      try{video.currentTime=t}catch(e){}
-    }
-  };
-
-  const play=async()=>{
-    if(generation!==pipDocumentRenderGeneration)return;
-    seek();
-    try{
-      const result=video.play();
-      if(result?.then)await result;
-    }catch(e){}
-  };
-
-  const type=String(media.type||"").toLowerCase();
-  const isHls=type.includes("mpegurl") || /\.m3u8(?:[?#]|$)/i.test(media.url);
-
-  if(isHls){
-    if(
-      video.canPlayType("application/vnd.apple.mpegurl") ||
-      video.canPlayType("application/x-mpegURL")
-    ){
-      video.src=media.url;
-      video.addEventListener("loadedmetadata",play,{once:true});
-      video.load();
-      return true;
-    }
-
-    const HlsCtor=await ensurePiPDocumentHlsLibrary();
-    if(generation!==pipDocumentRenderGeneration || !pipDocumentIsActive())return false;
-    if(!HlsCtor?.isSupported?.())return false;
-
-    const hls=new HlsCtor({
-      enableWorker:true,
-      lowLatencyMode:false,
-      backBufferLength:30
-    });
-    pipDocumentHls=hls;
-    hls.on(HlsCtor.Events.MEDIA_ATTACHED,()=>{
-      if(generation!==pipDocumentRenderGeneration)return;
-      hls.loadSource(media.url);
-    });
-    hls.on(HlsCtor.Events.MANIFEST_PARSED,play);
-    hls.attachMedia(video);
-    return true;
-  }
-
-  video.src=media.url;
-  video.addEventListener("loadedmetadata",play,{once:true});
-  video.load();
-  return true;
-}
-
-async function addPiPDocumentEmbed(mediaLayer,story,media,generation=0){
-  const doc=pipDocumentWindow?.document;
-  if(!doc || !mediaLayer || !media?.url)return false;
-
-  let src=cleanEmbedUrl(media);
-  const provider=String(media.provider||"").toLowerCase();
-
-  if(provider==="dailymotion"){
-    const t=await currentDailymotionPiPTime(story);
-    if(generation!==pipDocumentRenderGeneration)return false;
-    if(t>1){
-      try{
-        const u=new URL(src);
-        u.searchParams.set("startTime",String(Math.max(0,Math.floor(t))));
-        src=u.href;
-      }catch(e){}
-    }
-  }
-
-  const frame=doc.createElement("iframe");
-  frame.src=src;
-  frame.title=story?.title||"Flöw video";
-  frame.allow="autoplay; encrypted-media; picture-in-picture; fullscreen; web-share";
-  frame.setAttribute("allowfullscreen","");
-  frame.referrerPolicy="strict-origin-when-cross-origin";
-  mediaLayer.appendChild(frame);
-  return true;
-}
-
-async function renderPiPDocumentStory(story){
-  if(!pipDocumentIsActive() || !story)return;
-  const generation=++pipDocumentRenderGeneration;
-  const stage=makePiPDocumentStage();
-  if(!stage)return;
-
-  const doc=pipDocumentWindow.document;
-  const mediaLayer=doc.createElement("div");
-  mediaLayer.className="floew-dpip-media";
-  stage.appendChild(mediaLayer);
-  if(story.image)addPiPDocumentImage(mediaLayer,story.image);
-  addPiPDocumentCopy(stage,story);
-
-  let media=null;
-  let startTime=0;
-  const direct=currentDirectVideoDescriptor(story);
-  if(direct){
-    media=direct.media;
-    startTime=direct.currentTime;
-  }else{
-    try{media=await resolveStoryMedia(story)}catch(e){media=null}
-  }
-
-  if(
-    generation!==pipDocumentRenderGeneration ||
-    !pipDocumentIsActive() ||
-    mediaKey(story)!==mediaKey(state.stories[state.index]||story)
-  )return;
-
-  if(media?.kind==="video"){
-    await addPiPDocumentDirectVideo(
-      mediaLayer,
-      story,
-      media,
-      startTime,
-      generation
-    );
-  }else if(media?.kind==="embed"){
-    await addPiPDocumentEmbed(
-      mediaLayer,
-      story,
-      media,
-      generation
-    );
-  }
-}
-
-async function renderPiPDocumentAd(ad){
-  if(!pipDocumentIsActive() || !ad)return;
-  const generation=++pipDocumentRenderGeneration;
-  const stage=makePiPDocumentStage("floew-dpip-ad");
-  if(!stage)return;
-
-  const doc=pipDocumentWindow.document;
-  const mediaLayer=doc.createElement("div");
-  mediaLayer.className="floew-dpip-media";
-  stage.appendChild(mediaLayer);
-
-  const src=absoluteMediaUrl(ad.src||"");
-  if(ad.type==="video"){
-    const video=doc.createElement("video");
-    video.src=src;
-    video.muted=true;
-    video.defaultMuted=true;
-    video.volume=0;
-    video.autoplay=true;
-    video.loop=false;
-    video.playsInline=true;
-    video.setAttribute("muted","");
-    video.setAttribute("autoplay","");
-    video.setAttribute("playsinline","");
-    mediaLayer.appendChild(video);
-    try{await video.play()}catch(e){}
-  }else{
-    const img=doc.createElement("img");
-    img.src=src;
-    img.alt="Reklam";
-    mediaLayer.appendChild(img);
-  }
-
-  if(generation!==pipDocumentRenderGeneration)return;
-
-  const label=doc.createElement("div");
-  label.className="floew-dpip-ad-label";
-  label.textContent="Reklam";
-  stage.appendChild(label);
-}
-
-async function renderCurrentPiPDocumentContent(){
-  if(!pipDocumentIsActive())return;
-  if(adActive && adHasEntered && currentAd){
-    await renderPiPDocumentAd(currentAd);
-    return;
-  }
-  const story=state.stories[state.index]||null;
-  if(story)await renderPiPDocumentStory(story);
-}
-
-async function openDocumentPiP(){
-  const api=window.documentPictureInPicture;
-  if(!api?.requestWindow)return false;
-
-  const win=await api.requestWindow({width:960,height:540});
-  pipDocumentWindow=win;
-  setupPiPDocument(win);
-  pipActive=true;
-  await renderCurrentPiPDocumentContent();
-  return true;
-}
 
 async function getPiPImage(url){
   if(!url)return null;
@@ -7636,303 +7020,6 @@ async function getPiPImage(url){
   return promise;
 }
 
-
-function destroyPiPDirectHls(){
-  if(pipDirectHls){
-    try{pipDirectHls.destroy()}catch(e){}
-    pipDirectHls=null;
-  }
-}
-
-function currentDirectVideoDescriptor(story){
-  const slide=pipStorySlide(story);
-  const video=slide?.querySelector(".slide-video.media-visible");
-  if(!video)return null;
-
-  const descriptor=video.__floewMediaDescriptor;
-  if(
-    !descriptor ||
-    descriptor.kind!=="video" ||
-    !descriptor.url ||
-    video.__floewMediaStoryKey!==mediaKey(story)
-  ){
-    return null;
-  }
-
-  return {
-    media:descriptor,
-    currentTime:Number.isFinite(video.currentTime) ? video.currentTime : 0
-  };
-}
-
-async function setPiPPlaybackToCanvas(){
-  if(!pipVideo || !pipStream)return;
-  if(pipPlaybackMode==="canvas" && pipVideo.srcObject===pipStream)return;
-
-  ++pipDirectSwitchGeneration;
-  destroyPiPDirectHls();
-  pipDirectSourceKey="";
-
-  try{pipVideo.pause()}catch(e){}
-  try{pipVideo.removeAttribute("src")}catch(e){}
-  pipVideo.srcObject=pipStream;
-  pipPlaybackMode="canvas";
-
-  try{
-    const result=pipVideo.play();
-    if(result?.catch)result.catch(()=>{});
-  }catch(e){}
-
-  drawPiPScene();
-  schedulePiPRender();
-}
-
-async function setPiPPlaybackToDirect(story,descriptor,startTime=0){
-  if(!pipActive || !pipVideo || !descriptor?.url)return false;
-
-  const sourceKey=`${mediaKey(story)}|${descriptor.url}`;
-  if(pipPlaybackMode==="direct" && pipDirectSourceKey===sourceKey){
-    return true;
-  }
-
-  const generation=++pipDirectSwitchGeneration;
-  destroyPiPDirectHls();
-
-  try{pipVideo.pause()}catch(e){}
-  pipVideo.srcObject=null;
-  pipVideo.removeAttribute("src");
-  pipPlaybackMode="direct";
-  pipDirectSourceKey=sourceKey;
-
-  const seekWhenReady=()=>{
-    if(generation!==pipDirectSwitchGeneration)return;
-    const t=Number(startTime)||0;
-    if(t>0 && Number.isFinite(pipVideo.duration) && pipVideo.duration>t+0.25){
-      try{pipVideo.currentTime=t}catch(e){}
-    }
-  };
-
-  const playNow=async()=>{
-    if(generation!==pipDirectSwitchGeneration)return false;
-    seekWhenReady();
-    try{
-      const result=pipVideo.play();
-      if(result?.then)await result;
-      return !pipVideo.paused;
-    }catch(e){
-      return false;
-    }
-  };
-
-  const type=String(descriptor.type||"").toLowerCase();
-  const isHls=
-    type.includes("mpegurl") ||
-    /\.m3u8(?:[?#]|$)/i.test(descriptor.url);
-
-  if(isHls){
-    const HlsCtor=await ensureHlsLibrary();
-    if(generation!==pipDirectSwitchGeneration || !pipActive)return false;
-
-    if(HlsCtor?.isSupported?.()){
-      const hls=new HlsCtor({
-        enableWorker:true,
-        lowLatencyMode:false,
-        backBufferLength:30
-      });
-      pipDirectHls=hls;
-
-      hls.on(HlsCtor.Events.MEDIA_ATTACHED,()=>{
-        if(generation!==pipDirectSwitchGeneration)return;
-        hls.loadSource(descriptor.url);
-      });
-      hls.on(HlsCtor.Events.MANIFEST_PARSED,()=>{
-        if(generation!==pipDirectSwitchGeneration)return;
-        playNow();
-      });
-      hls.on(HlsCtor.Events.ERROR,(_event,data)=>{
-        if(!data?.fatal || generation!==pipDirectSwitchGeneration)return;
-        setPiPPlaybackToCanvas();
-      });
-      hls.attachMedia(pipVideo);
-      return true;
-    }
-
-    if(
-      pipVideo.canPlayType("application/vnd.apple.mpegurl") ||
-      pipVideo.canPlayType("application/x-mpegURL")
-    ){
-      pipVideo.src=descriptor.url;
-      pipVideo.load();
-      pipVideo.addEventListener("loadedmetadata",()=>{
-        if(generation!==pipDirectSwitchGeneration)return;
-        playNow();
-      },{once:true});
-      return true;
-    }
-
-    await setPiPPlaybackToCanvas();
-    return false;
-  }
-
-  pipVideo.src=descriptor.url;
-  pipVideo.load();
-  pipVideo.addEventListener("loadedmetadata",()=>{
-    if(generation!==pipDirectSwitchGeneration)return;
-    playNow();
-  },{once:true});
-  pipVideo.addEventListener("error",()=>{
-    if(generation!==pipDirectSwitchGeneration)return;
-    setPiPPlaybackToCanvas();
-  },{once:true});
-
-  return true;
-}
-
-async function syncCurrentDirectVideoToPiP(){
-  if(!pipActive)return false;
-  const story=state.stories[state.index]||null;
-  if(!story)return false;
-
-  const direct=currentDirectVideoDescriptor(story);
-  if(!direct)return false;
-
-  return setPiPPlaybackToDirect(
-    story,
-    direct.media,
-    direct.currentTime
-  );
-}
-
-function pipStorySlide(story){
-  if(!story)return null;
-  const key=mediaKey(story);
-  return slides.find(slide=>slide?.dataset?.storyKey===key) || null;
-}
-
-function pipStoryVideoIsCanvasSafe(video){
-  if(
-    !video ||
-    video.readyState<2 ||
-    !video.videoWidth ||
-    !video.videoHeight
-  ){
-    return false;
-  }
-
-  const src=String(video.currentSrc||video.src||"");
-  const cached=pipStoryVideoCanvasSafety.get(video);
-
-  if(cached && cached.src===src){
-    return cached.safe;
-  }
-
-  let safe=false;
-
-  /*
-    Haber videoları farklı yayıncı origin'lerinden gelebilir. Cross-origin
-    izni olmayan bir video doğrudan PiP canvas'ına çizilirse canvas tainted
-    olur ve captureStream akışı susabilir. Önce ayrı, tek kullanımlık küçük
-    bir canvas üzerinde origin-clean kontrolü yapıyoruz; ana PiP canvas'ına
-    yalnız güvenli video karesi giriyor.
-  */
-  try{
-    const probe=document.createElement("canvas");
-    probe.width=2;
-    probe.height=2;
-    const ctx=probe.getContext("2d",{willReadFrequently:true});
-    ctx.drawImage(video,0,0,2,2);
-    ctx.getImageData(0,0,1,1);
-    safe=true;
-  }catch(e){
-    safe=false;
-  }
-
-  pipStoryVideoCanvasSafety.set(video,{src,safe});
-  return safe;
-}
-
-function currentPiPStoryVideo(story){
-  const slide=pipStorySlide(story);
-  const video=slide?.querySelector(".slide-video.media-visible");
-
-  if(
-    !video ||
-    video.getAttribute("aria-hidden")==="true" ||
-    video.readyState<2 ||
-    !video.videoWidth ||
-    !video.videoHeight
-  ){
-    return null;
-  }
-
-  return pipStoryVideoIsCanvasSafe(video)
-    ? video
-    : null;
-}
-
-function pipItemMatchesStory(item,story){
-  return Boolean(
-    item?.kind==="story" &&
-    mediaKey(item.story)===mediaKey(story)
-  );
-}
-
-function attachStoryVideoToPiP(story,video){
-  if(!pipActive || !story || !video)return;
-
-  if(pipDocumentIsActive()){
-    if(mediaKey(story)===mediaKey(state.stories[state.index]||null)){
-      renderPiPDocumentStory(story).catch(()=>{});
-    }
-    return;
-  }
-
-  const descriptor=video.__floewMediaDescriptor;
-  if(
-    descriptor?.kind==="video" &&
-    descriptor.url &&
-    video.__floewMediaStoryKey===mediaKey(story)
-  ){
-    setPiPPlaybackToDirect(
-      story,
-      descriptor,
-      Number.isFinite(video.currentTime) ? video.currentTime : 0
-    ).catch(()=>{});
-    return;
-  }
-
-  /*
-    Canvas-safe medya varsa eski composite yolunu fallback olarak koru.
-  */
-  if(!pipStoryVideoIsCanvasSafe(video))return;
-
-  let changed=false;
-  const attach=item=>{
-    if(!pipItemMatchesStory(item,story))return;
-    if(item.media!==video){
-      item.media=video;
-      changed=true;
-    }
-  };
-  attach(pipCurrent);
-  attach(pipTransition?.from);
-  attach(pipTransition?.to);
-  if(changed){
-    drawPiPScene();
-    schedulePiPRender();
-  }
-}
-
-function pipStoryMediaIsLive(item){
-  const media=item?.kind==="story" ? item.media : null;
-  return Boolean(
-    media &&
-    media.readyState>=2 &&
-    !media.paused &&
-    !media.ended
-  );
-}
-
 function wrapCanvasText(ctx,text,maxWidth,maxLines=3){
   const words=String(text||"").split(/\s+/);
   const lines=[];
@@ -7971,7 +7058,7 @@ function wrapCanvasText(ctx,text,maxWidth,maxLines=3){
   return lines;
 }
 
-function drawPiPStory(ctx,story,img,media=null,offsetX=0,offsetY=0){
+function drawPiPStory(ctx,story,img,offsetX=0,offsetY=0){
   if(!pipCanvas)return;
 
   const W=pipCanvas.width;
@@ -7986,62 +7073,20 @@ function drawPiPStory(ctx,story,img,media=null,offsetX=0,offsetY=0){
   ctx.fillStyle="#090909";
   ctx.fillRect(0,0,W,H);
 
-  /*
-    Canlı ve origin-clean bir HTML5 haber videosu varsa PiP arka planında
-    gerçek video karesini kullan. Video hazır değilse/bitmişse güvenli
-    proxied haber görseline geri dön.
-  */
-  const visual=
-    media &&
-    media.readyState>=2 &&
-    media.videoWidth>0 &&
-    media.videoHeight>0
-      ? media
-      : img;
-
-  if(visual){
-    const iw=
-      visual.videoWidth ||
-      visual.naturalWidth ||
-      visual.width ||
-      W;
-
-    const ih=
-      visual.videoHeight ||
-      visual.naturalHeight ||
-      visual.height ||
-      H;
-
+  if(img){
+    const iw=img.width||img.videoWidth||W;
+    const ih=img.height||img.videoHeight||H;
     const scale=Math.max(W/iw,H/ih);
     const dw=iw*scale;
     const dh=ih*scale;
 
-    try{
-      ctx.drawImage(
-        visual,
-        (W-dw)/2,
-        (H-dh)/2,
-        dw,
-        dh
-      );
-    }catch(e){
-      if(visual!==img && img){
-        try{
-          const fiw=img.width||img.naturalWidth||W;
-          const fih=img.height||img.naturalHeight||H;
-          const fscale=Math.max(W/fiw,H/fih);
-          const fdw=fiw*fscale;
-          const fdh=fih*fscale;
-          ctx.drawImage(
-            img,
-            (W-fdw)/2,
-            (H-fdh)/2,
-            fdw,
-            fdh
-          );
-        }catch(innerError){}
-      }
-    }
+    ctx.drawImage(
+      img,
+      (W-dw)/2,
+      (H-dh)/2,
+      dw,
+      dh
+    );
   }
 
   const grad=ctx.createLinearGradient(0,H*.34,0,H);
@@ -8076,29 +7121,6 @@ function drawPiPStory(ctx,story,img,media=null,offsetX=0,offsetY=0){
   for(const line of lines){
     ctx.fillText(line,W-28,y);
     y+=40;
-  }
-
-  if(pipFallbackNotice){
-    ctx.shadowBlur=0;
-    ctx.textAlign="left";
-    ctx.textBaseline="middle";
-    ctx.font='700 15px "Comfortaa", Arial, sans-serif';
-    const label=String(pipFallbackNotice);
-    const maxWidth=Math.min(W-56,560);
-    const labelLines=wrapCanvasText(ctx,label,maxWidth,2);
-    const boxH=labelLines.length>1 ? 64 : 42;
-    const boxW=Math.min(
-      maxWidth+24,
-      Math.max(...labelLines.map(line=>ctx.measureText(line).width),160)+24
-    );
-    ctx.fillStyle="rgba(0,0,0,.72)";
-    ctx.fillRect(24,22,boxW,boxH);
-    ctx.fillStyle="rgba(255,255,255,.92)";
-    let ly=22+(labelLines.length>1?20:21);
-    for(const line of labelLines){
-      ctx.fillText(line,36,ly);
-      ly+=24;
-    }
   }
 
   ctx.shadowBlur=0;
@@ -8189,7 +7211,6 @@ function drawPiPItem(ctx,item,offsetX=0,offsetY=0){
     ctx,
     item.story,
     item.image,
-    item.media||null,
     offsetX,
     offsetY
   );
@@ -8279,46 +7300,13 @@ function stopPiPRenderLoop(){
     clearTimeout(pipAnimationTimer);
     pipAnimationTimer=null;
   }
-
-  if(pipTransitionFinalizer){
-    clearTimeout(pipTransitionFinalizer);
-    pipTransitionFinalizer=null;
-  }
-}
-
-function finalizePiPTransitionSoon(generation){
-  if(pipTransitionFinalizer){
-    clearTimeout(pipTransitionFinalizer);
-  }
-
-  pipTransitionFinalizer=setTimeout(()=>{
-    pipTransitionFinalizer=null;
-    if(!pipActive || generation!==pipRenderGeneration || !pipTransition)return;
-    pipCurrent=pipTransition.to;
-    pipTransition=null;
-    drawPiPScene();
-  },780);
 }
 
 function schedulePiPRender(){
-  if(pipDocumentIsActive())return;
-
-  if(pipAnimationFrame){
-    cancelAnimationFrame(pipAnimationFrame);
-    pipAnimationFrame=null;
-  }
-  if(pipAnimationTimer){
-    clearTimeout(pipAnimationTimer);
-    pipAnimationTimer=null;
-  }
+  stopPiPRenderLoop();
 
   const tick=()=>{
     if(!pipActive)return;
-
-    if(pipPlaybackMode==="direct"){
-      pipAnimationTimer=setTimeout(tick,500);
-      return;
-    }
 
     drawPiPScene();
 
@@ -8329,37 +7317,14 @@ function schedulePiPRender(){
       !pipCurrent.media.paused &&
       !pipCurrent.media.ended;
 
-    const liveStoryVideo=
-      pipStoryMediaIsLive(pipCurrent) ||
-      pipStoryMediaIsLive(pipTransition?.from) ||
-      pipStoryMediaIsLive(pipTransition?.to);
-
-    const needsLiveFrames=
-      Boolean(pipTransition) ||
-      liveAdVideo ||
-      liveStoryVideo;
-
-    if(needsLiveFrames){
-      /*
-        Arka plandaki sekmelerde requestAnimationFrame tamamen durabilir.
-        PiP ekranda kalırken canlı video/reklamın donmaması için hidden
-        durumda timer ile canvas karelerini üretmeye devam et.
-      */
-      if(document.visibilityState==="visible"){
-        pipAnimationFrame=requestAnimationFrame(tick);
-      }else{
-        pipAnimationTimer=setTimeout(tick,120);
-      }
+    if(pipTransition || liveAdVideo){
+      pipAnimationFrame=requestAnimationFrame(tick);
     }else{
       pipAnimationTimer=setTimeout(tick,500);
     }
   };
 
-  if(document.visibilityState==="visible"){
-    pipAnimationFrame=requestAnimationFrame(tick);
-  }else{
-    pipAnimationTimer=setTimeout(tick,0);
-  }
+  pipAnimationFrame=requestAnimationFrame(tick);
 }
 
 async function preparePiPStory(story){
@@ -8374,13 +7339,10 @@ async function preparePiPStory(story){
     pipCurrent?.image ||
     null;
 
-  const media=currentPiPStoryVideo(story);
-
   return {
     kind:"story",
     story,
-    image,
-    media
+    image
   };
 }
 
@@ -8425,14 +7387,7 @@ async function preparePiPAd(ad){
 }
 
 async function setPiPInitialAd(ad){
-  if(pipDocumentIsActive()){
-    await renderPiPDocumentAd(ad);
-    return;
-  }
-
-  const generation=++pipRenderGeneration;
   const prepared=await preparePiPAd(ad);
-  if(generation!==pipRenderGeneration)return;
   if(!prepared)return;
 
   pipCurrent=prepared;
@@ -8442,22 +7397,10 @@ async function setPiPInitialAd(ad){
 
 async function startPiPAdTransition(ad,dir=1){
   if(!pipActive || !ad)return;
-  if(pipProviderSession){
-    /* Sağlayıcı-native PiP bir sonraki Flöw kartına taşınamaz; donmuş/eski
-       görüntü bırakmak yerine haber değişiminde temiz biçimde kapat. */
-    exitProviderPiP().catch(()=>{});
-    return;
-  }
-  if(pipDocumentIsActive()){
-    await renderPiPDocumentAd(ad);
-    return;
-  }
-  await setPiPPlaybackToCanvas();
-  const generation=++pipRenderGeneration;
 
   const to=await preparePiPAd(ad);
 
-  if(!pipActive || !to || generation!==pipRenderGeneration)return;
+  if(!pipActive || !to)return;
 
   let from=pipCurrent;
 
@@ -8465,13 +7408,11 @@ async function startPiPAdTransition(ad,dir=1){
     from=await preparePiPStory(
       state.stories[state.index]
     );
-    if(generation!==pipRenderGeneration)return;
   }
 
-  if(!from || document.visibilityState!=="visible"){
+  if(!from){
     pipCurrent=to;
     pipTransition=null;
-    drawPiPScene();
     schedulePiPRender();
     return;
   }
@@ -8486,19 +7427,11 @@ async function startPiPAdTransition(ad,dir=1){
     startedAt:performance.now()
   };
 
-  finalizePiPTransitionSoon(generation);
   schedulePiPRender();
 }
 
 async function setPiPInitialStory(story){
-  if(pipDocumentIsActive()){
-    await renderPiPDocumentStory(story);
-    return;
-  }
-
-  const generation=++pipRenderGeneration;
   const prepared=await preparePiPStory(story);
-  if(generation!==pipRenderGeneration)return;
   if(!prepared)return;
 
   pipCurrent=prepared;
@@ -8508,28 +7441,10 @@ async function setPiPInitialStory(story){
 
 async function startPiPTransition(fromStory,toStory,dir){
   if(!pipActive || !toStory)return;
-  if(pipProviderSession){
-    /* Native direct/Vimeo PiP belirli bir medya öğesine bağlıdır. Flöw başka
-       habere geçtiğinde eski videoyu donmuş bırakmak yerine PiP'i kapatır. */
-    exitProviderPiP().catch(()=>{});
-    return;
-  }
-  if(pipDocumentIsActive()){
-    await renderPiPDocumentStory(toStory);
-    return;
-  }
-
-  /*
-    Haber değişirken önce composite canvas'a dön. Yeni haber doğrudan video
-    ise video görünür/oynar hale geldiği anda attachStoryVideoToPiP aynı PiP
-    elemanını yeniden gerçek medya kaynağına geçirir.
-  */
-  await setPiPPlaybackToCanvas();
-  const generation=++pipRenderGeneration;
 
   const to=await preparePiPStory(toStory);
 
-  if(!pipActive || !to || generation!==pipRenderGeneration)return;
+  if(!pipActive || !to)return;
 
   let from=pipCurrent;
 
@@ -8545,18 +7460,11 @@ async function startPiPTransition(fromStory,toStory,dir){
     )
   ){
     from=await preparePiPStory(fromStory);
-    if(generation!==pipRenderGeneration)return;
   }
 
-  /*
-    Arka plandaki sekmeler requestAnimationFrame'i ciddi biçimde kısabilir.
-    PiP görünürken ana sekme gizliyse animasyonu beklemek yerine yeni kareyi
-    hemen commit et; böylece PiP eski haberde donmuş görünmez.
-  */
-  if(!from || document.visibilityState!=="visible"){
+  if(!from){
     pipCurrent=to;
     pipTransition=null;
-    drawPiPScene();
     schedulePiPRender();
     return;
   }
@@ -8571,7 +7479,6 @@ async function startPiPTransition(fromStory,toStory,dir){
     startedAt:performance.now()
   };
 
-  finalizePiPTransitionSoon(generation);
   schedulePiPRender();
 }
 
@@ -8607,18 +7514,12 @@ async function ensurePiPVideo(){
 
   pipStream=pipCanvas.captureStream(30);
   pipVideo.srcObject=pipStream;
-  pipPlaybackMode="canvas";
 
   pipVideo.addEventListener(
     "leavepictureinpicture",
     ()=>{
       pipActive=false;
-      pipRenderGeneration++;
-      ++pipDirectSwitchGeneration;
-      destroyPiPDirectHls();
-      pipDirectSourceKey="";
       stopPiPRenderLoop();
-      setTimeout(()=>setPiPPlaybackToCanvas(),0);
     }
   );
 
@@ -8633,12 +7534,7 @@ async function ensurePiPVideo(){
       if(active){
         schedulePiPRender();
       }else{
-        pipRenderGeneration++;
-        ++pipDirectSwitchGeneration;
-        destroyPiPDirectHls();
-        pipDirectSourceKey="";
         stopPiPRenderLoop();
-        setTimeout(()=>setPiPPlaybackToCanvas(),0);
       }
     }
   );
@@ -8647,14 +7543,6 @@ async function ensurePiPVideo(){
 }
 
 async function exitPiP(){
-  if(await exitProviderPiP())return true;
-
-  if(pipDocumentIsActive()){
-    closePiPDocumentWindow();
-    pipActive=false;
-    return true;
-  }
-
   if(
     document.pictureInPictureElement &&
     typeof document.exitPictureInPicture==="function"
@@ -8688,45 +7576,8 @@ async function togglePiP(){
   try{
     if(await exitPiP())return;
 
-    const story=state.stories[state.index]||null;
-
-    /* Reklam videosu mevcut çalışan composite PiP yolunu kullanır. */
-    pipFallbackNotice="";
-
-    if(!(adActive && adHasEntered && currentAd) && story){
-      const context=currentStoryPiPMediaContext(story);
-
-      /* Doğrudan MP4/HLS: gerçek, zaten oynayan <video> öğesini native PiP'e ver. */
-      if(context.kind==="direct"){
-        if(await requestDirectStoryPiP(context,story))return;
-      }
-
-      /* Vimeo: resmi Player API'nin requestPictureInPicture() metodunu kullan. */
-      if(context.kind==="embed" && context.provider==="vimeo"){
-        if(window.Vimeo?.Player){
-          if(await requestVimeoStoryPiP(context,story))return;
-        }else{
-          ensureVimeoLibrary();
-        }
-      }
-
-      /*
-        Dailymotion/YouTube/generic iframe'lerde programatik native PiP yok.
-        Bu durumda Flöw'ün statik kart PiP'i bilinçli fallback'tir.
-      */
-      if(
-        context.kind==="embed" &&
-        ["dailymotion","youtube","generic"].includes(context.provider)
-      ){
-        pipFallbackNotice="Harici oynatıcı: PiP'te canlı video desteklenmiyor";
-        status(unsupportedPiPProviderMessage(context.provider));
-      }else if(context.kind==="embed" && context.provider && context.provider!=="vimeo"){
-        pipFallbackNotice="Harici oynatıcı: PiP'te canlı video desteklenmiyor";
-        status(unsupportedPiPProviderMessage(context.provider));
-      }
-    }
-
     const video=await ensurePiPVideo();
+    const story=state.stories[state.index];
 
     if(adActive && adHasEntered && currentAd){
       await setPiPInitialAd(currentAd);
@@ -8750,7 +7601,6 @@ async function togglePiP(){
     }
   }catch(err){
     console.error("Video PiP:",err);
-    clearProviderPiPSession();
     pipActive=false;
     stopPiPRenderLoop();
 
@@ -8759,6 +7609,7 @@ async function togglePiP(){
     );
   }
 }
+
 
 
 function renderKeywordFilterControl(){
@@ -12779,31 +11630,11 @@ document.addEventListener("visibilitychange",()=>{
   if(document.visibilityState==="visible"){
     requestDesktopWakeLock();
   }
-
-  if(pipActive){
-    /* Sekme görünürlük değişiminden sonra PiP'i güncel medyayla senkronla. */
-    if(pipDocumentIsActive()){
-      renderCurrentPiPDocumentContent().catch(()=>{});
-    }else{
-      const story=state.stories[state.index]||null;
-      if(!adActive && story){
-        if(pipPlaybackMode==="direct"){
-          syncCurrentDirectVideoToPiP().catch(()=>{});
-        }else{
-          setPiPInitialStory(story).then(()=>schedulePiPRender()).catch(()=>{});
-        }
-      }else{
-        drawPiPScene();
-        schedulePiPRender();
-      }
-    }
-  }
 });
 
 window.addEventListener("pagehide",()=>{
   try{screenWakeLock?.release?.()}catch(e){}
   screenWakeLock=null;
-  if(pipDocumentIsActive())closePiPDocumentWindow();
 });
 
 setTimeout(requestDesktopWakeLock,0);
