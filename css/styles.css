@@ -4480,7 +4480,7 @@ body.ad-mode #market-ticker{
     yüksekliği kadar yukarı çıkmak gerekir. Saat/kur için ek dikey kaydırma yok.
   */
   body.market-ticker-visible .headline{
-    bottom:calc(clamp(34px,7vh,88px) + 50px) !important;
+    bottom:calc(clamp(34px,7vh,88px) + 25px) !important;
   }
 
   /*
@@ -4515,16 +4515,6 @@ body.ad-mode #market-ticker{
     font-weight:700;
   }
 
-  /*
-    v31.42'deki yapay açıklama max-height sınırları kaldırıldı.
-    Mevcut line-clamp davranışı yeniden geçerli.
-  */
-  .description,
-  .description:not(.is-expanded),
-  .description.is-expanded{
-    max-height:none !important;
-    overflow:visible !important;
-  }
 }
 
 @media(max-width:390px){
@@ -4570,25 +4560,21 @@ body.ad-mode #market-ticker{
     Masaüstü ölçülerine dokunulmaz.
   */
   .source-line{
-    min-height:21px !important;
-    margin-bottom:9px !important;
-    gap:9px !important;
+    min-height:18px !important;
+    margin-bottom:8px !important;
+    gap:7px !important;
   }
 
   .source-logo{
-    flex-basis:21px !important;
-    width:21px !important;
-    height:21px !important;
+    flex-basis:18px !important;
+    width:18px !important;
+    height:18px !important;
   }
 
-  .category{
+  .category,
+  .source{
     font-size:10px !important;
     letter-spacing:.065em !important;
-  }
-
-  .source{
-    font-size:13px !important;
-    letter-spacing:.075em !important;
   }
 }
 
@@ -4599,19 +4585,16 @@ body.ad-mode #market-ticker{
   }
 
   .source-line{
-    gap:8px !important;
+    gap:6px !important;
   }
 
   .source-logo{
-    flex-basis:20px !important;
-    width:20px !important;
-    height:20px !important;
+    flex-basis:17px !important;
+    width:17px !important;
+    height:17px !important;
   }
 
-  .source{
-    font-size:12.5px !important;
-  }
-
+  .source,
   .category{
     font-size:9.5px !important;
   }
@@ -4621,6 +4604,30 @@ body.ad-mode #market-ticker{
   .headline{
     left:86px !important;
     right:11px !important;
+  }
+}
+
+
+/* =====================================================================
+   V31.45 — mobile description / metadata / ticker label cleanup
+   ===================================================================== */
+
+#market-ticker .market-ticker-window{
+  width:100%;
+  flex:1 1 100%;
+}
+
+@media(max-width:700px){
+  /*
+    Description max-height is intentionally NOT overridden here.
+    JS owns the inline preview/expanded height so tap-to-expand works.
+  */
+  .description{
+    overflow:hidden !important;
+  }
+
+  body.market-ticker-visible .headline{
+    bottom:calc(clamp(34px,7vh,88px) + 25px) !important;
   }
 }
 
