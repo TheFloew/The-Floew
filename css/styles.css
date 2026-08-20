@@ -4459,86 +4459,93 @@ body.ad-mode #market-ticker{
 
 
 /* =====================================================================
-   V31.42 — mobile headline safe area for clock / FX / market bands
+   V31.43 — mobile horizontal separation for clock / FX / headline
    ===================================================================== */
 
 @media(max-width:700px){
   /*
-    Haber metni sağ-alt köşede kalır ama saat/kur bloğunun üzerine inmez.
-    Varsayılan: yalnız saat için güvenli alan.
+    Saat, hava ve kur bilgileri sol altta kalır. Haber bloğu aynı düşey
+    konumunu korur; yalnızca solda finans/saat kolonu kadar yer bırakılır.
   */
   .headline{
-    bottom:86px !important;
-    max-height:calc(100dvh - 150px);
+    left:clamp(120px,35vw,148px) !important;
+    right:18px !important;
+    width:auto !important;
+    bottom:clamp(34px,7vh,88px) !important;
+    max-height:none !important;
   }
 
   /*
-    Döviz görünürse üç satırlık kur bloğuna ayrıca alan ayır.
-  */
-  body.fx-rates-visible .headline{
-    bottom:140px !important;
-    max-height:calc(100dvh - 204px);
-  }
-
-  /*
-    Borsa iki bantla görünürken saat zaten 50px yukarı taşınıyor.
+    Borsa bantları ekranın tamamını kapladığı için yalnızca onların gerçek
+    yüksekliği kadar yukarı çıkmak gerekir. Saat/kur için ek dikey kaydırma yok.
   */
   body.market-ticker-visible .headline{
-    bottom:136px !important;
-    max-height:calc(100dvh - 200px);
+    bottom:calc(clamp(34px,7vh,88px) + 50px) !important;
   }
 
   /*
-    Hem döviz hem borsa açıksa iki güvenli alan birlikte hesaplanır.
+    Kur satırlarında USD/EUR/GBP ile rakam arasındaki gereksiz minimum
+    kolon kaldırılır. Bayrak, birim ve değer daha kompakt görünür.
   */
-  body.market-ticker-visible.fx-rates-visible .headline{
-    bottom:190px !important;
-    max-height:calc(100dvh - 254px);
+  #clock #fx-rates .fx-rate{
+    grid-template-columns:14px 24px auto !important;
+    column-gap:2px !important;
+  }
+
+  #clock #fx-rates .fx-value{
+    min-width:0 !important;
+    text-align:left !important;
+  }
+
+  #clock #fx-rates{
+    gap:4px !important;
   }
 
   /*
-    Mobilde uzun açıklamanın ilk görünümde saat alanına doğru büyümesini
-    engelle. Açıklama genişletildiğinde aşağı değil, headline'ın sabit alt
-    sınırı sayesinde yukarı doğru alan kullanır.
+    Mobil hava satırında şehir etiketi artık 3 harftir; küçük sabit alan
+    taşmayı önler.
   */
-  .description:not(.is-expanded){
-    max-height:4.2em !important;
+  #weather-city-label{
+    max-width:30px !important;
+    min-width:0 !important;
+    overflow:hidden !important;
+    text-overflow:clip !important;
+    white-space:nowrap !important;
+    letter-spacing:.035em;
+    font-weight:700;
   }
 
+  /*
+    v31.42'deki yapay açıklama max-height sınırları kaldırıldı.
+    Mevcut line-clamp davranışı yeniden geçerli.
+  */
+  .description,
+  .description:not(.is-expanded),
   .description.is-expanded{
-    max-height:min(30dvh,12em) !important;
-    overflow:auto !important;
-    overscroll-behavior:contain;
-    scrollbar-width:none;
-  }
-
-  .description.is-expanded::-webkit-scrollbar{
-    display:none;
+    max-height:none !important;
+    overflow:visible !important;
   }
 }
 
-@media(max-width:420px){
+@media(max-width:390px){
   .headline{
-    left:20px !important;
-    right:20px !important;
+    left:116px !important;
+    right:14px !important;
   }
 
-  .description:not(.is-expanded){
-    max-height:4.15em !important;
+  #clock{
+    left:14px;
   }
 }
 
-@media(max-height:680px) and (max-width:700px){
-  /*
-    Kısa ekranlarda manşete daha fazla düşey alan bırakmak için açıklama
-    önizlemesini iki-üç satır civarında tut.
-  */
-  .description:not(.is-expanded){
-    max-height:3.05em !important;
+@media(max-width:340px){
+  .headline{
+    left:108px !important;
+    right:12px !important;
   }
 
-  .description.is-expanded{
-    max-height:24dvh !important;
+  #clock{
+    left:12px;
   }
 }
 

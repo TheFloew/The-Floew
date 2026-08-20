@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.42.0";
+window.__floewAppVersion="31.43.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -8872,6 +8872,44 @@ function weatherSymbol(code,isDay=true){
   return "◌";
 }
 
+function weatherCityAbbreviation(value){
+  const raw=String(value||"")
+    .trim()
+    .split(",")[0]
+    .trim();
+
+  if(!raw)return "";
+
+  const compact=raw.replace(/\s+/g,"");
+  return Array
+    .from(compact.toLocaleUpperCase("tr-TR"))
+    .slice(0,3)
+    .join("");
+}
+
+function renderWeatherCityLabel(){
+  const city=document.getElementById("weather-city-label");
+  if(!city)return;
+
+  const fullLabel=
+    weatherPreferences.label||
+    weatherPreferences.city||
+    "";
+
+  const cityName=
+    weatherPreferences.city||
+    fullLabel;
+
+  const mobile=window.matchMedia?.("(max-width:700px)")?.matches;
+
+  city.textContent=
+    mobile
+      ? weatherCityAbbreviation(cityName)
+      : fullLabel;
+
+  city.title=fullLabel;
+}
+
 function renderWeatherUnitOptions(){
   document.querySelectorAll(".weather-unit-option").forEach(btn=>{
     const active=btn.dataset.unit===weatherPreferences.unit;
@@ -9036,9 +9074,7 @@ async function fetchCurrentWeather(){
       }
 
       if(city){
-        city.textContent=
-          weatherPreferences.label||
-          weatherPreferences.city;
+        renderWeatherCityLabel();
       }
 
       if(box)box.hidden=false;
@@ -9106,6 +9142,17 @@ function initWeather(){
     e.stopPropagation();
     applyWeatherCity();
   });
+
+  const weatherMobileMedia=window.matchMedia?.("(max-width:700px)");
+  if(weatherMobileMedia){
+    const refreshWeatherCityLabel=()=>renderWeatherCityLabel();
+
+    if(typeof weatherMobileMedia.addEventListener==="function"){
+      weatherMobileMedia.addEventListener("change",refreshWeatherCityLabel);
+    }else if(typeof weatherMobileMedia.addListener==="function"){
+      weatherMobileMedia.addListener(refreshWeatherCityLabel);
+    }
+  }
 
   document.getElementById("weather-city")?.addEventListener("keydown",e=>{
     if(e.key==="Enter"){
