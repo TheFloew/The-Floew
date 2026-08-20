@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.58.0";
+window.__floewAppVersion="31.59.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -837,6 +837,9 @@ const IDDQD_CATEGORIES=[
 let iddqdModeActive=false;
 let iddqdTrustedActionGate="";
 let iddqdRotationTimer=null;
+const DEFAULT_HEADER_LOGO_SRC="assets/logo-beta.png";
+const ADHD_MODE_LOGO_SRC="assets/adhd-mode-logo.png";
+
 const iddqdCategoryPositions=new Map();
 
 
@@ -8650,6 +8653,19 @@ function scheduleIddqdRotation(){
   },delay);
 }
 
+function syncIddqdLogo(){
+  const logo=document.getElementById("logo");
+  if(!logo)return;
+
+  logo.src=iddqdModeActive
+    ? ADHD_MODE_LOGO_SRC
+    : DEFAULT_HEADER_LOGO_SRC;
+
+  logo.alt=iddqdModeActive
+    ? "ADHD mode"
+    : "Flöw";
+}
+
 function enterIddqdMode(){
   if(iddqdModeActive)return;
 
@@ -8672,6 +8688,7 @@ function enterIddqdMode(){
   const grid=document.getElementById("iddqd-grid");
   grid?.setAttribute("aria-hidden","false");
   document.body.classList.add("iddqd-mode");
+  syncIddqdLogo();
 
   renderIddqdGrid();
   renderKeywordFilterControl();
@@ -8690,6 +8707,7 @@ function exitIddqdMode(){
   const grid=document.getElementById("iddqd-grid");
   grid?.setAttribute("aria-hidden","true");
   document.body.classList.remove("iddqd-mode");
+  syncIddqdLogo();
 
   closeKeywordFilterPanel();
   closeControlMenu();
@@ -9406,6 +9424,7 @@ document.getElementById("duration-plus")?.addEventListener("click",e=>{
 renderDurationSetting();
 renderTimeRangeControl();
 renderKeywordFilterControl();
+syncIddqdLogo();
 renderKeywordWatchControl();
 renderFeedMode();
 
