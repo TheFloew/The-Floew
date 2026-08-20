@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.55.0";
+window.__floewAppVersion="31.56.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -2462,7 +2462,7 @@ function timeText(v){
 
 
 const storyMediaCache=new Map();
-const VIDEO_RESOLVER_VERSION="20260820-1";
+const VIDEO_RESOLVER_VERSION="20260821-2";
 const SUPPORTED_EMBED_VIDEO_PROVIDERS=new Set([
   "youtube",
   "vimeo",
@@ -2656,7 +2656,7 @@ async function resolveStoryMedia(story){
     }
 
     const controller=new AbortController();
-    const timeout=setTimeout(()=>controller.abort(),8500);
+    const timeout=setTimeout(()=>controller.abort(),13000);
 
     try{
       const requestUrl=new URL(VIDEO_API);
