@@ -4549,3 +4549,78 @@ body.ad-mode #market-ticker{
   }
 }
 
+
+/* =====================================================================
+   V31.44 — wider mobile headline / smaller source metadata
+   ===================================================================== */
+
+@media(max-width:700px){
+  /*
+    v31.43'te saat/kur kolonu için fazla pay bırakılmıştı.
+    Haber alanını yeniden genişletirken sol alttaki bilgi bloğuyla
+    doğrudan çakışmayacak kadar güvenli mesafe korunur.
+  */
+  .headline{
+    left:clamp(96px,28vw,118px) !important;
+    right:16px !important;
+  }
+
+  /*
+    Mobil kaynak/kategori satırını manşete göre daha hafif tut.
+    Masaüstü ölçülerine dokunulmaz.
+  */
+  .source-line{
+    min-height:21px !important;
+    margin-bottom:9px !important;
+    gap:9px !important;
+  }
+
+  .source-logo{
+    flex-basis:21px !important;
+    width:21px !important;
+    height:21px !important;
+  }
+
+  .category{
+    font-size:10px !important;
+    letter-spacing:.065em !important;
+  }
+
+  .source{
+    font-size:13px !important;
+    letter-spacing:.075em !important;
+  }
+}
+
+@media(max-width:390px){
+  .headline{
+    left:92px !important;
+    right:13px !important;
+  }
+
+  .source-line{
+    gap:8px !important;
+  }
+
+  .source-logo{
+    flex-basis:20px !important;
+    width:20px !important;
+    height:20px !important;
+  }
+
+  .source{
+    font-size:12.5px !important;
+  }
+
+  .category{
+    font-size:9.5px !important;
+  }
+}
+
+@media(max-width:340px){
+  .headline{
+    left:86px !important;
+    right:11px !important;
+  }
+}
+
