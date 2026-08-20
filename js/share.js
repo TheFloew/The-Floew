@@ -1,7 +1,7 @@
 /*
   Flöw — Haber paylaşımı v2.1.1
   ------------------------------------------------------------
-  - ⤴ Haberi paylaş düğmesi: Flöra ile Kaynağa Git arasına eklenir.
+  - ⤴︎ Haberi paylaş düğmesi: Flöra ile Kaynağa Git arasına eklenir.
   - Paylaşım URL'si ayrı Flöw Share Worker üzerinden üretilir.
   - Mobilde Web Share API; masaüstünde clipboard fallback kullanılır.
 */
@@ -206,7 +206,7 @@
     );
 
     button.textContent=
-      ok ? "✓" : "!";
+      ok ? "✓︎" : "!";
 
     button.setAttribute(
       "aria-label",

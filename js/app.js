@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.45.0";
+window.__floewAppVersion="31.47.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -2175,7 +2175,7 @@ function renderOptions(){
     const el=document.createElement("div");
     el.className="option"+(on?" on":"");
     el.dataset.key=key;
-    el.innerHTML=`<span class="option-name">${source}</span><span class="option-check">${on?"✓":""}</span>`;
+    el.innerHTML=`<span class="option-name">${source}</span><span class="option-check">${on?"✓︎":""}</span>`;
     el.addEventListener("click",()=>toggleSource(key));
     sourceBox.appendChild(el);
   }
@@ -2184,7 +2184,7 @@ function renderOptions(){
     const el=document.createElement("div");
     el.className="option on foreign-category-option";
     el.dataset.key=FOREIGN_CATEGORY;
-    el.innerHTML=`<span class="option-name">${FOREIGN_CATEGORY}</span><span class="option-check">✓</span>`;
+    el.innerHTML=`<span class="option-name">${FOREIGN_CATEGORY}</span><span class="option-check">✓︎</span>`;
     categoryBox.appendChild(el);
   }else{
     for(const category of CATEGORIES){
@@ -2192,7 +2192,7 @@ function renderOptions(){
       const el=document.createElement("div");
       el.className="option"+(on?" on":"");
       el.dataset.key=category;
-      el.innerHTML=`<span class="option-name">${category}</span><span class="option-check">${on?"✓":""}</span>`;
+      el.innerHTML=`<span class="option-name">${category}</span><span class="option-check">${on?"✓︎":""}</span>`;
       el.addEventListener("click",()=>toggleCategory(category));
       categoryBox.appendChild(el);
     }
@@ -6909,8 +6909,8 @@ function formatMarketPercent(value){
   if(!Number.isFinite(number))return "";
 
   const direction=
-    number>0 ? "▲ " :
-    number<0 ? "▼ " :
+    number>0 ? "▲︎ " :
+    number<0 ? "▼︎ " :
     "";
 
   const prefix=number>0?"+":"";
@@ -7322,7 +7322,7 @@ let cursorHideTimer = null;
 function setFullscreenIcon(){
   const btn=document.getElementById("fullscreen-button");
   const active=!!document.fullscreenElement;
-  btn.textContent="⤢";
+  btn.textContent="⤢︎";
   btn.title=active?"Tam ekrandan çık":"Tam ekran";
   btn.setAttribute("aria-label",btn.title);
 }
@@ -8861,15 +8861,15 @@ function weatherSymbol(code,isDay=true){
     U+FE0E (text presentation selector) keeps weather symbols monochrome/text
     on mobile platforms which would otherwise substitute colored emoji.
   */
-  if(c===0)return isDay?"☀︎":"☾";
-  if(c===1||c===2)return isDay?"◐":"☁︎";
+  if(c===0)return isDay?"☀︎":"☾︎";
+  if(c===1||c===2)return isDay?"◐︎":"☁︎";
   if(c===3)return "☁︎";
   if(c===45||c===48)return "≋";
   if([51,53,55,56,57].includes(c))return "☂︎";
   if([61,63,65,66,67,80,81,82].includes(c))return "☂︎";
   if([71,73,75,77,85,86].includes(c))return "❄︎";
   if([95,96,99].includes(c))return "⚡︎";
-  return "◌";
+  return "◌︎";
 }
 
 function weatherCityAbbreviation(value){

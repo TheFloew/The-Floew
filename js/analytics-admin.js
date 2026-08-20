@@ -115,7 +115,7 @@ function databaseStatusMessage(ping){
 
   return {
     state:"ready",
-    text:"✓ CONTENT_DB, AUDIENCE_DB ve BEHAVIOR_DB hazır. Reklam analytics tablosu da aktif."
+    text:"✓︎ CONTENT_DB, AUDIENCE_DB ve BEHAVIOR_DB hazır. Reklam analytics tablosu da aktif."
   };
 }
 
@@ -584,7 +584,7 @@ async function refreshGa4Status(){
     }
 
     el.className="database-status ready";
-    el.textContent="✓ GA4 koleksiyon + raporlama hazır. ad_id boyutları ve ad_dwell_ms metriği tanımlı.";
+    el.textContent="✓︎ GA4 koleksiyon + raporlama hazır. ad_id boyutları ve ad_dwell_ms metriği tanımlı.";
   }catch(err){
     el.className="database-status error";
     el.textContent=`GA4 durumu alınamadı: ${err.message||err}`;
@@ -652,7 +652,7 @@ async function setup(){
     }
 
     setDatabaseStatus(
-      "✓ Üç D1 veritabanı ve reklam analytics tablosu hazırlandı.",
+      "✓︎ Üç D1 veritabanı ve reklam analytics tablosu hazırlandı.",
       "ready"
     );
     await loadDashboard();
@@ -679,7 +679,7 @@ async function setupGa4(){
     const data=await api("/admin/ga4/setup",{method:"POST"});
     const created=data.created||{};
     el.className="database-status ready";
-    el.textContent=`✓ GA4 tanımları hazır. Yeni boyut: ${(created.dimensions||[]).length}, yeni metrik: ${(created.metrics||[]).length}.`;
+    el.textContent=`✓︎ GA4 tanımları hazır. Yeni boyut: ${(created.dimensions||[]).length}, yeni metrik: ${(created.metrics||[]).length}.`;
     await refreshGa4Status();
   }catch(err){
     el.className="database-status error";

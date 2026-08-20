@@ -4631,3 +4631,147 @@ body.ad-mode #market-ticker{
   }
 }
 
+
+/* =====================================================================
+   V31.46 — restore stable mobile Flöw loading animation
+   Desktop keeps the current seamless loader loop.
+   ===================================================================== */
+
+@media(max-width:520px){
+  /*
+    Mobilde iki setli / altı logolu sonsuz marquee yerine daha önce stabil
+    çalışan üç logolu akış kullanılır. İkinci kopya yalnız desktop loop için
+    DOM'da kalır ama mobilde render edilmez.
+  */
+  .loading-stage{
+    width:clamp(150px,54vw,220px) !important;
+    height:clamp(64px,22vw,88px) !important;
+    display:grid !important;
+    place-items:center !important;
+    overflow:hidden !important;
+  }
+
+  .loading-marquee{
+    position:static !important;
+    width:auto !important;
+    display:flex !important;
+    flex-direction:column !important;
+    align-items:center !important;
+    gap:0 !important;
+    animation:flowLoadingRiseMobile 2.15s linear infinite !important;
+    will-change:transform;
+    backface-visibility:hidden;
+  }
+
+  .loading-set:first-child{
+    display:flex !important;
+    flex-direction:column !important;
+    align-items:center !important;
+    gap:14px !important;
+    padding:0 !important;
+  }
+
+  .loading-set:nth-child(2){
+    display:none !important;
+  }
+
+  .loading-logo{
+    width:clamp(150px,54vw,220px) !important;
+    height:auto !important;
+    flex:0 0 auto !important;
+    opacity:.14 !important;
+    filter:none !important;
+  }
+
+  /*
+    Mevcut HTML'de ilk logo loading-logo-active sınıfını taşıyor.
+    Stabil eski görünümde ortadaki (2.) logo aktif olduğundan mobilde
+    active class'ı nötrlenir ve 2. logo öne çıkarılır.
+  */
+  .loading-set:first-child .loading-logo-active{
+    opacity:.14 !important;
+    filter:none !important;
+  }
+
+  .loading-set:first-child .loading-logo:nth-child(2){
+    opacity:1 !important;
+    filter:drop-shadow(0 0 8px rgba(255,255,255,.10)) !important;
+  }
+
+  /*
+    Daha yüksek mobil loading-stage ile progress çizgisi arasında
+    görünür boşluk bırak.
+  */
+  .loading-progress{
+    top:calc(50% + 54px) !important;
+    width:116px !important;
+  }
+}
+
+@keyframes flowLoadingRiseMobile{
+  from{
+    transform:translate3d(0,34%,0);
+  }
+  to{
+    transform:translate3d(0,-34%,0);
+  }
+}
+
+@media(max-width:520px) and (prefers-reduced-motion:reduce){
+  .loading-marquee{
+    animation-duration:5s !important;
+  }
+}
+
+
+/* =====================================================================
+   V31.47 — stable Unicode text presentation
+   ===================================================================== */
+
+/*
+  Flöw UI sembolleri cihazın emoji fontuna göre renkli emojiye dönüşmesin.
+  Asıl garanti HTML/JS içindeki U+FE0E selector'larıdır; bu kural destekleyen
+  tarayıcılarda ek olarak text presentation talep eder.
+*/
+html{
+  font-variant-emoji:text;
+}
+
+/*
+  Bayraklar bilinçli olarak emoji kalır.
+*/
+.fx-flag{
+  font-variant-emoji:emoji;
+  font-family:
+    "Apple Color Emoji",
+    "Segoe UI Emoji",
+    "Noto Color Emoji",
+    sans-serif;
+}
+
+/*
+  Sadece sembol içeren temel kontrol düğmelerinde emoji font fallback'inden
+  önce metin/sembol fontlarını tercih et.
+*/
+#fullscreen-button,
+#control-menu-button,
+#pip-button,
+#time-range-button,
+#keyword-filter-button,
+#keyword-watch-button,
+#info-button,
+#menu-button,
+.duration-auto-button,
+.share-link,
+.feedback-inline-link,
+.source-link{
+  font-family:
+    "Apple Symbols",
+    "Segoe UI Symbol",
+    "Noto Sans Symbols 2",
+    "Noto Sans Symbols",
+    "Arial Unicode MS",
+    sans-serif;
+  font-variant-emoji:text;
+}
+

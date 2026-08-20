@@ -169,11 +169,11 @@
   }
 
   const topicOptions=[
-    {v:"story",l:"Haber",i:"▤",next:"story_issue"},
-    {v:"image",l:"Görseller",i:"▧",next:"image_issue"},
-    {v:"scroll",l:"Kaydırma",i:"↕",next:"scroll_issue"},
-    {v:"usability",l:"Kullanım",i:"◌",next:"usability_area"},
-    {v:"sources",l:"Kaynaklar",i:"⌁",next:"source_kind"},
+    {v:"story",l:"Haber",i:"▤︎",next:"story_issue"},
+    {v:"image",l:"Görseller",i:"▧︎",next:"image_issue"},
+    {v:"scroll",l:"Kaydırma",i:"↕︎",next:"scroll_issue"},
+    {v:"usability",l:"Kullanım",i:"◌︎",next:"usability_area"},
+    {v:"sources",l:"Kaynaklar",i:"⌁︎",next:"source_kind"},
     {v:"categories",l:"Kategoriler",i:"#",next:"category_issue"},
     {v:"bug",l:"Bir şey bozuk",i:"!",next:"bug_issue"},
     {v:"suggestion",l:"Önerim var",i:"+",next:"suggestion_area"}
@@ -519,7 +519,7 @@
       <div class="floew-feedback">
         <div class="floew-feedback-step">
           <div class="floew-feedback-head">
-            <button class="floew-feedback-back" type="button" ${stateLocal.history.length?"":"hidden"}>← Geri</button>
+            <button class="floew-feedback-back" type="button" ${stateLocal.history.length?"":"hidden"}>←︎ Geri</button>
             ${progressHtml()}
           </div>
           <div class="floew-feedback-copy">
@@ -559,7 +559,7 @@
       <div class="floew-feedback">
         <div class="floew-feedback-step">
           <div class="floew-feedback-head">
-            <button class="floew-feedback-back" type="button">← Geri</button>
+            <button class="floew-feedback-back" type="button">←︎ Geri</button>
             ${progressHtml()}
           </div>
           <div class="floew-feedback-copy">
@@ -613,7 +613,7 @@
       <div class="floew-feedback">
         <div class="floew-feedback-success">
           <div>
-            <div class="floew-feedback-success-mark" aria-hidden="true">✓</div>
+            <div class="floew-feedback-success-mark" aria-hidden="true">✓︎</div>
             <h3>Aldık.</h3>
             <p>Geri bildirimin için teşekkürler.</p>
             <button class="floew-feedback-again" type="button">Başka bir şey gönder</button>
