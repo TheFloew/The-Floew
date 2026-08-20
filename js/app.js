@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.57.0";
+window.__floewAppVersion="31.58.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -820,6 +820,25 @@ let foreignSourcePreferencesApplied=false;
 const savedForeignSources=loadForeignSourcePreferences();
 
 let rawStories=[];
+
+/*
+  IDDQD — hidden six-panel news wall.
+  Deliberately runtime-only: no localStorage, URL flag or preference import.
+*/
+const IDDQD_CODE="IDDQD";
+const IDDQD_CATEGORIES=[
+  "#Türkiye",
+  "#Dünya",
+  "#Siyaset",
+  "#Ekonomi",
+  "#Teknoloji",
+  "#Spor"
+];
+let iddqdModeActive=false;
+let iddqdTrustedActionGate="";
+let iddqdRotationTimer=null;
+const iddqdCategoryPositions=new Map();
+
 
 /*
   Üst sekme her yeni sayfa yüklemesinde bilinçli olarak Gündem'den başlar.
@@ -5386,6 +5405,11 @@ function timer(durationMs=null){
   state.timer=null;
   state.timerDeadline=0;
 
+  if(iddqdModeActive){
+    state.timerRemainingMs=0;
+    return;
+  }
+
   /* Otomatik ilerleme kapalı olsa bile sıradaki haber hazır tutulur. */
   scheduleNextStoryPreload();
 
@@ -6063,6 +6087,8 @@ async function enterSkippedAdHistory(entryDir){
 }
 
 async function move(dir,options={}){
+  if(iddqdModeActive)return;
+
   closeFloraPopover({resume:false});
 
   if(
@@ -6908,6 +6934,10 @@ async function performNewsLoad(){
     }
 
     rawStories=enrichStories(incoming);
+
+    if(iddqdModeActive){
+      renderIddqdGrid();
+    }
 
     /*
       Yerleşik kaynak kataloğu GitHub'daki config.js'den gelir. Özel RSS
@@ -8442,6 +8472,265 @@ async function togglePiP(){
 
 
 
+function isExactIddqdInput(value=""){
+  return String(value||"")===IDDQD_CODE;
+}
+
+function iddqdStoriesForCategory(category){
+  const list=rawStories.filter(story=>
+    story &&
+    !story.flowForeign &&
+    String(story.flowCategory||"")===category
+  );
+
+  return orderStoriesForFeed(list,"agenda");
+}
+
+function ensureIddqdCells(){
+  const grid=document.getElementById("iddqd-grid");
+  if(!grid)return [];
+
+  const existing=[...grid.querySelectorAll(".iddqd-cell")];
+  if(existing.length===IDDQD_CATEGORIES.length){
+    return existing;
+  }
+
+  grid.replaceChildren();
+
+  for(const category of IDDQD_CATEGORIES){
+    const cell=document.createElement("section");
+    cell.className="iddqd-cell";
+    cell.dataset.category=category;
+
+    const link=document.createElement("a");
+    link.className="iddqd-card";
+    link.target="_blank";
+    link.rel="noopener noreferrer";
+    link.setAttribute("aria-label",`${category} haberini aç`);
+
+    const image=document.createElement("img");
+    image.className="iddqd-image";
+    image.alt="";
+    image.draggable=false;
+    image.referrerPolicy="no-referrer";
+
+    const shade=document.createElement("div");
+    shade.className="iddqd-shade";
+    shade.setAttribute("aria-hidden","true");
+
+    const copy=document.createElement("div");
+    copy.className="iddqd-copy";
+
+    const categoryEl=document.createElement("div");
+    categoryEl.className="iddqd-category";
+    categoryEl.textContent=category;
+
+    const title=document.createElement("h2");
+    title.className="iddqd-title";
+
+    const meta=document.createElement("div");
+    meta.className="iddqd-meta";
+
+    copy.append(categoryEl,title,meta);
+    link.append(image,shade,copy);
+    cell.append(link);
+    grid.append(cell);
+  }
+
+  return [...grid.querySelectorAll(".iddqd-cell")];
+}
+
+function setIddqdCellStory(cell,category,story){
+  if(!cell)return;
+
+  const link=cell.querySelector(".iddqd-card");
+  const image=cell.querySelector(".iddqd-image");
+  const title=cell.querySelector(".iddqd-title");
+  const meta=cell.querySelector(".iddqd-meta");
+
+  cell.classList.toggle("is-empty",!story);
+
+  if(!story){
+    if(link){
+      link.removeAttribute("href");
+      link.removeAttribute("title");
+    }
+    if(image){
+      image.removeAttribute("src");
+      image.style.visibility="hidden";
+      image.onerror=null;
+    }
+    if(title)title.textContent="Bu kategoride gösterilecek haber yok.";
+    if(meta)meta.textContent="";
+    return;
+  }
+
+  if(link){
+    if(story.link){
+      link.href=story.link;
+      link.title="Haberi yeni sekmede aç";
+    }else{
+      link.removeAttribute("href");
+      link.removeAttribute("title");
+    }
+  }
+
+  if(title)title.textContent=String(story.title||"").trim();
+
+  if(meta){
+    const parts=[
+      String(story.source||"").trim(),
+      timeText(story.published)
+    ].filter(Boolean);
+    meta.textContent=parts.join(" · ");
+  }
+
+  if(image){
+    const direct=String(story.image||"").trim();
+    const proxy=storyImageProxyUrl(story);
+    image.style.visibility=direct||proxy ? "visible" : "hidden";
+    image.dataset.fallbackUsed="0";
+    image.onerror=()=>{
+      if(
+        image.dataset.fallbackUsed!=="1" &&
+        proxy &&
+        image.src!==proxy
+      ){
+        image.dataset.fallbackUsed="1";
+        image.src=proxy;
+        return;
+      }
+      image.style.visibility="hidden";
+    };
+
+    if(direct){
+      image.src=direct;
+    }else if(proxy){
+      image.src=proxy;
+    }else{
+      image.removeAttribute("src");
+    }
+  }
+}
+
+function renderIddqdGrid({advance=false}={}){
+  const cells=ensureIddqdCells();
+  if(!cells.length)return;
+
+  IDDQD_CATEGORIES.forEach((category,index)=>{
+    const stories=iddqdStoriesForCategory(category);
+
+    if(!stories.length){
+      iddqdCategoryPositions.set(category,0);
+      setIddqdCellStory(cells[index],category,null);
+      return;
+    }
+
+    const previous=Number(iddqdCategoryPositions.get(category))||0;
+    const position=advance
+      ? (previous+1)%stories.length
+      : Math.min(previous,stories.length-1);
+
+    iddqdCategoryPositions.set(category,position);
+    setIddqdCellStory(cells[index],category,stories[position]);
+  });
+}
+
+function scheduleIddqdRotation(){
+  clearTimeout(iddqdRotationTimer);
+  iddqdRotationTimer=null;
+
+  if(!iddqdModeActive)return;
+
+  const delay=Math.max(6000,Math.max(5,showDurationSeconds)*1000);
+  iddqdRotationTimer=setTimeout(()=>{
+    if(!iddqdModeActive)return;
+    renderIddqdGrid({advance:true});
+    scheduleIddqdRotation();
+  },delay);
+}
+
+function enterIddqdMode(){
+  if(iddqdModeActive)return;
+
+  iddqdModeActive=true;
+  iddqdCategoryPositions.clear();
+
+  clearTimeout(state.timer);
+  state.timer=null;
+  state.timerDeadline=0;
+  state.timerRemainingMs=0;
+
+  closeFloraPopover({resume:false});
+  closeStatsOverlay();
+  closeMenu();
+  closeQuickPanels();
+  closeControlMenu();
+
+  slides.forEach(slide=>stopSlideMedia(slide));
+
+  const grid=document.getElementById("iddqd-grid");
+  grid?.setAttribute("aria-hidden","false");
+  document.body.classList.add("iddqd-mode");
+
+  renderIddqdGrid();
+  renderKeywordFilterControl();
+  scheduleIddqdRotation();
+  showFullscreenButton();
+}
+
+function exitIddqdMode(){
+  if(!iddqdModeActive)return;
+
+  iddqdModeActive=false;
+  clearTimeout(iddqdRotationTimer);
+  iddqdRotationTimer=null;
+  iddqdCategoryPositions.clear();
+
+  const grid=document.getElementById("iddqd-grid");
+  grid?.setAttribute("aria-hidden","true");
+  document.body.classList.remove("iddqd-mode");
+
+  closeKeywordFilterPanel();
+  closeControlMenu();
+  renderKeywordFilterControl();
+
+  const story=state.stories[state.index]||null;
+  if(story){
+    setStoryStageVisible(true);
+    fill(slides[state.active],story,{prepareMedia:false});
+    slides[state.active].className="slide active";
+    activateSlideMedia(slides[state.active],story);
+    updateKeywordAlert(story);
+    timer();
+  }else{
+    applyFilters();
+  }
+
+  showFullscreenButton();
+}
+
+function runTrustedKeywordFilterButtonAction(mode,event){
+  const input=document.getElementById("keyword-filter-input");
+  const exact=isExactIddqdInput(input?.value||"");
+
+  /*
+    The easter egg gate is set only by a real user click on the actual
+    Show/Hide buttons. Enter key, synthetic .click(), URL flags, storage and
+    direct applyKeywordFilter() calls cannot open or close this mode.
+  */
+  iddqdTrustedActionGate=
+    event?.isTrusted && exact && (mode==="show" || mode==="hide")
+      ? mode
+      : "";
+
+  try{
+    return applyKeywordFilter(mode);
+  }finally{
+    iddqdTrustedActionGate="";
+  }
+}
+
 function renderKeywordFilterControl(){
   const input=document.getElementById("keyword-filter-input");
   const show=document.getElementById("keyword-filter-show");
@@ -8449,43 +8738,94 @@ function renderKeywordFilterControl(){
   const trigger=document.getElementById("keyword-filter-button");
 
   if(input && document.activeElement!==input){
-    input.value=keywordFilterState.text;
+    input.value=iddqdModeActive
+      ? IDDQD_CODE
+      : keywordFilterState.text;
   }
 
-  const active=
+  const normalActive=
     parseKeywordList(keywordFilterState.text).length>0 &&
     keywordFilterState.mode!=="off";
 
+  const active=iddqdModeActive || normalActive;
+
   show?.classList.toggle(
     "active",
-    active && keywordFilterState.mode==="show"
+    iddqdModeActive ||
+    (normalActive && keywordFilterState.mode==="show")
   );
+
   hide?.classList.toggle(
     "active",
-    active && keywordFilterState.mode==="hide"
+    !iddqdModeActive &&
+    normalActive &&
+    keywordFilterState.mode==="hide"
   );
 
   show?.setAttribute(
     "aria-pressed",
-    active && keywordFilterState.mode==="show" ? "true" : "false"
+    iddqdModeActive ||
+    (normalActive && keywordFilterState.mode==="show")
+      ? "true"
+      : "false"
   );
+
   hide?.setAttribute(
     "aria-pressed",
-    active && keywordFilterState.mode==="hide" ? "true" : "false"
+    !iddqdModeActive &&
+    normalActive &&
+    keywordFilterState.mode==="hide"
+      ? "true"
+      : "false"
   );
 
   trigger?.classList.toggle("tool-active",active);
+
   if(trigger){
-    trigger.title=active
-      ? `Anahtar kelime filtresi: ${keywordFilterState.mode==="show"?"Göster":"Gizle"}`
-      : "Anahtar kelime filtresi";
+    trigger.title=iddqdModeActive
+      ? "Anahtar kelime filtresi"
+      : normalActive
+        ? `Anahtar kelime filtresi: ${keywordFilterState.mode==="show"?"Göster":"Gizle"}`
+        : "Anahtar kelime filtresi";
     trigger.setAttribute("aria-label",trigger.title);
   }
 }
 
 function applyKeywordFilter(mode){
   const input=document.getElementById("keyword-filter-input");
-  const text=String(input?.value||"").trim();
+  const rawText=String(input?.value||"");
+  const exactIddqd=isExactIddqdInput(rawText);
+
+  if(iddqdModeActive){
+    if(
+      exactIddqd &&
+      mode==="hide" &&
+      iddqdTrustedActionGate==="hide"
+    ){
+      exitIddqdMode();
+      return "iddqd-exit";
+    }
+
+    /* While active, no other filter action can alter or exit the mode. */
+    renderKeywordFilterControl();
+    return "iddqd-locked";
+  }
+
+  if(exactIddqd){
+    if(
+      mode==="show" &&
+      iddqdTrustedActionGate==="show"
+    ){
+      enterIddqdMode();
+      return "iddqd-enter";
+    }
+
+    /* IDDQD is never treated as an ordinary show/hide keyword filter. */
+    renderKeywordFilterControl();
+    return "iddqd-denied";
+  }
+
+  const text=rawText.trim();
   const keywords=parseKeywordList(text);
 
   keywordFilterState={
@@ -8502,10 +8842,20 @@ function applyKeywordFilter(mode){
   closeKeywordFilterPanel();
   applyFilters();
   showFullscreenButton();
+  return "filter-applied";
 }
 
 function clearKeywordFilter(){
   const input=document.getElementById("keyword-filter-input");
+
+  if(iddqdModeActive){
+    if(input)input.value="";
+    setTimeout(()=>{
+      document.getElementById("keyword-filter-input")?.focus();
+    },0);
+    return "iddqd-locked";
+  }
+
   if(input)input.value="";
 
   keywordFilterState={
@@ -8521,6 +8871,7 @@ function clearKeywordFilter(){
   setTimeout(()=>{
     document.getElementById("keyword-filter-input")?.focus();
   },0);
+  return "filter-cleared";
 }
 
 function renderKeywordWatchControl(){
@@ -9065,12 +9416,12 @@ document.getElementById("keyword-filter-clear")?.addEventListener("click",e=>{
 
 document.getElementById("keyword-filter-show")?.addEventListener("click",e=>{
   e.stopPropagation();
-  applyKeywordFilter("show");
+  runTrustedKeywordFilterButtonAction("show",e);
 });
 
 document.getElementById("keyword-filter-hide")?.addEventListener("click",e=>{
   e.stopPropagation();
-  applyKeywordFilter("hide");
+  runTrustedKeywordFilterButtonAction("hide",e);
 });
 
 document.getElementById("keyword-filter-input")?.addEventListener("keydown",e=>{
@@ -9078,6 +9429,10 @@ document.getElementById("keyword-filter-input")?.addEventListener("keydown",e=>{
 
   if(e.key==="Enter"){
     e.preventDefault();
+
+    /* IDDQD only responds to the physical Show/Hide buttons. */
+    if(isExactIddqdInput(e.currentTarget?.value||""))return;
+
     applyKeywordFilter(
       keywordFilterState.mode==="hide"
         ? "hide"
@@ -12198,6 +12553,12 @@ applyKeywordFilter=function(mode){
   const text=String(input?.value||"").trim();
   const keywords=parseKeywordList(text);
   const result=__floewApplyKeywordFilter.apply(this,arguments);
+
+  /* The easter-egg code is intentionally not written into keyword telemetry. */
+  if(String(result||"").startsWith("iddqd-")){
+    return result;
+  }
+
   telemetryQueueEvent(
     keywordFilterState.mode==="show" ? "filter_show" :
     keywordFilterState.mode==="hide" ? "filter_hide" :
@@ -12215,6 +12576,11 @@ const __floewClearKeywordFilter=clearKeywordFilter;
 clearKeywordFilter=function(){
   const before=keywordFilterState.text;
   const result=__floewClearKeywordFilter.apply(this,arguments);
+
+  if(String(result||"").startsWith("iddqd-")){
+    return result;
+  }
+
   telemetryQueueEvent("filter_clear",{
     keyword_text:before,
     keyword_count:parseKeywordList(before).length
