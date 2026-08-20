@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
 <link rel="manifest" href="site.webmanifest">
 
-<link rel="stylesheet" href="css/styles.css?h=7071f07a69a3">
+<link rel="stylesheet" href="css/styles.css?h=6410ed0b0cda">
 
 <style id="boot-black-style">
   html,body{background:#000}
@@ -399,8 +399,8 @@
 
   <article class="slide active" id="a">
     <img class="slide-image" alt="" draggable="false" referrerpolicy="no-referrer">
-    <video class="slide-video" muted autoplay playsinline preload="metadata" aria-hidden="true"></video>
-    <iframe class="slide-embed" title="Haber videosu" allow="autoplay; encrypted-media; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" aria-hidden="true"></iframe>
+    <video class="slide-video" muted autoplay playsinline preload="auto" loop aria-hidden="true"></video>
+    <iframe class="slide-embed" title="Haber videosu" allow="autoplay; encrypted-media" referrerpolicy="strict-origin-when-cross-origin" aria-hidden="true"></iframe>
     <div class="shade"></div>
     <div class="headline">
       <div class="source-line">
@@ -425,8 +425,8 @@
 
   <article class="slide" id="b">
     <img class="slide-image" alt="" draggable="false" referrerpolicy="no-referrer">
-    <video class="slide-video" muted autoplay playsinline preload="metadata" aria-hidden="true"></video>
-    <iframe class="slide-embed" title="Haber videosu" allow="autoplay; encrypted-media; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" aria-hidden="true"></iframe>
+    <video class="slide-video" muted autoplay playsinline preload="auto" loop aria-hidden="true"></video>
+    <iframe class="slide-embed" title="Haber videosu" allow="autoplay; encrypted-media" referrerpolicy="strict-origin-when-cross-origin" aria-hidden="true"></iframe>
     <div class="shade"></div>
     <div class="headline">
       <div class="source-line">
@@ -454,6 +454,8 @@
     <video id="ad-video" class="ad-media" muted playsinline preload="auto" hidden></video>
   </div>
 </main>
+
+<button id="video-audio-toggle" type="button" hidden aria-hidden="true" aria-pressed="false" aria-label="Videonun sesini aç" title="Sesi aç"><span class="video-audio-label">SESSİZ</span></button>
 
 <div id="keyword-alert-frame" aria-hidden="true"></div>
 <div id="status" hidden></div>
@@ -490,7 +492,7 @@
 </script>
 
 <script src="js/config.js?h=d84488edfaa0"></script>
-<script src="js/app.js?v=421d1d97da8c" onerror="
+<script src="js/app.js?v=b1053d1fc01c" onerror="
   var loader=document.getElementById('loading-screen');
   if(loader)loader.remove();
   var status=document.getElementById('status');

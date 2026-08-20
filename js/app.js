@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.48.0";
+window.__floewAppVersion="31.49.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -654,7 +654,7 @@ let adSkipRequestedDirection=0;
   kullanıcı skip hareketlerini kabul etmeye başlarız.
 */
 let adSkipEnabledAt=0;
-const AD_SKIP_GRACE_MS=450;
+const AD_SKIP_GRACE_MS=180;
 
 let currentAd=null;
 let adEntryDirection=1;
@@ -2462,6 +2462,15 @@ function timeText(v){
 
 
 const storyMediaCache=new Map();
+const VIDEO_RESOLVER_VERSION="20260820-1";
+const SUPPORTED_EMBED_VIDEO_PROVIDERS=new Set([
+  "youtube",
+  "vimeo",
+  "dailymotion"
+]);
+let videoAudioEnabled=false;
+let videoAudioStoryKey="";
+let videoAudioUiSyncQueued=false;
 
 function mediaKey(story){
   if(!story)return "";
@@ -2471,27 +2480,66 @@ function mediaKey(story){
     .trim();
 
   /*
-    Bazı canlı/rolling haber URL'leri zaman içinde farklı içerik ve video ile
-    yeniden kullanılabiliyor. Video cache/async guard yalnız linke bağlı olursa
-    eski videonun yeni manşete sızması mümkün. Başlığı da medya kimliğine kat.
+    Link tek başına yeterli değil: rolling/live URL'ler zaman içinde başka
+    başlık ve videoya dönüşebiliyor. Async medya işlemlerini başlıkla da bağla.
   */
   if(link)return `${link}|${title}`;
   return `${String(story?.source||"").trim()}|${title}`;
 }
 
+function mediaUrlIsSafe(value=""){
+  try{
+    const url=new URL(String(value||""));
+    return url.protocol==="https:" || url.protocol==="http:";
+  }catch(e){
+    return false;
+  }
+}
+
+function normalizeResolvedStoryMedia(value){
+  if(!value || typeof value!=="object")return null;
+
+  const kind=String(value.kind||"").toLowerCase();
+  const url=String(value.url||"").trim();
+  if(!url || !mediaUrlIsSafe(url))return null;
+
+  if(kind==="video"){
+    return {
+      kind:"video",
+      url,
+      type:String(value.type||""),
+      provider:"native",
+      source:String(value.source||""),
+      confidence:Number(value.confidence)||0
+    };
+  }
+
+  if(kind==="embed"){
+    const provider=String(value.provider||"").toLowerCase();
+    if(!SUPPORTED_EMBED_VIDEO_PROVIDERS.has(provider))return null;
+    return {
+      kind:"embed",
+      url,
+      type:"",
+      provider,
+      source:String(value.source||""),
+      confidence:Number(value.confidence)||0
+    };
+  }
+
+  return null;
+}
+
 function retireDailymotionHost(host){
   if(!host)return;
 
-  /*
-    Dailymotion Web SDK player instance'larını source/container ID ile kendi
-    registry'sinde tutuyor. Aynı fiziksel slide/container ID'sini tekrar tekrar
-    destroy -> create döngüsünde kullanmak bazı tarayıcılarda eski instance'ın
-    sonraki videoya taşınmasına yol açabiliyor. Eski player'ı önce pasifleştir,
-    sonra container'ı tamamen emekliye ayır; bir sonraki Dailymotion haberi
-    benzersiz yeni bir host ID alacak.
-  */
   host.dataset.retired="1";
   host.removeAttribute("data-media-token");
+
+  if(host.__floewDailymotionMonitor){
+    clearInterval(host.__floewDailymotionMonitor);
+    host.__floewDailymotionMonitor=null;
+  }
 
   const player=host.__floewDailymotionPlayer;
   host.__floewDailymotionPlayer=null;
@@ -2520,10 +2568,15 @@ function retireDailymotionHost(host){
 }
 
 function resetSlideMedia(el){
+  if(!el)return;
+
   el.dataset.mediaToken=String(
     (Number(el.dataset.mediaToken)||0)+1
   );
   el.removeAttribute("data-preloaded-story-key");
+  el.removeAttribute("data-media-ready-story-key");
+  el.removeAttribute("data-media-kind");
+  el.__floewMediaPrepare=null;
 
   const image=el.querySelector(".slide-image");
   const video=el.querySelector(".slide-video");
@@ -2541,20 +2594,24 @@ function resetSlideMedia(el){
   }
 
   if(video){
+    video.__floewShouldPlay=false;
+    video.__floewMediaDescriptor=null;
+    video.__floewMediaStoryKey="";
     if(video.__floewHls){
       try{video.__floewHls.destroy()}catch(e){}
       video.__floewHls=null;
     }
     try{video.pause()}catch(e){}
-    video.__floewMediaDescriptor=null;
-    video.__floewMediaStoryKey="";
+    video.onloadeddata=null;
+    video.onerror=null;
     video.removeAttribute("src");
-    video.load();
+    try{video.load()}catch(e){}
     video.classList.remove("media-visible");
     video.setAttribute("aria-hidden","true");
   }
 
   if(embed){
+    embed.onload=null;
     embed.src="about:blank";
     embed.classList.remove("media-visible");
     embed.setAttribute("aria-hidden","true");
@@ -2566,6 +2623,8 @@ function resetSlideMedia(el){
     dailymotionHost.setAttribute("aria-hidden","true");
     retireDailymotionHost(dailymotionHost);
   }
+
+  queueVideoAudioUiSync();
 }
 
 function stopSlideMedia(el){
@@ -2576,56 +2635,56 @@ function stopSlideMedia(el){
 async function resolveStoryMedia(story){
   if(!videoEnabled || !story)return null;
 
-  if(story.video){
-    return {
-      kind:"video",
-      url:story.video,
-      type:story.videoType||""
-    };
-  }
-
-  if(!story.link)return null;
-
   const key=mediaKey(story);
-  if(storyMediaCache.has(key)){
-    return storyMediaCache.get(key);
-  }
+  if(!key)return null;
+  if(storyMediaCache.has(key))return storyMediaCache.get(key);
 
   const promise=(async()=>{
+    /*
+      RSS media:content/enclosure URL'si doğrudan oynatılabilir olsa bile
+      artık frontend tarafından körlemesine kullanılmıyor. Worker'a hint olarak
+      gönderiliyor; aynı haber sayfası ve başlık bağlamında normalize ediliyor.
+    */
+    if(!story.link){
+      const direct=normalizeResolvedStoryMedia({
+        kind:"video",
+        url:story.video,
+        type:story.videoType||"",
+        source:"feed"
+      });
+      return direct;
+    }
+
     const controller=new AbortController();
-    const timeout=setTimeout(
-      ()=>controller.abort(),
-      8500
-    );
+    const timeout=setTimeout(()=>controller.abort(),8500);
 
     try{
       const requestUrl=new URL(VIDEO_API);
       requestUrl.searchParams.set("url",story.link);
       requestUrl.searchParams.set("title",String(story.title||""));
-      /* Resolver sürümü yanlış/eskiden cache'lenmiş video eşleşmelerini kırar. */
-      requestUrl.searchParams.set("rv","20260818-2");
+      requestUrl.searchParams.set("rv",VIDEO_RESOLVER_VERSION);
 
-      const r=await fetch(requestUrl.href,{
+      if(story.video){
+        requestUrl.searchParams.set("hint",String(story.video));
+        requestUrl.searchParams.set("hintType",String(story.videoType||""));
+      }
+
+      const response=await fetch(requestUrl.href,{
         method:"GET",
         mode:"cors",
         credentials:"omit",
         cache:"no-store",
         signal:controller.signal,
-        headers:{
-          "Accept":"application/json"
-        }
+        headers:{"Accept":"application/json"}
       });
 
-      if(!r.ok)return null;
-
-      const data=await r.json();
-      return data?.media||null;
-    }catch(err){
-      console.warn(
-        "Video resolve:",
-        story.link,
-        err
-      );
+      if(!response.ok)return null;
+      const data=await response.json();
+      return normalizeResolvedStoryMedia(data?.media);
+    }catch(error){
+      if(error?.name!=="AbortError"){
+        console.warn("Video resolve:",story.link,error);
+      }
       return null;
     }finally{
       clearTimeout(timeout);
@@ -2633,6 +2692,21 @@ async function resolveStoryMedia(story){
   })();
 
   storyMediaCache.set(key,promise);
+
+  promise.then(media=>{
+    /* Null/error sonucunu oturum boyunca kilitleme; sonraki preload tekrar deneyebilir. */
+    if(!media && storyMediaCache.get(key)===promise){
+      storyMediaCache.delete(key);
+    }
+  }).catch(()=>{
+    if(storyMediaCache.get(key)===promise)storyMediaCache.delete(key);
+  });
+
+  if(storyMediaCache.size>160){
+    const first=storyMediaCache.keys().next().value;
+    if(first)storyMediaCache.delete(first);
+  }
+
   return promise;
 }
 
@@ -2660,6 +2734,7 @@ function ensureHlsLibrary(){
     script.addEventListener("load",()=>resolve(window.Hls||null),{once:true});
     script.addEventListener("error",()=>{
       console.warn("Flöw video: HLS.js yüklenemedi.");
+      hlsLibraryPromise=null;
       resolve(null);
     },{once:true});
     document.head.appendChild(script);
@@ -2675,22 +2750,52 @@ function setMutedInlinePlaybackAttributes(video){
   video.defaultMuted=true;
   video.volume=0;
   video.autoplay=true;
+  video.loop=true;
   video.playsInline=true;
   video.controls=false;
+  video.preload="auto";
   video.disablePictureInPicture=true;
   try{video.disableRemotePlayback=true}catch(e){}
-  video.setAttribute("controlslist","nodownload noplaybackrate noremoteplayback");
+
   video.setAttribute("muted","");
   video.setAttribute("autoplay","");
+  video.setAttribute("loop","");
   video.setAttribute("playsinline","");
   video.setAttribute("webkit-playsinline","");
+  video.setAttribute("preload","auto");
+  video.setAttribute("controlslist","nodownload noplaybackrate noremoteplayback");
+
+  if(!video.__floewPlaybackGuardBound){
+    video.__floewPlaybackGuardBound=true;
+
+    video.addEventListener("ended",()=>{
+      if(!video.__floewShouldPlay)return;
+      try{video.currentTime=0}catch(e){}
+      const p=video.play?.();
+      if(p?.catch)p.catch(()=>{});
+    });
+
+    video.addEventListener("pause",()=>{
+      if(
+        !video.__floewShouldPlay ||
+        document.visibilityState!=="visible"
+      )return;
+
+      setTimeout(()=>{
+        if(!video.__floewShouldPlay || document.visibilityState!=="visible")return;
+        const p=video.play?.();
+        if(p?.catch)p.catch(()=>{});
+      },70);
+    });
+  }
 }
 
-async function attemptMutedAutoplay(video,attempts=5){
+async function attemptMutedAutoplay(video,attempts=4){
   if(!video)return false;
   setMutedInlinePlaybackAttributes(video);
+  video.__floewShouldPlay=true;
 
-  const delays=[0,90,220,450,800];
+  const delays=[0,70,180,380];
   const count=Math.max(1,Math.min(attempts,delays.length));
 
   for(let i=0;i<count;i++){
@@ -2699,6 +2804,8 @@ async function attemptMutedAutoplay(video,attempts=5){
     }else{
       await new Promise(resolve=>requestAnimationFrame(()=>resolve()));
     }
+
+    if(!video.__floewShouldPlay)return false;
 
     try{
       const result=video.play();
@@ -2710,172 +2817,340 @@ async function attemptMutedAutoplay(video,attempts=5){
   return !video.paused;
 }
 
+function activeVideoSlide(){
+  return document.querySelector(".slide.active") || slides?.[state?.active||0] || null;
+}
+
+function slideVisibleMedia(el){
+  if(!el)return null;
+
+  const direct=el.querySelector(".slide-video.media-visible");
+  if(direct){
+    return {kind:"video",provider:"native",element:direct};
+  }
+
+  const dailymotion=el.querySelector(".slide-dailymotion.media-visible");
+  if(dailymotion){
+    return {kind:"embed",provider:"dailymotion",element:dailymotion};
+  }
+
+  const embed=el.querySelector(".slide-embed.media-visible");
+  if(embed){
+    const provider=String(embed.dataset.provider||"").toLowerCase();
+    if(SUPPORTED_EMBED_VIDEO_PROVIDERS.has(provider)){
+      return {kind:"embed",provider,element:embed};
+    }
+  }
+
+  return null;
+}
+
+function postYouTubeCommand(iframe,func,args=[]){
+  try{
+    iframe?.contentWindow?.postMessage(
+      JSON.stringify({event:"command",func,args}),
+      "*"
+    );
+  }catch(e){}
+}
+
+function postVimeoCommand(iframe,method,value){
+  try{
+    const payload=value===undefined ? {method} : {method,value};
+    iframe?.contentWindow?.postMessage(payload,"https://player.vimeo.com");
+  }catch(e){}
+}
+
+function applySlideVideoAudio(el,enabled){
+  const media=slideVisibleMedia(el);
+  if(!media)return;
+
+  if(media.provider==="native"){
+    const video=media.element;
+    try{
+      video.muted=!enabled;
+      video.defaultMuted=!enabled;
+      video.volume=enabled?1:0;
+    }catch(e){}
+    return;
+  }
+
+  if(media.provider==="youtube"){
+    postYouTubeCommand(media.element,enabled?"unMute":"mute");
+    postYouTubeCommand(media.element,"setVolume",[enabled?100:0]);
+    return;
+  }
+
+  if(media.provider==="vimeo"){
+    postVimeoCommand(media.element,"setVolume",enabled?1:0);
+    return;
+  }
+
+  if(media.provider==="dailymotion"){
+    const player=media.element.__floewDailymotionPlayer;
+    try{
+      const result=player?.setVolume?.(enabled?1:0);
+      if(result?.catch)result.catch(()=>{});
+    }catch(e){}
+  }
+}
+
+function syncActiveVideoAudioUi(){
+  videoAudioUiSyncQueued=false;
+  const button=document.getElementById("video-audio-toggle");
+  if(!button)return;
+
+  const slide=activeVideoSlide();
+  const media=slideVisibleMedia(slide);
+  const storyKey=String(slide?.dataset.storyKey||"");
+
+  if(!media || !storyKey || adActive){
+    button.hidden=true;
+    button.setAttribute("aria-hidden","true");
+    return;
+  }
+
+  if(videoAudioStoryKey!==storyKey){
+    videoAudioStoryKey=storyKey;
+    videoAudioEnabled=false;
+  }
+
+  /* Her yeni haber varsayılan olarak sessiz başlar. */
+  applySlideVideoAudio(slide,videoAudioEnabled);
+
+  button.hidden=false;
+  button.setAttribute("aria-hidden","false");
+  button.classList.toggle("sound-on",videoAudioEnabled);
+  button.setAttribute("aria-pressed",videoAudioEnabled?"true":"false");
+  button.setAttribute("aria-label",videoAudioEnabled?"Videonun sesini kapat":"Videonun sesini aç");
+  button.title=videoAudioEnabled?"Sesi kapat":"Sesi aç";
+  button.querySelector(".video-audio-label")?.replaceChildren(
+    document.createTextNode(videoAudioEnabled?"SES AÇIK":"SESSİZ")
+  );
+}
+
+function queueVideoAudioUiSync(){
+  if(videoAudioUiSyncQueued)return;
+  videoAudioUiSyncQueued=true;
+  queueMicrotask(syncActiveVideoAudioUi);
+}
+
+function bindVideoAudioUi(){
+  const button=document.getElementById("video-audio-toggle");
+  if(!button)return;
+
+  const stop=e=>e.stopPropagation();
+  button.addEventListener("pointerdown",stop);
+  button.addEventListener("pointerup",stop);
+  button.addEventListener("click",e=>{
+    e.preventDefault();
+    e.stopPropagation();
+
+    const slide=activeVideoSlide();
+    if(!slideVisibleMedia(slide))return;
+
+    videoAudioEnabled=!videoAudioEnabled;
+    applySlideVideoAudio(slide,videoAudioEnabled);
+    syncActiveVideoAudioUi();
+  });
+
+  const root=document.querySelector("main");
+  if(root && window.MutationObserver){
+    const observer=new MutationObserver(queueVideoAudioUiSync);
+    observer.observe(root,{
+      subtree:true,
+      childList:true,
+      attributes:true,
+      attributeFilter:["class","data-story-key","aria-hidden"]
+    });
+  }
+
+  document.addEventListener("visibilitychange",()=>{
+    if(document.visibilityState==="visible"){
+      const slide=activeVideoSlide();
+      const direct=slide?.querySelector(".slide-video.media-visible");
+      if(direct?.__floewShouldPlay){
+        const p=direct.play?.();
+        if(p?.catch)p.catch(()=>{});
+      }
+      queueVideoAudioUiSync();
+    }
+  });
+
+  queueVideoAudioUiSync();
+}
+
+function markSlideMediaReady(el,story,kind){
+  if(!el || !story)return;
+  el.dataset.mediaReadyStoryKey=mediaKey(story);
+  el.dataset.mediaKind=kind;
+  queueVideoAudioUiSync();
+}
+
 function showDirectVideo(el,story,media,token){
   const image=el.querySelector(".slide-image");
   const video=el.querySelector(".slide-video");
 
-  if(!video || !media?.url)return;
+  if(!video || !media?.url)return Promise.resolve(false);
 
   setMutedInlinePlaybackAttributes(video);
   video.poster=story.image||"";
   video.__floewMediaDescriptor=media;
   video.__floewMediaStoryKey=mediaKey(story);
+  video.__floewShouldPlay=true;
 
-  let settled=false;
-  let mediaRecoveryTried=false;
+  return new Promise(resolve=>{
+    let settled=false;
+    let revealing=false;
+    let mediaRecoveryTried=false;
 
-  const destroyHls=()=>{
-    if(video.__floewHls){
-      try{video.__floewHls.destroy()}catch(e){}
-      video.__floewHls=null;
-    }
-  };
+    const isCurrent=()=>Boolean(
+      videoEnabled &&
+      token===el.dataset.mediaToken &&
+      mediaKey(story)===el.dataset.storyKey &&
+      video.__floewMediaStoryKey===mediaKey(story)
+    );
 
-  const fallback=()=>{
-    if(settled)return;
-    settled=true;
+    const finish=value=>{
+      if(settled)return;
+      settled=true;
+      resolve(Boolean(value));
+    };
 
-    if(
-      token!==el.dataset.mediaToken ||
-      mediaKey(story)!==el.dataset.storyKey
-    ) return;
+    const destroyHls=()=>{
+      if(video.__floewHls){
+        try{video.__floewHls.destroy()}catch(e){}
+        video.__floewHls=null;
+      }
+    };
 
-    destroyHls();
-    try{video.pause()}catch(e){}
-    video.removeAttribute("src");
-    video.load();
-    video.classList.remove("media-visible");
-    video.setAttribute("aria-hidden","true");
+    const fallback=()=>{
+      if(settled)return;
+      if(!isCurrent()){
+        finish(false);
+        return;
+      }
 
-    if(image)image.style.display="block";
-  };
+      video.__floewShouldPlay=false;
+      destroyHls();
+      try{video.pause()}catch(e){}
+      video.removeAttribute("src");
+      try{video.load()}catch(e){}
+      video.classList.remove("media-visible");
+      video.setAttribute("aria-hidden","true");
+      if(image)image.style.display="block";
+      queueVideoAudioUiSync();
+      finish(false);
+    };
 
-  const reveal=async()=>{
-    if(settled)return;
+    const reveal=async()=>{
+      if(settled || revealing)return;
+      revealing=true;
 
-    if(
-      !videoEnabled ||
-      token!==el.dataset.mediaToken ||
-      mediaKey(story)!==el.dataset.storyKey
-    ){
-      fallback();
-      return;
-    }
+      if(!isCurrent()){
+        revealing=false;
+        finish(false);
+        return;
+      }
 
-    const played=await attemptMutedAutoplay(video,5);
+      const played=await attemptMutedAutoplay(video,4);
+      revealing=false;
 
-    /*
-      play() promise'i mobilde yüzlerce ms sonra çözülebilir. Bu sırada aynı
-      fiziksel slide başka bir habere atanmış olabilir. Geç kalan eski async
-      işlem yeni habere önceki videoyu sızdıramasın.
-    */
-    if(
-      !played ||
-      !videoEnabled ||
-      token!==el.dataset.mediaToken ||
-      mediaKey(story)!==el.dataset.storyKey
-    ){
-      fallback();
-      return;
-    }
-
-    settled=true;
-    video.classList.add("media-visible");
-    video.setAttribute("aria-hidden","false");
-
-    if(image)image.style.display="none";
-  };
-
-  video.addEventListener(
-    "loadeddata",
-    reveal,
-    {once:true}
-  );
-  video.addEventListener(
-    "error",
-    fallback,
-    {once:true}
-  );
-
-  const type=String(media.type||"").toLowerCase();
-  const isHls=
-    type.includes("mpegurl") ||
-    /\.m3u8(?:[?#]|$)/i.test(media.url);
-
-  const startNative=()=>{
-    video.src=media.url;
-    video.load();
-  };
-
-  if(!isHls){
-    startNative();
-    return;
-  }
-
-  /*
-    Chrome/Firefox gibi MSE destekli tarayıcılarda HLS.js kullanılır.
-    Safari/iOS gibi native HLS oynatabilen ortamlarda native yol fallback'tir.
-  */
-  (async()=>{
-    const HlsCtor=await ensureHlsLibrary();
-
-    if(
-      settled ||
-      token!==el.dataset.mediaToken ||
-      mediaKey(story)!==el.dataset.storyKey
-    ) return;
-
-    if(HlsCtor?.isSupported?.()){
-      const hls=new HlsCtor({
-        enableWorker:true,
-        lowLatencyMode:false,
-        backBufferLength:30
-      });
-
-      video.__floewHls=hls;
-
-      hls.on(HlsCtor.Events.MEDIA_ATTACHED,()=>{
-        if(settled)return;
-        hls.loadSource(media.url);
-      });
-
-      hls.on(HlsCtor.Events.MANIFEST_PARSED,()=>{
-        reveal();
-      });
-
-      hls.on(HlsCtor.Events.ERROR,(_event,data)=>{
-        if(!data?.fatal || settled)return;
-
-        if(
-          data.type===HlsCtor.ErrorTypes.MEDIA_ERROR &&
-          !mediaRecoveryTried
-        ){
-          mediaRecoveryTried=true;
-          try{
-            hls.recoverMediaError();
-            return;
-          }catch(e){}
-        }
-
+      if(!played || !isCurrent()){
         fallback();
-      });
+        return;
+      }
 
-      hls.attachMedia(video);
-      return;
-    }
+      video.classList.add("media-visible");
+      video.setAttribute("aria-hidden","false");
+      if(image)image.style.display="none";
+      markSlideMediaReady(el,story,"video");
+      finish(true);
+    };
 
-    if(
-      video.canPlayType("application/vnd.apple.mpegurl") ||
-      video.canPlayType("application/x-mpegURL")
-    ){
+    video.onloadeddata=()=>{reveal();};
+    video.onerror=fallback;
+
+    const type=String(media.type||"").toLowerCase();
+    const isHls=
+      type.includes("mpegurl") ||
+      /\.m3u8(?:[?#]|$)/i.test(media.url);
+
+    const startNative=()=>{
+      if(!isCurrent()){
+        finish(false);
+        return;
+      }
+      video.src=media.url;
+      video.load();
+      if(video.readyState>=2)reveal();
+    };
+
+    if(!isHls){
       startNative();
       return;
     }
 
-    fallback();
-  })();
+    (async()=>{
+      const HlsCtor=await ensureHlsLibrary();
+      if(settled || !isCurrent()){
+        finish(false);
+        return;
+      }
+
+      if(HlsCtor?.isSupported?.()){
+        const hls=new HlsCtor({
+          enableWorker:true,
+          lowLatencyMode:false,
+          backBufferLength:30
+        });
+        video.__floewHls=hls;
+
+        hls.on(HlsCtor.Events.MEDIA_ATTACHED,()=>{
+          if(!settled && isCurrent())hls.loadSource(media.url);
+        });
+        hls.on(HlsCtor.Events.MANIFEST_PARSED,()=>{reveal();});
+        hls.on(HlsCtor.Events.ERROR,(_event,data)=>{
+          if(!data?.fatal || settled)return;
+
+          if(
+            data.type===HlsCtor.ErrorTypes.MEDIA_ERROR &&
+            !mediaRecoveryTried
+          ){
+            mediaRecoveryTried=true;
+            try{
+              hls.recoverMediaError();
+              return;
+            }catch(e){}
+          }
+          fallback();
+        });
+        hls.attachMedia(video);
+        return;
+      }
+
+      if(
+        video.canPlayType("application/vnd.apple.mpegurl") ||
+        video.canPlayType("application/x-mpegURL")
+      ){
+        startNative();
+        return;
+      }
+
+      fallback();
+    })();
+  });
 }
 
+function youtubeVideoIdFromEmbed(url=""){
+  try{
+    const u=new URL(url);
+    const match=u.pathname.match(/\/embed\/([A-Za-z0-9_-]{6,20})/);
+    return match?.[1]||"";
+  }catch(e){
+    return "";
+  }
+}
 
 function cleanEmbedUrl(media){
   if(!media?.url)return "";
@@ -2885,6 +3160,7 @@ function cleanEmbedUrl(media){
     const provider=String(media.provider||"").toLowerCase();
 
     if(provider==="youtube"){
+      const id=youtubeVideoIdFromEmbed(u.href);
       u.searchParams.set("autoplay","1");
       u.searchParams.set("mute","1");
       u.searchParams.set("controls","0");
@@ -2894,6 +3170,10 @@ function cleanEmbedUrl(media){
       u.searchParams.set("iv_load_policy","3");
       u.searchParams.set("cc_load_policy","0");
       u.searchParams.set("rel","0");
+      u.searchParams.set("loop","1");
+      u.searchParams.set("enablejsapi","1");
+      if(id)u.searchParams.set("playlist",id);
+      try{u.searchParams.set("origin",location.origin)}catch(e){}
     }else if(provider==="vimeo"){
       u.searchParams.set("autoplay","1");
       u.searchParams.set("muted","1");
@@ -2906,75 +3186,93 @@ function cleanEmbedUrl(media){
       u.searchParams.set("keyboard","0");
       u.searchParams.set("dnt","1");
     }else if(provider==="dailymotion"){
-      /*
-        Dailymotion runtime parametreleri autoplay ve scaleMode'u destekliyor.
-        İframe Flöw navigasyonu için pointer-events:none olduğundan autoplay
-        zorunlu; scaleMode=fill ise mobil portrede siyah bant bırakmadan kırpar.
-      */
       u.searchParams.set("autoplay","true");
       u.searchParams.set("mute","true");
       u.searchParams.set("loop","true");
       u.searchParams.set("scaleMode","fill");
+    }else{
+      return "";
     }
 
     return u.href;
-  }catch{
-    return String(media.url||"");
+  }catch(e){
+    return "";
   }
 }
 
-function showGenericEmbedVideo(el,story,media,token){
+function showProviderEmbedVideo(el,story,media,token){
   const image=el.querySelector(".slide-image");
   const embed=el.querySelector(".slide-embed");
+  const provider=String(media?.provider||"").toLowerCase();
 
-  if(!embed || !media?.url)return;
+  if(
+    !embed ||
+    !media?.url ||
+    !["youtube","vimeo"].includes(provider)
+  )return Promise.resolve(false);
 
-  const provider=String(media.provider||"generic").toLowerCase();
   const cleanUrl=cleanEmbedUrl(media);
-
-  if(!cleanUrl)return;
+  if(!cleanUrl)return Promise.resolve(false);
 
   embed.dataset.provider=provider;
   embed.tabIndex=-1;
+  embed.setAttribute("allow","autoplay; encrypted-media");
 
-  /*
-    Harici oynatıcılar mouse/touch/keyboard girdisi almasın.
-    Flöw'ün kaydırma/tıklama navigasyonu kesintisiz kalsın.
-  */
-  embed.setAttribute(
-    "allow",
-    "autoplay; encrypted-media; picture-in-picture"
-  );
+  return new Promise(resolve=>{
+    let settled=false;
+    const isCurrent=()=>Boolean(
+      videoEnabled &&
+      token===el.dataset.mediaToken &&
+      mediaKey(story)===el.dataset.storyKey
+    );
 
-  const reveal=()=>{
-    if(
-      !videoEnabled ||
-      token!==el.dataset.mediaToken ||
-      mediaKey(story)!==el.dataset.storyKey
-    ) return;
+    const finish=value=>{
+      if(settled)return;
+      settled=true;
+      resolve(Boolean(value));
+    };
 
-    embed.classList.add("media-visible");
-    embed.setAttribute("aria-hidden","false");
+    embed.onload=()=>{
+      if(!isCurrent()){
+        finish(false);
+        return;
+      }
 
-    if(image)image.style.display="none";
-  };
+      embed.classList.add("media-visible");
+      embed.setAttribute("aria-hidden","false");
+      if(image)image.style.display="none";
+      markSlideMediaReady(el,story,"embed");
 
-  embed.addEventListener(
-    "load",
-    reveal,
-    {once:true}
-  );
+      /* Parametreye ek olarak API komutunu da gönder; preload sırasında başlasın. */
+      if(provider==="youtube"){
+        postYouTubeCommand(embed,"mute");
+        postYouTubeCommand(embed,"playVideo");
+        setTimeout(()=>{
+          if(isCurrent()){
+            postYouTubeCommand(embed,"mute");
+            postYouTubeCommand(embed,"playVideo");
+          }
+        },320);
+      }else if(provider==="vimeo"){
+        postVimeoCommand(embed,"setVolume",0);
+        postVimeoCommand(embed,"setLoop",true);
+        postVimeoCommand(embed,"play");
+        setTimeout(()=>{
+          if(isCurrent()){
+            postVimeoCommand(embed,"setVolume",0);
+            postVimeoCommand(embed,"play");
+          }
+        },320);
+      }
 
-  embed.src=cleanUrl;
+      finish(true);
+    };
 
-  if(provider==="vimeo"){
-    ensureVimeoLibrary();
-  }
+    embed.src=cleanUrl;
+  });
 }
 
-
 let dailymotionLibraryPromise=null;
-let dailymotionLibraryPlayerId="";
 let dailymotionHostSequence=0;
 
 function dailymotionMediaParts(media){
@@ -2990,7 +3288,6 @@ function dailymotionMediaParts(media){
 
     if(!/^[A-Za-z0-9]{5,24}$/.test(videoId))return null;
     if(!/^[A-Za-z0-9_-]{3,40}$/.test(playerId))return null;
-
     return {videoId,playerId};
   }catch(e){
     return null;
@@ -2999,13 +3296,7 @@ function dailymotionMediaParts(media){
 
 function ensureDailymotionHost(el){
   const existing=el.querySelector(".slide-dailymotion");
-  if(existing){
-    /*
-      Bir önceki Dailymotion haberi aynı fiziksel slide'ı kullanmış olabilir.
-      Source/container ID'yi asla yeniden kullanma.
-    */
-    retireDailymotionHost(existing);
-  }
+  if(existing)retireDailymotionHost(existing);
 
   const host=document.createElement("div");
   host.className="slide-dailymotion";
@@ -3013,60 +3304,40 @@ function ensureDailymotionHost(el){
   host.setAttribute("aria-hidden","true");
 
   const embed=el.querySelector(".slide-embed");
-  if(embed){
-    embed.insertAdjacentElement("afterend",host);
-  }else{
-    el.appendChild(host);
-  }
+  if(embed)embed.insertAdjacentElement("afterend",host);
+  else el.appendChild(host);
 
   return host;
 }
 
 function ensureDailymotionLibrary(playerId){
-  if(window.dailymotion?.createPlayer){
-    return Promise.resolve(window.dailymotion);
-  }
-
-  if(dailymotionLibraryPromise){
-    return dailymotionLibraryPromise;
-  }
-
-  dailymotionLibraryPlayerId=playerId;
+  if(!/^[A-Za-z0-9_-]{3,40}$/.test(String(playerId||"")))return Promise.resolve(null);
+  if(window.dailymotion?.createPlayer)return Promise.resolve(window.dailymotion);
+  if(dailymotionLibraryPromise)return dailymotionLibraryPromise;
 
   dailymotionLibraryPromise=new Promise(resolve=>{
-    const existing=document.querySelector(
-      'script[data-floew-dailymotion-library="1"]'
-    );
-
-    const finish=()=>{
-      resolve(
-        window.dailymotion?.createPlayer
-          ? window.dailymotion
-          : null
-      );
-    };
+    const existing=document.querySelector('script[data-floew-dailymotion-library="1"]');
+    const finish=()=>resolve(window.dailymotion?.createPlayer?window.dailymotion:null);
 
     if(existing){
-      if(window.dailymotion?.createPlayer){
-        finish();
-      }else{
+      if(window.dailymotion?.createPlayer)finish();
+      else{
         existing.addEventListener("load",finish,{once:true});
         existing.addEventListener("error",()=>resolve(null),{once:true});
       }
       return;
     }
 
+    /* Dailymotion'ın resmi Player Library URL biçimi. */
     const script=document.createElement("script");
     script.src=`https://geo.dailymotion.com/libs/player/${encodeURIComponent(playerId)}.js`;
     script.async=true;
     script.referrerPolicy="strict-origin-when-cross-origin";
     script.dataset.floewDailymotionLibrary="1";
-    script.dataset.floewDailymotionPlayerId=playerId;
     script.addEventListener("load",finish,{once:true});
     script.addEventListener("error",()=>{
       console.warn("Flöw video: Dailymotion Player Library yüklenemedi.");
       dailymotionLibraryPromise=null;
-      dailymotionLibraryPlayerId="";
       resolve(null);
     },{once:true});
     document.body.appendChild(script);
@@ -3090,36 +3361,46 @@ async function ensureDailymotionExactVideo(player,videoId){
   if(!player || !expected)return false;
 
   const readWithRetries=async()=>{
-    const delays=[0,90,180,320];
-    for(const delay of delays){
+    for(const delay of [0,80,170,300]){
       if(delay)await new Promise(resolve=>setTimeout(resolve,delay));
-      const current=await dailymotionStateVideoId(player);
-      if(current===expected)return true;
+      if(await dailymotionStateVideoId(player)===expected)return true;
     }
     return false;
   };
 
   if(await readWithRetries())return true;
 
-  /*
-    SDK başka/önceki içeriği taşıyorsa beklenen xID'yi API üzerinden tekrar yükle.
-    Dailymotion PLAYER_VIDEOCHANGE olayı da loadContent({video}) ile tetiklenir.
-  */
-  try{
-    await player.loadContent?.({video:expected});
-  }catch(e){
-    return false;
-  }
+  try{await player.loadContent?.({video:expected});}
+  catch(e){return false;}
 
   return readWithRetries();
 }
 
+function monitorDailymotionExactVideo(host,player,expected,isCurrent){
+  if(host.__floewDailymotionMonitor){
+    clearInterval(host.__floewDailymotionMonitor);
+  }
+
+  let checking=false;
+  host.__floewDailymotionMonitor=setInterval(async()=>{
+    if(checking || !isCurrent())return;
+    checking=true;
+    try{
+      const current=await dailymotionStateVideoId(player);
+      if(current && current!==expected && isCurrent()){
+        try{await player.loadContent?.({video:expected});}catch(e){}
+        try{await player.setVolume?.(0);}catch(e){}
+        try{await player.play?.();}catch(e){}
+      }
+    }finally{
+      checking=false;
+    }
+  },650);
+}
+
 async function showDailymotionVideo(el,story,media,token){
   const parts=dailymotionMediaParts(media);
-  if(!parts){
-    showGenericEmbedVideo(el,story,media,token);
-    return;
-  }
+  if(!parts)return false;
 
   const image=el.querySelector(".slide-image");
   const host=ensureDailymotionHost(el);
@@ -3140,163 +3421,131 @@ async function showDailymotionVideo(el,story,media,token){
   );
 
   if(!dm?.createPlayer || !isCurrent()){
-    if(!dm?.createPlayer && isCurrent()){
-      retireDailymotionHost(host);
-      showGenericEmbedVideo(el,story,media,token);
-    }
-    return;
+    retireDailymotionHost(host);
+    return false;
   }
 
   try{
-    const player=await dm.createPlayer(host.id,{
-      player:parts.playerId,
+    const options={
       video:parts.videoId,
       params:{
+        autoplay:true,
         loop:true,
         mute:true,
         scaleMode:"fill"
       }
-    });
+    };
+    if(parts.playerId)options.player=parts.playerId;
 
+    const player=await dm.createPlayer(host.id,options);
     host.__floewDailymotionPlayer=player;
     host.__floewDailymotionPlayerId=parts.playerId;
     host.__floewDailymotionVideoId=parts.videoId;
 
     if(!isCurrent()){
       retireDailymotionHost(host);
-      return;
+      return false;
     }
 
     try{await player.setVolume?.(0)}catch(e){}
     try{await player.setScaleMode?.("fill")}catch(e){}
 
-    /*
-      Cumhuriyet/Dailymotion için kritik güvenlik kontrolü:
-      createPlayer promise'i çözülmüş olsa bile SDK registry'sinde eski bir
-      instance/content kalmış olabilir. Görünür yapmadan önce gerçekten bu
-      habere ait xID'nin yüklendiğini doğrula; değilse loadContent ile zorla.
-    */
-    const exactVideo=await ensureDailymotionExactVideo(
-      player,
-      parts.videoId
-    );
-
-    if(!exactVideo || !isCurrent()){
-      const storyStillCurrent=Boolean(
-        token===el.dataset.mediaToken &&
-        mediaKey(story)===el.dataset.storyKey
-      );
+    if(!await ensureDailymotionExactVideo(player,parts.videoId) || !isCurrent()){
       retireDailymotionHost(host);
-      if(!exactVideo && storyStillCurrent){
-        showGenericEmbedVideo(el,story,media,token);
-      }
-      return;
+      return false;
     }
 
-    let played=false;
-    try{
-      await player.play();
-      played=true;
-    }catch(e){
-      await new Promise(resolve=>setTimeout(resolve,250));
+    try{await player.play?.();}
+    catch(e){
+      await new Promise(resolve=>setTimeout(resolve,180));
       if(isCurrent()){
-        try{
-          await player.play();
-          played=true;
-        }catch(innerError){}
+        try{await player.play?.();}catch(innerError){}
       }
     }
 
-    if(!played || !isCurrent()){
-      const storyStillCurrent=Boolean(
-        token===el.dataset.mediaToken &&
-        mediaKey(story)===el.dataset.storyKey
-      );
+    if(!await ensureDailymotionExactVideo(player,parts.videoId) || !isCurrent()){
       retireDailymotionHost(host);
-      if(!played && storyStillCurrent){
-        showGenericEmbedVideo(el,story,media,token);
-      }
-      return;
+      return false;
     }
 
-    /*
-      play() sonrasında da xID'yi tekrar kontrol et. SDK autonext/contextual
-      davranışı ya da stale registry yanlış içeriğe dönmüşse yanlış video tek
-      kare bile görünmesin.
-    */
-    const playingExpectedVideo=await ensureDailymotionExactVideo(
-      player,
-      parts.videoId
-    );
-
-    if(!playingExpectedVideo || !isCurrent()){
-      const storyStillCurrent=Boolean(
-        token===el.dataset.mediaToken &&
-        mediaKey(story)===el.dataset.storyKey
-      );
-      retireDailymotionHost(host);
-      if(!playingExpectedVideo && storyStillCurrent){
-        showGenericEmbedVideo(el,story,media,token);
-      }
-      return;
-    }
-
+    monitorDailymotionExactVideo(host,player,parts.videoId,isCurrent);
     host.classList.add("media-visible");
     host.setAttribute("aria-hidden","false");
     if(image)image.style.display="none";
+    markSlideMediaReady(el,story,"embed");
+    return true;
   }catch(error){
     console.warn("Flöw video: Dailymotion SDK:",error);
-    const stillCurrent=Boolean(
-      token===el.dataset.mediaToken &&
-      mediaKey(story)===el.dataset.storyKey
-    );
     retireDailymotionHost(host);
-    if(stillCurrent){
-      showGenericEmbedVideo(el,story,media,token);
-    }
+    return false;
   }
 }
 
 function showEmbedVideo(el,story,media,token){
   const provider=String(media?.provider||"").toLowerCase();
-
-  if(provider==="dailymotion"){
-    showDailymotionVideo(el,story,media,token);
-    return;
+  if(provider==="dailymotion")return showDailymotionVideo(el,story,media,token);
+  if(provider==="youtube" || provider==="vimeo"){
+    return showProviderEmbedVideo(el,story,media,token);
   }
-
-  showGenericEmbedVideo(el,story,media,token);
+  return Promise.resolve(false);
 }
 
-async function prepareSlideMedia(el,story){
-  if(!videoEnabled || !story)return;
+async function prepareSlideMedia(el,story,{preload=false}={}){
+  if(!videoEnabled || !el || !story)return false;
+  if(mediaKey(story)!==el.dataset.storyKey)return false;
+
+  const key=mediaKey(story);
+  const direct=el.querySelector(".slide-video");
+
+  if(el.dataset.mediaReadyStoryKey===key){
+    if(direct?.classList.contains("media-visible")){
+      direct.__floewShouldPlay=true;
+      const p=direct.play?.();
+      if(p?.catch)p.catch(()=>{});
+    }
+    if(!preload)queueVideoAudioUiSync();
+    return true;
+  }
+
+  if(el.__floewMediaPrepare?.key===key){
+    return el.__floewMediaPrepare.promise;
+  }
 
   const token=el.dataset.mediaToken;
-  const media=await resolveStoryMedia(story);
+  const promise=(async()=>{
+    const media=await resolveStoryMedia(story);
 
-  if(
-    !videoEnabled ||
-    !media ||
-    token!==el.dataset.mediaToken ||
-    mediaKey(story)!==el.dataset.storyKey
-  ) return;
+    if(
+      !videoEnabled ||
+      !media ||
+      token!==el.dataset.mediaToken ||
+      key!==el.dataset.storyKey
+    )return false;
 
-  if(media.kind==="embed"){
-    showEmbedVideo(
-      el,
-      story,
-      media,
-      token
-    );
-  }else if(media.kind==="video"){
-    showDirectVideo(
-      el,
-      story,
-      media,
-      token
-    );
+    if(media.kind==="video"){
+      return showDirectVideo(el,story,media,token);
+    }
+
+    if(media.kind==="embed"){
+      return showEmbedVideo(el,story,media,token);
+    }
+
+    return false;
+  })();
+
+  el.__floewMediaPrepare={key,promise};
+
+  try{
+    return await promise;
+  }finally{
+    if(el.__floewMediaPrepare?.promise===promise){
+      el.__floewMediaPrepare=null;
+    }
+    if(!preload)queueVideoAudioUiSync();
   }
 }
+
+bindVideoAudioUi();
 
 function renderVideoSetting(){
   const btn=document.getElementById("video-setting");
@@ -5475,12 +5724,9 @@ function warmEmbedMedia(media){
     }
   }catch(e){}
 
-  const provider=String(media?.provider||"").toLowerCase();
-  if(provider==="dailymotion"){
+  if(String(media?.provider||"").toLowerCase()==="dailymotion"){
     const parts=dailymotionMediaParts(media);
     if(parts?.playerId)ensureDailymotionLibrary(parts.playerId);
-  }else if(provider==="vimeo"){
-    ensureVimeoLibrary();
   }
 }
 
@@ -5581,6 +5827,15 @@ function scheduleNextStoryPreload(delay=70){
       const inactiveSlide=slides[1-state.active];
       fill(inactiveSlide,story,{prepareMedia:false});
       inactiveSlide.className="slide";
+
+      /*
+        Sıradaki haber ekrana gelmeden önce video da pasif slaytta gerçekten
+        yüklenip sessiz şekilde oynatılmaya başlar. Geçişte aynı medya instance'ı
+        korunur; ikinci kez player oluşturulmaz.
+      */
+      if(videoEnabled){
+        prepareSlideMedia(inactiveSlide,story,{preload:true}).catch(()=>{});
+      }
 
       const image=inactiveSlide.querySelector(".slide-image");
 

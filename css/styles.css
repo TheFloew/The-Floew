@@ -4780,3 +4780,122 @@ html{
   }
 }
 
+/* =====================================================================
+   V31.49 — unified news video surface / audio control
+   ===================================================================== */
+
+/* Haber videosunun kendisi hiçbir zaman navigasyon girdisi almaz. */
+.slide-video,
+.slide-embed,
+.slide-dailymotion,
+.slide-dailymotion *{
+  pointer-events:none !important;
+  user-select:none !important;
+  -webkit-user-select:none !important;
+  touch-action:none !important;
+}
+
+.slide-video,
+.slide-dailymotion{
+  position:absolute !important;
+  inset:0 !important;
+  width:100% !important;
+  height:100% !important;
+  min-width:100% !important;
+  min-height:100% !important;
+  object-fit:cover !important;
+  object-position:50% 50% !important;
+  overflow:hidden !important;
+  background:#000 !important;
+}
+
+.slide-dailymotion > *,
+.slide-dailymotion iframe{
+  position:absolute !important;
+  inset:0 !important;
+  width:100% !important;
+  height:100% !important;
+  min-width:100% !important;
+  min-height:100% !important;
+  max-width:none !important;
+  max-height:none !important;
+  margin:0 !important;
+  border:0 !important;
+}
+
+/* YouTube/Vimeo 16:9 yüzeyi hem yatay hem dikey ekranda cover gibi kırpılır. */
+.slide-embed[data-provider="youtube"],
+.slide-embed[data-provider="vimeo"]{
+  position:absolute !important;
+  left:50% !important;
+  top:50% !important;
+  right:auto !important;
+  bottom:auto !important;
+  width:max(100vw,177.7778vh) !important;
+  height:max(56.25vw,100vh) !important;
+  min-width:100vw !important;
+  min-height:100vh !important;
+  transform:translate(-50%,-50%) !important;
+  border:0 !important;
+  background:#000 !important;
+}
+
+@supports (height:100dvh){
+  .slide-embed[data-provider="youtube"],
+  .slide-embed[data-provider="vimeo"]{
+    width:max(100vw,177.7778dvh) !important;
+    height:max(56.25vw,100dvh) !important;
+    min-height:100dvh !important;
+  }
+}
+
+#video-audio-toggle{
+  position:fixed;
+  z-index:126;
+  top:74px;
+  right:18px;
+  min-width:66px;
+  height:30px;
+  padding:0 11px;
+  border:1px solid rgba(255,255,255,.34);
+  border-radius:999px;
+  background:rgba(0,0,0,.56);
+  color:rgba(255,255,255,.76);
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+  font:700 9px/28px "Comfortaa",Arial,sans-serif;
+  letter-spacing:.08em;
+  text-align:center;
+  cursor:pointer;
+  pointer-events:auto;
+  user-select:none;
+  -webkit-user-select:none;
+  transition:opacity .18s ease,border-color .18s ease,background .18s ease;
+}
+#video-audio-toggle[hidden]{display:none !important}
+#video-audio-toggle.sound-on{
+  color:#fff;
+  border-color:rgba(255,255,255,.72);
+  background:rgba(0,0,0,.76);
+}
+#video-audio-toggle:focus-visible{
+  outline:1px solid rgba(255,255,255,.8);
+  outline-offset:3px;
+}
+body.ad-mode #video-audio-toggle,
+#menu-overlay.open ~ #video-audio-toggle{
+  display:none !important;
+}
+
+@media(max-width:700px){
+  #video-audio-toggle{
+    top:60px;
+    right:12px;
+    min-width:60px;
+    height:28px;
+    padding:0 9px;
+    font-size:8px;
+    line-height:26px;
+  }
+}
+
