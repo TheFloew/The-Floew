@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.34.0";
+window.__floewAppVersion="31.35.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -7173,17 +7173,11 @@ function unsupportedPiPProviderMessage(provider){
 
 function pipSupportMode(){
   /*
-    Document PiP Flöw için ideal yol: yalnız bir <video> karesi değil, gerçek
-    HTML/iframe içeriğini de always-on-top pencereye koyabiliyoruz. Böylece
-    Dailymotion/YouTube/Vimeo videoları canvas güvenlik sınırına takılmıyor.
+    Flöw PiP yalnızca klasik native VIDEO Picture-in-Picture kullanır.
+    Document Picture-in-Picture bilinçli olarak kullanılmaz; o API ayrı bir
+    always-on-top belge/popup penceresi oluşturur ve Flöw'ün beklenen küçük
+    video PiP davranışı değildir.
   */
-  if(
-    window.documentPictureInPicture &&
-    typeof window.documentPictureInPicture.requestWindow==="function"
-  ){
-    return "document";
-  }
-
   const hasCanvasStream=
     typeof HTMLCanvasElement.prototype.captureStream==="function";
 
@@ -7584,12 +7578,6 @@ async function renderCurrentPiPDocumentContent(){
 async function openDocumentPiP(){
   const api=window.documentPictureInPicture;
   if(!api?.requestWindow)return false;
-
-  if(pipDocumentIsActive()){
-    closePiPDocumentWindow();
-    pipActive=false;
-    return true;
-  }
 
   const win=await api.requestWindow({width:960,height:540});
   pipDocumentWindow=win;
@@ -8701,16 +8689,6 @@ async function togglePiP(){
     if(await exitPiP())return;
 
     const story=state.stories[state.index]||null;
-
-    /*
-      Document PiP varsa iframe dahil bütün Flöw kartını taşıyabildiğimiz için
-      sağlayıcı ayrımı gerekmez. Firefox'ta bu API varsayılan olarak yoksa
-      aşağıdaki video-sağlayıcı yollarına düşeriz.
-    */
-    if(mode==="document"){
-      await openDocumentPiP();
-      return;
-    }
 
     /* Reklam videosu mevcut çalışan composite PiP yolunu kullanır. */
     pipFallbackNotice="";
