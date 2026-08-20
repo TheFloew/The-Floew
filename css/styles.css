@@ -4875,15 +4875,17 @@ html{
   -webkit-user-select:none;
 
   /*
-    This symbol is intentionally an emoji, unlike the other UI unicode
-    controls which use text presentation.
+    Speaker uses U+FE0E (text presentation) just like the other flat
+    Flöw UI symbols. Prefer monochrome symbol fonts over emoji fonts.
   */
   font-family:
-    "Apple Color Emoji",
-    "Segoe UI Emoji",
-    "Noto Color Emoji",
+    "Apple Symbols",
+    "Segoe UI Symbol",
+    "Noto Sans Symbols 2",
+    "Noto Sans Symbols",
+    "Arial Unicode MS",
     sans-serif;
-  font-variant-emoji:emoji;
+  font-variant-emoji:text;
   font-size:23px;
   line-height:1;
 
@@ -4925,11 +4927,13 @@ html{
   height:1em;
   line-height:1;
   font-family:
-    "Apple Color Emoji",
-    "Segoe UI Emoji",
-    "Noto Color Emoji",
+    "Apple Symbols",
+    "Segoe UI Symbol",
+    "Noto Sans Symbols 2",
+    "Noto Sans Symbols",
+    "Arial Unicode MS",
     sans-serif;
-  font-variant-emoji:emoji;
+  font-variant-emoji:text;
 }
 
 body.ad-mode #video-audio-toggle,
