@@ -4384,3 +4384,76 @@ body.ad-mode #market-ticker{
     display:none;
   }
 }
+
+
+/* =====================================================================
+   V31.41 — market visual deploy hotfix
+   Keeps the intended V31.39/V31.40 presentation even if older market
+   declarations exist earlier in the stylesheet.
+   ===================================================================== */
+
+#clock #fx-rates{
+  left:0 !important;
+  bottom:calc(100% + 18px) !important;
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:flex-start !important;
+  gap:5px !important;
+}
+
+#clock #fx-rates[hidden]{
+  display:none !important;
+}
+
+#clock #fx-rates .fx-rate{
+  display:grid !important;
+  grid-template-columns:18px 29px minmax(48px,auto) !important;
+  align-items:center !important;
+  column-gap:4px !important;
+}
+
+#market-ticker{
+  height:56px !important;
+  background:transparent !important;
+}
+
+#market-ticker .market-band{
+  height:28px !important;
+}
+
+#market-ticker .market-index-band{
+  background:#4d060d !important;
+}
+
+#market-ticker .market-company-band{
+  background:#05163c !important;
+}
+
+#market-ticker .market-index-band .market-band-label{
+  background:#300308 !important;
+}
+
+#market-ticker .market-company-band .market-band-label{
+  background:#030c24 !important;
+}
+
+@media(max-width:700px){
+  #clock #fx-rates{
+    bottom:calc(100% + 14px) !important;
+    gap:4px !important;
+  }
+
+  #clock #fx-rates .fx-rate{
+    grid-template-columns:16px 25px minmax(43px,auto) !important;
+    column-gap:3px !important;
+  }
+
+  #market-ticker{
+    height:50px !important;
+  }
+
+  #market-ticker .market-band{
+    height:25px !important;
+  }
+}
+
