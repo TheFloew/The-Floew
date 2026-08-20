@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.49.0";
+window.__floewAppVersion="31.50.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -4911,10 +4911,23 @@ function resetAdMedia(){
   }
 
   if(adVideo){
+    /*
+      Reklam player'ı haber videosu playback guard'larından bağımsızdır.
+      Özellikle loop/restart state'i her reklam çıkışında sıfırlanır.
+    */
+    adVideo.__floewShouldPlay=false;
+
     try{adVideo.pause()}catch(e){}
+
+    adVideo.autoplay=false;
+    adVideo.loop=false;
     adVideo.controls=false;
     adVideo.hidden=true;
+
+    adVideo.removeAttribute("autoplay");
+    adVideo.removeAttribute("loop");
     adVideo.removeAttribute("src");
+
     adVideo.load();
   }
 }
@@ -5035,6 +5048,93 @@ function waitForImageAd(src){
   });
 }
 
+function configureAdVideoPlayback(video){
+  if(!video)return;
+
+  /*
+    Reklam videosu, haber videosu motorundan bilinçli olarak ayrıdır.
+
+    Haber videosu:
+      autoplay + muted + loop + pause/ended guard
+
+    Reklam videosu:
+      autoplay + muted + TEK SEFER + ended => reklam tamamlanır
+
+    __floewShouldPlay=false bırakılması, bu DOM elemanına eski bir
+    playback guard bağlanmış olsa bile reklamın yeniden başlamasını önler.
+  */
+  video.__floewShouldPlay=false;
+
+  video.muted=true;
+  video.defaultMuted=true;
+  video.volume=0;
+  video.autoplay=true;
+  video.loop=false;
+  video.playsInline=true;
+  video.controls=false;
+  video.preload="auto";
+  video.disablePictureInPicture=true;
+
+  try{video.disableRemotePlayback=true}catch(e){}
+
+  video.setAttribute("muted","");
+  video.setAttribute("autoplay","");
+  video.removeAttribute("loop");
+  video.setAttribute("playsinline","");
+  video.setAttribute("webkit-playsinline","");
+  video.setAttribute("preload","auto");
+  video.setAttribute(
+    "controlslist",
+    "nodownload noplaybackrate noremoteplayback"
+  );
+}
+
+async function attemptAdVideoAutoplay(video,attempts=5){
+  if(!video)return false;
+
+  configureAdVideoPlayback(video);
+
+  const delays=[0,70,180,380,700];
+  const count=Math.max(
+    1,
+    Math.min(attempts,delays.length)
+  );
+
+  for(let i=0;i<count;i++){
+    if(delays[i]){
+      await new Promise(
+        resolve=>setTimeout(resolve,delays[i])
+      );
+    }else{
+      await new Promise(
+        resolve=>requestAnimationFrame(()=>resolve())
+      );
+    }
+
+    /*
+      Reklam başka bir hareketle kapatılmışsa yeni play() çağrısı yapma.
+    */
+    if(
+      !adActive ||
+      adVideo!==video ||
+      video.hidden
+    ){
+      return false;
+    }
+
+    try{
+      const result=video.play();
+      if(result?.then)await result;
+
+      if(!video.paused){
+        return true;
+      }
+    }catch(e){}
+  }
+
+  return !video.paused;
+}
+
 function waitForVideoAd(src){
   return new Promise(resolve=>{
     if(!adVideo){
@@ -5054,6 +5154,14 @@ function waitForVideoAd(src){
     const cleanup=()=>{
       clearTimeout(safetyTimer);
       clearTimeout(loadTimer);
+
+      /*
+        Bir reklam bittiğinde haber video motorunun restart bayrağını
+        kesin olarak kapalı tut.
+      */
+      adVideo.__floewShouldPlay=false;
+      adVideo.loop=false;
+      adVideo.removeAttribute("loop");
 
       adVideo.onloadeddata=null;
       adVideo.oncanplay=null;
@@ -5110,7 +5218,7 @@ function waitForVideoAd(src){
         return;
       }
 
-      const played=await attemptMutedAutoplay(adVideo,5);
+      const played=await attemptAdVideoAutoplay(adVideo,5);
       if(finished)return;
 
       if(!played){
@@ -5135,9 +5243,7 @@ function waitForVideoAd(src){
       );
     };
 
-    setMutedInlinePlaybackAttributes(adVideo);
-    adVideo.loop=false;
-    adVideo.preload="auto";
+    configureAdVideoPlayback(adVideo);
     adVideo.hidden=false;
 
     adVideo.onloadeddata=start;
