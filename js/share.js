@@ -1,5 +1,5 @@
 /*
-  Flöw — Haber paylaşımı v3.0.1
+  Flöw — Haber paylaşımı v3.1.0
   ------------------------------------------------------------
   - ⤴︎ Haberi paylaş düğmesi: Flöra ile Kaynağa Git arasına eklenir.
   - Paylaşım URL'si ayrı Flöw Share Worker üzerinden üretilir.
@@ -8,7 +8,7 @@
 (function(){
   "use strict";
 
-  const FEATURE_VERSION="3.0.1";
+  const FEATURE_VERSION="3.1.0";
   const SHARE_LABEL="Haberi paylaş";
   const SHARE_WORKER_BASE=String(
     window.FLOEW_CONFIG?.shareWorkerBase||"https://thefloew-share.thefloewback.workers.dev"
@@ -125,16 +125,215 @@
     );
   }
 
-  async function requestShortShareUrl(articleUrl){
+  function currentStoryForShare(slide,articleUrl){
+    try{
+      if(
+        typeof state!=="undefined" &&
+        state &&
+        Array.isArray(state.stories)
+      ){
+        const current=state.stories[state.index]||null;
+
+        if(
+          current &&
+          validHttpUrl(current.link)===articleUrl
+        ){
+          return current;
+        }
+
+        return state.stories.find(item=>
+          validHttpUrl(item?.link)===articleUrl
+        )||current;
+      }
+    }catch(e){}
+
+    return null;
+  }
+
+  function normalizeShareMedia(value){
+    if(!value || typeof value!=="object")return null;
+
+    const kind=String(value.kind||"").toLowerCase();
+    const url=validHttpUrl(value.url);
+    if(!url)return null;
+
+    if(kind!=="video" && kind!=="embed")return null;
+
+    const provider=clean(value.provider||"").toLowerCase();
+
+    return {
+      kind,
+      url,
+      type:clean(value.type||"").slice(0,120),
+      provider:
+        ["native","youtube","vimeo","dailymotion"].includes(provider)
+          ? provider
+          : (kind==="video" ? "native" : "")
+    };
+  }
+
+  function mediaSnapshotFromSlide(slide){
+    if(!slide)return null;
+
+    const video=slide.querySelector(".slide-video");
+    const descriptor=
+      normalizeShareMedia(video?.__floewMediaDescriptor);
+
+    if(descriptor)return descriptor;
+
+    const embed=slide.querySelector(".slide-embed");
+    const embedSrc=validHttpUrl(embed?.getAttribute("src"));
+
+    if(
+      embedSrc &&
+      embedSrc!=="about:blank" &&
+      embed?.classList?.contains("media-visible")
+    ){
+      return normalizeShareMedia({
+        kind:"embed",
+        url:embedSrc,
+        provider:embed.dataset.provider||""
+      });
+    }
+
+    return null;
+  }
+
+  async function resolveMediaSnapshot(storyRef,slide){
+    const fromSlide=mediaSnapshotFromSlide(slide);
+    if(fromSlide)return fromSlide;
+
+    try{
+      if(
+        storyRef &&
+        typeof resolveStoryMedia==="function"
+      ){
+        let timeoutId=0;
+
+        const timeout=new Promise(resolve=>{
+          timeoutId=setTimeout(
+            ()=>resolve(null),
+            2400
+          );
+        });
+
+        const resolved=await Promise.race([
+          Promise.resolve(
+            resolveStoryMedia(storyRef)
+          ).catch(()=>null),
+          timeout
+        ]);
+
+        clearTimeout(timeoutId);
+
+        return normalizeShareMedia(resolved);
+      }
+    }catch(e){}
+
+    return null;
+  }
+
+  function numericFloraScore(slide){
+    const raw=clean(
+      slide
+        ?.querySelector(".flora-inline-value")
+        ?.textContent
+    );
+
+    if(!raw || raw==="—")return null;
+
+    const value=Number(
+      raw.replace(",",".")
+    );
+
+    return Number.isFinite(value)
+      ? Math.max(0,Math.min(100,value))
+      : null;
+  }
+
+  async function buildShareSnapshot(button,story){
+    const slide=
+      button?.closest?.(".slide");
+
+    const storyRef=
+      currentStoryForShare(
+        slide,
+        story.articleUrl
+      );
+
+    const imageEl=
+      slide?.querySelector(".slide-image");
+
+    const logoEl=
+      slide?.querySelector(".source-logo");
+
+    const media=
+      await resolveMediaSnapshot(
+        storyRef,
+        slide
+      );
+
+    const image=
+      validHttpUrl(
+        imageEl?.currentSrc ||
+        imageEl?.src ||
+        storyRef?.image
+      );
+
+    const sourceLogo=
+      validHttpUrl(
+        logoEl?.currentSrc ||
+        logoEl?.src
+      );
+
+    return {
+      title:
+        clean(
+          storyRef?.title ||
+          story.title
+        ).slice(0,700),
+      source:
+        clean(
+          storyRef?.source ||
+          story.source
+        ).slice(0,180),
+      category:
+        clean(
+          storyRef?.flowCategory ||
+          slide
+            ?.querySelector(".category")
+            ?.textContent
+        ).slice(0,100),
+      description:
+        clean(
+          storyRef?.description ||
+          storyRef?.summary ||
+          slide
+            ?.querySelector(".description")
+            ?.textContent
+        ).slice(0,5000),
+      image,
+      sourceLogo,
+      published:
+        clean(
+          storyRef?.published ||
+          ""
+        ).slice(0,80),
+      floraScore:
+        numericFloraScore(slide),
+      media
+    };
+  }
+
+  async function requestShortShareUrl(articleUrl,snapshot=null){
     const safe=validHttpUrl(articleUrl);
     if(!safe)return "";
 
-    if(shortLinkCache.has(safe)){
-      return normalizeDisplayShareUrl(
-        shortLinkCache.get(safe)||""
-      );
-    }
-
+    /*
+      We intentionally POST even when the URL was shared earlier in this
+      session. The code stays deterministic, while KV receives the newest
+      Flöw snapshot (title/category/image/video/Flöra etc.).
+    */
     for(const endpoint of SHORT_CREATE_ENDPOINTS){
       const controller=
         typeof AbortController==="function"
@@ -151,7 +350,10 @@
           headers:{
             "Content-Type":"application/json"
           },
-          body:JSON.stringify({url:safe}),
+          body:JSON.stringify({
+            url:safe,
+            snapshot
+          }),
           cache:"no-store",
           credentials:"omit",
           signal:controller?.signal
@@ -176,14 +378,21 @@
       }
     }
 
-    return "";
+    return normalizeDisplayShareUrl(
+      shortLinkCache.get(safe)||""
+    );
   }
 
-  async function shareUrlForArticle(articleUrl){
+  async function shareUrlForArticle(articleUrl,snapshot=null){
     const safe=validHttpUrl(articleUrl);
     if(!safe)return "";
 
-    const shortUrl=await requestShortShareUrl(safe);
+    const shortUrl=
+      await requestShortShareUrl(
+        safe,
+        snapshot
+      );
+
     if(shortUrl)return shortUrl;
 
     return legacyShareUrlForArticle(safe);
@@ -225,7 +434,8 @@
         "Flöw'de bir haber",
       source,
       articleUrl,
-      shareUrl:""
+      shareUrl:"",
+      snapshot:null
     };
   }
 
@@ -422,9 +632,16 @@
     button?.setAttribute("aria-busy","true");
 
     try{
+      story.snapshot=
+        await buildShareSnapshot(
+          button,
+          story
+        );
+
       story.shareUrl=
         await shareUrlForArticle(
-          story.articleUrl
+          story.articleUrl,
+          story.snapshot
         );
     }finally{
       button?.removeAttribute("aria-busy");
