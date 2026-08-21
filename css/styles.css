@@ -2149,7 +2149,9 @@ body.breaking-mode #keyword-watch-panel{
    --------------------------------------------------------------------- */
 
 #stats-overlay{
-  position:fixed;
+  position:relative;
+  width:100vw;
+  height:100vh;
   z-index:1400;
   inset:0;
   display:flex;
@@ -2177,6 +2179,8 @@ body.breaking-mode #keyword-watch-panel{
 }
 
 #public-stats-panel{
+  position:absolute;
+  top:4em;
   width:min(920px,92vw);
   max-height:min(82vh,760px);
   overflow:auto;
@@ -3352,20 +3356,6 @@ body.foreign-mode #time-range-button{
 
 #near-duplicate-setting small{
   line-height:1.5;
-}
-
-
-/* =====================================================================
-   V31.23.1 — integrated mobile smart-focus stability
-   Face-group union center · safer crop bounds · pre-transition focal lock
-   ===================================================================== */
-
-
-/* =====================================================================
-   V31.24.0 — Flöw hakkında / bilgi merkezi
-   ===================================================================== */
-#public-stats-panel{
-  position:relative;
 }
 
 .about-main-header{
