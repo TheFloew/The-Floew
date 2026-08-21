@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
 <link rel="manifest" href="site.webmanifest">
 
-<link rel="stylesheet" href="css/styles.css?h=6d3cafcd1567">
+<link rel="stylesheet" href="css/styles.css?h=87e2572b123a">
 
 <style id="boot-black-style">
   html,body{background:#000}
@@ -127,6 +127,31 @@
         aria-label="Anahtar kelime takibini temizle" title="Temizle">×</button>
       <button id="keyword-watch-apply" class="keyword-tool-action" type="button">Uyar</button>
     </div>
+  </div>
+
+  <div id="source-viewer-overlay" aria-hidden="true">
+    <section id="source-viewer-panel" role="dialog" aria-modal="true" aria-label="Haber kaynağı">
+      <header id="source-viewer-header">
+        <div id="source-viewer-heading">
+          <div id="source-viewer-title">Kaynak</div>
+          <div id="source-viewer-url"></div>
+        </div>
+        <div id="source-viewer-actions">
+          <a id="source-viewer-external" href="#" target="_blank" rel="noopener noreferrer" title="Kaynağı yeni sekmede aç">Yeni sekmede aç ↗</a>
+          <button id="source-viewer-close" type="button" aria-label="Kaynak penceresini kapat" title="Kapat">X</button>
+        </div>
+      </header>
+      <div id="source-viewer-stage">
+        <div id="source-viewer-status" role="status">Kaynak yükleniyor…</div>
+        <iframe
+          id="source-viewer-frame"
+          title="Haber kaynağı"
+          sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+          referrerpolicy="no-referrer"
+          loading="eager"
+        ></iframe>
+      </div>
+    </section>
   </div>
 
   <div id="stats-overlay" aria-hidden="true">
@@ -420,7 +445,7 @@
         </span>
         <button class="share-link" type="button" aria-label="Haberi paylaş" title="Haberi paylaş">⤴︎</button>
         <button class="feedback-inline-link" type="button" aria-label="Geri bildirim" title="Geri bildirim">⚑︎</button>
-        <a class="source-link" href="#" target="_blank" rel="noopener noreferrer" aria-label="Haber kaynağına git">⎋︎</a>
+        <a class="source-link" href="#" rel="noopener noreferrer" aria-label="Kaynağı gör" title="Kaynağı gör">⎋︎</a>
       </div>
     </div>
   </article>
@@ -446,7 +471,7 @@
         </span>
         <button class="share-link" type="button" aria-label="Haberi paylaş" title="Haberi paylaş">⤴︎</button>
         <button class="feedback-inline-link" type="button" aria-label="Geri bildirim" title="Geri bildirim">⚑︎</button>
-        <a class="source-link" href="#" target="_blank" rel="noopener noreferrer" aria-label="Haber kaynağına git">⎋︎</a>
+        <a class="source-link" href="#" rel="noopener noreferrer" aria-label="Kaynağı gör" title="Kaynağı gör">⎋︎</a>
       </div>
     </div>
   </article>
@@ -494,7 +519,7 @@
 </script>
 
 <script src="js/config.js?h=beda7fe1ea23"></script>
-<script src="js/app.js?v=d96daca80a1d" onerror="
+<script src="js/app.js?v=061c05c69b17" onerror="
   var loader=document.getElementById('loading-screen');
   if(loader)loader.remove();
   var status=document.getElementById('status');

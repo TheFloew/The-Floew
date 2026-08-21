@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.63.0";
+window.__floewAppVersion="31.64.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -14,6 +14,7 @@ const API=`${NEWS_WORKER_BASE}/news`;
 const VIDEO_API=`${NEWS_WORKER_BASE}/video`;
 const IMAGE_PROXY_API=`${NEWS_WORKER_BASE}/image`;
 const CUSTOM_RSS_API=`${NEWS_WORKER_BASE}/custom-rss`;
+const SOURCE_VIEW_API=`${NEWS_WORKER_BASE}/source`;
 const MARKET_API=`${MARKET_WORKER_BASE}/market`;
 const FLORA_SCORES_API=`${ANALYTICS_WORKER_BASE}/stats/flora-scores`;
 const FLORA_STORY_API=`${ANALYTICS_WORKER_BASE}/stats/flora-story`;
@@ -98,6 +99,9 @@ function loadShowDuration(){
 
 let showDurationSeconds=loadShowDuration();
 let autoAdvancePaused=false;
+let sourceViewerOpen=false;
+let sourceViewerRemainingMs=0;
+let sourceViewerArticleUrl="";
 
 function loadNearDuplicateDedupPreference(){
   try{
@@ -4226,8 +4230,12 @@ function fill(el,s,options={}){
 
   const sourceLink=el.querySelector(".source-link");
   if(sourceLink){
+    sourceLink.title="Kaynağı gör";
+    sourceLink.setAttribute("aria-label","Kaynağı gör");
+
     if(s.link){
       sourceLink.href=s.link;
+      sourceLink.removeAttribute("target");
       sourceLink.removeAttribute("aria-hidden");
       sourceLink.style.display="inline-block";
     }else{
@@ -5413,6 +5421,10 @@ function timer(durationMs=null){
     return;
   }
 
+  if(sourceViewerOpen){
+    return;
+  }
+
   /* Otomatik ilerleme kapalı olsa bile sıradaki haber hazır tutulur. */
   scheduleNextStoryPreload();
 
@@ -5448,6 +5460,7 @@ function pauseFlowForMouseMovement(){
     !desktopMouseFlowEnabled() ||
     adActive ||
     autoAdvancePaused ||
+    sourceViewerOpen ||
     !state.stories.length
   ) return;
 
@@ -5482,6 +5495,10 @@ function resumeFlowAfterMouseStops(){
 
     Yalnız gerçek bir haber/reklam geçişi sürerken yeniden timer kurmayız.
   */
+  if(sourceViewerOpen){
+    return;
+  }
+
   if(state.busy || adActive){
     mouseFlowResumeTimer=setTimeout(
       resumeFlowAfterMouseStops,
@@ -6090,7 +6107,7 @@ async function enterSkippedAdHistory(entryDir){
 }
 
 async function move(dir,options={}){
-  if(iddqdModeActive)return;
+  if(iddqdModeActive || sourceViewerOpen)return;
 
   closeFloraPopover({resume:false});
 
@@ -7725,6 +7742,7 @@ function anyControlPanelOpen(){
     document.getElementById("keyword-filter-panel")?.classList.contains("open") ||
     document.getElementById("keyword-watch-panel")?.classList.contains("open") ||
     document.getElementById("stats-overlay")?.classList.contains("open") ||
+    document.getElementById("source-viewer-overlay")?.classList.contains("open") ||
     document.getElementById("menu-overlay")?.classList.contains("open")
   );
 }
@@ -7738,7 +7756,8 @@ function navigationBlockingPanelOpen(){
     document.getElementById("time-range-panel")?.classList.contains("open") ||
     document.getElementById("keyword-filter-panel")?.classList.contains("open") ||
     document.getElementById("keyword-watch-panel")?.classList.contains("open") ||
-    document.getElementById("stats-overlay")?.classList.contains("open")
+    document.getElementById("stats-overlay")?.classList.contains("open") ||
+    document.getElementById("source-viewer-overlay")?.classList.contains("open")
   );
 }
 
@@ -10566,14 +10585,189 @@ document.querySelectorAll(".menu-tab").forEach(tab=>{
 });
 
 
+function sourceViewerProxyUrl(articleUrl){
+  try{
+    const u=new URL(SOURCE_VIEW_API);
+    u.searchParams.set("url",articleUrl);
+    return u.href;
+  }catch(e){
+    return "";
+  }
+}
+
+function sourceViewerRemainingTime(){
+  if(state.timerDeadline){
+    return Math.max(250,state.timerDeadline-Date.now());
+  }
+
+  return state.timerRemainingMs || Math.max(5,showDurationSeconds)*1000;
+}
+
+function pauseFlowForSourceViewer(){
+  sourceViewerRemainingMs=sourceViewerRemainingTime();
+
+  clearTimeout(state.timer);
+  state.timer=null;
+  state.timerDeadline=0;
+  state.timerRemainingMs=sourceViewerRemainingMs;
+
+  clearTimeout(mouseFlowResumeTimer);
+  mouseFlowResumeTimer=null;
+  mouseFlowPaused=false;
+}
+
+function setSourceViewerFrame(articleUrl){
+  const safe=String(articleUrl||"").trim();
+  if(!/^https?:\/\//i.test(safe))return false;
+
+  const frame=document.getElementById("source-viewer-frame");
+  const external=document.getElementById("source-viewer-external");
+  const urlLabel=document.getElementById("source-viewer-url");
+  const status=document.getElementById("source-viewer-status");
+  const proxy=sourceViewerProxyUrl(safe);
+
+  if(!frame || !proxy)return false;
+
+  sourceViewerArticleUrl=safe;
+
+  if(external)external.href=safe;
+
+  if(urlLabel){
+    try{
+      const u=new URL(safe);
+      urlLabel.textContent=u.hostname.replace(/^www\./i,"");
+    }catch(e){
+      urlLabel.textContent="";
+    }
+  }
+
+  if(status){
+    status.hidden=false;
+    status.textContent="Kaynak yükleniyor…";
+  }
+
+  frame.src=proxy;
+  return true;
+}
+
+function openSourceViewer(articleUrl,sourceName=""){
+  const safe=String(articleUrl||"").trim();
+  if(!/^https?:\/\//i.test(safe))return false;
+
+  if(!sourceViewerOpen){
+    pauseFlowForSourceViewer();
+  }
+
+  sourceViewerOpen=true;
+
+  closeFloraPopover({resume:false});
+  closeStatsOverlay();
+  closeQuickPanels();
+  closeControlMenu();
+  closeMenu();
+
+  const overlay=document.getElementById("source-viewer-overlay");
+  const title=document.getElementById("source-viewer-title");
+
+  if(title){
+    title.textContent=String(sourceName||"Kaynak").trim() || "Kaynak";
+  }
+
+  overlay?.classList.add("open");
+  overlay?.setAttribute("aria-hidden","false");
+  document.body.classList.add("source-viewer-open");
+
+  setSourceViewerFrame(safe);
+  showFullscreenButton();
+
+  setTimeout(()=>{
+    document.getElementById("source-viewer-close")?.focus();
+  },0);
+
+  return true;
+}
+
+function closeSourceViewer(){
+  if(!sourceViewerOpen)return;
+
+  const overlay=document.getElementById("source-viewer-overlay");
+  const frame=document.getElementById("source-viewer-frame");
+  const status=document.getElementById("source-viewer-status");
+  const remaining=sourceViewerRemainingMs || state.timerRemainingMs || Math.max(5,showDurationSeconds)*1000;
+
+  sourceViewerOpen=false;
+  sourceViewerArticleUrl="";
+
+  overlay?.classList.remove("open");
+  overlay?.setAttribute("aria-hidden","true");
+  document.body.classList.remove("source-viewer-open");
+
+  if(frame)frame.src="about:blank";
+  if(status)status.hidden=false;
+
+  sourceViewerRemainingMs=0;
+
+  if(
+    !autoAdvancePaused &&
+    !adActive &&
+    !state.busy &&
+    state.stories.length
+  ){
+    timer(remaining);
+  }
+
+  showFullscreenButton();
+}
+
 document.querySelectorAll(".source-link").forEach(link=>{
   link.addEventListener("pointerdown",e=>e.stopPropagation());
   link.addEventListener("pointerup",e=>e.stopPropagation());
-  link.addEventListener("click",e=>e.stopPropagation());
+  link.addEventListener("click",e=>{
+    e.preventDefault();
+    e.stopPropagation();
+
+    const story=state.stories[state.index]||null;
+    const href=link.getAttribute("href")||story?.link||"";
+    const sourceName=story?.source||link.closest(".slide")?.querySelector(".source")?.textContent||"Kaynak";
+
+    openSourceViewer(href,sourceName);
+  });
+});
+
+document.getElementById("source-viewer-close")?.addEventListener("click",e=>{
+  e.preventDefault();
+  e.stopPropagation();
+  closeSourceViewer();
+});
+
+document.getElementById("source-viewer-overlay")?.addEventListener("pointerdown",e=>{
+  e.stopPropagation();
+});
+
+document.getElementById("source-viewer-frame")?.addEventListener("load",()=>{
+  const status=document.getElementById("source-viewer-status");
+  if(status)status.hidden=true;
+});
+
+window.addEventListener("message",e=>{
+  const frame=document.getElementById("source-viewer-frame");
+  if(
+    !sourceViewerOpen ||
+    !frame ||
+    e.source!==frame.contentWindow ||
+    !e.data ||
+    e.data.type!=="floew-source-nav"
+  )return;
+
+  const next=String(e.data.url||"").trim();
+  if(/^https?:\/\//i.test(next)){
+    setSourceViewerFrame(next);
+  }
 });
 
 document.addEventListener("keydown",e=>{
   if(e.key==="Escape"){
+    closeSourceViewer();
     closeMenu();
     closeStatsOverlay();
     closeQuickPanels();
@@ -10611,6 +10805,7 @@ window.addEventListener("wheel",e=>{
   if(e.target.closest && e.target.closest("#control-menu-panel"))return;
   if(e.target.closest && e.target.closest("#info-button"))return;
   if(e.target.closest && e.target.closest("#stats-overlay"))return;
+  if(e.target.closest && e.target.closest("#source-viewer-overlay"))return;
   if(e.target.closest && e.target.closest("#menu-button"))return;
   if(e.target.closest && e.target.closest("#time-range-button"))return;
   if(e.target.closest && e.target.closest("#time-range-panel"))return;
@@ -10631,6 +10826,9 @@ window.addEventListener("keydown",e=>{
   const statsOpen=
     document.getElementById("stats-overlay")?.classList.contains("open");
 
+  const sourceViewerIsOpen=
+    document.getElementById("source-viewer-overlay")?.classList.contains("open");
+
   const timeOpen=
     document.getElementById("time-range-panel")?.classList.contains("open");
 
@@ -10640,7 +10838,7 @@ window.addEventListener("keydown",e=>{
   const keywordWatchOpen=
     document.getElementById("keyword-watch-panel")?.classList.contains("open");
 
-  if(menuOpen || statsOpen || timeOpen || keywordFilterOpen || keywordWatchOpen)return;
+  if(menuOpen || statsOpen || sourceViewerIsOpen || timeOpen || keywordFilterOpen || keywordWatchOpen)return;
 
   const target=e.target;
   const typingTarget=Boolean(
@@ -11273,6 +11471,7 @@ window.addEventListener("pointerdown",e=>{
   if(e.target.closest && e.target.closest("#control-menu-panel"))return;
   if(e.target.closest && e.target.closest("#info-button"))return;
   if(e.target.closest && e.target.closest("#stats-overlay"))return;
+  if(e.target.closest && e.target.closest("#source-viewer-overlay"))return;
   if(e.target.closest && e.target.closest("#menu-button"))return;
   if(e.target.closest && e.target.closest("#time-range-button"))return;
   if(e.target.closest && e.target.closest("#time-range-panel"))return;
