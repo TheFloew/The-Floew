@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.69.0";
+window.__floewAppVersion="31.70.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -3708,6 +3708,7 @@ function storyExternalImageProxyUrl(story){
 
 
 const smartFocalCache=new Map();
+const smartFocalResolvedCache=new Map();
 const SMART_FOCAL_SAMPLE=48;
 const SMART_FOCAL_CACHE_MAX=160;
 const SMART_FOCAL_LOCK_TIMEOUT_MS=520;
@@ -3818,9 +3819,20 @@ function smartFocalFromPixels(data,width,height){
 
 function smartFocalCacheSet(key,value){
   smartFocalCache.set(key,value);
+
   while(smartFocalCache.size>SMART_FOCAL_CACHE_MAX){
     const first=smartFocalCache.keys().next().value;
     smartFocalCache.delete(first);
+    smartFocalResolvedCache.delete(first);
+  }
+}
+
+function smartFocalResolvedCacheSet(key,value){
+  smartFocalResolvedCache.set(key,value);
+
+  while(smartFocalResolvedCache.size>SMART_FOCAL_CACHE_MAX){
+    const first=smartFocalResolvedCache.keys().next().value;
+    smartFocalResolvedCache.delete(first);
   }
 }
 
@@ -3952,6 +3964,7 @@ function detectSmartFocalPoint(story){
     */
     probe.src=storyImageProxyUrl(story)||source;
   }).then(value=>{
+    smartFocalResolvedCacheSet(key,value);
     smartFocalCacheSet(key,Promise.resolve(value));
     return value;
   });
@@ -4007,6 +4020,17 @@ async function lockSmartFocalPoint(
     return null;
   }
 
+  /*
+    Başka bir geçiş çağrısı bu görseli biz beklerken kilitlediyse artık
+    object-position'ı sonradan değiştirme. Bu özellikle masaüstündeki
+    non-blocking ok geçişlerinde görünür kadraj sıçramasını önler.
+  */
+  if(img.dataset.focalLockedKey===focalKey){
+    return smartFocalResolvedCache.has(focalKey)
+      ? smartFocalResolvedCache.get(focalKey)
+      : null;
+  }
+
   if(focal){
     img.style.objectPosition=
       `${focal.x.toFixed(1)}% ${focal.y.toFixed(1)}%`;
@@ -4016,6 +4040,78 @@ async function lockSmartFocalPoint(
 
   img.dataset.focalLockedKey=focalKey;
   return focal;
+}
+
+function desktopFinePointer(){
+  try{
+    return Boolean(
+      window.matchMedia?.("(pointer: fine)")?.matches
+    );
+  }catch(e){
+    return window.innerWidth>900;
+  }
+}
+
+function lockSmartFocalPointImmediate(img,story){
+  if(!img)return null;
+
+  const focalKey=
+    `${mediaKey(story)}|${String(story?.image||"").trim()}`;
+
+  img.dataset.focalKey=focalKey;
+
+  if(!smartCropEnabled()){
+    img.style.objectPosition="50% 50%";
+    img.dataset.focalLockedKey=focalKey;
+    return null;
+  }
+
+  /*
+    Masaüstünde geçişi yüz analizine bağlamıyoruz.
+    Analiz preload sırasında bittiyse sonucu senkron kullan; bitmediyse
+    merkez kadrajla hemen geç ve analizi sonraki kullanım için arka planda
+    cache'e doldurmaya devam et.
+  */
+  const hasResolved=
+    smartFocalResolvedCache.has(focalKey);
+
+  const focal=
+    hasResolved
+      ? smartFocalResolvedCache.get(focalKey)
+      : null;
+
+  if(focal){
+    img.style.objectPosition=
+      `${focal.x.toFixed(1)}% ${focal.y.toFixed(1)}%`;
+  }else{
+    img.style.objectPosition="50% 50%";
+
+    if(!hasResolved){
+      void detectSmartFocalPoint(story).catch(()=>null);
+    }
+  }
+
+  img.dataset.focalLockedKey=focalKey;
+  return focal;
+}
+
+async function lockSmartFocalPointForTransition(img,story){
+  if(!img)return null;
+
+  /*
+    Fine pointer = masaüstü/laptop: tuş ve mouse geçişi anında başlar.
+    Coarse pointer = mevcut mobil davranış: odak animasyondan önce en fazla
+    520 ms kilitlenmeye devam eder.
+  */
+  if(desktopFinePointer()){
+    return lockSmartFocalPointImmediate(img,story);
+  }
+
+  return lockSmartFocalPoint(
+    img,
+    story,
+    SMART_FOCAL_LOCK_TIMEOUT_MS
+  );
 }
 
 function applySmartFocalPoint(img,story){
@@ -6260,10 +6356,9 @@ async function transitionFromAdTo(nextIndex,fromHistory,dir=1){
   }
 
   if(nextImage){
-    await lockSmartFocalPoint(
+    await lockSmartFocalPointForTransition(
       nextImage,
-      story,
-      SMART_FOCAL_LOCK_TIMEOUT_MS
+      story
     );
   }
 
@@ -6399,10 +6494,9 @@ async function transitionTo(nextIndex,fromHistory,dir){
   }
 
   if(nextImage){
-    await lockSmartFocalPoint(
+    await lockSmartFocalPointForTransition(
       nextImage,
-      story,
-      SMART_FOCAL_LOCK_TIMEOUT_MS
+      story
     );
   }
 
