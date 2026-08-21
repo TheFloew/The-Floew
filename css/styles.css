@@ -5185,33 +5185,11 @@ body.iddqd-mode #logo{
   gap:18px;
   padding:9px 10px 9px 17px;
   border:0;
-  background:
-    linear-gradient(
-      180deg,
-      rgba(0,0,0,.92) 0%,
-      rgba(0,0,0,.78) 100%
-    );
+  background:rgba(8,8,8,.68);
   color:#fff;
-  backdrop-filter:blur(14px);
-  -webkit-backdrop-filter:blur(14px);
-}
-
-#source-viewer-header::after{
-  content:"";
-  position:absolute;
-  left:16px;
-  right:16px;
-  bottom:0;
-  height:1px;
-  background:
-    linear-gradient(
-      90deg,
-      transparent,
-      rgba(255,255,255,.10) 12%,
-      rgba(255,255,255,.10) 88%,
-      transparent
-    );
-  pointer-events:none;
+  box-shadow:0 10px 34px rgba(0,0,0,.18);
+  backdrop-filter:blur(6px);
+  -webkit-backdrop-filter:blur(6px);
 }
 
 #source-viewer-heading{
@@ -5280,13 +5258,21 @@ body.iddqd-mode #logo{
 }
 
 #source-viewer-close{
-  font-size:19px;
+  width:36px;
+  height:36px;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  color:#fff;
+  cursor:pointer;
+  opacity:.68;
+  font:300 28px/34px Arial,sans-serif;
+  transform:none;
+  text-shadow:none;
 }
 
 #source-viewer-external:hover,
-#source-viewer-external:focus-visible,
-#source-viewer-close:hover,
-#source-viewer-close:focus-visible{
+#source-viewer-external:focus-visible{
   color:#fff;
   background:transparent;
   outline:none;
@@ -5296,9 +5282,23 @@ body.iddqd-mode #logo{
     0 2px 6px rgba(0,0,0,.28);
 }
 
-#source-viewer-external:active,
-#source-viewer-close:active{
+#source-viewer-external:active{
   transform:scale(.94);
+}
+
+#source-viewer-close:hover,
+#source-viewer-close:focus-visible{
+  background:transparent;
+  color:#fff;
+  opacity:1;
+  outline:none;
+  transform:none;
+  text-shadow:none;
+}
+
+#source-viewer-close:active{
+  opacity:.82;
+  transform:none;
 }
 
 #source-viewer-stage{
@@ -5366,19 +5366,17 @@ body.source-viewer-open{
     font-size:7px;
   }
 
-  #source-viewer-external,
-  #source-viewer-close{
+  #source-viewer-external{
     width:36px;
     height:36px;
     line-height:36px;
-  }
-
-  #source-viewer-external{
     font-size:20px;
   }
 
   #source-viewer-close{
-    font-size:17px;
+    width:36px;
+    height:36px;
+    font:300 28px/34px Arial,sans-serif;
   }
 }
 
