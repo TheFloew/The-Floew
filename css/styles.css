@@ -80,7 +80,9 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 #menu-button:active{transform:scale(.95)}
 
 #menu-overlay{
-  position:fixed;
+  position:relative;
+  width:100vw;
+  height:100vh;
   z-index:1400;
   inset:0;
   display:flex;
@@ -103,6 +105,7 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 }
 #settings-menu{
   position:absolute;
+  top:4em;
   width:min(620px,88vw);
   max-height:min(760px,86vh);
   overflow:auto;
