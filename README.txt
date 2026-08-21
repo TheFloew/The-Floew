@@ -1,3 +1,15 @@
+Beta Versiyon 1.8.0
+- Döviz kuru bilgileri
+- Borsa bantları
+- Yeni paylaşım sistemi
+- Siteden çıkmadan kaynağı görme
+- Tercihleri içe/dışa aktarma
+- Mouse hareketiyle duraksama
+- Ekran koruyucuyu devre dışı bırakma
+- Benzer haber algoritmasında iyileştirmelr
+- Reklamlarda iyileştirmeler
+- Video haberlerde iyileştirmeler
+
 Beta Versiyon 1.7.6
 - Bazı videoların alakasız haberlere karışma sorunu düzeltildi.
 
@@ -9,7 +21,7 @@ Beta Versiyon 1.7.5
 - Flöra puanı sorunu düzeltildi.
 - Flöra puanı tıklanabilir oldu. Geçerli haberin Flöra değerlerini ve istatistiklerini gösteren ekran eklendi.
 - Legal yazılarda dizgi düzeltmeleri.
-- Loading ekranın yükleme barı eklendi.
+- Loading ekranına yükleme barı eklendi.
 - Kaydırma iyileştirmeleri.
 
 Beta Versiyon 1.7.2
