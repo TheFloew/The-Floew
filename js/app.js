@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.68.0";
+window.__floewAppVersion="31.69.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -3713,17 +3713,12 @@ const SMART_FOCAL_CACHE_MAX=160;
 const SMART_FOCAL_LOCK_TIMEOUT_MS=520;
 
 function smartCropEnabled(){
-  try{
-    return (
-      window.innerWidth<=700 ||
-      (
-        window.innerWidth<=900 &&
-        window.matchMedia?.("(pointer: coarse)")?.matches
-      )
-    );
-  }catch(e){
-    return window.innerWidth<=700;
-  }
+  /*
+    v31.69 — Akıllı odak artık ekran boyutundan bağımsız.
+    Mobilde kullanılan aynı FaceDetector + hafif saliency fallback'i
+    masaüstü haber görsellerinde de uygulanır.
+  */
+  return true;
 }
 
 function clampFocal(value,min,max){
@@ -3953,8 +3948,7 @@ function detectSmartFocalPoint(story){
 
     /*
       Görsel analizi CORS yüzünden takılmasın diye mümkün olduğunda mevcut
-      Worker image proxy'sini kullanıyoruz. Bu işlem yalnız mobil smart-crop
-      açıkken ve arka planda çalışır.
+      Worker image proxy'sini kullanıyoruz. Bu işlem akıllı odak açıkken ve arka planda çalışır.
     */
     probe.src=storyImageProxyUrl(story)||source;
   }).then(value=>{
