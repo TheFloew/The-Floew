@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.72.0";
+window.__floewAppVersion="31.73.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -837,8 +837,9 @@ let rawStories=[];
 const videoOnlyVerdicts=new Map();
 const VIDEO_ONLY_TRUE_TTL_MS=20*60*1000;
 const VIDEO_ONLY_FALSE_TTL_MS=3*60*1000;
-const VIDEO_ONLY_BATCH_SIZE=28;
+const VIDEO_ONLY_BATCH_SIZE=36;
 const VIDEO_ONLY_TARGET_COUNT=18;
+const VIDEO_ONLY_MIN_PER_SOURCE=2;
 const VIDEO_ONLY_CONCURRENCY=5;
 let videoOnlyScanRunning=false;
 let videoOnlyScanQueued=false;
@@ -924,6 +925,166 @@ function queueVideoOnlyScan(){
   },35);
 }
 
+function videoOnlyLikelyScore(story){
+  let score=0;
+
+  if(story?.video)score+=100;
+
+  const text=normalizeText(
+    `${story?.title||""} ${story?.description||""}`
+  );
+
+  if(
+    /\b(video|görüntü|goruntu|kamerada|kameraya|izle|canlı yayın|canli yayin|yayında|yayinda|o anlar)\b/
+      .test(text)
+  ){
+    score+=36;
+  }
+
+  if(
+    /\b(video galeri|video haber|canlı izle|canli izle)\b/
+      .test(text)
+  ){
+    score+=24;
+  }
+
+  return score;
+}
+
+function videoOnlySourceCoverage(candidates){
+  const groups=new Map();
+
+  for(const story of candidates){
+    const key=sourceKey(story?.source)||"__unknown__";
+    let group=groups.get(key);
+
+    if(!group){
+      group={
+        total:0,
+        checked:0
+      };
+      groups.set(key,group);
+    }
+
+    group.total++;
+
+    if(
+      currentVideoOnlyVerdict(story)!==null
+    ){
+      group.checked++;
+    }
+  }
+
+  let complete=true;
+
+  for(const group of groups.values()){
+    const required=Math.min(
+      VIDEO_ONLY_MIN_PER_SOURCE,
+      group.total
+    );
+
+    if(group.checked<required){
+      complete=false;
+      break;
+    }
+  }
+
+  return {
+    complete,
+    groups
+  };
+}
+
+function videoOnlyBalancedBatch(candidates){
+  const unknown=candidates.filter(
+    story=>currentVideoOnlyVerdict(story)===null
+  );
+
+  if(!unknown.length)return [];
+
+  const sourceGroups=new Map();
+
+  unknown.forEach((story,index)=>{
+    const key=sourceKey(story?.source)||"__unknown__";
+
+    if(!sourceGroups.has(key)){
+      sourceGroups.set(key,[]);
+    }
+
+    sourceGroups.get(key).push({
+      story,
+      index,
+      score:videoOnlyLikelyScore(story)
+    });
+  });
+
+  for(const list of sourceGroups.values()){
+    list.sort((a,b)=>
+      (b.score-a.score) ||
+      (a.index-b.index)
+    );
+  }
+
+  const ordered=[];
+  const used=new Set();
+
+  /*
+    İlk tur kaynak bazlıdır: RSS'inde media:content taşıyan birkaç kaynak
+    bütün taramayı tüketemez. Her aktif kaynağa en az iki doğrulama şansı
+    verilir (kaynakta o kadar haber varsa).
+  */
+  for(let round=0;round<VIDEO_ONLY_MIN_PER_SOURCE;round++){
+    for(const list of sourceGroups.values()){
+      const item=list[round];
+
+      if(!item)continue;
+
+      const key=videoOnlyVerdictKey(item.story);
+
+      if(!key || used.has(key))continue;
+
+      used.add(key);
+      ordered.push(item.story);
+
+      if(ordered.length>=VIDEO_ONLY_BATCH_SIZE){
+        return ordered;
+      }
+    }
+  }
+
+  /*
+    Kalan kapasiteyi video olma ihtimali yüksek haberlere ver.
+    Bu yalnız tarama sırasını etkiler; haberlerin ekrandaki sırası değişmez.
+  */
+  const remainder=[];
+
+  for(const list of sourceGroups.values()){
+    for(let i=VIDEO_ONLY_MIN_PER_SOURCE;i<list.length;i++){
+      remainder.push(list[i]);
+    }
+  }
+
+  remainder.sort((a,b)=>
+    (b.score-a.score) ||
+    (a.index-b.index)
+  );
+
+  for(const item of remainder){
+    const key=videoOnlyVerdictKey(item.story);
+
+    if(!key || used.has(key))continue;
+
+    used.add(key);
+    ordered.push(item.story);
+
+    if(ordered.length>=VIDEO_ONLY_BATCH_SIZE){
+      break;
+    }
+  }
+
+  return ordered;
+}
+
 async function runVideoOnlyScan(){
   if(!videoOnlyEnabled)return;
 
@@ -938,31 +1099,7 @@ async function runVideoOnlyScan(){
 
   try{
     const candidates=videoOnlyBaseCandidates(feedMode);
-    const confirmed=candidates.filter(
-      story=>currentVideoOnlyVerdict(story)===true
-    );
-
-    /*
-      Önce feed'den video hint'i gelenleri dene; fakat gerçek sonuç yine
-      Worker resolver tarafından doğrulanır. Son sıralama candidates dizisinin
-      doğal haber sırasından yapılacağı için tarama önceliği akış sırasını
-      değiştirmez.
-    */
-    const unknown=candidates
-      .filter(
-        story=>currentVideoOnlyVerdict(story)===null
-      )
-      .sort((a,b)=>
-        Number(Boolean(b?.video))-
-        Number(Boolean(a?.video))
-      )
-      .slice(
-        0,
-        Math.max(
-          VIDEO_ONLY_BATCH_SIZE,
-          VIDEO_ONLY_TARGET_COUNT-confirmed.length
-        )
-      );
+    const unknown=videoOnlyBalancedBatch(candidates);
 
     if(!unknown.length)return;
 
@@ -1037,17 +1174,22 @@ async function runVideoOnlyScan(){
         const stillUnknown=candidates.some(
           story=>currentVideoOnlyVerdict(story)===null
         );
+        const coverage=
+          videoOnlySourceCoverage(candidates);
 
         /*
-          İlk batch'te yeterli video çıkmadıysa sonraki batch'i tara.
-          Yeterli video bulunduğunda ağ kullanımını durdurup yeni ihtiyaç/
-          filtre değişikliğinde devam ederiz.
+          Global hedefe ulaşmış olsak bile her aktif kaynağa asgari tarama
+          şansı verilmeden durma. Böylece NTV/Halk TV gibi RSS'inde video hint'i
+          taşımayan kaynaklar diğer kaynaklar tarafından aç bırakılmaz.
         */
         if(
           videoOnlyScanRerun ||
           (
-            confirmedCount<VIDEO_ONLY_TARGET_COUNT &&
-            stillUnknown
+            stillUnknown &&
+            (
+              confirmedCount<VIDEO_ONLY_TARGET_COUNT ||
+              !coverage.complete
+            )
           )
         ){
           videoOnlyScanRerun=false;
@@ -2749,7 +2891,7 @@ function timeText(v){
 
 
 const storyMediaCache=new Map();
-const VIDEO_RESOLVER_VERSION="20260823-1";
+const VIDEO_RESOLVER_VERSION="20260823-2";
 const SUPPORTED_EMBED_VIDEO_PROVIDERS=new Set([
   "youtube",
   "vimeo",
