@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.70.0";
+window.__floewAppVersion="31.71.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -2488,7 +2488,7 @@ function timeText(v){
 
 
 const storyMediaCache=new Map();
-const VIDEO_RESOLVER_VERSION="20260822-1";
+const VIDEO_RESOLVER_VERSION="20260823-1";
 const SUPPORTED_EMBED_VIDEO_PROVIDERS=new Set([
   "youtube",
   "vimeo",
@@ -2723,6 +2723,22 @@ async function resolveStoryMedia(story){
     /* Null/error sonucunu oturum boyunca kilitleme; sonraki preload tekrar deneyebilir. */
     if(!media && storyMediaCache.get(key)===promise){
       storyMediaCache.delete(key);
+      return;
+    }
+
+    /*
+      Dailymotion metadata'sından çözülen native URL'ler imzalı/geçici olabilir.
+      Oturum boyunca sonsuza kadar cache'leme; birkaç dakika sonra yeniden çöz.
+    */
+    if(
+      media?.source==="cumhuriyet-dailymotion-native" &&
+      storyMediaCache.get(key)===promise
+    ){
+      setTimeout(()=>{
+        if(storyMediaCache.get(key)===promise){
+          storyMediaCache.delete(key);
+        }
+      },4*60*1000);
     }
   }).catch(()=>{
     if(storyMediaCache.get(key)===promise)storyMediaCache.delete(key);
@@ -3369,14 +3385,19 @@ function ensureDailymotionLibrary(playerId){
   return dailymotionLibraryPromise;
 }
 
-async function dailymotionStateVideoId(player){
-  if(!player?.getState)return "";
+async function dailymotionState(player){
+  if(!player?.getState)return null;
   try{
     const state=await player.getState();
-    return String(state?.videoId||"").trim();
+    return state && typeof state==="object" ? state : null;
   }catch(e){
-    return "";
+    return null;
   }
+}
+
+async function dailymotionStateVideoId(player){
+  const state=await dailymotionState(player);
+  return String(state?.videoId||"").trim();
 }
 
 async function ensureDailymotionExactVideo(player,videoId){
@@ -3408,17 +3429,36 @@ function monitorDailymotionExactVideo(host,player,expected,isCurrent){
   host.__floewDailymotionMonitor=setInterval(async()=>{
     if(checking || !isCurrent())return;
     checking=true;
+
     try{
-      const current=await dailymotionStateVideoId(player);
-      if(current && current!==expected && isCurrent()){
+      const state=await dailymotionState(player);
+      const current=String(state?.videoId||"").trim();
+      const loadedFrom=String(state?.videoLoadedFrom||"").toLowerCase();
+
+      /*
+        Dailymotion player konfigürasyonu auto-next/recommendation açmışsa,
+        video bittiğinde başka içerik yükleyebilir. Bunu mümkün olan en kısa
+        sürede beklenen habere geri sabitle.
+      */
+      if(
+        isCurrent() &&
+        (
+          (current && current!==expected) ||
+          (
+            loadedFrom==="auto_next" &&
+            current!==expected
+          )
+        )
+      ){
         try{await player.loadContent?.({video:expected});}catch(e){}
         try{await player.setVolume?.(0);}catch(e){}
+        try{await player.setScaleMode?.("fill");}catch(e){}
         try{await player.play?.();}catch(e){}
       }
     }finally{
       checking=false;
     }
-  },650);
+  },180);
 }
 
 async function showDailymotionVideo(el,story,media,token){
@@ -3521,13 +3561,34 @@ async function prepareSlideMedia(el,story,{preload=false}={}){
   const direct=el.querySelector(".slide-video");
 
   if(el.dataset.mediaReadyStoryKey===key){
-    if(direct?.classList.contains("media-visible")){
-      direct.__floewShouldPlay=true;
-      const p=direct.play?.();
-      if(p?.catch)p.catch(()=>{});
+    const dmHost=el.querySelector(".slide-dailymotion.media-visible");
+
+    if(dmHost){
+      const expected=String(dmHost.dataset.dailymotionVideoId||"").trim();
+      const player=dmHost.__floewDailymotionPlayer;
+
+      if(
+        !expected ||
+        !player ||
+        !await ensureDailymotionExactVideo(player,expected)
+      ){
+        resetSlideMedia(el);
+        el.dataset.storyKey=key;
+      }else{
+        try{await player.setVolume?.(0);}catch(e){}
+        try{await player.play?.();}catch(e){}
+        if(!preload)queueVideoAudioUiSync();
+        return true;
+      }
+    }else{
+      if(direct?.classList.contains("media-visible")){
+        direct.__floewShouldPlay=true;
+        const p=direct.play?.();
+        if(p?.catch)p.catch(()=>{});
+      }
+      if(!preload)queueVideoAudioUiSync();
+      return true;
     }
-    if(!preload)queueVideoAudioUiSync();
-    return true;
   }
 
   if(el.__floewMediaPrepare?.key===key){
@@ -3550,6 +3611,19 @@ async function prepareSlideMedia(el,story,{preload=false}={}){
     }
 
     if(media.kind==="embed"){
+      const provider=String(media.provider||"").toLowerCase();
+
+      /*
+        Dailymotion preload'u player oluşturarak yapma.
+        Cumhuriyet'in kısa videoları gizli slaytta biterse Dailymotion
+        auto-next/recommendation başka videoya geçebiliyor. Yalnız library
+        ve origin'i ısıt; gerçek player haber görünürken oluşturulsun.
+      */
+      if(preload && provider==="dailymotion"){
+        warmEmbedMedia(media);
+        return false;
+      }
+
       return showEmbedVideo(el,story,media,token);
     }
 
