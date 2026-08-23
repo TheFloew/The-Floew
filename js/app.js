@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.73.0";
+window.__floewAppVersion="31.74.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -840,6 +840,7 @@ const VIDEO_ONLY_FALSE_TTL_MS=3*60*1000;
 const VIDEO_ONLY_BATCH_SIZE=36;
 const VIDEO_ONLY_TARGET_COUNT=18;
 const VIDEO_ONLY_MIN_PER_SOURCE=2;
+const VIDEO_ONLY_SOURCE_SAMPLE_MAX=6;
 const VIDEO_ONLY_CONCURRENCY=5;
 let videoOnlyScanRunning=false;
 let videoOnlyScanQueued=false;
@@ -928,6 +929,7 @@ function queueVideoOnlyScan(){
 function videoOnlyLikelyScore(story){
   let score=0;
 
+  if(story?.videoDiscovery)score+=180;
   if(story?.video)score+=100;
 
   const text=normalizeText(
@@ -951,8 +953,9 @@ function videoOnlyLikelyScore(story){
   return score;
 }
 
-function videoOnlySourceCoverage(candidates){
+function videoOnlySourceStats(candidates){
   const groups=new Map();
+  let sourceOrder=0;
 
   for(const story of candidates){
     const key=sourceKey(story?.source)||"__unknown__";
@@ -960,30 +963,59 @@ function videoOnlySourceCoverage(candidates){
 
     if(!group){
       group={
+        key,
+        order:sourceOrder++,
         total:0,
-        checked:0
+        checked:0,
+        confirmed:0,
+        unknown:[]
       };
       groups.set(key,group);
     }
 
     group.total++;
 
-    if(
-      currentVideoOnlyVerdict(story)!==null
-    ){
+    const verdict=currentVideoOnlyVerdict(story);
+
+    if(verdict===true){
       group.checked++;
+      group.confirmed++;
+    }else if(verdict===false){
+      group.checked++;
+    }else{
+      group.unknown.push(story);
     }
   }
 
+  for(const group of groups.values()){
+    group.unknown.sort((a,b)=>
+      (videoOnlyLikelyScore(b)-videoOnlyLikelyScore(a))
+    );
+  }
+
+  return groups;
+}
+
+function videoOnlySourceCoverage(candidates){
+  const groups=videoOnlySourceStats(candidates);
   let complete=true;
 
   for(const group of groups.values()){
     const required=Math.min(
-      VIDEO_ONLY_MIN_PER_SOURCE,
+      VIDEO_ONLY_SOURCE_SAMPLE_MAX,
       group.total
     );
 
-    if(group.checked<required){
+    /*
+      Bir kaynakta video bulduysak kaynak kapsaması tamamdır.
+      Henüz bulamadıysak, o kaynaktan sınırlı ama gerçek bir örneklem
+      tamamlanana kadar aramaya devam ederiz.
+    */
+    if(
+      group.confirmed===0 &&
+      group.checked<required &&
+      group.unknown.length
+    ){
       complete=false;
       break;
     }
@@ -996,55 +1028,55 @@ function videoOnlySourceCoverage(candidates){
 }
 
 function videoOnlyBalancedBatch(candidates){
-  const unknown=candidates.filter(
-    story=>currentVideoOnlyVerdict(story)===null
-  );
-
-  if(!unknown.length)return [];
-
-  const sourceGroups=new Map();
-
-  unknown.forEach((story,index)=>{
-    const key=sourceKey(story?.source)||"__unknown__";
-
-    if(!sourceGroups.has(key)){
-      sourceGroups.set(key,[]);
-    }
-
-    sourceGroups.get(key).push({
-      story,
-      index,
-      score:videoOnlyLikelyScore(story)
-    });
-  });
-
-  for(const list of sourceGroups.values()){
-    list.sort((a,b)=>
-      (b.score-a.score) ||
-      (a.index-b.index)
-    );
-  }
-
+  const groups=videoOnlySourceStats(candidates);
   const ordered=[];
   const used=new Set();
 
+  const addStory=story=>{
+    const key=videoOnlyVerdictKey(story);
+    if(!key || used.has(key))return false;
+
+    used.add(key);
+    ordered.push(story);
+    return true;
+  };
+
   /*
-    İlk tur kaynak bazlıdır: RSS'inde media:content taşıyan birkaç kaynak
-    bütün taramayı tüketemez. Her aktif kaynağa en az iki doğrulama şansı
-    verilir (kaynakta o kadar haber varsa).
+    Öncelik: Henüz tek bir video bile bulamadığımız kaynaklar.
+    Kaynakları "kaç haber kontrol edildi" sayısına göre sırala.
+    Böylece ilk 36 kaynak dolunca sonraki batch'te aynı kaynaklar tekrar
+    başa geçmez; henüz hiç kontrol edilmemiş kaynaklar otomatik olarak öne gelir.
   */
-  for(let round=0;round<VIDEO_ONLY_MIN_PER_SOURCE;round++){
-    for(const list of sourceGroups.values()){
-      const item=list[round];
+  const uncovered=[...groups.values()]
+    .filter(group=>
+      group.confirmed===0 &&
+      group.unknown.length &&
+      group.checked<
+        Math.min(
+          VIDEO_ONLY_SOURCE_SAMPLE_MAX,
+          group.total
+        )
+    )
+    .sort((a,b)=>
+      (a.checked-b.checked) ||
+      (a.order-b.order)
+    );
 
-      if(!item)continue;
+  let progress=true;
 
-      const key=videoOnlyVerdictKey(item.story);
+  while(
+    progress &&
+    ordered.length<VIDEO_ONLY_BATCH_SIZE
+  ){
+    progress=false;
 
-      if(!key || used.has(key))continue;
+    for(const group of uncovered){
+      const story=group.unknown.shift();
+      if(!story)continue;
 
-      used.add(key);
-      ordered.push(item.story);
+      if(addStory(story)){
+        progress=true;
+      }
 
       if(ordered.length>=VIDEO_ONLY_BATCH_SIZE){
         return ordered;
@@ -1053,31 +1085,29 @@ function videoOnlyBalancedBatch(candidates){
   }
 
   /*
-    Kalan kapasiteyi video olma ihtimali yüksek haberlere ver.
-    Bu yalnız tarama sırasını etkiler; haberlerin ekrandaki sırası değişmez.
+    Kaynak kapsaması için ayrılan kapasiteden sonra, kalan yerleri
+    video olma ihtimali en yüksek bilinmeyen haberlerle doldur.
   */
   const remainder=[];
 
-  for(const list of sourceGroups.values()){
-    for(let i=VIDEO_ONLY_MIN_PER_SOURCE;i<list.length;i++){
-      remainder.push(list[i]);
+  for(const group of groups.values()){
+    for(const story of group.unknown){
+      remainder.push({
+        story,
+        score:videoOnlyLikelyScore(story),
+        sourceOrder:group.order
+      });
     }
   }
 
   remainder.sort((a,b)=>
     (b.score-a.score) ||
-    (a.index-b.index)
+    (a.sourceOrder-b.sourceOrder)
   );
 
   for(const item of remainder){
-    const key=videoOnlyVerdictKey(item.story);
-
-    if(!key || used.has(key))continue;
-
-    used.add(key);
-    ordered.push(item.story);
-
-    if(ordered.length>=VIDEO_ONLY_BATCH_SIZE){
+    if(addStory(item.story) &&
+       ordered.length>=VIDEO_ONLY_BATCH_SIZE){
       break;
     }
   }
@@ -2891,7 +2921,7 @@ function timeText(v){
 
 
 const storyMediaCache=new Map();
-const VIDEO_RESOLVER_VERSION="20260823-2";
+const VIDEO_RESOLVER_VERSION="20260823-3";
 const SUPPORTED_EMBED_VIDEO_PROVIDERS=new Set([
   "youtube",
   "vimeo",
