@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.71.0";
+window.__floewAppVersion="31.72.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -745,7 +745,7 @@ const NEW_CATEGORIES=["#Yaşam","#Sağlık","#Otomotiv","#Sinema","#Müzik","#Ed
 function loadPreferences(){
   try{
     const raw=localStorage.getItem(PREFS_KEY);
-    if(!raw)return {sources:null,categories:null,direction:"up",videoEnabled:true};
+    if(!raw)return {sources:null,categories:null,direction:"up",videoEnabled:true,videoOnlyEnabled:false};
     const p=JSON.parse(raw)||{};
 
     let categories=Array.isArray(p.categories)?p.categories.filter(c=>c!=="#Gündem"):null;
@@ -759,17 +759,19 @@ function loadPreferences(){
       sources:Array.isArray(p.sources)?p.sources:null,
       categories,
       direction:["up","down"].includes(p.direction)?p.direction:"up",
-      videoEnabled:p.videoEnabled!==false
+      videoEnabled:p.videoEnabled!==false,
+      videoOnlyEnabled:p.videoOnlyEnabled===true
     };
   }catch(e){
     console.warn("Preferences:",e);
-    return {sources:null,categories:null,direction:"up",videoEnabled:true};
+    return {sources:null,categories:null,direction:"up",videoEnabled:true,videoOnlyEnabled:false};
   }
 }
 
 const savedPreferences=loadPreferences();
 let transitionDirection=savedPreferences.direction||"up";
 let videoEnabled=savedPreferences.videoEnabled!==false;
+let videoOnlyEnabled=savedPreferences.videoOnlyEnabled===true;
 let sourcePreferencesApplied=false;
 
 function savePreferences(){
@@ -778,7 +780,8 @@ function savePreferences(){
       sources:[...filters.sources],
       categories:[...filters.categories],
       direction:transitionDirection,
-      videoEnabled
+      videoEnabled,
+      videoOnlyEnabled
     }));
   }catch(e){
     console.warn("Preferences:",e);
@@ -824,6 +827,236 @@ let foreignSourcePreferencesApplied=false;
 const savedForeignSources=loadForeignSourcePreferences();
 
 let rawStories=[];
+
+/*
+  v31.72 — "Sadece videolu haberler"
+  Sonuçlar yalnız bu oturumda cache'lenir. Gerçek video doğrulaması mevcut
+  /video resolver üzerinden yapılır; RSS'deki video hint'i tek başına yeterli
+  sayılmaz.
+*/
+const videoOnlyVerdicts=new Map();
+const VIDEO_ONLY_TRUE_TTL_MS=20*60*1000;
+const VIDEO_ONLY_FALSE_TTL_MS=3*60*1000;
+const VIDEO_ONLY_BATCH_SIZE=28;
+const VIDEO_ONLY_TARGET_COUNT=18;
+const VIDEO_ONLY_CONCURRENCY=5;
+let videoOnlyScanRunning=false;
+let videoOnlyScanQueued=false;
+let videoOnlyScanRerun=false;
+let videoOnlyScanGeneration=0;
+let videoOnlyFilterRefreshTimer=null;
+
+function videoOnlyVerdictKey(story){
+  return mediaKey(story);
+}
+
+function currentVideoOnlyVerdict(story){
+  const key=videoOnlyVerdictKey(story);
+  if(!key)return null;
+
+  const row=videoOnlyVerdicts.get(key);
+  if(!row)return null;
+
+  const age=Date.now()-Number(row.checkedAt||0);
+  const ttl=row.hasVideo
+    ? VIDEO_ONLY_TRUE_TTL_MS
+    : VIDEO_ONLY_FALSE_TTL_MS;
+
+  if(age>ttl){
+    videoOnlyVerdicts.delete(key);
+    return null;
+  }
+
+  return Boolean(row.hasVideo);
+}
+
+function storyConfirmedVideo(story){
+  return currentVideoOnlyVerdict(story)===true;
+}
+
+function applyVideoOnlyFilter(list,options={}){
+  if(
+    !videoOnlyEnabled ||
+    options?.skipVideoOnly
+  ){
+    return list;
+  }
+
+  return list.filter(
+    story=>storyConfirmedVideo(story)
+  );
+}
+
+function videoOnlyBaseCandidates(mode=feedMode){
+  return storiesForFeedMode(
+    mode,
+    {skipVideoOnly:true}
+  );
+}
+
+function videoOnlyFilterRefresh(){
+  if(!videoOnlyEnabled)return;
+
+  clearTimeout(videoOnlyFilterRefreshTimer);
+  videoOnlyFilterRefreshTimer=setTimeout(()=>{
+    if(videoOnlyEnabled){
+      applyFilters({
+        preserveScan:true
+      });
+    }
+  },90);
+}
+
+function queueVideoOnlyScan(){
+  if(!videoOnlyEnabled)return;
+
+  if(videoOnlyScanRunning){
+    videoOnlyScanRerun=true;
+    return;
+  }
+
+  if(videoOnlyScanQueued)return;
+  videoOnlyScanQueued=true;
+
+  setTimeout(()=>{
+    videoOnlyScanQueued=false;
+    void runVideoOnlyScan();
+  },35);
+}
+
+async function runVideoOnlyScan(){
+  if(!videoOnlyEnabled)return;
+
+  if(videoOnlyScanRunning){
+    videoOnlyScanRerun=true;
+    return;
+  }
+
+  videoOnlyScanRunning=true;
+  videoOnlyScanRerun=false;
+  const generation=++videoOnlyScanGeneration;
+
+  try{
+    const candidates=videoOnlyBaseCandidates(feedMode);
+    const confirmed=candidates.filter(
+      story=>currentVideoOnlyVerdict(story)===true
+    );
+
+    /*
+      Önce feed'den video hint'i gelenleri dene; fakat gerçek sonuç yine
+      Worker resolver tarafından doğrulanır. Son sıralama candidates dizisinin
+      doğal haber sırasından yapılacağı için tarama önceliği akış sırasını
+      değiştirmez.
+    */
+    const unknown=candidates
+      .filter(
+        story=>currentVideoOnlyVerdict(story)===null
+      )
+      .sort((a,b)=>
+        Number(Boolean(b?.video))-
+        Number(Boolean(a?.video))
+      )
+      .slice(
+        0,
+        Math.max(
+          VIDEO_ONLY_BATCH_SIZE,
+          VIDEO_ONLY_TARGET_COUNT-confirmed.length
+        )
+      );
+
+    if(!unknown.length)return;
+
+    let cursor=0;
+
+    const worker=async()=>{
+      while(
+        videoOnlyEnabled &&
+        generation===videoOnlyScanGeneration
+      ){
+        const index=cursor++;
+        if(index>=unknown.length)return;
+
+        const story=unknown[index];
+        const key=videoOnlyVerdictKey(story);
+        if(!key)continue;
+
+        let media=null;
+
+        try{
+          media=await resolveStoryMedia(
+            story,
+            {force:true}
+          );
+        }catch(e){
+          media=null;
+        }
+
+        if(
+          !videoOnlyEnabled ||
+          generation!==videoOnlyScanGeneration
+        ){
+          return;
+        }
+
+        videoOnlyVerdicts.set(
+          key,
+          {
+            hasVideo:Boolean(media),
+            checkedAt:Date.now()
+          }
+        );
+
+        if(media){
+          videoOnlyFilterRefresh();
+        }
+      }
+    };
+
+    await Promise.all(
+      Array.from(
+        {
+          length:Math.min(
+            VIDEO_ONLY_CONCURRENCY,
+            unknown.length
+          )
+        },
+        ()=>worker()
+      )
+    );
+  }finally{
+    if(generation===videoOnlyScanGeneration){
+      videoOnlyScanRunning=false;
+
+      if(videoOnlyEnabled){
+        videoOnlyFilterRefresh();
+
+        const candidates=videoOnlyBaseCandidates(feedMode);
+        const confirmedCount=candidates.filter(
+          story=>currentVideoOnlyVerdict(story)===true
+        ).length;
+        const stillUnknown=candidates.some(
+          story=>currentVideoOnlyVerdict(story)===null
+        );
+
+        /*
+          İlk batch'te yeterli video çıkmadıysa sonraki batch'i tara.
+          Yeterli video bulunduğunda ağ kullanımını durdurup yeni ihtiyaç/
+          filtre değişikliğinde devam ederiz.
+        */
+        if(
+          videoOnlyScanRerun ||
+          (
+            confirmedCount<VIDEO_ONLY_TARGET_COUNT &&
+            stillUnknown
+          )
+        ){
+          videoOnlyScanRerun=false;
+          queueVideoOnlyScan();
+        }
+      }
+    }
+  }
+}
 
 /*
   IDDQD — hidden six-panel news wall.
@@ -1759,7 +1992,7 @@ function storyInBreakingWindow(story){
   return (Date.now()-publishedAt)<=BREAKING_WINDOW_MS;
 }
 
-function storiesForFeedMode(mode){
+function storiesForFeedMode(mode,options={}){
   if(mode==="source"){
     if(!temporarySourceFilter)return [];
 
@@ -1770,7 +2003,7 @@ function storiesForFeedMode(mode){
       return true;
     });
 
-    return orderStoriesForFeed(list,mode);
+    return applyVideoOnlyFilter(orderStoriesForFeed(list,mode),options);
   }
 
   if(mode==="category"){
@@ -1783,7 +2016,7 @@ function storiesForFeedMode(mode){
       return true;
     });
 
-    return orderStoriesForFeed(list,mode);
+    return applyVideoOnlyFilter(orderStoriesForFeed(list,mode),options);
   }
 
   if(mode==="foreign"){
@@ -1794,7 +2027,7 @@ function storiesForFeedMode(mode){
       if(!passesKeywordFilter(s))return false;
       return true;
     });
-    return orderStoriesForFeed(list,mode);
+    return applyVideoOnlyFilter(orderStoriesForFeed(list,mode),options);
   }
 
   if(mode==="breaking"){
@@ -1805,7 +2038,7 @@ function storiesForFeedMode(mode){
       if(!passesKeywordFilter(s))return false;
       return true;
     });
-    return orderStoriesForFeed(list,mode);
+    return applyVideoOnlyFilter(orderStoriesForFeed(list,mode),options);
   }
 
   const list=rawStories.filter(s=>{
@@ -1832,7 +2065,7 @@ function storiesForFeedMode(mode){
     return true;
   });
 
-  return orderStoriesForFeed(list,mode);
+  return applyVideoOnlyFilter(orderStoriesForFeed(list,mode),options);
 }
 
 function activeStories(){
@@ -1840,6 +2073,14 @@ function activeStories(){
 }
 
 function emptyStoriesMessage(){
+  if(videoOnlyEnabled){
+    if(videoOnlyScanRunning || videoOnlyScanQueued){
+      return "Videolu haberler aranıyor…";
+    }
+
+    return "Seçtiğiniz filtrelerde videolu haber bulunamadı.";
+  }
+
   const keywordCount=
     parseKeywordList(keywordFilterState.text).length;
 
@@ -2269,9 +2510,29 @@ function applyFilters(options={}){
 
   renderOptions();
 
+  if(
+    videoOnlyEnabled &&
+    !options?.preserveScan
+  ){
+    queueVideoOnlyScan();
+  }
+
   if(!list.length){
     if(!filterReturnStoryKey && previousKey){
       filterReturnStoryKey=previousKey;
+    }
+
+    if(videoOnlyEnabled){
+      state.stories=[];
+      state.index=0;
+      state.history=[];
+      state.historyPos=0;
+      skippedAdHistory=null;
+      historicalAdContext=null;
+      clearTimeout(state.timer);
+      state.timer=null;
+      state.timerDeadline=0;
+      setStoryStageVisible(false);
     }
 
     status(emptyStoriesMessage());
@@ -2658,8 +2919,9 @@ function stopSlideMedia(el){
   resetSlideMedia(el);
 }
 
-async function resolveStoryMedia(story){
-  if(!videoEnabled || !story)return null;
+async function resolveStoryMedia(story,options={}){
+  const force=Boolean(options?.force);
+  if((!videoEnabled && !force) || !story)return null;
 
   const key=mediaKey(story);
   if(!key)return null;
@@ -3661,6 +3923,98 @@ function renderVideoSetting(){
   if(state){
     state.textContent=
       videoEnabled?"Açık":"Kapalı";
+  }
+}
+
+function renderVideoOnlySetting(){
+  const btn=document.getElementById("video-only-setting");
+  if(!btn)return;
+
+  btn.classList.toggle(
+    "active",
+    videoOnlyEnabled
+  );
+
+  btn.setAttribute(
+    "aria-pressed",
+    videoOnlyEnabled
+      ? "true"
+      : "false"
+  );
+
+  const stateEl=btn.querySelector(
+    ".media-setting-state"
+  );
+
+  if(stateEl){
+    stateEl.textContent=
+      videoOnlyEnabled
+        ? "Açık"
+        : "Kapalı";
+  }
+}
+
+function applyVideoOnlySetting(){
+  renderVideoOnlySetting();
+
+  videoOnlyScanGeneration++;
+  videoOnlyScanRunning=false;
+  videoOnlyScanQueued=false;
+  videoOnlyScanRerun=false;
+
+  clearTimeout(
+    videoOnlyFilterRefreshTimer
+  );
+
+  if(videoOnlyEnabled){
+    /*
+      Mevcut görünür haber zaten çözülmüş bir videoysa onu anında doğrula.
+      Aksi halde sahneyi temizleyip arka plan taramasından ilk gerçek videoyu
+      bekle.
+    */
+    const current=
+      state.stories[
+        state.index
+      ] || null;
+
+    if(current){
+      const cached=
+        storyMediaCache.get(
+          mediaKey(current)
+        );
+
+      if(cached){
+        Promise.resolve(cached)
+          .then(media=>{
+            if(
+              videoOnlyEnabled &&
+              media
+            ){
+              videoOnlyVerdicts.set(
+                videoOnlyVerdictKey(current),
+                {
+                  hasVideo:true,
+                  checkedAt:Date.now()
+                }
+              );
+              videoOnlyFilterRefresh();
+            }
+          })
+          .catch(()=>{});
+      }
+    }
+
+    applyFilters({
+      preserveScan:true
+    });
+    queueVideoOnlyScan();
+  }else{
+    clearStatus();
+    setStoryStageVisible(true);
+    applyFilters({
+      resetToStart:false,
+      preserveScan:true
+    });
   }
 }
 
@@ -7117,6 +7471,10 @@ async function performNewsLoad(){
 
     rawStories=enrichStories(incoming);
 
+    if(videoOnlyEnabled){
+      queueVideoOnlyScan();
+    }
+
     if(iddqdModeActive){
       renderIddqdGrid();
     }
@@ -10133,12 +10491,20 @@ document.querySelectorAll(".direction-option").forEach(btn=>{
 
 renderDirectionOptions();
 renderVideoSetting();
+renderVideoOnlySetting();
 
 document.getElementById("video-setting")?.addEventListener("click",e=>{
   e.stopPropagation();
   videoEnabled=!videoEnabled;
   savePreferences();
   applyVideoSetting();
+});
+
+document.getElementById("video-only-setting")?.addEventListener("click",e=>{
+  e.stopPropagation();
+  videoOnlyEnabled=!videoOnlyEnabled;
+  savePreferences();
+  applyVideoOnlySetting();
 });
 
 const PUBLIC_STATS_API=`${ANALYTICS_WORKER_BASE}/stats/public`;
@@ -13064,6 +13430,14 @@ document.getElementById("video-setting")?.addEventListener("click",()=>{
   setTimeout(()=>{
     telemetryQueueEvent("video_setting",{
       mode:videoEnabled?"on":"off"
+    });
+  },0);
+});
+
+document.getElementById("video-only-setting")?.addEventListener("click",()=>{
+  setTimeout(()=>{
+    telemetryQueueEvent("video_only_setting",{
+      mode:videoOnlyEnabled?"on":"off"
     });
   },0);
 });
