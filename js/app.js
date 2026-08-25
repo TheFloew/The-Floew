@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.74.0";
+window.__floewAppVersion="31.74.1";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -903,7 +903,8 @@ function videoOnlyFilterRefresh(){
   videoOnlyFilterRefreshTimer=setTimeout(()=>{
     if(videoOnlyEnabled){
       applyFilters({
-        preserveScan:true
+        preserveScan:true,
+        preserveHistory:true
       });
     }
   },90);
@@ -2676,6 +2677,16 @@ function toggleCategory(cat){
 
 
 function applyFilters(options={}){
+  const preserveHistory=Boolean(options?.preserveHistory);
+  const previousStories=preserveHistory && Array.isArray(state.stories)
+    ? state.stories
+    : null;
+  const previousHistory=preserveHistory && Array.isArray(state.history)
+    ? [...state.history]
+    : [];
+  const previousHistoryPos=preserveHistory && Number.isInteger(state.historyPos)
+    ? Math.max(0,Math.min(state.historyPos,Math.max(0,previousHistory.length-1)))
+    : 0;
   const previousStory=state.stories[state.index]||null;
   const previousKey=storyIdentity(previousStory);
   const list=activeStories();
@@ -2694,7 +2705,13 @@ function applyFilters(options={}){
       filterReturnStoryKey=previousKey;
     }
 
-    if(videoOnlyEnabled){
+    /*
+      Video-only arka plan taraması yeni verdict'leri parça parça ekler.
+      Taramanın ara anında liste geçici olarak boşalırsa mevcut akış/history
+      silinmesin. Kullanıcı ayarı gerçekten değiştirdiğinde eski davranış
+      korunur; bu koruma yalnız preserveHistory çağrıları için geçerlidir.
+    */
+    if(videoOnlyEnabled && !preserveHistory){
       state.stories=[];
       state.index=0;
       state.history=[];
@@ -2713,7 +2730,6 @@ function applyFilters(options={}){
 
   clearStatus();
   setStoryStageVisible(true);
-  state.stories=list;
 
   const resetToStart=Boolean(options?.resetToStart);
   const preferredKey=resetToStart
@@ -2737,11 +2753,73 @@ function applyFilters(options={}){
   const targetStory=list[idx];
   const targetKey=storyIdentity(targetStory);
 
+  state.stories=list;
   state.index=idx;
-  state.history=[idx];
-  state.historyPos=0;
-  skippedAdHistory=null;
-  historicalAdContext=null;
+
+  if(preserveHistory && previousStories?.length && previousHistory.length){
+    const indexByKey=new Map();
+    const indexBySignature=new Map();
+
+    list.forEach((story,index)=>{
+      const key=storyIdentity(story);
+      const signature=exactDuplicateSignature(story);
+      if(key && !indexByKey.has(key))indexByKey.set(key,index);
+      if(signature && !indexBySignature.has(signature)){
+        indexBySignature.set(signature,index);
+      }
+    });
+
+    const remapped=[];
+    let remappedPos=-1;
+
+    previousHistory.forEach((oldIndex,position)=>{
+      if(!Number.isInteger(oldIndex))return;
+      const oldStory=previousStories[oldIndex];
+      if(!oldStory)return;
+
+      const key=storyIdentity(oldStory);
+      const signature=exactDuplicateSignature(oldStory);
+      let mapped=-1;
+
+      if(key && indexByKey.has(key))mapped=indexByKey.get(key);
+      else if(signature && indexBySignature.has(signature)){
+        mapped=indexBySignature.get(signature);
+      }
+
+      if(mapped<0)return;
+
+      if(remapped[remapped.length-1]!==mapped){
+        remapped.push(mapped);
+      }
+
+      if(position<=previousHistoryPos){
+        remappedPos=remapped.length-1;
+      }
+    });
+
+    if(!remapped.length){
+      remapped.push(idx);
+      remappedPos=0;
+    }else{
+      remappedPos=Math.max(0,Math.min(remappedPos,remapped.length-1));
+
+      if(remapped[remappedPos]!==idx){
+        remapped.splice(remappedPos+1);
+        if(remapped[remapped.length-1]!==idx){
+          remapped.push(idx);
+        }
+        remappedPos=remapped.length-1;
+      }
+    }
+
+    state.history=remapped;
+    state.historyPos=remappedPos;
+  }else{
+    state.history=[idx];
+    state.historyPos=0;
+    skippedAdHistory=null;
+    historicalAdContext=null;
+  }
 
   /*
     Eski kod state'i geri taşıyıp ekrandaki slide'ı değiştirmeyebiliyordu.
