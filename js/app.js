@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.74.2";
+window.__floewAppVersion="31.74.3";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -3655,7 +3655,15 @@ function showDirectVideo(el,story,media,token){
       finish(true);
     };
 
-    video.onloadeddata=()=>{reveal();};
+    /*
+      İlk HLS gelişinde manifest hazır olsa bile ilk video karesi henüz buffer'a
+      düşmemiş olabilir. Görseli ancak gerçek medya verisi hazır olduğunda
+      kaldır; bu, ilk ziyarette görselde kalıp geri dönüşte videonun açılması
+      şeklindeki yarış durumunu azaltır.
+    */
+    const requestReveal=()=>{reveal();};
+    video.onloadeddata=requestReveal;
+    video.oncanplay=requestReveal;
     video.onerror=fallback;
 
     const type=String(media.type||"").toLowerCase();
@@ -3696,7 +3704,22 @@ function showDirectVideo(el,story,media,token){
         hls.on(HlsCtor.Events.MEDIA_ATTACHED,()=>{
           if(!settled && isCurrent())hls.loadSource(media.url);
         });
-        hls.on(HlsCtor.Events.MANIFEST_PARSED,()=>{reveal();});
+        hls.on(HlsCtor.Events.MANIFEST_PARSED,()=>{
+          if(settled || !isCurrent())return;
+
+          /*
+            MANIFEST_PARSED yalnız playlist'in çözüldüğünü söyler; ilk frame'in
+            oynatılabilir olduğunu garanti etmez. Autoplay'i erkenden tetikle,
+            fakat görseli loadeddata/canplay gelene kadar kapatma.
+          */
+          attemptMutedAutoplay(video,4).catch(()=>{});
+          if(video.readyState>=2)requestReveal();
+        });
+        if(HlsCtor.Events.FRAG_BUFFERED){
+          hls.on(HlsCtor.Events.FRAG_BUFFERED,()=>{
+            if(!settled && isCurrent() && video.readyState>=2)requestReveal();
+          });
+        }
         hls.on(HlsCtor.Events.ERROR,(_event,data)=>{
           if(!data?.fatal || settled)return;
 
