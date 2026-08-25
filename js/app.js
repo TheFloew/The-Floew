@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.74.1";
+window.__floewAppVersion="31.74.2";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -853,6 +853,19 @@ function videoOnlyVerdictKey(story){
 }
 
 function currentVideoOnlyVerdict(story){
+  /*
+    Worker tarafından gerçek bir medya URL'si olarak doğrulanmış ve
+    yayıncının /video RSS kanalından geldiği işaretlenmiş haberler,
+    video-only için güçlü doğrudan kanıttır. Böylece özellikle CNN Türk
+    gibi gerçek video RSS'leri tarama kuyruğunda gereksiz yere kaybolmaz.
+  */
+  if(
+    story?.videoVerified===true &&
+    story?.videoArticleHint===true
+  ){
+    return true;
+  }
+
   const key=videoOnlyVerdictKey(story);
   if(!key)return null;
 
@@ -1153,7 +1166,10 @@ async function runVideoOnlyScan(){
         try{
           media=await resolveStoryMedia(
             story,
-            {force:true}
+            {
+              force:true,
+              strict:true
+            }
           );
         }catch(e){
           media=null;
@@ -2999,7 +3015,7 @@ function timeText(v){
 
 
 const storyMediaCache=new Map();
-const VIDEO_RESOLVER_VERSION="20260823-3";
+const VIDEO_RESOLVER_VERSION="20260825-6";
 const SUPPORTED_EMBED_VIDEO_PROVIDERS=new Set([
   "youtube",
   "vimeo",
@@ -3171,11 +3187,25 @@ function stopSlideMedia(el){
 
 async function resolveStoryMedia(story,options={}){
   const force=Boolean(options?.force);
+  const strict=Boolean(options?.strict);
   if((!videoEnabled && !force) || !story)return null;
 
   const key=mediaKey(story);
   if(!key)return null;
-  if(storyMediaCache.has(key))return storyMediaCache.get(key);
+
+  /*
+    Normal oynatma ile "Sadece videolu haberler" doğrulaması aynı cache'i
+    paylaşamaz. Normal resolver önerilen/site-geneli bir player bulmuş olsa
+    bile strict tarama bunu yeniden Worker'da article-linked olarak
+    doğrulamalıdır.
+  */
+  const cacheKey=strict
+    ? `${key}|video-only-strict`
+    : key;
+
+  if(storyMediaCache.has(cacheKey)){
+    return storyMediaCache.get(cacheKey);
+  }
 
   const promise=(async()=>{
     /*
@@ -3201,6 +3231,10 @@ async function resolveStoryMedia(story,options={}){
       requestUrl.searchParams.set("url",story.link);
       requestUrl.searchParams.set("title",String(story.title||""));
       requestUrl.searchParams.set("rv",VIDEO_RESOLVER_VERSION);
+
+      if(strict){
+        requestUrl.searchParams.set("strict","1");
+      }
 
       if(story.video){
         requestUrl.searchParams.set("hint",String(story.video));
@@ -3229,12 +3263,12 @@ async function resolveStoryMedia(story,options={}){
     }
   })();
 
-  storyMediaCache.set(key,promise);
+  storyMediaCache.set(cacheKey,promise);
 
   promise.then(media=>{
     /* Null/error sonucunu oturum boyunca kilitleme; sonraki preload tekrar deneyebilir. */
-    if(!media && storyMediaCache.get(key)===promise){
-      storyMediaCache.delete(key);
+    if(!media && storyMediaCache.get(cacheKey)===promise){
+      storyMediaCache.delete(cacheKey);
       return;
     }
 
@@ -3244,16 +3278,18 @@ async function resolveStoryMedia(story,options={}){
     */
     if(
       media?.source==="cumhuriyet-dailymotion-native" &&
-      storyMediaCache.get(key)===promise
+      storyMediaCache.get(cacheKey)===promise
     ){
       setTimeout(()=>{
-        if(storyMediaCache.get(key)===promise){
-          storyMediaCache.delete(key);
+        if(storyMediaCache.get(cacheKey)===promise){
+          storyMediaCache.delete(cacheKey);
         }
       },4*60*1000);
     }
   }).catch(()=>{
-    if(storyMediaCache.get(key)===promise)storyMediaCache.delete(key);
+    if(storyMediaCache.get(cacheKey)===promise){
+      storyMediaCache.delete(cacheKey);
+    }
   });
 
   if(storyMediaCache.size>160){
@@ -4227,32 +4263,11 @@ function applyVideoOnlySetting(){
         state.index
       ] || null;
 
-    if(current){
-      const cached=
-        storyMediaCache.get(
-          mediaKey(current)
-        );
-
-      if(cached){
-        Promise.resolve(cached)
-          .then(media=>{
-            if(
-              videoOnlyEnabled &&
-              media
-            ){
-              videoOnlyVerdicts.set(
-                videoOnlyVerdictKey(current),
-                {
-                  hasVideo:true,
-                  checkedAt:Date.now()
-                }
-              );
-              videoOnlyFilterRefresh();
-            }
-          })
-          .catch(()=>{});
-      }
-    }
+    /*
+      Normal oynatma cache'i video-only için kanıt sayılmaz. Mevcut haber de
+      diğerleri gibi strict resolver üzerinden doğrulanır; aksi halde sayfa
+      altındaki önerilen bir player filtreyi yanlış pozitif yapabilir.
+    */
 
     applyFilters({
       preserveScan:true
@@ -7682,7 +7697,16 @@ async function performNewsLoad(){
         ...preferred,
         breaking:Boolean(existing.breaking||candidate.breaking),
         video:preferred.video||other.video||"",
-        videoType:preferred.videoType||other.videoType||""
+        videoType:preferred.videoType||other.videoType||"",
+        videoArticleHint:Boolean(
+          preferred.videoArticleHint || other.videoArticleHint
+        ),
+        videoVerified:Boolean(
+          preferred.videoVerified || other.videoVerified
+        ),
+        videoDiscovery:Boolean(
+          preferred.videoDiscovery || other.videoDiscovery
+        )
       };
     }
 
