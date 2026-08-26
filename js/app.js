@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.76.0";
+window.__floewAppVersion="31.77.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -55,7 +55,8 @@ const MARKET_CACHE_MAX_AGE_MS=6*60*60*1000;
 const GOLD_SPOT_API="https://api.gold-api.com/price/XAU";
 const GOLD_REFRESH_MS=5*60*1000;
 const TROY_OUNCE_GRAMS=31.1034768;
-const STOCK_TICKER_SCALE_MIN=.78;
+const STOCK_TICKER_SCALE_MIN=.8;
+const STOCK_TICKER_SCALE_STEP=.1;
 const COOKIE_NOTICE_KEY="thefloew.cookieNotice.v1";
 const CUSTOM_RSS_STORAGE_KEY="thefloew.customRss.v1";
 const CUSTOM_RSS_LEGACY_COOKIE_KEY="thefloew.customRss.v1";
@@ -8243,48 +8244,16 @@ function ensureGoldFxRow(){
   const box=document.getElementById("fx-rates");
   if(!box || box.querySelector('[data-fx="GOLD"]'))return;
 
-  const template=
-    box.querySelector('[data-fx="GBP"]') ||
-    box.querySelector('[data-fx="USD"]') ||
-    box.firstElementChild;
-
-  if(!template)return;
-
-  const row=template.cloneNode(true);
+  const row=document.createElement("span");
+  row.className="fx-rate fx-rate-gold";
   row.dataset.fx="GOLD";
   row.dataset.direction="flat";
   row.setAttribute("title","Gram altın · TL");
-
-  const value=row.querySelector(".fx-value");
-  if(value)value.textContent="—";
-
-  const walker=document.createTreeWalker(
-    row,
-    NodeFilter.SHOW_TEXT
-  );
-
-  let labelNode=null;
-  while(walker.nextNode()){
-    const node=walker.currentNode;
-    if(
-      node.parentElement?.closest?.(".fx-value") ||
-      !String(node.nodeValue||"").trim()
-    )continue;
-
-    labelNode=node;
-    break;
-  }
-
-  if(labelNode){
-    labelNode.nodeValue=String(labelNode.nodeValue||"").replace(
-      /(GBP|USD|EUR|STERLİN|DOLAR|EURO)/iu,
-      "ALTIN"
-    );
-
-    if(!/ALTIN/iu.test(labelNode.nodeValue)){
-      labelNode.nodeValue="ALTIN ";
-    }
-  }
+  row.innerHTML=
+    '<span class="fx-gold-icon" aria-hidden="true">'+
+      '<img src="assets/gold.png" alt="" draggable="false">'+
+    '</span>'+
+    '<span class="fx-value">—</span>';
 
   box.appendChild(row);
 }
@@ -8359,12 +8328,18 @@ async function enrichMarketDataWithGold(data){
     }
 
     const gramTry=ounceUsd*usdTry/TROY_OUNCE_GRAMS;
+    const previousGoldValue=Number(previousGold?.value);
+    const goldChangePercent=
+      Number.isFinite(previousGoldValue) && previousGoldValue>0
+        ? ((gramTry-previousGoldValue)/previousGoldValue)*100
+        : 0;
+
     const gold={
       key:"GOLD",
       label:"Gram Altın",
       shortLabel:"ALTIN",
       value:gramTry,
-      changePercent:0,
+      changePercent:goldChangePercent,
       unit:"TRY/g",
       source:"gold-api.com"
     };
@@ -8406,51 +8381,13 @@ function loadStockTickerScale(){
 }
 
 let stockTickerScale=loadStockTickerScale();
-let stockTickerBaseHeight=0;
 
-function measureStockTickerBaseHeight(){
-  const ticker=document.getElementById("market-ticker");
-  if(!ticker)return 0;
-
-  const wasHidden=ticker.hidden;
-  const bodyHadClass=document.body.classList.contains("market-ticker-visible");
-  const previousStyle=ticker.getAttribute("style");
-
-  ticker.hidden=false;
-  document.body.classList.add("market-ticker-visible");
-  ticker.style.removeProperty("height");
-  ticker.style.removeProperty("max-height");
-  ticker.style.setProperty("visibility","hidden","important");
-  ticker.style.setProperty("pointer-events","none","important");
-
-  const measured=Math.max(
-    0,
-    ticker.getBoundingClientRect().height,
-    Number.parseFloat(getComputedStyle(ticker).height)||0
-  );
-
-  if(previousStyle===null){
-    ticker.removeAttribute("style");
-  }else{
-    ticker.setAttribute("style",previousStyle);
-  }
-
-  ticker.hidden=wasHidden;
-  if(!bodyHadClass){
-    document.body.classList.remove("market-ticker-visible");
-  }
-
-  return measured;
+function stockTickerBaseHeightPx(){
+  return window.matchMedia?.("(max-width:700px)")?.matches ? 50 : 56;
 }
 
 function stockTickerMaxScale(){
-  const base=Math.max(
-    1,
-    stockTickerBaseHeight || measureStockTickerBaseHeight() || 56
-  );
-
-  stockTickerBaseHeight=base;
-
+  const base=Math.max(1,stockTickerBaseHeightPx());
   return Math.max(
     1,
     (Math.max(1,window.innerHeight)/8)/base
@@ -8477,92 +8414,64 @@ function saveStockTickerScale(){
 }
 
 function renderStockTickerScaleControl(){
-  const range=document.getElementById("stock-ticker-size");
+  const minus=document.getElementById("stock-ticker-size-minus");
+  const plus=document.getElementById("stock-ticker-size-plus");
   const value=document.getElementById("stock-ticker-size-value");
-  if(!range)return;
 
-  const max=stockTickerMaxScale();
   stockTickerScale=clampStockTickerScale(stockTickerScale);
+  const max=stockTickerMaxScale();
+  const rounded=Math.round(stockTickerScale*100);
 
-  range.min=String(Math.round(STOCK_TICKER_SCALE_MIN*100));
-  range.max=String(Math.max(
-    Math.round(max*100),
-    Math.round(STOCK_TICKER_SCALE_MIN*100)
-  ));
-  range.value=String(Math.round(stockTickerScale*100));
-  range.setAttribute(
-    "aria-valuetext",
-    `%${Math.round(stockTickerScale*100)}`
-  );
-
-  if(value){
-    value.textContent=`%${Math.round(stockTickerScale*100)}`;
+  if(value)value.textContent=`%${rounded}`;
+  if(minus){
+    minus.disabled=stockTickerScale<=STOCK_TICKER_SCALE_MIN+.001;
   }
+  if(plus){
+    plus.disabled=stockTickerScale>=max-.001;
+  }
+}
+
+function setStockTickerScale(value){
+  const next=clampStockTickerScale(value);
+  if(Math.abs(next-stockTickerScale)<.0001){
+    renderStockTickerScaleControl();
+    return;
+  }
+
+  stockTickerScale=next;
+  saveStockTickerScale();
+  applyStockTickerScale();
 }
 
 function applyStockTickerScale({reconfigure=true}={}){
   const ticker=document.getElementById("market-ticker");
   if(!ticker)return;
 
-  if(!stockTickerBaseHeight){
-    stockTickerBaseHeight=measureStockTickerBaseHeight()||56;
-  }
-
   stockTickerScale=clampStockTickerScale(stockTickerScale);
+
+  const base=stockTickerBaseHeightPx();
   const target=Math.min(
-    window.innerHeight/8,
-    stockTickerBaseHeight*stockTickerScale
+    Math.max(1,window.innerHeight)/8,
+    base*stockTickerScale
   );
 
-  ticker.style.setProperty(
-    "height",
-    `${Math.max(1,target).toFixed(1)}px`,
-    "important"
+  /*
+    Tek görsel state JS'de: kullanıcının seçtiği ölçek. Gerçek yükseklik,
+    iki bandın paylaşımı ve çevredeki yerleşim CSS değişkeniyle yönetilir.
+  */
+  const targetHeight=`${Math.max(1,target).toFixed(1)}px`;
+  document.body.style.setProperty(
+    "--floew-market-height",
+    targetHeight
   );
   ticker.style.setProperty(
-    "max-height",
-    "12.5vh",
-    "important"
+    "--floew-market-height",
+    targetHeight
   );
   ticker.style.setProperty(
     "--floew-market-scale",
     String(stockTickerScale)
   );
-
-  const windows=[
-    ...ticker.querySelectorAll(".market-ticker-window")
-  ];
-
-  if(windows.length){
-    const each=Math.max(1,target/windows.length);
-    windows.forEach(windowEl=>{
-      windowEl.style.setProperty(
-        "height",
-        `${each.toFixed(1)}px`,
-        "important"
-      );
-      windowEl.style.setProperty(
-        "min-height",
-        "0",
-        "important"
-      );
-    });
-  }
-
-  ticker.querySelectorAll(".market-ticker-item").forEach(item=>{
-    if(!item.dataset.floewBaseFontSize){
-      const baseFont=Number.parseFloat(getComputedStyle(item).fontSize);
-      if(Number.isFinite(baseFont) && baseFont>0){
-        item.dataset.floewBaseFontSize=String(baseFont);
-      }
-    }
-
-    const baseFont=Number(item.dataset.floewBaseFontSize);
-    if(Number.isFinite(baseFont) && baseFont>0){
-      item.style.fontSize=
-        `${Math.max(9,baseFont*stockTickerScale).toFixed(2)}px`;
-    }
-  });
 
   renderStockTickerScaleControl();
 
@@ -8973,9 +8882,6 @@ function setStockTickerVisible(enabled){
 function initMarketData(){
   marketDataSnapshot=readMarketDataCache();
   ensureGoldFxRow();
-  if(!stockTickerBaseHeight){
-    stockTickerBaseHeight=measureStockTickerBaseHeight()||56;
-  }
   renderMarketPreferences();
   renderMarketData(marketDataSnapshot);
   applyStockTickerScale({reconfigure:false});
@@ -10586,6 +10492,16 @@ function bindEnhancementUi(){
     telemetryQueueEvent("stock_ticker_toggle",{story:null,mode:stockTickerVisible?"on":"off"});
   });
 
+  document.getElementById("stock-ticker-size-minus")?.addEventListener("click",e=>{
+    e.stopPropagation();
+    setStockTickerScale(stockTickerScale-STOCK_TICKER_SCALE_STEP);
+  });
+
+  document.getElementById("stock-ticker-size-plus")?.addEventListener("click",e=>{
+    e.stopPropagation();
+    setStockTickerScale(stockTickerScale+STOCK_TICKER_SCALE_STEP);
+  });
+
   document.getElementById("preferences-export")?.addEventListener("click",e=>{
     e.stopPropagation();
     exportPreferences();
@@ -11522,6 +11438,7 @@ function closeControlMenu(){
   const button=document.getElementById("control-menu-button");
   panel?.classList.remove("open");
   panel?.setAttribute("aria-hidden","true");
+  panel?.setAttribute("inert","");
   button?.classList.remove("open");
   button?.setAttribute("aria-expanded","false");
 }
@@ -11536,6 +11453,7 @@ function openControlMenu(){
   const button=document.getElementById("control-menu-button");
   panel?.classList.add("open");
   panel?.setAttribute("aria-hidden","false");
+  panel?.removeAttribute("inert");
   button?.classList.add("open");
   button?.setAttribute("aria-expanded","true");
   showFullscreenButton();
@@ -11997,328 +11915,7 @@ document.getElementById("menu-overlay").addEventListener("click",e=>{
    V31.76.0 — Preferences layout / market size / larger story actions
    ===================================================================== */
 
-function ensureFrontendV3176Styles(){
-  if(document.getElementById("floew-v31-76-styles"))return;
-
-  const style=document.createElement("style");
-  style.id="floew-v31-76-styles";
-  style.textContent=`
-    #motion-panel{
-      display:flex;
-      flex-direction:column;
-      gap:18px;
-    }
-
-    #motion-panel > *{
-      margin-top:0!important;
-      margin-bottom:0!important;
-    }
-
-    #motion-panel .floew-appearance-item{
-      margin:0!important;
-    }
-
-    #motion-panel .floew-appearance-direction{
-      display:flex;
-      flex-direction:column;
-      gap:10px;
-    }
-
-    #motion-panel .floew-setting-heading,
-    #motion-panel .motion-label{
-      margin:0!important;
-      padding:0!important;
-      font:inherit;
-      font-size:inherit;
-      font-weight:700;
-      line-height:1.2;
-      color:inherit;
-      opacity:1;
-    }
-
-    #motion-panel .direction-list{
-      margin:0!important;
-    }
-
-    #motion-panel .floew-appearance-weather{
-      display:flex;
-      flex-direction:column;
-      gap:14px;
-      margin:0!important;
-      padding-top:0!important;
-    }
-
-    #motion-panel .floew-appearance-weather::before{
-      content:"Hava & Su";
-      display:block;
-      font-weight:700;
-      line-height:1.2;
-      margin-bottom:2px;
-    }
-
-    #motion-panel .duration-control{
-      column-gap:7px;
-    }
-
-    #motion-panel #duration-play{
-      margin-inline-start:13px!important;
-    }
-
-    .floew-ticker-size-setting{
-      display:grid;
-      grid-template-columns:minmax(0,1fr) auto;
-      grid-template-areas:
-        "copy value"
-        "range range";
-      align-items:center;
-      gap:9px 14px;
-      width:100%;
-      box-sizing:border-box;
-    }
-
-    .floew-ticker-size-copy{
-      grid-area:copy;
-      min-width:0;
-    }
-
-    .floew-ticker-size-copy strong,
-    .floew-ticker-size-copy small{
-      display:block;
-    }
-
-    .floew-ticker-size-copy small{
-      margin-top:3px;
-      opacity:.7;
-    }
-
-    #stock-ticker-size-value{
-      grid-area:value;
-      min-width:48px;
-      text-align:right;
-      font-variant-numeric:tabular-nums;
-      opacity:.82;
-    }
-
-    #stock-ticker-size{
-      grid-area:range;
-      width:100%;
-      margin:2px 0 0;
-      accent-color:currentColor;
-      cursor:pointer;
-    }
-
-    .headline-actions{
-      display:flex!important;
-      align-items:center!important;
-      gap:11px!important;
-    }
-
-    .headline-actions > .flora-inline,
-    .headline-actions > .share-link,
-    .headline-actions > .feedback-link,
-    .headline-actions > .report-link,
-    .headline-actions > [data-feedback],
-    .headline-actions > [aria-label*="Geri bildirim"],
-    .headline-actions > [title*="Geri bildirim"],
-    .headline-actions > .source-link{
-      inline-size:48px!important;
-      block-size:44px!important;
-      min-inline-size:48px!important;
-      min-block-size:44px!important;
-      max-inline-size:48px!important;
-      box-sizing:border-box!important;
-      display:inline-flex!important;
-      align-items:center!important;
-      justify-content:center!important;
-      margin:0!important;
-      padding:0!important;
-      touch-action:manipulation;
-      -webkit-tap-highlight-color:transparent;
-    }
-
-    .headline-actions > .share-link,
-    .headline-actions > .feedback-link,
-    .headline-actions > .report-link,
-    .headline-actions > [data-feedback],
-    .headline-actions > [aria-label*="Geri bildirim"],
-    .headline-actions > [title*="Geri bildirim"],
-    .headline-actions > .source-link{
-      font-size:21px!important;
-      line-height:1!important;
-    }
-
-    .headline-actions > .flora-inline{
-      gap:3px!important;
-    }
-
-    .faq-accordion-intro{
-      margin-bottom:16px;
-    }
-
-    .faq-accordion-item{
-      border-bottom:1px solid rgba(255,255,255,.14);
-    }
-
-    .faq-accordion-item:first-of-type{
-      border-top:1px solid rgba(255,255,255,.14);
-    }
-
-    .faq-accordion-button{
-      width:100%;
-      min-height:54px;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:18px;
-      padding:14px 2px;
-      margin:0;
-      border:0;
-      background:none;
-      color:inherit;
-      font:inherit;
-      text-align:left;
-      cursor:pointer;
-    }
-
-    .faq-accordion-question{
-      font-weight:700;
-      line-height:1.35;
-    }
-
-    .faq-accordion-chevron{
-      flex:0 0 auto;
-      font-size:20px;
-      line-height:1;
-      transition:transform .3s ease;
-    }
-
-    .faq-accordion-item.open .faq-accordion-chevron{
-      transform:rotate(180deg);
-    }
-
-    .faq-accordion-panel{
-      overflow:hidden;
-      transition:
-        max-height .36s cubic-bezier(.22,.72,.18,1),
-        opacity .22s ease;
-      will-change:max-height;
-    }
-
-    .faq-accordion-body{
-      padding:0 2px 17px;
-    }
-
-    @media(max-width:700px), (pointer:coarse){
-      #motion-panel{
-        gap:16px;
-      }
-
-      .headline-actions{
-        gap:9px!important;
-      }
-
-      .headline-actions > .flora-inline,
-      .headline-actions > .share-link,
-      .headline-actions > .feedback-link,
-      .headline-actions > .report-link,
-      .headline-actions > [data-feedback],
-      .headline-actions > [aria-label*="Geri bildirim"],
-      .headline-actions > [title*="Geri bildirim"],
-      .headline-actions > .source-link{
-        inline-size:52px!important;
-        block-size:48px!important;
-        min-inline-size:52px!important;
-        min-block-size:48px!important;
-        max-inline-size:52px!important;
-      }
-
-      .headline-actions > .share-link,
-      .headline-actions > .feedback-link,
-      .headline-actions > .report-link,
-      .headline-actions > [data-feedback],
-      .headline-actions > [aria-label*="Geri bildirim"],
-      .headline-actions > [title*="Geri bildirim"],
-      .headline-actions > .source-link{
-        font-size:23px!important;
-      }
-
-      .faq-accordion-button{
-        min-height:58px;
-        padding-block:15px;
-      }
-    }
-
-    @media(prefers-reduced-motion:reduce){
-      .faq-accordion-panel,
-      .faq-accordion-chevron{
-        transition:none!important;
-      }
-    }
-  `;
-
-  document.head.appendChild(style);
-}
-
-function directChildOf(parent,node){
-  let current=node;
-  while(current && current.parentElement!==parent){
-    current=current.parentElement;
-  }
-  return current?.parentElement===parent ? current : null;
-}
-
-function ensureStockTickerSizeControl(motionPanel){
-  if(
-    !motionPanel ||
-    document.getElementById("stock-ticker-size")
-  )return;
-
-  const toggle=document.getElementById("stock-ticker-setting");
-  if(!toggle)return;
-
-  const anchor=directChildOf(motionPanel,toggle);
-  if(!anchor)return;
-
-  const group=document.createElement("div");
-  group.className="floew-ticker-size-setting floew-appearance-item";
-  group.innerHTML=`
-    <div class="floew-ticker-size-copy">
-      <strong>Borsa bandı boyutu</strong>
-      <small>Alt ve üst piyasa bantlarının yüksekliği</small>
-    </div>
-    <span id="stock-ticker-size-value">%100</span>
-    <input
-      id="stock-ticker-size"
-      type="range"
-      min="78"
-      max="200"
-      step="1"
-      value="100"
-      aria-label="Borsa bandı boyutu"
-    >
-  `;
-
-  anchor.insertAdjacentElement("afterend",group);
-
-  const input=group.querySelector("#stock-ticker-size");
-  input?.addEventListener("input",event=>{
-    event.stopPropagation();
-    stockTickerScale=Number(event.currentTarget.value)/100;
-    stockTickerScale=clampStockTickerScale(stockTickerScale);
-    saveStockTickerScale();
-    applyStockTickerScale();
-  });
-
-  ["pointerdown","pointerup","click"].forEach(type=>{
-    group.addEventListener(type,event=>event.stopPropagation());
-  });
-
-  renderStockTickerScaleControl();
-}
-
 function upgradeAppearancePreferencesV3176(){
-  ensureFrontendV3176Styles();
-
   const motionPanel=document.getElementById("motion-panel");
   if(!motionPanel)return;
 
@@ -12379,7 +11976,6 @@ function upgradeAppearancePreferencesV3176(){
     child.classList.add("floew-appearance-item");
   });
 
-  ensureStockTickerSizeControl(motionPanel);
 }
 
 function bindStatsFloraInternalViewer(){

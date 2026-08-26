@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
 <link rel="manifest" href="site.webmanifest">
 
-<link rel="stylesheet" href="css/styles.css?h=8646cf37e922">
+<link rel="stylesheet" href="css/styles.css?h=bad56dc26f0b">
 
 <style id="boot-black-style">
   html,body{background:#000}
@@ -71,9 +71,9 @@
   </nav>
 
   <button id="fullscreen-button" type="button" aria-label="Tam ekran" title="Tam ekran">⤢︎</button>
-  <button id="control-menu-button" type="button" aria-label="Araçlar" title="Araçlar">☰︎</button>
+  <button id="control-menu-button" type="button" aria-label="Araçlar" title="Araçlar" aria-expanded="false" aria-controls="control-menu-panel">☰︎</button>
 
-  <div id="control-menu-panel" aria-hidden="true">
+  <div id="control-menu-panel" aria-hidden="true" inert>
     <button id="pip-button" class="control-menu-item" type="button" aria-label="Picture-in-Picture" title="Köşeye indir">⧉︎</button>
     <button id="time-range-button" class="control-menu-item" type="button" aria-label="Haber zaman aralığı" title="Haber zaman aralığı">⏲︎</button>
     <button id="keyword-filter-button" class="control-menu-item" type="button" aria-label="Anahtar kelime filtresi" title="Anahtar kelime filtresi">±</button>
@@ -344,6 +344,18 @@
 
           <div class="market-data-note">Piyasa verileri gecikmeli olabilir.</div>
         </div>
+
+        <div class="ticker-size-setting">
+          <div class="setting-copy">
+            <strong>Borsa bandı boyutu</strong>
+            <small>Alt ve üst piyasa bantlarının yüksekliği</small>
+          </div>
+          <div class="duration-control ticker-size-control" role="group" aria-label="Borsa bandı boyutu">
+            <button id="stock-ticker-size-minus" type="button" aria-label="Borsa bandını küçült">−</button>
+            <span id="stock-ticker-size-value">%100</span>
+            <button id="stock-ticker-size-plus" type="button" aria-label="Borsa bandını büyüt">+</button>
+          </div>
+        </div>
       </div>
 
       <div class="menu-panel" id="weather-panel" data-panel="weather">
@@ -416,6 +428,7 @@
       <span class="fx-rate" data-fx="USD"><span class="fx-flag" aria-hidden="true">🇺🇸</span><strong>USD</strong><span class="fx-value">—</span></span>
       <span class="fx-rate" data-fx="EUR"><span class="fx-flag" aria-hidden="true">🇪🇺</span><strong>EUR</strong><span class="fx-value">—</span></span>
       <span class="fx-rate" data-fx="GBP"><span class="fx-flag" aria-hidden="true">🇬🇧</span><strong>GBP</strong><span class="fx-value">—</span></span>
+      <span class="fx-rate fx-rate-gold" data-fx="GOLD" title="Gram altın · TL"><span class="fx-gold-icon" aria-hidden="true"><img src="assets/gold.png?h=531e4eda9edf" alt="" draggable="false"></span><span class="fx-value">—</span></span>
     </div>
   </div>
 
@@ -529,7 +542,7 @@
 </script>
 
 <script src="js/config.js?h=beda7fe1ea23"></script>
-<script src="js/app.js?v=21fd5f6110a0" onerror="
+<script src="js/app.js?v=63b7710f8525" onerror="
   var loader=document.getElementById('loading-screen');
   if(loader)loader.remove();
   var status=document.getElementById('status');

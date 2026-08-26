@@ -5348,3 +5348,358 @@ body.source-viewer-open{
   }
 }
 
+
+
+/* =====================================================================
+   V31.76.0 — migrated from runtime JS to stylesheet
+   ===================================================================== */
+    .headline-actions{
+      display:flex!important;
+      align-items:center!important;
+      gap:11px!important;
+    }
+
+    .headline-actions > .flora-inline,
+    .headline-actions > .share-link,
+    .headline-actions > .feedback-link,
+    .headline-actions > .report-link,
+    .headline-actions > [data-feedback],
+    .headline-actions > [aria-label*="Geri bildirim"],
+    .headline-actions > [title*="Geri bildirim"],
+    .headline-actions > .source-link{
+      inline-size:48px!important;
+      block-size:44px!important;
+      min-inline-size:48px!important;
+      min-block-size:44px!important;
+      max-inline-size:48px!important;
+      box-sizing:border-box!important;
+      display:inline-flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      margin:0!important;
+      padding:0!important;
+      touch-action:manipulation;
+      -webkit-tap-highlight-color:transparent;
+    }
+
+    .headline-actions > .share-link,
+    .headline-actions > .feedback-link,
+    .headline-actions > .report-link,
+    .headline-actions > [data-feedback],
+    .headline-actions > [aria-label*="Geri bildirim"],
+    .headline-actions > [title*="Geri bildirim"],
+    .headline-actions > .source-link{
+      font-size:21px!important;
+      line-height:1!important;
+    }
+
+    .headline-actions > .flora-inline{
+      gap:3px!important;
+    }
+
+    .faq-accordion-intro{
+      margin-bottom:16px;
+    }
+
+    .faq-accordion-item{
+      border-bottom:1px solid rgba(255,255,255,.14);
+    }
+
+    .faq-accordion-item:first-of-type{
+      border-top:1px solid rgba(255,255,255,.14);
+    }
+
+    .faq-accordion-button{
+      width:100%;
+      min-height:54px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:18px;
+      padding:14px 2px;
+      margin:0;
+      border:0;
+      background:none;
+      color:inherit;
+      font:inherit;
+      text-align:left;
+      cursor:pointer;
+    }
+
+    .faq-accordion-question{
+      font-weight:700;
+      line-height:1.35;
+    }
+
+    .faq-accordion-chevron{
+      flex:0 0 auto;
+      font-size:20px;
+      line-height:1;
+      transition:transform .3s ease;
+    }
+
+    .faq-accordion-item.open .faq-accordion-chevron{
+      transform:rotate(180deg);
+    }
+
+    .faq-accordion-panel{
+      overflow:hidden;
+      transition:
+        max-height .36s cubic-bezier(.22,.72,.18,1),
+        opacity .22s ease;
+      will-change:max-height;
+    }
+
+    .faq-accordion-body{
+      padding:0 2px 17px;
+    }
+
+    @media(max-width:700px), (pointer:coarse){
+      .headline-actions{
+        gap:9px!important;
+      }
+
+      .headline-actions > .flora-inline,
+      .headline-actions > .share-link,
+      .headline-actions > .feedback-link,
+      .headline-actions > .report-link,
+      .headline-actions > [data-feedback],
+      .headline-actions > [aria-label*="Geri bildirim"],
+      .headline-actions > [title*="Geri bildirim"],
+      .headline-actions > .source-link{
+        inline-size:52px!important;
+        block-size:48px!important;
+        min-inline-size:52px!important;
+        min-block-size:48px!important;
+        max-inline-size:52px!important;
+      }
+
+      .headline-actions > .share-link,
+      .headline-actions > .feedback-link,
+      .headline-actions > .report-link,
+      .headline-actions > [data-feedback],
+      .headline-actions > [aria-label*="Geri bildirim"],
+      .headline-actions > [title*="Geri bildirim"],
+      .headline-actions > .source-link{
+        font-size:23px!important;
+      }
+
+      .faq-accordion-button{
+        min-height:58px;
+        padding-block:15px;
+      }
+    }
+
+    @media(prefers-reduced-motion:reduce){
+      .faq-accordion-panel,
+      .faq-accordion-chevron{
+        transition:none!important;
+      }
+    }
+
+
+/* =====================================================================
+   V31.77.0 — appearance / market / hamburger interaction fixes
+   ===================================================================== */
+
+/* Görünüm bir menu-panel'dir: yalnız aktif sekmeyken görünür. */
+#settings-menu #motion-panel.menu-panel{
+  display:none !important;
+}
+#settings-menu #motion-panel.menu-panel.active{
+  display:flex !important;
+  flex-direction:column;
+  gap:0 !important;
+}
+
+/* Görünüm ekranındaki başlık ve satır ritmi Haber süresi / Haber videoları ile aynıdır. */
+#motion-panel .floew-appearance-direction{
+  gap:0 !important;
+}
+#motion-panel .floew-setting-heading,
+#motion-panel .motion-label,
+#motion-panel .floew-appearance-weather::before{
+  margin:0 !important;
+  padding:0 !important;
+  text-align:left !important;
+  font-family:"Comfortaa",sans-serif !important;
+  font-size:12px !important;
+  line-height:1.35 !important;
+  font-weight:700 !important;
+  opacity:1 !important;
+}
+#motion-panel .direction-list{
+  margin-top:12px !important;
+}
+#motion-panel .direction-option,
+#motion-panel .weather-unit-option,
+#motion-panel #weather-city{
+  font-size:12px !important;
+}
+#motion-panel .duration-setting-group,
+#motion-panel .media-setting-group,
+#motion-panel .ticker-size-setting,
+#motion-panel .floew-appearance-weather{
+  margin-top:24px !important;
+  padding-top:12px !important;
+  border-top:1px solid rgba(255,255,255,.10) !important;
+}
+#motion-panel .setting-copy strong,
+#motion-panel .media-setting strong,
+#motion-panel .weather-field > span{
+  font-size:12px !important;
+  line-height:1.35 !important;
+}
+#motion-panel .setting-copy small,
+#motion-panel .media-setting small{
+  margin-top:5px !important;
+  font-size:10px !important;
+  line-height:1.4 !important;
+}
+#motion-panel .media-setting-state{
+  font-size:11px !important;
+}
+#motion-panel .floew-appearance-weather{
+  display:flex;
+  flex-direction:column;
+  gap:0 !important;
+  width:100% !important;
+  max-width:none !important;
+  margin-left:0 !important;
+  margin-right:0 !important;
+}
+#motion-panel .floew-appearance-weather::before{
+  margin-bottom:14px !important;
+}
+#motion-panel .weather-field{
+  margin-bottom:24px !important;
+}
+#motion-panel .weather-field > span{
+  margin-bottom:10px !important;
+  opacity:.58;
+}
+#motion-panel .weather-attribution{
+  font-size:10px !important;
+}
+
+/* Borsa bandı boyutu, Haber süresi ile aynı +/- kontrol dilini kullanır. */
+.ticker-size-setting{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:22px;
+  width:100%;
+  box-sizing:border-box;
+}
+.ticker-size-control{
+  flex:0 0 auto;
+}
+#stock-ticker-size-value{
+  min-width:48px;
+  text-align:center;
+  font-size:12px;
+  font-variant-numeric:tabular-nums;
+}
+
+/* Altın satırı: yazı etiketi yok, bayraklarla aynı görsel alanında külçe ikonu var. */
+#clock #fx-rates .fx-rate-gold{
+  grid-template-columns:18px minmax(48px,auto) !important;
+}
+.fx-gold-icon{
+  width:18px;
+  height:18px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:flex-start;
+  line-height:1;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.4));
+}
+.fx-gold-icon img{
+  display:block;
+  width:18px;
+  height:18px;
+  object-fit:contain;
+}
+.fx-rate-gold .fx-value{
+  text-align:left !important;
+}
+
+/* Ticker'ın gerçek yüksekliğini CSS yönetir; iki bandın her biri yarısını doldurur. */
+#market-ticker{
+  --floew-market-height:56px;
+  height:var(--floew-market-height) !important;
+  max-height:12.5vh !important;
+}
+#market-ticker .market-band{
+  flex:1 1 50% !important;
+  height:auto !important;
+  min-height:0 !important;
+}
+#market-ticker .market-ticker-window,
+#market-ticker .market-ticker-track{
+  height:100% !important;
+  min-height:0 !important;
+}
+body.market-ticker-visible #clock{
+  bottom:calc(2.4vh + var(--floew-market-height,56px)) !important;
+}
+body.market-ticker-visible .headline{
+  bottom:calc(clamp(34px,7vh,88px) + var(--floew-market-height,56px)) !important;
+}
+
+/* Kapalı hamburger tepsisindeki çocuklar görünmez olmanın yanında hit-test dışıdır. */
+#control-menu-panel:not(.open),
+#control-menu-panel[aria-hidden="true"]{
+  pointer-events:none !important;
+  visibility:hidden !important;
+}
+#control-menu-panel:not(.open) .control-menu-item,
+#control-menu-panel[aria-hidden="true"] .control-menu-item{
+  pointer-events:none !important;
+  visibility:hidden !important;
+}
+#control-menu-panel.open[aria-hidden="false"] .control-menu-item{
+  pointer-events:auto !important;
+  visibility:visible !important;
+}
+
+@media(max-width:700px){
+  #clock #fx-rates .fx-rate-gold{
+    grid-template-columns:14px auto !important;
+  }
+  .fx-gold-icon,
+  .fx-gold-icon img{
+    width:14px;
+    height:14px;
+  }
+  #market-ticker{
+    --floew-market-height:50px;
+  }
+  body.market-ticker-visible #clock{
+    bottom:calc(2.4vh + var(--floew-market-height,50px)) !important;
+  }
+  body.market-ticker-visible .headline{
+    bottom:calc(clamp(34px,7vh,88px) + var(--floew-market-height,50px)) !important;
+  }
+  .ticker-size-setting{
+    align-items:flex-start;
+  }
+}
+
+
+/* V31.77.0 — stronger closed-tray hit-test guard against historical ID rules. */
+#control-menu-panel:not(.open) #pip-button,
+#control-menu-panel:not(.open) #time-range-button,
+#control-menu-panel:not(.open) #keyword-filter-button,
+#control-menu-panel:not(.open) #keyword-watch-button,
+#control-menu-panel:not(.open) #info-button,
+#control-menu-panel:not(.open) #menu-button,
+#control-menu-panel[aria-hidden="true"] #pip-button,
+#control-menu-panel[aria-hidden="true"] #time-range-button,
+#control-menu-panel[aria-hidden="true"] #keyword-filter-button,
+#control-menu-panel[aria-hidden="true"] #keyword-watch-button,
+#control-menu-panel[aria-hidden="true"] #info-button,
+#control-menu-panel[aria-hidden="true"] #menu-button{
+  pointer-events:none !important;
+  visibility:hidden !important;
+}
