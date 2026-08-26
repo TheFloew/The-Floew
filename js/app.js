@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.77.0";
+window.__floewAppVersion="31.78.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -2666,6 +2666,10 @@ function renderOptions(){
 
 function updateFilterCount(){
   const count=document.getElementById("filter-count");
+  if(!count)return;
+
+  const sourcesPanel=document.getElementById("sources-panel");
+  count.hidden=!Boolean(sourcesPanel?.classList.contains("active"));
 
   if(feedMode==="foreign"){
     count.textContent=
@@ -8253,6 +8257,7 @@ function ensureGoldFxRow(){
     '<span class="fx-gold-icon" aria-hidden="true">'+
       '<img src="assets/gold.png" alt="" draggable="false">'+
     '</span>'+
+    '<strong>XAU</strong>'+
     '<span class="fx-value">—</span>';
 
   box.appendChild(row);
@@ -8337,7 +8342,7 @@ async function enrichMarketDataWithGold(data){
     const gold={
       key:"GOLD",
       label:"Gram Altın",
-      shortLabel:"ALTIN",
+      shortLabel:"XAU",
       value:gramTry,
       changePercent:goldChangePercent,
       unit:"TRY/g",
@@ -8472,6 +8477,24 @@ function applyStockTickerScale({reconfigure=true}={}){
     "--floew-market-scale",
     String(stockTickerScale)
   );
+
+  /*
+    Bandın yüksekliğiyle birlikte kayan piyasa metinleri ve aralıkları da
+    aynı oranda büyüyüp küçülsün. Mobil taban ölçüleri mevcut tasarımı korur.
+  */
+  const compactMarket=window.matchMedia("(max-width:700px)").matches;
+  const marketMetrics=compactMarket
+    ? {item:10,strong:9,value:10,change:9,itemGap:7,changeMin:48,setGap:28,companyGap:26}
+    : {item:12,strong:11,value:12,change:11,itemGap:9,changeMin:58,setGap:38,companyGap:34};
+
+  ticker.style.setProperty("--floew-market-item-font",`${(marketMetrics.item*stockTickerScale).toFixed(2)}px`);
+  ticker.style.setProperty("--floew-market-strong-font",`${(marketMetrics.strong*stockTickerScale).toFixed(2)}px`);
+  ticker.style.setProperty("--floew-market-value-font",`${(marketMetrics.value*stockTickerScale).toFixed(2)}px`);
+  ticker.style.setProperty("--floew-market-change-font",`${(marketMetrics.change*stockTickerScale).toFixed(2)}px`);
+  ticker.style.setProperty("--floew-market-item-gap",`${(marketMetrics.itemGap*stockTickerScale).toFixed(2)}px`);
+  ticker.style.setProperty("--floew-market-change-min",`${(marketMetrics.changeMin*stockTickerScale).toFixed(2)}px`);
+  ticker.style.setProperty("--floew-market-set-gap",`${(marketMetrics.setGap*stockTickerScale).toFixed(2)}px`);
+  ticker.style.setProperty("--floew-market-company-gap",`${(marketMetrics.companyGap*stockTickerScale).toFixed(2)}px`);
 
   renderStockTickerScaleControl();
 
@@ -11262,6 +11285,9 @@ function setFaqAccordionOpen(item,open){
   button.setAttribute("aria-expanded",next?"true":"false");
   panel.setAttribute("aria-hidden",next?"false":"true");
 
+  const chevron=item.querySelector(".faq-accordion-chevron");
+  if(chevron)chevron.textContent=next?"▲":"▼";
+
   if(next){
     panel.style.maxHeight=`${Math.max(1,panel.scrollHeight)}px`;
     panel.style.opacity="1";
@@ -11310,7 +11336,7 @@ function renderFaqAccordion(target,text){
     const chevron=document.createElement("span");
     chevron.className="faq-accordion-chevron";
     chevron.setAttribute("aria-hidden","true");
-    chevron.textContent="⌄";
+    chevron.textContent="▼";
 
     button.append(question,chevron);
 
@@ -11976,6 +12002,7 @@ function upgradeAppearancePreferencesV3176(){
     child.classList.add("floew-appearance-item");
   });
 
+  updateFilterCount();
 }
 
 function bindStatsFloraInternalViewer(){
@@ -12013,6 +12040,7 @@ document.querySelectorAll(".menu-tab").forEach(tab=>{
     document.querySelectorAll(".menu-panel").forEach(x=>x.classList.remove("active"));
     tab.classList.add("active");
     document.querySelector(`[data-panel="${tab.dataset.tab}"]`).classList.add("active");
+    updateFilterCount();
   });
 });
 

@@ -5703,3 +5703,99 @@ body.market-ticker-visible .headline{
   pointer-events:none !important;
   visibility:hidden !important;
 }
+
+
+/* =====================================================================
+   V31.78.0 — requested UI polish: ticker scale, XAU, preferences, FAQ,
+   action spacing and headline position
+   ===================================================================== */
+
+/* Kaynak/kategori sayacı yalnız Kaynaklar sekmesinde görünür. */
+#filter-count[hidden]{
+  display:none !important;
+}
+
+/* Görünüm: Hava durumu grubu artık kendi başlığını taşır. */
+#motion-panel .floew-appearance-weather::before{
+  content:"Hava durumu";
+}
+
+/* Döviz kurları ile Borsa bandı satırları arasında diğer gruplara benzer nefes. */
+#motion-panel .market-visibility-settings #stock-ticker-setting{
+  margin-top:12px !important;
+}
+
+/* Altın satırı USD/EUR/GBP ile aynı üç kolonlu yapıyı kullanır: ikon + XAU + değer. */
+#clock #fx-rates .fx-rate-gold{
+  grid-template-columns:18px 29px minmax(48px,auto) !important;
+}
+.fx-rate-gold .fx-value{
+  text-align:right !important;
+}
+
+/* Borsa bandı büyüdükçe/küçüldükçe kayan metin ve aralıklar da ölçeklenir. */
+#market-ticker .market-ticker-set{
+  gap:var(--floew-market-set-gap,38px) !important;
+  padding-right:var(--floew-market-set-gap,38px) !important;
+}
+#market-ticker .market-company-track .market-ticker-set{
+  gap:var(--floew-market-company-gap,34px) !important;
+  padding-right:var(--floew-market-company-gap,34px) !important;
+}
+#market-ticker .market-ticker-item{
+  gap:var(--floew-market-item-gap,9px) !important;
+  font-size:var(--floew-market-item-font,12px) !important;
+  line-height:1 !important;
+}
+#market-ticker .market-ticker-item strong{
+  font-size:var(--floew-market-strong-font,11px) !important;
+}
+#market-ticker .market-ticker-value{
+  font-size:var(--floew-market-value-font,12px) !important;
+}
+#market-ticker .market-ticker-change{
+  min-width:var(--floew-market-change-min,58px) !important;
+  font-size:var(--floew-market-change-font,11px) !important;
+}
+
+/* SSS aç/kapa işareti doğrudan ▲ / ▼ karakteridir; döndürme kullanılmaz. */
+.faq-accordion-chevron{
+  transform:none !important;
+  transition:none !important;
+  font-size:13px !important;
+}
+.faq-accordion-item.open .faq-accordion-chevron{
+  transform:none !important;
+}
+
+/* Manşet altı aksiyonların boyutu korunur, yalnız araları sıkılaşır. */
+.headline-actions{
+  gap:7px !important;
+}
+
+/* Büyüyen aksiyon satırının manşeti yukarı itmesini telafi et. */
+.headline{
+  bottom:calc(clamp(34px,7vh,88px) - 8px) !important;
+}
+body.market-ticker-visible .headline{
+  bottom:calc(clamp(34px,7vh,88px) - 8px + var(--floew-market-height,56px)) !important;
+}
+
+@media(max-width:700px){
+  #clock #fx-rates .fx-rate-gold{
+    grid-template-columns:14px 24px auto !important;
+  }
+  .fx-rate-gold .fx-value{
+    text-align:left !important;
+  }
+
+  .headline-actions{
+    gap:6px !important;
+  }
+  .headline{
+    bottom:calc(clamp(34px,7vh,88px) - 8px) !important;
+  }
+  body.market-ticker-visible .headline{
+    bottom:calc(clamp(34px,7vh,88px) - 8px + var(--floew-market-height,50px)) !important;
+  }
+}
