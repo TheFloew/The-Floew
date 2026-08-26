@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.74.3";
+window.__floewAppVersion="31.74.4";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -3129,6 +3129,7 @@ function resetSlideMedia(el){
   el.removeAttribute("data-preloaded-story-key");
   el.removeAttribute("data-media-ready-story-key");
   el.removeAttribute("data-media-kind");
+  el.removeAttribute("data-media-timer-story-key");
   el.__floewMediaPrepare=null;
 
   const image=el.querySelector(".slide-image");
@@ -3567,11 +3568,88 @@ function bindVideoAudioUi(){
   queueVideoAudioUiSync();
 }
 
+function storyLikelyNeedsMediaGrace(story){
+  if(!videoEnabled || !story)return false;
+
+  if(
+    story.videoVerified===true ||
+    story.videoArticleHint===true ||
+    story.videoDiscovery===true ||
+    Boolean(story.video)
+  )return true;
+
+  try{
+    const path=new URL(String(story.link||""),location.href).pathname;
+    if(/(?:^|\/)video(?:\/|-)/i.test(path))return true;
+  }catch(e){}
+
+  return false;
+}
+
 function markSlideMediaReady(el,story,kind){
   if(!el || !story)return;
   el.dataset.mediaReadyStoryKey=mediaKey(story);
   el.dataset.mediaKind=kind;
+
+  /*
+    İlk ziyarette /video çözümü geç tamamlanırsa eski sayaç haberi video
+    görünmeden ilerletebiliyordu. Medya aktif slaytta sonradan gerçekten hazır
+    olduğunda o haber için süreyi bir kez yeniden başlat; preload edilen pasif
+    slaytlar bu davranışı tetiklemez.
+  */
+  const identity=storyIdentity(story);
+  const current=state.stories[state.index];
+  if(
+    identity &&
+    storyLikelyNeedsMediaGrace(story) &&
+    el.classList.contains("active") &&
+    storyIdentity(current)===identity &&
+    el.dataset.mediaTimerStoryKey!==identity
+  ){
+    el.dataset.mediaTimerStoryKey=identity;
+    if(!state.busy)timer();
+  }
+
   queueVideoAudioUiSync();
+}
+
+function timerAfterLikelyMediaWarmup(el,story,maxGraceMs=7000){
+  if(!storyLikelyNeedsMediaGrace(story)){
+    timer();
+    return;
+  }
+
+  const key=mediaKey(story);
+  const pending=
+    el?.__floewMediaPrepare?.key===key
+      ? el.__floewMediaPrepare.promise
+      : null;
+
+  if(!pending || typeof pending.then!=="function"){
+    timer();
+    return;
+  }
+
+  const identity=storyIdentity(story);
+  let finished=false;
+  const arm=()=>{
+    if(finished)return;
+    finished=true;
+
+    if(
+      adActive ||
+      state.busy ||
+      !el?.classList.contains("active") ||
+      storyIdentity(state.stories[state.index])!==identity
+    )return;
+
+    timer();
+  };
+
+  Promise.race([
+    Promise.resolve(pending).catch(()=>false),
+    new Promise(resolve=>setTimeout(resolve,Math.max(0,maxGraceMs)))
+  ]).then(arm,arm);
 }
 
 function showDirectVideo(el,story,media,token){
@@ -7261,7 +7339,7 @@ async function transitionTo(nextIndex,fromHistory,dir){
 
       state.busy=false;
 
-      timer();
+      timerAfterLikelyMediaWarmup(nextSlide,story);
     },
     {once:true}
   );
@@ -7906,7 +7984,7 @@ async function performNewsLoad(){
       newsShownSinceAd=1;
       clearStatus();
       finishInitialLoading();
-      timer();
+      timerAfterLikelyMediaWarmup(slides[0],list[0]);
 
       if(ADS_TEST_MODE){
         setTimeout(runAdTestOnce,900);
