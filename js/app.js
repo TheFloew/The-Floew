@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.74.4";
+window.__floewAppVersion="31.76.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -48,9 +48,14 @@ const KEYWORD_WATCH_KEY="thefloew.keywordWatch.v1";
 const WEATHER_PREFS_KEY="thefloew.weather.v1";
 const FX_RATES_VISIBLE_KEY="thefloew.fxRatesVisible.v1";
 const STOCK_TICKER_VISIBLE_KEY="thefloew.stockTickerVisible.v1";
+const STOCK_TICKER_SCALE_KEY="thefloew.stockTickerScale.v1";
 const MARKET_DATA_CACHE_KEY="thefloew.marketDataCache.v1";
 const MARKET_REFRESH_MS=60*1000;
 const MARKET_CACHE_MAX_AGE_MS=6*60*60*1000;
+const GOLD_SPOT_API="https://api.gold-api.com/price/XAU";
+const GOLD_REFRESH_MS=5*60*1000;
+const TROY_OUNCE_GRAMS=31.1034768;
+const STOCK_TICKER_SCALE_MIN=.78;
 const COOKIE_NOTICE_KEY="thefloew.cookieNotice.v1";
 const CUSTOM_RSS_STORAGE_KEY="thefloew.customRss.v1";
 const CUSTOM_RSS_LEGACY_COOKIE_KEY="thefloew.customRss.v1";
@@ -102,6 +107,7 @@ let autoAdvancePaused=false;
 let sourceViewerOpen=false;
 let sourceViewerRemainingMs=0;
 let sourceViewerArticleUrl="";
+let sourceViewerDirectMode=false;
 
 function loadNearDuplicateDedupPreference(){
   try{
@@ -8233,14 +8239,360 @@ function renderMarketPreferenceButton(id,enabled){
   if(stateEl)stateEl.textContent=enabled?"Açık":"Kapalı";
 }
 
+function ensureGoldFxRow(){
+  const box=document.getElementById("fx-rates");
+  if(!box || box.querySelector('[data-fx="GOLD"]'))return;
+
+  const template=
+    box.querySelector('[data-fx="GBP"]') ||
+    box.querySelector('[data-fx="USD"]') ||
+    box.firstElementChild;
+
+  if(!template)return;
+
+  const row=template.cloneNode(true);
+  row.dataset.fx="GOLD";
+  row.dataset.direction="flat";
+  row.setAttribute("title","Gram altın · TL");
+
+  const value=row.querySelector(".fx-value");
+  if(value)value.textContent="—";
+
+  const walker=document.createTreeWalker(
+    row,
+    NodeFilter.SHOW_TEXT
+  );
+
+  let labelNode=null;
+  while(walker.nextNode()){
+    const node=walker.currentNode;
+    if(
+      node.parentElement?.closest?.(".fx-value") ||
+      !String(node.nodeValue||"").trim()
+    )continue;
+
+    labelNode=node;
+    break;
+  }
+
+  if(labelNode){
+    labelNode.nodeValue=String(labelNode.nodeValue||"").replace(
+      /(GBP|USD|EUR|STERLİN|DOLAR|EURO)/iu,
+      "ALTIN"
+    );
+
+    if(!/ALTIN/iu.test(labelNode.nodeValue)){
+      labelNode.nodeValue="ALTIN ";
+    }
+  }
+
+  box.appendChild(row);
+}
+
+function marketGoldFromSnapshot(){
+  const rows=Array.isArray(marketDataSnapshot?.fx)
+    ? marketDataSnapshot.fx
+    : [];
+
+  return rows.find(
+    item=>String(item?.key||"").toUpperCase()==="GOLD"
+  )||null;
+}
+
+async function enrichMarketDataWithGold(data){
+  const fx=Array.isArray(data?.fx)?data.fx:[];
+  const usd=fx.find(
+    item=>String(item?.key||"").toUpperCase()==="USD"
+  );
+
+  const usdTry=Number(usd?.value);
+  if(!Number.isFinite(usdTry) || usdTry<=0)return data;
+
+  const previousGold=marketGoldFromSnapshot();
+  const previousAt=Number(marketDataSnapshot?.goldGeneratedAt)||0;
+
+  if(
+    previousGold &&
+    previousAt &&
+    Date.now()-previousAt<GOLD_REFRESH_MS
+  ){
+    return {
+      ...data,
+      fx:[
+        ...fx.filter(item=>String(item?.key||"").toUpperCase()!=="GOLD"),
+        previousGold
+      ],
+      goldGeneratedAt:previousAt
+    };
+  }
+
+  try{
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),5000);
+
+    let response;
+    try{
+      response=await fetch(
+        GOLD_SPOT_API,
+        {
+          method:"GET",
+          mode:"cors",
+          credentials:"omit",
+          cache:"no-store",
+          signal:controller.signal,
+          headers:{"Accept":"application/json"}
+        }
+      );
+    }finally{
+      clearTimeout(timeout);
+    }
+
+    if(!response.ok){
+      throw new Error(`gold_http_${response.status}`);
+    }
+
+    const payload=await response.json();
+    const ounceUsd=Number(payload?.price);
+
+    if(!Number.isFinite(ounceUsd) || ounceUsd<=0){
+      throw new Error("gold_invalid_payload");
+    }
+
+    const gramTry=ounceUsd*usdTry/TROY_OUNCE_GRAMS;
+    const gold={
+      key:"GOLD",
+      label:"Gram Altın",
+      shortLabel:"ALTIN",
+      value:gramTry,
+      changePercent:0,
+      unit:"TRY/g",
+      source:"gold-api.com"
+    };
+
+    return {
+      ...data,
+      fx:[
+        ...fx.filter(item=>String(item?.key||"").toUpperCase()!=="GOLD"),
+        gold
+      ],
+      goldGeneratedAt:Date.now()
+    };
+  }catch(error){
+    console.warn("Flöw gold data:",error);
+
+    if(previousGold){
+      return {
+        ...data,
+        fx:[
+          ...fx.filter(item=>String(item?.key||"").toUpperCase()!=="GOLD"),
+          previousGold
+        ],
+        goldGeneratedAt:previousAt||Date.now()
+      };
+    }
+
+    return data;
+  }
+}
+
+function loadStockTickerScale(){
+  try{
+    const saved=Number(localStorage.getItem(STOCK_TICKER_SCALE_KEY));
+    if(Number.isFinite(saved)){
+      return Math.max(STOCK_TICKER_SCALE_MIN,saved);
+    }
+  }catch(e){}
+  return 1;
+}
+
+let stockTickerScale=loadStockTickerScale();
+let stockTickerBaseHeight=0;
+
+function measureStockTickerBaseHeight(){
+  const ticker=document.getElementById("market-ticker");
+  if(!ticker)return 0;
+
+  const wasHidden=ticker.hidden;
+  const bodyHadClass=document.body.classList.contains("market-ticker-visible");
+  const previousStyle=ticker.getAttribute("style");
+
+  ticker.hidden=false;
+  document.body.classList.add("market-ticker-visible");
+  ticker.style.removeProperty("height");
+  ticker.style.removeProperty("max-height");
+  ticker.style.setProperty("visibility","hidden","important");
+  ticker.style.setProperty("pointer-events","none","important");
+
+  const measured=Math.max(
+    0,
+    ticker.getBoundingClientRect().height,
+    Number.parseFloat(getComputedStyle(ticker).height)||0
+  );
+
+  if(previousStyle===null){
+    ticker.removeAttribute("style");
+  }else{
+    ticker.setAttribute("style",previousStyle);
+  }
+
+  ticker.hidden=wasHidden;
+  if(!bodyHadClass){
+    document.body.classList.remove("market-ticker-visible");
+  }
+
+  return measured;
+}
+
+function stockTickerMaxScale(){
+  const base=Math.max(
+    1,
+    stockTickerBaseHeight || measureStockTickerBaseHeight() || 56
+  );
+
+  stockTickerBaseHeight=base;
+
+  return Math.max(
+    1,
+    (Math.max(1,window.innerHeight)/8)/base
+  );
+}
+
+function clampStockTickerScale(value){
+  const number=Number(value);
+  const next=Number.isFinite(number)?number:1;
+
+  return Math.min(
+    stockTickerMaxScale(),
+    Math.max(STOCK_TICKER_SCALE_MIN,next)
+  );
+}
+
+function saveStockTickerScale(){
+  try{
+    localStorage.setItem(
+      STOCK_TICKER_SCALE_KEY,
+      String(stockTickerScale)
+    );
+  }catch(e){}
+}
+
+function renderStockTickerScaleControl(){
+  const range=document.getElementById("stock-ticker-size");
+  const value=document.getElementById("stock-ticker-size-value");
+  if(!range)return;
+
+  const max=stockTickerMaxScale();
+  stockTickerScale=clampStockTickerScale(stockTickerScale);
+
+  range.min=String(Math.round(STOCK_TICKER_SCALE_MIN*100));
+  range.max=String(Math.max(
+    Math.round(max*100),
+    Math.round(STOCK_TICKER_SCALE_MIN*100)
+  ));
+  range.value=String(Math.round(stockTickerScale*100));
+  range.setAttribute(
+    "aria-valuetext",
+    `%${Math.round(stockTickerScale*100)}`
+  );
+
+  if(value){
+    value.textContent=`%${Math.round(stockTickerScale*100)}`;
+  }
+}
+
+function applyStockTickerScale({reconfigure=true}={}){
+  const ticker=document.getElementById("market-ticker");
+  if(!ticker)return;
+
+  if(!stockTickerBaseHeight){
+    stockTickerBaseHeight=measureStockTickerBaseHeight()||56;
+  }
+
+  stockTickerScale=clampStockTickerScale(stockTickerScale);
+  const target=Math.min(
+    window.innerHeight/8,
+    stockTickerBaseHeight*stockTickerScale
+  );
+
+  ticker.style.setProperty(
+    "height",
+    `${Math.max(1,target).toFixed(1)}px`,
+    "important"
+  );
+  ticker.style.setProperty(
+    "max-height",
+    "12.5vh",
+    "important"
+  );
+  ticker.style.setProperty(
+    "--floew-market-scale",
+    String(stockTickerScale)
+  );
+
+  const windows=[
+    ...ticker.querySelectorAll(".market-ticker-window")
+  ];
+
+  if(windows.length){
+    const each=Math.max(1,target/windows.length);
+    windows.forEach(windowEl=>{
+      windowEl.style.setProperty(
+        "height",
+        `${each.toFixed(1)}px`,
+        "important"
+      );
+      windowEl.style.setProperty(
+        "min-height",
+        "0",
+        "important"
+      );
+    });
+  }
+
+  ticker.querySelectorAll(".market-ticker-item").forEach(item=>{
+    if(!item.dataset.floewBaseFontSize){
+      const baseFont=Number.parseFloat(getComputedStyle(item).fontSize);
+      if(Number.isFinite(baseFont) && baseFont>0){
+        item.dataset.floewBaseFontSize=String(baseFont);
+      }
+    }
+
+    const baseFont=Number(item.dataset.floewBaseFontSize);
+    if(Number.isFinite(baseFont) && baseFont>0){
+      item.style.fontSize=
+        `${Math.max(9,baseFont*stockTickerScale).toFixed(2)}px`;
+    }
+  });
+
+  renderStockTickerScaleControl();
+
+  if(reconfigure){
+    requestAnimationFrame(()=>{
+      ticker
+        .querySelectorAll(".market-ticker-track")
+        .forEach(track=>{
+          const state=marketTrackState.get(track);
+          if(!state?.items?.length)return;
+          configureMarketTrackLoop(
+            track,
+            {company:Boolean(state.company)}
+          );
+        });
+    });
+  }
+}
+
 function renderMarketPreferences(){
   renderMarketPreferenceButton("fx-rates-setting",fxRatesVisible);
   renderMarketPreferenceButton("stock-ticker-setting",stockTickerVisible);
+  renderStockTickerScaleControl();
 }
 
 function renderFxRates(data=marketDataSnapshot){
   const box=document.getElementById("fx-rates");
   if(!box)return;
+
+  ensureGoldFxRow();
 
   box.hidden=!fxRatesVisible;
   document.body.classList.toggle("fx-rates-visible",fxRatesVisible);
@@ -8250,7 +8602,7 @@ function renderFxRates(data=marketDataSnapshot){
   const rows=Array.isArray(data?.fx)?data.fx:[];
   const map=new Map(rows.map(item=>[String(item?.key||"").toUpperCase(),item]));
 
-  for(const key of ["USD","EUR","GBP"]){
+  for(const key of ["USD","EUR","GBP","GOLD"]){
     const row=box.querySelector(`[data-fx="${key}"]`);
     const value=row?.querySelector(".fx-value");
     if(!row || !value)continue;
@@ -8469,6 +8821,9 @@ window.addEventListener("resize",()=>{
           company:Boolean(state.company)
         });
       });
+
+    renderStockTickerScaleControl();
+    applyStockTickerScale({reconfigure:false});
   },160);
 });
 
@@ -8504,6 +8859,10 @@ function renderStockTicker(data=marketDataSnapshot){
   fillMarketTrack(companyTrack,companies,{company:true});
 
   ticker.dataset.stale=data?.stale?"1":"0";
+
+  requestAnimationFrame(()=>{
+    applyStockTickerScale({reconfigure:false});
+  });
 }
 
 function renderMarketData(data=marketDataSnapshot){
@@ -8550,10 +8909,14 @@ async function refreshMarketData(force=false){
         stale:false
       };
 
-      marketDataSnapshot=data;
-      writeMarketDataCache(data);
-      renderMarketData(data);
-      return data;
+      const enrichedData=fxRatesVisible
+        ? await enrichMarketDataWithGold(data)
+        : data;
+
+      marketDataSnapshot=enrichedData;
+      writeMarketDataCache(enrichedData);
+      renderMarketData(enrichedData);
+      return enrichedData;
     }catch(error){
       console.warn("Flöw market data:",error);
       const cached=marketDataSnapshot||readMarketDataCache();
@@ -8602,12 +8965,20 @@ function setStockTickerVisible(enabled){
   stockTickerVisible=Boolean(enabled);
   saveBooleanUiPreference(STOCK_TICKER_VISIBLE_KEY,stockTickerVisible);
   applyMarketVisibility();
+  requestAnimationFrame(()=>{
+    applyStockTickerScale({reconfigure:false});
+  });
 }
 
 function initMarketData(){
   marketDataSnapshot=readMarketDataCache();
+  ensureGoldFxRow();
+  if(!stockTickerBaseHeight){
+    stockTickerBaseHeight=measureStockTickerBaseHeight()||56;
+  }
   renderMarketPreferences();
   renderMarketData(marketDataSnapshot);
+  applyStockTickerScale({reconfigure:false});
   restartMarketRefreshTimer();
   if(fxRatesVisible || stockTickerVisible)refreshMarketData(true);
 }
@@ -10093,7 +10464,8 @@ function preferenceTransferKeys(){
     CUSTOM_RSS_STORAGE_KEY,
     NEAR_DUPLICATE_PREF_KEY,
     FX_RATES_VISIBLE_KEY,
-    STOCK_TICKER_VISIBLE_KEY
+    STOCK_TICKER_VISIBLE_KEY,
+    STOCK_TICKER_SCALE_KEY
   ];
 }
 
@@ -10940,7 +11312,147 @@ function renderStructuredAboutDocumentText(target,text){
   target.appendChild(fragment);
 }
 
-async function loadAboutDocument(path,target,{structured=false}={}){
+function appendFaqAnswerLine(parent,rawLine){
+  const line=String(rawLine||"").trim();
+
+  if(!line){
+    const spacer=document.createElement("div");
+    spacer.className="about-doc-spacer";
+    parent.appendChild(spacer);
+    return;
+  }
+
+  if(/^#(?!#)/.test(line)){
+    const strong=document.createElement("div");
+    strong.className="about-doc-strong";
+    strong.textContent=line.replace(/^#\s*/,"");
+    parent.appendChild(strong);
+    return;
+  }
+
+  const paragraph=document.createElement("div");
+  paragraph.className="about-doc-line";
+  paragraph.textContent=String(rawLine||"").trimEnd();
+  parent.appendChild(paragraph);
+}
+
+function setFaqAccordionOpen(item,open){
+  const button=item?.querySelector(".faq-accordion-button");
+  const panel=item?.querySelector(".faq-accordion-panel");
+  if(!button || !panel)return;
+
+  const next=Boolean(open);
+  item.classList.toggle("open",next);
+  button.setAttribute("aria-expanded",next?"true":"false");
+  panel.setAttribute("aria-hidden",next?"false":"true");
+
+  if(next){
+    panel.style.maxHeight=`${Math.max(1,panel.scrollHeight)}px`;
+    panel.style.opacity="1";
+  }else{
+    panel.style.maxHeight="0px";
+    panel.style.opacity="0";
+  }
+}
+
+function renderFaqAccordion(target,text){
+  if(!target)return;
+  target.replaceChildren();
+
+  const clean=String(text||"").replace(/\r\n?/g,"\n").trim();
+  if(!clean){
+    target.textContent="Bu belge şu anda boş.";
+    return;
+  }
+
+  const lines=clean.split("\n");
+  const fragment=document.createDocumentFragment();
+  const intro=document.createElement("div");
+  intro.className="faq-accordion-intro";
+
+  let current=null;
+  let faqIndex=0;
+
+  const flushCurrent=()=>{
+    if(!current)return;
+
+    const item=document.createElement("section");
+    item.className="faq-accordion-item";
+
+    const button=document.createElement("button");
+    button.type="button";
+    button.className="faq-accordion-button";
+    button.setAttribute("aria-expanded","false");
+
+    const answerId=`faq-answer-${faqIndex++}`;
+    button.setAttribute("aria-controls",answerId);
+
+    const question=document.createElement("span");
+    question.className="faq-accordion-question";
+    question.textContent=current.question;
+
+    const chevron=document.createElement("span");
+    chevron.className="faq-accordion-chevron";
+    chevron.setAttribute("aria-hidden","true");
+    chevron.textContent="⌄";
+
+    button.append(question,chevron);
+
+    const panel=document.createElement("div");
+    panel.id=answerId;
+    panel.className="faq-accordion-panel";
+    panel.setAttribute("aria-hidden","true");
+    panel.style.maxHeight="0px";
+    panel.style.opacity="0";
+
+    const body=document.createElement("div");
+    body.className="faq-accordion-body";
+    current.answer.forEach(line=>appendFaqAnswerLine(body,line));
+    panel.appendChild(body);
+
+    button.addEventListener("click",event=>{
+      event.preventDefault();
+      event.stopPropagation();
+      setFaqAccordionOpen(
+        item,
+        button.getAttribute("aria-expanded")!=="true"
+      );
+    });
+
+    item.append(button,panel);
+    fragment.appendChild(item);
+    current=null;
+  };
+
+  for(const rawLine of lines){
+    const line=rawLine.trim();
+
+    if(/^##(?:\s|$)/.test(line)){
+      flushCurrent();
+      current={
+        question:line.replace(/^##\s*/,"").trim(),
+        answer:[]
+      };
+      continue;
+    }
+
+    if(current){
+      current.answer.push(rawLine);
+    }else{
+      appendFaqAnswerLine(intro,rawLine);
+    }
+  }
+
+  flushCurrent();
+
+  if(intro.childNodes.length){
+    fragment.insertBefore(intro,fragment.firstChild);
+  }
+
+  target.appendChild(fragment);
+}
+
+async function loadAboutDocument(path,target,{structured=false,accordion=false}={}){
   if(!path || !target)return;
   target.textContent="İçerik yükleniyor...";
   try{
@@ -10952,7 +11464,9 @@ async function loadAboutDocument(path,target,{structured=false}={}){
       aboutDocumentCache.set(path,text);
     }
 
-    if(structured){
+    if(accordion){
+      renderFaqAccordion(target,text);
+    }else if(structured){
       renderStructuredAboutDocumentText(target,text);
     }else{
       target.textContent=text.trim()||"Bu belge şu anda boş.";
@@ -10996,7 +11510,7 @@ function activateAboutTab(name="stats",{load=true}={}){
 
   if(!load)return;
   if(aboutActiveTab==="stats")loadPublicStats(publicStatsRange);
-  else if(aboutActiveTab==="faq")loadAboutDocument("docs/SSS.txt",document.querySelector('[data-about-panel="faq"] [data-about-doc]'),{structured:true});
+  else if(aboutActiveTab==="faq")loadAboutDocument("docs/SSS.txt",document.querySelector('[data-about-panel="faq"] [data-about-doc]'),{structured:true,accordion:true});
   else if(aboutActiveTab==="ads")loadAboutDocument("docs/REKLAM.txt",document.querySelector('[data-about-panel="ads"] [data-about-doc]'));
   else if(aboutActiveTab==="contact")loadAboutDocument("docs/ILETISIM.txt",document.querySelector('[data-about-panel="contact"] [data-about-doc]'));
 }
@@ -11478,6 +11992,425 @@ document.getElementById("menu-overlay").addEventListener("click",e=>{
   if(e.target.id==="menu-overlay")closeMenu();
 });
 
+
+/* =====================================================================
+   V31.76.0 — Preferences layout / market size / larger story actions
+   ===================================================================== */
+
+function ensureFrontendV3176Styles(){
+  if(document.getElementById("floew-v31-76-styles"))return;
+
+  const style=document.createElement("style");
+  style.id="floew-v31-76-styles";
+  style.textContent=`
+    #motion-panel{
+      display:flex;
+      flex-direction:column;
+      gap:18px;
+    }
+
+    #motion-panel > *{
+      margin-top:0!important;
+      margin-bottom:0!important;
+    }
+
+    #motion-panel .floew-appearance-item{
+      margin:0!important;
+    }
+
+    #motion-panel .floew-appearance-direction{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+
+    #motion-panel .floew-setting-heading,
+    #motion-panel .motion-label{
+      margin:0!important;
+      padding:0!important;
+      font:inherit;
+      font-size:inherit;
+      font-weight:700;
+      line-height:1.2;
+      color:inherit;
+      opacity:1;
+    }
+
+    #motion-panel .direction-list{
+      margin:0!important;
+    }
+
+    #motion-panel .floew-appearance-weather{
+      display:flex;
+      flex-direction:column;
+      gap:14px;
+      margin:0!important;
+      padding-top:0!important;
+    }
+
+    #motion-panel .floew-appearance-weather::before{
+      content:"Hava & Su";
+      display:block;
+      font-weight:700;
+      line-height:1.2;
+      margin-bottom:2px;
+    }
+
+    #motion-panel .duration-control{
+      column-gap:7px;
+    }
+
+    #motion-panel #duration-play{
+      margin-inline-start:13px!important;
+    }
+
+    .floew-ticker-size-setting{
+      display:grid;
+      grid-template-columns:minmax(0,1fr) auto;
+      grid-template-areas:
+        "copy value"
+        "range range";
+      align-items:center;
+      gap:9px 14px;
+      width:100%;
+      box-sizing:border-box;
+    }
+
+    .floew-ticker-size-copy{
+      grid-area:copy;
+      min-width:0;
+    }
+
+    .floew-ticker-size-copy strong,
+    .floew-ticker-size-copy small{
+      display:block;
+    }
+
+    .floew-ticker-size-copy small{
+      margin-top:3px;
+      opacity:.7;
+    }
+
+    #stock-ticker-size-value{
+      grid-area:value;
+      min-width:48px;
+      text-align:right;
+      font-variant-numeric:tabular-nums;
+      opacity:.82;
+    }
+
+    #stock-ticker-size{
+      grid-area:range;
+      width:100%;
+      margin:2px 0 0;
+      accent-color:currentColor;
+      cursor:pointer;
+    }
+
+    .headline-actions{
+      display:flex!important;
+      align-items:center!important;
+      gap:11px!important;
+    }
+
+    .headline-actions > .flora-inline,
+    .headline-actions > .share-link,
+    .headline-actions > .feedback-link,
+    .headline-actions > .report-link,
+    .headline-actions > [data-feedback],
+    .headline-actions > [aria-label*="Geri bildirim"],
+    .headline-actions > [title*="Geri bildirim"],
+    .headline-actions > .source-link{
+      inline-size:48px!important;
+      block-size:44px!important;
+      min-inline-size:48px!important;
+      min-block-size:44px!important;
+      max-inline-size:48px!important;
+      box-sizing:border-box!important;
+      display:inline-flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      margin:0!important;
+      padding:0!important;
+      touch-action:manipulation;
+      -webkit-tap-highlight-color:transparent;
+    }
+
+    .headline-actions > .share-link,
+    .headline-actions > .feedback-link,
+    .headline-actions > .report-link,
+    .headline-actions > [data-feedback],
+    .headline-actions > [aria-label*="Geri bildirim"],
+    .headline-actions > [title*="Geri bildirim"],
+    .headline-actions > .source-link{
+      font-size:21px!important;
+      line-height:1!important;
+    }
+
+    .headline-actions > .flora-inline{
+      gap:3px!important;
+    }
+
+    .faq-accordion-intro{
+      margin-bottom:16px;
+    }
+
+    .faq-accordion-item{
+      border-bottom:1px solid rgba(255,255,255,.14);
+    }
+
+    .faq-accordion-item:first-of-type{
+      border-top:1px solid rgba(255,255,255,.14);
+    }
+
+    .faq-accordion-button{
+      width:100%;
+      min-height:54px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:18px;
+      padding:14px 2px;
+      margin:0;
+      border:0;
+      background:none;
+      color:inherit;
+      font:inherit;
+      text-align:left;
+      cursor:pointer;
+    }
+
+    .faq-accordion-question{
+      font-weight:700;
+      line-height:1.35;
+    }
+
+    .faq-accordion-chevron{
+      flex:0 0 auto;
+      font-size:20px;
+      line-height:1;
+      transition:transform .3s ease;
+    }
+
+    .faq-accordion-item.open .faq-accordion-chevron{
+      transform:rotate(180deg);
+    }
+
+    .faq-accordion-panel{
+      overflow:hidden;
+      transition:
+        max-height .36s cubic-bezier(.22,.72,.18,1),
+        opacity .22s ease;
+      will-change:max-height;
+    }
+
+    .faq-accordion-body{
+      padding:0 2px 17px;
+    }
+
+    @media(max-width:700px), (pointer:coarse){
+      #motion-panel{
+        gap:16px;
+      }
+
+      .headline-actions{
+        gap:9px!important;
+      }
+
+      .headline-actions > .flora-inline,
+      .headline-actions > .share-link,
+      .headline-actions > .feedback-link,
+      .headline-actions > .report-link,
+      .headline-actions > [data-feedback],
+      .headline-actions > [aria-label*="Geri bildirim"],
+      .headline-actions > [title*="Geri bildirim"],
+      .headline-actions > .source-link{
+        inline-size:52px!important;
+        block-size:48px!important;
+        min-inline-size:52px!important;
+        min-block-size:48px!important;
+        max-inline-size:52px!important;
+      }
+
+      .headline-actions > .share-link,
+      .headline-actions > .feedback-link,
+      .headline-actions > .report-link,
+      .headline-actions > [data-feedback],
+      .headline-actions > [aria-label*="Geri bildirim"],
+      .headline-actions > [title*="Geri bildirim"],
+      .headline-actions > .source-link{
+        font-size:23px!important;
+      }
+
+      .faq-accordion-button{
+        min-height:58px;
+        padding-block:15px;
+      }
+    }
+
+    @media(prefers-reduced-motion:reduce){
+      .faq-accordion-panel,
+      .faq-accordion-chevron{
+        transition:none!important;
+      }
+    }
+  `;
+
+  document.head.appendChild(style);
+}
+
+function directChildOf(parent,node){
+  let current=node;
+  while(current && current.parentElement!==parent){
+    current=current.parentElement;
+  }
+  return current?.parentElement===parent ? current : null;
+}
+
+function ensureStockTickerSizeControl(motionPanel){
+  if(
+    !motionPanel ||
+    document.getElementById("stock-ticker-size")
+  )return;
+
+  const toggle=document.getElementById("stock-ticker-setting");
+  if(!toggle)return;
+
+  const anchor=directChildOf(motionPanel,toggle);
+  if(!anchor)return;
+
+  const group=document.createElement("div");
+  group.className="floew-ticker-size-setting floew-appearance-item";
+  group.innerHTML=`
+    <div class="floew-ticker-size-copy">
+      <strong>Borsa bandı boyutu</strong>
+      <small>Alt ve üst piyasa bantlarının yüksekliği</small>
+    </div>
+    <span id="stock-ticker-size-value">%100</span>
+    <input
+      id="stock-ticker-size"
+      type="range"
+      min="78"
+      max="200"
+      step="1"
+      value="100"
+      aria-label="Borsa bandı boyutu"
+    >
+  `;
+
+  anchor.insertAdjacentElement("afterend",group);
+
+  const input=group.querySelector("#stock-ticker-size");
+  input?.addEventListener("input",event=>{
+    event.stopPropagation();
+    stockTickerScale=Number(event.currentTarget.value)/100;
+    stockTickerScale=clampStockTickerScale(stockTickerScale);
+    saveStockTickerScale();
+    applyStockTickerScale();
+  });
+
+  ["pointerdown","pointerup","click"].forEach(type=>{
+    group.addEventListener(type,event=>event.stopPropagation());
+  });
+
+  renderStockTickerScaleControl();
+}
+
+function upgradeAppearancePreferencesV3176(){
+  ensureFrontendV3176Styles();
+
+  const motionPanel=document.getElementById("motion-panel");
+  if(!motionPanel)return;
+
+  const motionTab=document.querySelector('.menu-tab[data-tab="motion"]');
+  const weatherTab=document.querySelector('.menu-tab[data-tab="weather"]');
+  const weatherPanel=document.querySelector('.menu-panel[data-panel="weather"]');
+
+  if(
+    weatherTab?.classList.contains("active") ||
+    weatherPanel?.classList.contains("active")
+  ){
+    document
+      .querySelectorAll(".menu-tab")
+      .forEach(tab=>tab.classList.remove("active"));
+
+    document
+      .querySelectorAll(".menu-panel")
+      .forEach(panel=>panel.classList.remove("active"));
+
+    motionTab?.classList.add("active");
+    motionPanel.classList.add("active");
+  }
+
+  const label=motionPanel.querySelector(".motion-label");
+  const directionList=motionPanel.querySelector(".direction-list");
+
+  if(
+    label &&
+    directionList &&
+    !motionPanel.querySelector(".floew-appearance-direction")
+  ){
+    const directionGroup=document.createElement("div");
+    directionGroup.className=
+      "floew-appearance-direction floew-appearance-item";
+
+    motionPanel.insertBefore(directionGroup,label);
+    directionGroup.append(label,directionList);
+  }
+
+  if(label){
+    label.textContent="Haber geçiş yönü";
+    label.classList.add("floew-setting-heading");
+  }
+
+  const weatherSettings=weatherPanel?.querySelector(".weather-settings");
+  if(weatherSettings){
+    weatherSettings.classList.add(
+      "floew-appearance-weather",
+      "floew-appearance-item"
+    );
+    motionPanel.appendChild(weatherSettings);
+  }
+
+  weatherTab?.remove();
+  weatherPanel?.remove();
+
+  [...motionPanel.children].forEach(child=>{
+    child.classList.add("floew-appearance-item");
+  });
+
+  ensureStockTickerSizeControl(motionPanel);
+}
+
+function bindStatsFloraInternalViewer(){
+  const detail=document.getElementById("public-stats-detail-link");
+  if(!detail || detail.dataset.floewInternalBound)return;
+
+  detail.dataset.floewInternalBound="1";
+  detail.removeAttribute("target");
+  detail.removeAttribute("rel");
+
+  detail.addEventListener("click",event=>{
+    event.preventDefault();
+    event.stopPropagation();
+    openInternalPageViewer(
+      detail.getAttribute("href")||"flora.html",
+      "Flöra"
+    );
+  });
+}
+
+function refreshOpenFaqAccordionHeights(){
+  document
+    .querySelectorAll(".faq-accordion-item.open")
+    .forEach(item=>{
+      const panel=item.querySelector(".faq-accordion-panel");
+      if(panel){
+        panel.style.maxHeight=`${Math.max(1,panel.scrollHeight)}px`;
+      }
+    });
+}
+
 document.querySelectorAll(".menu-tab").forEach(tab=>{
   tab.addEventListener("click",()=>{
     document.querySelectorAll(".menu-tab").forEach(x=>x.classList.remove("active"));
@@ -11486,6 +12419,14 @@ document.querySelectorAll(".menu-tab").forEach(tab=>{
     document.querySelector(`[data-panel="${tab.dataset.tab}"]`).classList.add("active");
   });
 });
+
+
+upgradeAppearancePreferencesV3176();
+bindStatsFloraInternalViewer();
+
+window.addEventListener("resize",()=>{
+  refreshOpenFaqAccordionHeights();
+},{passive:true});
 
 
 function sourceViewerProxyUrl(articleUrl){
@@ -11519,7 +12460,7 @@ function pauseFlowForSourceViewer(){
   mouseFlowPaused=false;
 }
 
-function setSourceViewerFrame(articleUrl){
+function setSourceViewerFrame(articleUrl,{direct=false}={}){
   const safe=String(articleUrl||"").trim();
   if(!/^https?:\/\//i.test(safe))return false;
 
@@ -11527,33 +12468,45 @@ function setSourceViewerFrame(articleUrl){
   const external=document.getElementById("source-viewer-external");
   const urlLabel=document.getElementById("source-viewer-url");
   const status=document.getElementById("source-viewer-status");
-  const proxy=sourceViewerProxyUrl(safe);
+  const directMode=Boolean(direct);
+  const targetUrl=directMode ? safe : sourceViewerProxyUrl(safe);
 
-  if(!frame || !proxy)return false;
+  if(!frame || !targetUrl)return false;
 
   sourceViewerArticleUrl=safe;
+  sourceViewerDirectMode=directMode;
 
-  if(external)external.href=safe;
+  if(external){
+    external.href=safe;
+    external.hidden=directMode;
+    external.setAttribute("aria-hidden",directMode?"true":"false");
+  }
 
   if(urlLabel){
-    try{
-      const u=new URL(safe);
-      urlLabel.textContent=u.hostname.replace(/^www\./i,"");
-    }catch(e){
-      urlLabel.textContent="";
+    if(directMode){
+      urlLabel.textContent="Flöw";
+    }else{
+      try{
+        const u=new URL(safe);
+        urlLabel.textContent=u.hostname.replace(/^www\./i,"");
+      }catch(e){
+        urlLabel.textContent="";
+      }
     }
   }
 
   if(status){
     status.hidden=false;
-    status.textContent="Kaynak yükleniyor…";
+    status.textContent=directMode
+      ? "Sayfa yükleniyor…"
+      : "Kaynak yükleniyor…";
   }
 
-  frame.src=proxy;
+  frame.src=targetUrl;
   return true;
 }
 
-function openSourceViewer(articleUrl,sourceName=""){
+function openSourceViewer(articleUrl,sourceName="",options={}){
   const safe=String(articleUrl||"").trim();
   if(!/^https?:\/\//i.test(safe))return false;
 
@@ -11580,7 +12533,7 @@ function openSourceViewer(articleUrl,sourceName=""){
   overlay?.setAttribute("aria-hidden","false");
   document.body.classList.add("source-viewer-open");
 
-  setSourceViewerFrame(safe);
+  setSourceViewerFrame(safe,{direct:Boolean(options?.direct)});
   showFullscreenButton();
 
   setTimeout(()=>{
@@ -11590,22 +12543,43 @@ function openSourceViewer(articleUrl,sourceName=""){
   return true;
 }
 
+function openInternalPageViewer(path,title="Flöw"){
+  let url="";
+  try{
+    url=new URL(path,document.baseURI).href;
+  }catch(e){
+    return false;
+  }
+
+  return openSourceViewer(
+    url,
+    title,
+    {direct:true}
+  );
+}
+
 function closeSourceViewer(){
   if(!sourceViewerOpen)return;
 
   const overlay=document.getElementById("source-viewer-overlay");
   const frame=document.getElementById("source-viewer-frame");
+  const external=document.getElementById("source-viewer-external");
   const status=document.getElementById("source-viewer-status");
   const remaining=sourceViewerRemainingMs || state.timerRemainingMs || Math.max(5,showDurationSeconds)*1000;
 
   sourceViewerOpen=false;
   sourceViewerArticleUrl="";
+  sourceViewerDirectMode=false;
 
   overlay?.classList.remove("open");
   overlay?.setAttribute("aria-hidden","true");
   document.body.classList.remove("source-viewer-open");
 
   if(frame)frame.src="about:blank";
+  if(external){
+    external.hidden=false;
+    external.removeAttribute("aria-hidden");
+  }
   if(status)status.hidden=false;
 
   sourceViewerRemainingMs=0;
@@ -11656,6 +12630,7 @@ window.addEventListener("message",e=>{
   const frame=document.getElementById("source-viewer-frame");
   if(
     !sourceViewerOpen ||
+    sourceViewerDirectMode ||
     !frame ||
     e.source!==frame.contentWindow ||
     !e.data ||
