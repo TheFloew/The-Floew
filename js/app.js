@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.78.0";
+window.__floewAppVersion="31.78.2";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -11204,6 +11204,28 @@ const ABOUT_LEGAL_DOCS={
   cookies:{title:"Çerezler",path:"docs/CEREZLER.txt"}
 };
 
+function appendStructuredAboutInlineText(target,text){
+  const source=String(text??"");
+  const italicPattern=/\*([^*\n]+)\*/g;
+  let lastIndex=0;
+  let match;
+
+  while((match=italicPattern.exec(source))){
+    if(match.index>lastIndex){
+      target.appendChild(document.createTextNode(source.slice(lastIndex,match.index)));
+    }
+    const emphasis=document.createElement("em");
+    emphasis.className="about-doc-emphasis";
+    emphasis.textContent=match[1];
+    target.appendChild(emphasis);
+    lastIndex=italicPattern.lastIndex;
+  }
+
+  if(lastIndex<source.length){
+    target.appendChild(document.createTextNode(source.slice(lastIndex)));
+  }
+}
+
 function renderStructuredAboutDocumentText(target,text){
   if(!target)return;
   target.replaceChildren();
@@ -11229,7 +11251,7 @@ function renderStructuredAboutDocumentText(target,text){
     if(/^#(?!#)/.test(line)){
       const heading=document.createElement("h2");
       heading.className="about-doc-heading";
-      heading.textContent=line.replace(/^#\s*/,"");
+      appendStructuredAboutInlineText(heading,line.replace(/^#\s*/,""));
       fragment.appendChild(heading);
       continue;
     }
@@ -11237,14 +11259,14 @@ function renderStructuredAboutDocumentText(target,text){
     if(/^##+/.test(line)){
       const strong=document.createElement("div");
       strong.className="about-doc-strong";
-      strong.textContent=line.replace(/^##+\s*/,"");
+      appendStructuredAboutInlineText(strong,line.replace(/^##+\s*/,""));
       fragment.appendChild(strong);
       continue;
     }
 
     const paragraph=document.createElement("div");
     paragraph.className="about-doc-line";
-    paragraph.textContent=rawLine.trimEnd();
+    appendStructuredAboutInlineText(paragraph,rawLine.trimEnd());
     fragment.appendChild(paragraph);
   }
 
@@ -11453,7 +11475,7 @@ function activateAboutTab(name="stats",{load=true}={}){
   if(!load)return;
   if(aboutActiveTab==="stats")loadPublicStats(publicStatsRange);
   else if(aboutActiveTab==="faq")loadAboutDocument("docs/SSS.txt",document.querySelector('[data-about-panel="faq"] [data-about-doc]'),{structured:true,accordion:true});
-  else if(aboutActiveTab==="ads")loadAboutDocument("docs/REKLAM.txt",document.querySelector('[data-about-panel="ads"] [data-about-doc]'));
+  else if(aboutActiveTab==="ads")loadAboutDocument("docs/REKLAM.txt",document.querySelector('[data-about-panel="ads"] [data-about-doc]'),{structured:true});
   else if(aboutActiveTab==="contact")loadAboutDocument("docs/ILETISIM.txt",document.querySelector('[data-about-panel="contact"] [data-about-doc]'));
 }
 

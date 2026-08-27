@@ -3752,6 +3752,9 @@ body.foreign-mode #time-range-button{
 .about-doc-line{
   min-height:1em;
 }
+.about-doc-emphasis{
+  font-style:italic;
+}
 .about-doc-spacer{
   height:.8em;
 }
@@ -5866,3 +5869,5 @@ body.market-ticker-visible .headline{
   }
 }
 
+
+/* V31.78.2 — Reklam belgesinde ## kalın başlık ve *italik* metin desteği. */
