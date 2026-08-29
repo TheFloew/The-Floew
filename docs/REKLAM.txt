@@ -11,3 +11,5 @@ Flöw’ün sade ve kesintisiz yayın deneyimine uyum sağlayan özel reklam pro
 Bu düzenlemeler kapsamında, Türkiye’den günlük erişimi bir milyondan fazla olan sosyal ağ sağlayıcıların; platformlarında yayınlanan reklamlara ilişkin reklam veren, reklam içeriği, yayın süresi ve hedef kitle gibi bilgileri içeren bir reklam kütüphanesi oluşturması ve kamuya açık şekilde yayınlaması öngörülmektedir.
 
 Bu kapsamda oluşturduğumuz ve düzenli olarak güncelleyeceğimiz **Flöw Reklam Kütüphanesi** üzerinden platformumuzda yayınlanan reklamlara ilişkin bilgilere ulaşabilirsiniz.
+
+reklam@flöw.tr
