@@ -11,7 +11,7 @@ Bu Gizlilik Politikası, Flöw’ü ziyaret ettiğinizde hangi bilgilerin işlen
 6698 sayılı Kişisel Verilerin Korunması Kanunu (“KVKK”) kapsamında veri sorumlusu:
 
 **Ad / Unvan:** `[VERİ SORUMLUSUNUN ADI VEYA UNVANI]`
-**E-posta:** `[İLETİŞİM E-POSTASI]`
+**E-posta:** `bilgi@flöw.tr`
 **Adres:** `[ADRES – GEREKİYORSA]`
 
 ## 2. Hangi veriler işlenebilir?
