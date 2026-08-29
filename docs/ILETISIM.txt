@@ -3,4 +3,4 @@ Flöw
 Şirket bilgileri
 Adres
 Telefon
-E-posta
+bilgi@flöw.tr
