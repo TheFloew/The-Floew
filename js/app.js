@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.78.2";
+window.__floewAppVersion="31.79.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -109,6 +109,8 @@ let sourceViewerOpen=false;
 let sourceViewerRemainingMs=0;
 let sourceViewerArticleUrl="";
 let sourceViewerDirectMode=false;
+let uiFlowPauseActive=false;
+let uiFlowPauseRemainingMs=0;
 
 function loadNearDuplicateDedupPreference(){
   try{
@@ -1678,8 +1680,8 @@ function closeFloraPopover({resume=true}={}){
   popover.style.visibility="";
   floraPopoverOpen=false;
 
-  if(resume && !adActive && !autoAdvancePaused && !state.busy){
-    timer();
+  if(resume){
+    queueUiFlowResumeCheck();
   }
 }
 
@@ -1738,8 +1740,7 @@ async function openFloraPopover(anchor,story){
   if(!anchor || !story)return;
 
   closeFloraPopover({resume:false});
-  clearTimeout(state.timer);
-  state.timer=null;
+  pauseFlowForUi();
   floraPopoverOpen=true;
 
   const popover=ensureFloraPopover();
@@ -1782,6 +1783,18 @@ function bindFloraScoreControl(scoreEl){
     event.preventDefault();
     event.stopPropagation();
     const key=scoreEl.dataset.floraStoryKey||"";
+    const popover=document.getElementById("flora-story-popover");
+
+    if(
+      floraPopoverOpen &&
+      popover &&
+      !popover.hidden &&
+      popover.dataset.storyKey===key
+    ){
+      closeFloraPopover();
+      return;
+    }
+
     const story=state.stories.find(item=>storyIdentity(item)===key) ||
       state.stories[state.index] || null;
     if(story)openFloraPopover(scoreEl,story);
@@ -1792,6 +1805,19 @@ function bindFloraScoreControl(scoreEl){
     if(event.key==="Enter" || event.key===" ")open(event);
   });
 }
+
+document.addEventListener("pointerdown",event=>{
+  if(!floraPopoverOpen)return;
+
+  const popover=document.getElementById("flora-story-popover");
+  const target=event.target;
+  if(
+    popover?.contains(target) ||
+    target?.closest?.(".flora-inline")
+  )return;
+
+  closeFloraPopover();
+},{capture:true,passive:true});
 
 function setSlideFloraScore(el,story){
   if(!el)return;
@@ -5178,7 +5204,10 @@ function descriptionPreviewHeight(description){
     lineHeight=fontSize*1.42;
   }
 
-  return Math.ceil(lineHeight*5);
+  const mobile=Boolean(
+    window.matchMedia?.("(max-width:700px), (pointer:coarse)")?.matches
+  );
+  return Math.ceil(lineHeight*(mobile?4:5));
 }
 
 function prepareDescriptionPreview(description){
@@ -6316,7 +6345,7 @@ function timer(durationMs=null){
     return;
   }
 
-  if(sourceViewerOpen){
+  if(sourceViewerOpen || uiFlowPauseActive){
     return;
   }
 
@@ -6344,8 +6373,8 @@ function timer(durationMs=null){
 
 function pauseFlowForMouseMovement(){
   /*
-    Hamburger menü bir izleme katmanıdır; açıkken haber akışını durdurmaz.
-    Menü içindeki fare hareketleri de otomatik akışı pause etmez.
+    Tercihler açıkken akış zaten UI duraklatma koordinatörü tarafından
+    tutulur; menü içindeki fare hareketleri ayrıca bir pause başlatmasın.
   */
   if(document.getElementById("menu-overlay")?.classList.contains("open")){
     return;
@@ -11358,7 +11387,7 @@ function renderFaqAccordion(target,text){
     const chevron=document.createElement("span");
     chevron.className="faq-accordion-chevron";
     chevron.setAttribute("aria-hidden","true");
-    chevron.textContent="▼";
+    chevron.textContent="▼︎";
 
     button.append(question,chevron);
 
@@ -11489,6 +11518,7 @@ function closeControlMenu(){
   panel?.setAttribute("inert","");
   button?.classList.remove("open");
   button?.setAttribute("aria-expanded","false");
+  queueUiFlowResumeCheck();
 }
 
 function openControlMenu(){
@@ -11496,6 +11526,7 @@ function openControlMenu(){
   closeMenu();
   closeStatsOverlay();
 
+  pauseFlowForUi();
   controlMenuOpen=true;
   const panel=document.getElementById("control-menu-panel");
   const button=document.getElementById("control-menu-button");
@@ -11521,6 +11552,7 @@ function closeStatsOverlay(){
   closeAboutDocumentViewer();
   overlay?.classList.remove("open");
   overlay?.setAttribute("aria-hidden","true");
+  queueUiFlowResumeCheck();
 }
 
 function publicStatsEscape(value){
@@ -11691,6 +11723,7 @@ async function loadPublicStats(range=publicStatsRange){
 }
 
 function openStatsOverlay(){
+  pauseFlowForUi();
   closeFloraPopover({resume:false});
   closeQuickPanels();
   closeMenu();
@@ -11712,12 +11745,14 @@ function closeKeywordFilterPanel(){
   const panel=document.getElementById("keyword-filter-panel");
   panel?.classList.remove("open");
   panel?.setAttribute("aria-hidden","true");
+  queueUiFlowResumeCheck();
 }
 
 function closeKeywordWatchPanel(){
   const panel=document.getElementById("keyword-watch-panel");
   panel?.classList.remove("open");
   panel?.setAttribute("aria-hidden","true");
+  queueUiFlowResumeCheck();
 }
 
 function closeQuickPanels(except=""){
@@ -11727,6 +11762,7 @@ function closeQuickPanels(except=""){
 }
 
 function openTimeRangePanel(){
+  pauseFlowForUi();
   closeMenu();
   closeStatsOverlay();
   closeQuickPanels("time");
@@ -11743,6 +11779,7 @@ function closeTimeRangePanel(){
   const panel=document.getElementById("time-range-panel");
   panel?.classList.remove("open");
   panel?.setAttribute("aria-hidden","true");
+  queueUiFlowResumeCheck();
 }
 
 function toggleTimeRangePanel(){
@@ -11758,6 +11795,7 @@ function toggleTimeRangePanel(){
 }
 
 function openKeywordFilterPanel(){
+  pauseFlowForUi();
   closeMenu();
   closeStatsOverlay();
   closeQuickPanels("filter");
@@ -11788,6 +11826,7 @@ function toggleKeywordFilterPanel(){
 }
 
 function openKeywordWatchPanel(){
+  pauseFlowForUi();
   closeMenu();
   closeStatsOverlay();
   closeQuickPanels("watch");
@@ -11817,36 +11856,8 @@ function toggleKeywordWatchPanel(){
   }
 }
 
-function ensureFlowRunsWhileHamburgerOpen(){
-  clearTimeout(mouseFlowResumeTimer);
-  mouseFlowResumeTimer=null;
-
-  if(mouseFlowPaused){
-    mouseFlowPaused=false;
-
-    if(!autoAdvancePaused && !adActive && !state.busy && state.stories.length){
-      const remaining=state.timerRemainingMs || Math.max(5,showDurationSeconds)*1000;
-      timer(remaining+MOUSE_FLOW_RESUME_BONUS_MS);
-    }
-    return;
-  }
-
-  /*
-    Timer başka bir UI etkileşimi tarafından temizlenmişse menüyü açmak onu
-    sonsuza kadar durmuş bırakmasın.
-  */
-  if(
-    !autoAdvancePaused &&
-    !adActive &&
-    !state.busy &&
-    state.stories.length &&
-    !state.timer
-  ){
-    timer(state.timerRemainingMs || Math.max(5,showDurationSeconds)*1000);
-  }
-}
-
 function openMenu(){
+  pauseFlowForUi();
   closeFloraPopover({resume:false});
   closeStatsOverlay();
   closeQuickPanels();
@@ -11854,7 +11865,6 @@ function openMenu(){
   const overlay=document.getElementById("menu-overlay");
   overlay.classList.add("open");
   overlay.setAttribute("aria-hidden","false");
-  ensureFlowRunsWhileHamburgerOpen();
   showFullscreenButton();
 }
 
@@ -11862,6 +11872,7 @@ function closeMenu(){
   const overlay=document.getElementById("menu-overlay");
   overlay.classList.remove("open");
   overlay.setAttribute("aria-hidden","true");
+  queueUiFlowResumeCheck();
 }
 
 document.getElementById("control-menu-button")?.addEventListener("pointerdown",e=>e.stopPropagation());
@@ -12075,6 +12086,70 @@ window.addEventListener("resize",()=>{
 },{passive:true});
 
 
+function currentFlowRemainingTime(){
+  if(state.timerDeadline){
+    return Math.max(250,state.timerDeadline-Date.now());
+  }
+  return state.timerRemainingMs || Math.max(5,showDurationSeconds)*1000;
+}
+
+function anyUiPauseSurfaceOpen(){
+  return Boolean(
+    floraPopoverOpen ||
+    document.getElementById("control-menu-panel")?.classList.contains("open") ||
+    document.getElementById("time-range-panel")?.classList.contains("open") ||
+    document.getElementById("keyword-filter-panel")?.classList.contains("open") ||
+    document.getElementById("keyword-watch-panel")?.classList.contains("open") ||
+    document.getElementById("stats-overlay")?.classList.contains("open") ||
+    document.getElementById("menu-overlay")?.classList.contains("open")
+  );
+}
+
+function pauseFlowForUi(){
+  if(uiFlowPauseActive || sourceViewerOpen)return;
+
+  uiFlowPauseActive=true;
+  uiFlowPauseRemainingMs=currentFlowRemainingTime();
+
+  clearTimeout(state.timer);
+  state.timer=null;
+  state.timerDeadline=0;
+  state.timerRemainingMs=uiFlowPauseRemainingMs;
+
+  clearTimeout(mouseFlowResumeTimer);
+  mouseFlowResumeTimer=null;
+  mouseFlowPaused=false;
+}
+
+function resumeFlowFromUiIfClear(){
+  if(
+    !uiFlowPauseActive ||
+    sourceViewerOpen ||
+    anyUiPauseSurfaceOpen()
+  )return;
+
+  const remaining=
+    uiFlowPauseRemainingMs ||
+    state.timerRemainingMs ||
+    Math.max(5,showDurationSeconds)*1000;
+
+  uiFlowPauseActive=false;
+  uiFlowPauseRemainingMs=0;
+
+  if(
+    !autoAdvancePaused &&
+    !adActive &&
+    !state.busy &&
+    state.stories.length
+  ){
+    timer(remaining);
+  }
+}
+
+function queueUiFlowResumeCheck(){
+  queueMicrotask(resumeFlowFromUiIfClear);
+}
+
 function sourceViewerProxyUrl(articleUrl){
   try{
     const u=new URL(SOURCE_VIEW_API);
@@ -12104,6 +12179,71 @@ function pauseFlowForSourceViewer(){
   clearTimeout(mouseFlowResumeTimer);
   mouseFlowResumeTimer=null;
   mouseFlowPaused=false;
+}
+
+function applyInternalViewerTweaks(frame){
+  if(
+    !frame ||
+    !sourceViewerDirectMode ||
+    !/\/flora\.html(?:[?#]|$)/i.test(sourceViewerArticleUrl)
+  )return;
+
+  try{
+    const doc=frame.contentDocument;
+    if(!doc)return;
+
+    if(!doc.getElementById("floew-embedded-overrides")){
+      const style=doc.createElement("style");
+      style.id="floew-embedded-overrides";
+      style.textContent=`
+        html,body{
+          -webkit-text-size-adjust:100% !important;
+          text-size-adjust:100% !important;
+          font-variant-emoji:text;
+        }
+      `;
+      (doc.head||doc.documentElement).appendChild(style);
+    }
+
+    const candidates=[
+      doc.querySelector(".flora-brand img"),
+      doc.getElementById("logo"),
+      doc.querySelector("img.site-logo"),
+      doc.querySelector("img.brand-logo"),
+      ...doc.querySelectorAll('header img[src*="logo" i]')
+    ].filter(Boolean);
+
+    const logo=candidates.find(el=>{
+      if(el.dataset?.floewEmbeddedSized==="1")return false;
+      const rect=el.getBoundingClientRect?.();
+      return rect && rect.width>=32 && rect.height>=12;
+    });
+
+    if(logo){
+      const brand=logo.closest?.(".flora-brand");
+      const target=brand||logo;
+      const rect=target.getBoundingClientRect?.();
+
+      if(rect?.width){
+        target.style.setProperty(
+          "width",
+          `${Math.max(16,Math.round(rect.width/2))}px`,
+          "important"
+        );
+        target.style.setProperty("max-width","50%","important");
+      }
+
+      if(brand){
+        logo.style.setProperty("width","100%","important");
+      }else{
+        logo.style.setProperty("height","auto","important");
+      }
+
+      logo.dataset.floewEmbeddedSized="1";
+    }
+  }catch(e){
+    /* Same-origin erişimi mümkün değilse sayfayı olduğu gibi bırak. */
+  }
 }
 
 function setSourceViewerFrame(articleUrl,{direct=false}={}){
@@ -12161,6 +12301,8 @@ function openSourceViewer(articleUrl,sourceName="",options={}){
   }
 
   sourceViewerOpen=true;
+  uiFlowPauseActive=false;
+  uiFlowPauseRemainingMs=0;
 
   closeFloraPopover({resume:false});
   closeStatsOverlay();
@@ -12269,7 +12411,9 @@ document.getElementById("source-viewer-overlay")?.addEventListener("pointerdown"
 
 document.getElementById("source-viewer-frame")?.addEventListener("load",()=>{
   const status=document.getElementById("source-viewer-status");
+  const frame=document.getElementById("source-viewer-frame");
   if(status)status.hidden=true;
+  applyInternalViewerTweaks(frame);
 });
 
 window.addEventListener("message",e=>{
@@ -12973,6 +13117,18 @@ async function finishTouchStoryDrag(){
   return true;
 }
 
+let suppressHeadlineActionClickUntil=0;
+
+document.addEventListener("click",event=>{
+  if(
+    performance.now()<suppressHeadlineActionClickUntil &&
+    event.target?.closest?.(".headline-actions")
+  ){
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+},{capture:true});
+
 window.addEventListener("pointerdown",e=>{
   if(e.button!==0)return;
 
@@ -13022,7 +13178,7 @@ window.addEventListener("pointerdown",e=>{
       window.matchMedia?.("(pointer: coarse)")?.matches &&
       e.pointerType!=="mouse"
     );
-});
+},{capture:true});
 
 /*
   Mobil doğrudan manipülasyon:
@@ -13084,7 +13240,7 @@ window.addEventListener("pointermove",e=>{
     e.preventDefault();
     updateTouchStoryDrag(dy,e);
   }
-},{passive:false});
+},{passive:false,capture:true});
 
 window.addEventListener("pointercancel",e=>{
   if(e.pointerId!==state.pointerId)return;
@@ -13101,7 +13257,7 @@ window.addEventListener("pointercancel",e=>{
   state.pointerId=null;
   state.swipeHandled=false;
   state.swipeTouch=false;
-});
+},{capture:true});
 
 window.addEventListener("pointerup",e=>{
   if(e.button!==0)return;
@@ -13124,6 +13280,7 @@ window.addEventListener("pointerup",e=>{
     state.touchDragActive &&
     e.pointerId===state.pointerId
   ){
+    suppressHeadlineActionClickUntil=performance.now()+450;
     finishTouchStoryDrag();
     state.pointerId=null;
     state.swipeHandled=false;
@@ -13152,6 +13309,7 @@ window.addEventListener("pointerup",e=>{
     state.swipeHandled &&
     e.pointerId===state.pointerId
   ){
+    suppressHeadlineActionClickUntil=performance.now()+450;
     state.pointerId=null;
     state.swipeHandled=false;
     state.swipeTouch=false;
@@ -13216,7 +13374,7 @@ window.addEventListener("pointerup",e=>{
   state.pointerId=null;
   state.swipeHandled=false;
   state.swipeTouch=false;
-});
+},{capture:true});
 
 window.addEventListener("dragstart",e=>e.preventDefault());
 
@@ -13231,6 +13389,72 @@ window.addEventListener(
   refreshAdsLayoutIfNeeded,
   {passive:true}
 );
+
+const FLOEW_TEXT_PRESENTATION_SYMBOLS=new Set([
+  "☰","⤢","⧉","⏲","⌖","ⓘ","⚙","↑","↓","−","▶","⏸",
+  "↗","→","▲","▼","⤴","⚑","⎋","☀","☾","◐","☁","☂","❄","⚡","◌"
+]);
+
+function forceTextPresentationSymbols(root=document){
+  const scope=root?.querySelectorAll ? root : document;
+  const nodes=[
+    ...(scope===document ? [] : [scope]),
+    ...scope.querySelectorAll(
+      'button,a,[role="button"],#weather-icon,.faq-accordion-chevron,.flora-story-popover-mark'
+    )
+  ];
+
+  for(const el of nodes){
+    if(!(el instanceof Element) || el.closest?.(".fx-flag"))continue;
+
+    const walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);
+    const texts=[];
+    while(walker.nextNode())texts.push(walker.currentNode);
+
+    let hasSymbol=false;
+    for(const textNode of texts){
+      const chars=Array.from(textNode.nodeValue||"");
+      let changed=false;
+      const next=[];
+
+      for(let i=0;i<chars.length;i++){
+        const char=chars[i];
+        next.push(char);
+        if(
+          FLOEW_TEXT_PRESENTATION_SYMBOLS.has(char) &&
+          chars[i+1]!=="︎"
+        ){
+          next.push("︎");
+          changed=true;
+          hasSymbol=true;
+        }else if(FLOEW_TEXT_PRESENTATION_SYMBOLS.has(char)){
+          hasSymbol=true;
+        }
+      }
+
+      if(changed)textNode.nodeValue=next.join("");
+    }
+
+    if(hasSymbol && el.childElementCount===0){
+      el.classList.add("floew-text-symbol");
+    }
+  }
+}
+
+forceTextPresentationSymbols();
+
+if(window.MutationObserver){
+  let symbolRefreshQueued=false;
+  const symbolObserver=new MutationObserver(()=>{
+    if(symbolRefreshQueued)return;
+    symbolRefreshQueued=true;
+    queueMicrotask(()=>{
+      symbolRefreshQueued=false;
+      forceTextPresentationSymbols();
+    });
+  });
+  symbolObserver.observe(document.body,{subtree:true,childList:true,characterData:true});
+}
 
 updateClock();
 setInterval(updateClock,1000);

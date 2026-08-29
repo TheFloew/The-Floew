@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
 <link rel="manifest" href="site.webmanifest">
 
-<link rel="stylesheet" href="css/styles.css?v=31.78.2">
+<link rel="stylesheet" href="css/styles.css?v=82b5ec9001af">
 
 <style id="boot-black-style">
   html,body{background:#000}
@@ -137,7 +137,7 @@
           <div id="source-viewer-url"></div>
         </div>
         <div id="source-viewer-actions">
-          <a id="source-viewer-external" href="#" target="_blank" rel="noopener noreferrer" aria-label="Kaynağı yeni sekmede aç" title="Kaynağı yeni sekmede aç">↗</a>
+          <a id="source-viewer-external" href="#" target="_blank" rel="noopener noreferrer" aria-label="Kaynağı yeni sekmede aç" title="Kaynağı yeni sekmede aç">↗︎</a>
           <button id="source-viewer-close" type="button" aria-label="Kaynak penceresini kapat" title="Kapat">×</button>
         </div>
       </header>
@@ -146,7 +146,7 @@
         <iframe
           id="source-viewer-frame"
           title="Haber kaynağı"
-          sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+          sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
           referrerpolicy="no-referrer"
           loading="eager"
         ></iframe>
@@ -297,7 +297,7 @@
             <small>Bir haberin ekranda kalacağı süre</small>
           </div>
           <div class="duration-control" role="group" aria-label="Haber süresi">
-            <button id="duration-minus" type="button" aria-label="Süreyi azalt">−</button>
+            <button id="duration-minus" type="button" aria-label="Süreyi azalt">−︎</button>
             <span id="duration-value">10 sn</span>
             <button id="duration-plus" type="button" aria-label="Süreyi artır">+</button>
             <button id="duration-play" class="duration-auto-button" type="button" aria-label="Otomatik kaydırmayı devam ettir" title="Otomatik kaydırmayı devam ettir">▶︎</button>
@@ -351,7 +351,7 @@
             <small>Alt ve üst piyasa bantlarının yüksekliği</small>
           </div>
           <div class="duration-control ticker-size-control" role="group" aria-label="Borsa bandı boyutu">
-            <button id="stock-ticker-size-minus" type="button" aria-label="Borsa bandını küçült">−</button>
+            <button id="stock-ticker-size-minus" type="button" aria-label="Borsa bandını küçült">−︎</button>
             <span id="stock-ticker-size-value">%100</span>
             <button id="stock-ticker-size-plus" type="button" aria-label="Borsa bandını büyüt">+</button>
           </div>
@@ -542,7 +542,7 @@
 </script>
 
 <script src="js/config.js?h=beda7fe1ea23"></script>
-<script src="js/app.js?v=48a5053ca71b" onerror="
+<script src="js/app.js?v=31d7d5625f60" onerror="
   var loader=document.getElementById('loading-screen');
   if(loader)loader.remove();
   var status=document.getElementById('status');

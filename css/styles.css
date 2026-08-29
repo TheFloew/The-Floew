@@ -5871,3 +5871,124 @@ body.market-ticker-visible .headline{
 
 
 /* V31.78.2 — Reklam belgesinde ## kalın başlık ve *italik* metin desteği. */
+
+
+/* =====================================================================
+   V31.79.0 — mobile density / touch continuity / unified UI pausing
+   ===================================================================== */
+
+/* iOS/Safari orientation changes must not auto-inflate type. */
+html,body{
+  -webkit-text-size-adjust:100% !important;
+  text-size-adjust:100% !important;
+  font-variant-emoji:text;
+}
+
+/* Dynamic symbol-only controls are tagged by app.js. Flags remain emoji. */
+.floew-text-symbol,
+#weather-icon,
+.faq-accordion-chevron,
+.flora-story-popover-mark{
+  font-family:
+    "Apple Symbols",
+    "Segoe UI Symbol",
+    "Noto Sans Symbols 2",
+    "Noto Sans Symbols",
+    "Arial Unicode MS",
+    sans-serif !important;
+  font-variant-emoji:text !important;
+}
+.fx-flag,
+.fx-flag *{
+  font-variant-emoji:emoji !important;
+}
+
+/* hidden must beat the viewer's display:grid rule. */
+#source-viewer-external[hidden]{
+  display:none !important;
+}
+
+@media(max-width:700px), (pointer:coarse){
+  /* Haber metni telefonda görüntüyü daha az kaplasın. */
+  .headline h1{
+    font-size:clamp(23px,6vmin,30px) !important;
+    line-height:1.06 !important;
+  }
+  .description{
+    font-size:11px !important;
+    line-height:1.36 !important;
+  }
+  .time{
+    margin-top:11px !important;
+    font-size:11px !important;
+  }
+
+  /* Alt aksiyonlar swipe yüzeyinin bir parçası olarak davranır. */
+  .headline-actions,
+  .headline-actions > *{
+    touch-action:none !important;
+  }
+}
+
+/* Mobil kaynak / iç sayfa görüntüleyici: ince başlık, içerik, altta kontroller. */
+@media(max-width:700px){
+  #source-viewer-panel{
+    display:flex;
+    flex-direction:column;
+  }
+
+  #source-viewer-header{
+    display:contents;
+  }
+
+  #source-viewer-heading{
+    order:1;
+    flex:0 0 auto;
+    box-sizing:border-box;
+    width:100%;
+    min-height:38px;
+    padding:8px 14px 7px;
+    border-bottom:1px solid rgba(255,255,255,.07);
+    background:rgba(18,18,18,.98);
+  }
+
+  #source-viewer-title{
+    font-size:15px !important;
+    line-height:1.08 !important;
+  }
+
+  #source-viewer-url{
+    margin-top:3px !important;
+    font-size:8px !important;
+    line-height:1.1 !important;
+  }
+
+  #source-viewer-stage{
+    order:2;
+    flex:1 1 auto;
+    min-height:0;
+  }
+
+  #source-viewer-actions{
+    order:3;
+    flex:0 0 auto;
+    box-sizing:border-box;
+    width:100%;
+    min-height:54px;
+    display:flex;
+    justify-content:flex-end;
+    align-items:center;
+    gap:9px;
+    padding:7px max(12px,env(safe-area-inset-right)) max(7px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));
+    border-top:1px solid rgba(255,255,255,.08);
+    background:rgba(18,18,18,.98);
+  }
+
+  #source-viewer-external,
+  #source-viewer-close{
+    width:40px !important;
+    height:40px !important;
+    flex-basis:40px !important;
+    line-height:40px !important;
+  }
+}
