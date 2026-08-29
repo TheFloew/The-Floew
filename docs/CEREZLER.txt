@@ -150,4 +150,4 @@ Güncel sürüm Flöw üzerinde yayımlanır ve son değişiklik tarihi bu sayfa
 
 Çerezler, gizlilik veya kişisel verilerinizle ilgili sorularınız için bizimle iletişime geçebilirsiniz:
 
-**E-posta:** `[KVKK / İLETİŞİM E-POSTASI]`
+**E-posta:** `bilgi@flöw.tr`
