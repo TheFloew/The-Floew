@@ -132,7 +132,7 @@ haklarına sahip olabilirsiniz.
 
 Kişisel verilerinizle ilgili soru veya talepleriniz için veri sorumlusuna ulaşabilirsiniz:
 
-**E-posta:** `[KVKK / İLETİŞİM E-POSTASI]`
+**E-posta:** `bilgi@flöw.tr`
 
 Başvurular yürürlükteki kişisel verilerin korunması mevzuatı çerçevesinde değerlendirilir.
 
