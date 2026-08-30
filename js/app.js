@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.79.4";
+window.__floewAppVersion="31.79.2";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -674,57 +674,16 @@ let currentAd=null;
 let adEntryDirection=1;
 
 /*
-  Reklamlar haber history dizisini bozmadan iki komşu haber arasındaki gerçek
-  navigation kayıtları olarak tutulur. Bu, daha önce çalışan replayRecord
-  modelinin güncel sürüme uyarlanmış halidir. Reklam tamamlanmadan geçilse de
-  A -> reklam -> B sınırı history'de kalır ve geri/ileri gezinmede aynı reklam
-  yeniden açılır.
+  Haber history dizisini bozmadan reklamı gerçek bir gezinme durağı gibi
+  davranacak şekilde araya yerleştiriyoruz.
+
+  adHistoryStops, kullanıcının akışta gördüğü reklam duraklarını ileri/geri geçmişiyle birlikte korur.
+  Böylece:
+    haber A -> reklam -> haber B
+  dizisinde B'den geri gidildiğinde reklama, reklamdan da A'ya dönülebilir.
 */
-const adHistoryByAfterPos=new Map();
-let pendingAdRecordAfterCurrent=null;
-let activeAdRecord=null;
+let adHistoryStops=[];
 let historicalAdContext=null;
-
-function clearAdNavigationHistory(){
-  adHistoryByAfterPos.clear();
-  pendingAdRecordAfterCurrent=null;
-  activeAdRecord=null;
-  historicalAdContext=null;
-}
-
-function adRecordAfterCurrent(){
-  const pending=pendingAdRecordAfterCurrent;
-  if(
-    pending &&
-    pending.beforeHistoryPos===state.historyPos &&
-    pending.beforeStoryIndex===state.index &&
-    pending.afterHistoryPos==null
-  ){
-    return pending;
-  }
-
-  const record=adHistoryByAfterPos.get(state.historyPos+1);
-  if(
-    record &&
-    record.beforeHistoryPos===state.historyPos &&
-    record.afterHistoryPos===state.historyPos+1
-  ){
-    return record;
-  }
-  return null;
-}
-
-function adRecordBeforeCurrent(){
-  const record=adHistoryByAfterPos.get(state.historyPos);
-  if(
-    record &&
-    record.afterHistoryPos===state.historyPos &&
-    record.beforeHistoryPos===state.historyPos-1
-  ){
-    return record;
-  }
-  return null;
-}
 
 /*
   V31.26.1 — mobil reklam direct-drag durumu.
@@ -741,6 +700,22 @@ let touchAdDragLastY=0;
 let touchAdDragLastT=0;
 let touchAdDragVelocityY=0;
 let touchAdDragCommitted=null;
+
+/*
+  V31.79.2 — haber -> reklam doğrudan parmak takibi.
+  Yeni reklam veya history içindeki reklam, haber slaytı gibi parmakla birlikte
+  ekrana girer; pointerup sonrası yalnız kalan mesafe tamamlanır.
+*/
+let touchAdEntryActive=false;
+let touchAdEntryDirection=0;
+let touchAdEntryDy=0;
+let touchAdEntryLastY=0;
+let touchAdEntryLastT=0;
+let touchAdEntryVelocityY=0;
+let touchAdEntryAd=null;
+let touchAdEntryHistoryStop=null;
+let touchAdEntryBeforeIndex=-1;
+let touchAdEntryBeforeHistoryPos=-1;
 
 const state={
   stories:[],
@@ -2635,7 +2610,7 @@ async function switchFeedMode(nextMode){
     state.index=0;
     state.history=[];
     state.historyPos=0;
-    clearAdNavigationHistory();
+    adHistoryStops=[];
     historicalAdContext=null;
     clearTimeout(state.timer);
     setStoryStageVisible(false);
@@ -2698,7 +2673,7 @@ async function switchFeedMode(nextMode){
   state.index=idx;
   state.history=[idx];
   state.historyPos=0;
-  clearAdNavigationHistory();
+  adHistoryStops=[];
   historicalAdContext=null;
   state.active=1-state.active;
 
@@ -2904,7 +2879,7 @@ function applyFilters(options={}){
       state.index=0;
       state.history=[];
       state.historyPos=0;
-      clearAdNavigationHistory();
+      adHistoryStops=[];
       historicalAdContext=null;
       clearTimeout(state.timer);
       state.timer=null;
@@ -3005,7 +2980,7 @@ function applyFilters(options={}){
   }else{
     state.history=[idx];
     state.historyPos=0;
-    clearAdNavigationHistory();
+    adHistoryStops=[];
     historicalAdContext=null;
   }
 
@@ -6007,21 +5982,6 @@ function refreshAdsLayoutIfNeeded(){
 let upcomingAd=null;
 let upcomingAdPreloadPromise=null;
 let upcomingAdPreloadKey="";
-let upcomingAdPreloadReady=false;
-let upcomingAdPreloadFailed=false;
-let upcomingAdPreloadProbe=null;
-/*
-  Görünür #ad-image / #ad-video elemanlarını preload için kullanmıyoruz.
-  Android WebView ve bazı mobil Chromium sürümleri gizli gerçek video elemanını
-  hazırlarken native "play" posterini bir frame boyayabiliyor. Preload tamamen
-  ayrık bir probe üzerinde yapılır; gerçek reklam DOM'u yalnız gösterim anında
-  devreye girer.
-*/
-let stagedAdAssetKey="";
-
-function adAssetKey(ad){
-  return ad?.src ? `${ad.type||"image"}|${ad.src}` : "";
-}
 
 function chooseRandomAdCandidate(){
   if(!adCatalog.length)return null;
@@ -6048,107 +6008,51 @@ function chooseRandomAd(){
   return markAdChosen(chooseRandomAdCandidate());
 }
 
-function disposeUpcomingAdProbe(){
-  const probe=upcomingAdPreloadProbe;
-  upcomingAdPreloadProbe=null;
-  if(!probe)return;
-
-  try{
-    probe.onload=null;
-    probe.onerror=null;
-    probe.onloadeddata=null;
-    probe.oncanplay=null;
-    probe.oncanplaythrough=null;
-    if(probe instanceof HTMLVideoElement){
-      probe.pause();
-      probe.removeAttribute("src");
-      probe.load();
-    }
-  }catch(e){}
-}
-
 function clearUpcomingAdPreload(){
   upcomingAd=null;
   upcomingAdPreloadPromise=null;
   upcomingAdPreloadKey="";
-  upcomingAdPreloadReady=false;
-  upcomingAdPreloadFailed=false;
-  stagedAdAssetKey="";
-  disposeUpcomingAdProbe();
 }
 
 function preloadAdAsset(ad){
   if(!ad?.src)return Promise.resolve(false);
 
-  const key=adAssetKey(ad);
+  const key=`${ad.type||"image"}|${ad.src}`;
   if(upcomingAdPreloadPromise && upcomingAdPreloadKey===key){
     return upcomingAdPreloadPromise;
   }
 
-  disposeUpcomingAdProbe();
   upcomingAdPreloadKey=key;
-  upcomingAdPreloadReady=false;
-  upcomingAdPreloadFailed=false;
-
   upcomingAdPreloadPromise=new Promise(resolve=>{
     let settled=false;
     const done=value=>{
       if(settled)return;
       settled=true;
       clearTimeout(timeout);
-      const ok=Boolean(value);
-      if(upcomingAdPreloadKey===key){
-        upcomingAdPreloadReady=ok;
-        upcomingAdPreloadFailed=!ok;
-      }
-      resolve(ok);
+      resolve(Boolean(value));
     };
 
-    const timeout=setTimeout(()=>done(false),6500);
+    const timeout=setTimeout(()=>done(false),5000);
 
     if(ad.type==="video"){
-      const probe=document.createElement("video");
-      upcomingAdPreloadProbe=probe;
-      probe.muted=true;
-      probe.defaultMuted=true;
-      probe.volume=0;
-      probe.autoplay=false;
-      probe.loop=false;
-      probe.playsInline=true;
-      probe.preload="auto";
-      probe.setAttribute("muted","");
-      probe.setAttribute("playsinline","");
-      probe.setAttribute("webkit-playsinline","");
-      probe.onloadeddata=()=>done(probe.readyState>=2);
-      probe.oncanplay=()=>done(true);
-      probe.onerror=()=>done(false);
-      probe.src=ad.src;
-      try{probe.load()}catch(e){done(false)}
+      const video=document.createElement("video");
+      video.muted=true;
+      video.defaultMuted=true;
+      video.preload="auto";
+      video.playsInline=true;
+      video.onloadeddata=()=>done(true);
+      video.oncanplay=()=>done(true);
+      video.onerror=()=>done(false);
+      video.src=ad.src;
+      try{video.load()}catch(e){done(false)}
       return;
     }
 
     const image=new Image();
-    upcomingAdPreloadProbe=image;
     image.decoding="async";
-    const finishImage=async()=>{
-      try{if(image.decode)await image.decode()}catch(e){}
-      done(image.naturalWidth>0);
-    };
-    image.onload=finishImage;
+    image.onload=()=>done(true);
     image.onerror=()=>done(false);
     image.src=ad.src;
-  }).then(ok=>{
-    /* Başarısız bir aday sonraki bütün swipe'ları tekrar tekrar bekletmesin. */
-    if(!ok && upcomingAdPreloadKey===key && upcomingAd===ad){
-      upcomingAd=null;
-      upcomingAdPreloadPromise=null;
-      upcomingAdPreloadKey="";
-      upcomingAdPreloadReady=false;
-      upcomingAdPreloadFailed=false;
-      disposeUpcomingAdProbe();
-      setTimeout(()=>maybeScheduleUpcomingAdPreload(),120);
-    }
-    return ok;
   });
 
   return upcomingAdPreloadPromise;
@@ -6158,13 +6062,13 @@ async function prepareUpcomingAd(){
   if(
     adActive ||
     upcomingAd ||
-    newsShownSinceAd<Math.max(1,ADS_INTERVAL_NEWS-4)
+    newsShownSinceAd<Math.max(1,ADS_INTERVAL_NEWS-2)
   ){
     return upcomingAd;
   }
 
   if(!adCatalog.length){
-    try{await loadAdsCatalog(getAdsLayout())}catch(e){}
+    await loadAdsCatalog(getAdsLayout());
   }
 
   if(adActive || upcomingAd || !adCatalog.length)return upcomingAd;
@@ -6181,28 +6085,21 @@ function maybeScheduleUpcomingAdPreload(){
   if(
     adActive ||
     upcomingAd ||
-    newsShownSinceAd<Math.max(1,ADS_INTERVAL_NEWS-4)
+    newsShownSinceAd<Math.max(1,ADS_INTERVAL_NEWS-2)
   ) return;
 
   const run=()=>{ void prepareUpcomingAd(); };
-  const coarse=Boolean(window.matchMedia?.("(pointer: coarse)")?.matches);
-
-  /* Mobilde sürekli swipe requestIdleCallback'i uzun süre erteleyebilir. */
-  if(coarse){
-    setTimeout(run,40);
-  }else if("requestIdleCallback" in window){
-    requestIdleCallback(run,{timeout:500});
+  if("requestIdleCallback" in window){
+    requestIdleCallback(run,{timeout:900});
   }else{
-    setTimeout(run,60);
+    setTimeout(run,80);
   }
 }
 
 function takeUpcomingAd(){
-  if(!upcomingAd || !upcomingAdPreloadReady)return null;
   const ad=upcomingAd;
-  markAdChosen(ad);
   clearUpcomingAdPreload();
-  return ad;
+  return markAdChosen(ad);
 }
 
 const FLOW_TRANSITION_CLASSES=[
@@ -6301,28 +6198,14 @@ function requestAdSkip(dir=1){
     Reklam tamamen görünür olmadan ve kısa grace süresi dolmadan skip
     isteğini kaydetmiyoruz.
   */
-  const touchSkip=Boolean(state.swipeTouch || touchAdDragActive);
-  const requestedDirection=dir<0?-1:1;
-
-  /*
-    Mobil touch ile reklam giriş animasyonu sürerken yapılan ikinci hızlı
-    swipe'ı kaybetme. Trackpad/mouse-wheel momentum koruması aynen kalır;
-    yalnız gerçek touch isteğini reklam tamamen girdikten sonra mevcut
-    waitForImageAd / waitForVideoAd akışı tüketmek üzere kuyruğa alırız.
-  */
-  if(!adHasEntered){
-    if(touchSkip){
-      adSkipRequestedDirection=requestedDirection;
-      return true;
-    }
+  if(
+    !adHasEntered ||
+    performance.now()<adSkipEnabledAt
+  ){
     return false;
   }
 
-  if(!touchSkip && performance.now()<adSkipEnabledAt){
-    return false;
-  }
-
-  adSkipRequestedDirection=requestedDirection;
+  adSkipRequestedDirection=dir<0?-1:1;
 
   if(adPlaybackFinish){
     adPlaybackFinish(adSkipRequestedDirection);
@@ -6331,53 +6214,36 @@ function requestAdSkip(dir=1){
   return true;
 }
 
-function resetAdMedia(options={}){
-  const preserveKey=adAssetKey(options.preserveAd);
-  const preserveStaged=Boolean(
-    preserveKey &&
-    stagedAdAssetKey===preserveKey
-  );
-
+function resetAdMedia(){
   if(adImage){
     adImage.hidden=true;
-    adImage.onload=null;
-    adImage.onerror=null;
-    if(!preserveStaged || !preserveKey.startsWith("image|")){
-      adImage.removeAttribute("src");
-    }
+    adImage.removeAttribute("src");
   }
 
   if(adVideo){
+    /*
+      Reklam player'ı haber videosu playback guard'larından bağımsızdır.
+      Özellikle loop/restart state'i her reklam çıkışında sıfırlanır.
+    */
     adVideo.__floewShouldPlay=false;
+
     try{adVideo.pause()}catch(e){}
 
     adVideo.autoplay=false;
     adVideo.loop=false;
     adVideo.controls=false;
     adVideo.hidden=true;
-    adVideo.onloadeddata=null;
-    adVideo.oncanplay=null;
-    adVideo.onended=null;
-    adVideo.onerror=null;
-    adVideo.onabort=null;
 
     adVideo.removeAttribute("autoplay");
     adVideo.removeAttribute("loop");
+    adVideo.removeAttribute("src");
 
-    if(!preserveStaged || !preserveKey.startsWith("video|")){
-      adVideo.removeAttribute("src");
-      try{adVideo.load()}catch(e){}
-    }
-  }
-
-  if(!preserveStaged){
-    stagedAdAssetKey="";
+    adVideo.load();
   }
 }
 
 function showAdOverlay(){
   document.body.classList.add("ad-mode");
-  adOverlay?.classList.remove("ad-priming");
 
   if(adOverlay){
     adOverlay.hidden=false;
@@ -6389,7 +6255,6 @@ function showAdOverlay(){
 
 function hideAdOverlay(){
   document.body.classList.remove("ad-mode");
-  adOverlay?.classList.remove("ad-priming");
 
   if(touchAdDragActive || touchAdDragCommitted){
     /* Reklam parmak ekrandayken doğal olarak biterse aynı pointerup ikinci
@@ -6407,7 +6272,7 @@ function hideAdOverlay(){
   resetAdMedia();
 }
 
-function waitForImageAd(src){
+function waitForImageAd(src,options={}){
   return new Promise(resolve=>{
     if(!adImage){
       resolve({
@@ -6419,6 +6284,7 @@ function waitForImageAd(src){
     }
 
     let finished=false;
+    let started=false;
     let timerId=null;
     let loadTimer=null;
 
@@ -6451,36 +6317,61 @@ function waitForImageAd(src){
 
     adPlaybackFinish=skip;
 
-    const start=async()=>{
-      if(finished)return;
-      const entered=await transitionAdIn(adEntryDirection);
-      if(!entered){finish(false,1,false);return;}
-      if(adSkipRequestedDirection){
-        finish(true,adSkipRequestedDirection,true);
+    adImage.onload=async()=>{
+      if(started||finished)return;
+      started=true;
+
+      const entered=await transitionAdIn(
+        adEntryDirection
+      );
+
+      if(!entered){
+        finish(false,1,false);
         return;
       }
-      timerId=setTimeout(()=>finish(true,1,false),AD_IMAGE_MS);
+
+      if(adSkipRequestedDirection){
+        finish(
+          true,
+          adSkipRequestedDirection,
+          true
+        );
+        return;
+      }
+
+      timerId=setTimeout(
+        ()=>finish(true,1,false),
+        AD_IMAGE_MS
+      );
     };
 
-    adImage.onload=start;
     adImage.onerror=()=>{
       console.warn("Ad image could not load:",src);
       finish(false,1,false);
     };
 
     adImage.hidden=false;
-    const alreadyReady=
-      adImage.getAttribute("src")===src &&
-      adImage.complete &&
-      adImage.naturalWidth>0;
-    if(alreadyReady){
-      queueMicrotask(start);
-    }else{
+
+    const alreadyPrepared=Boolean(options.prepared);
+    if(adImage.getAttribute("src")!==src){
       adImage.src=src;
     }
 
+    /* Önceden gesture preview için decode edilmiş bir görselde load olayı
+       handler bağlanmadan önce bitmiş olabilir. Aynı yükü yeniden başlatmadan
+       hazır durumu doğrudan işle. */
+    if(
+      alreadyPrepared &&
+      adImage.complete &&
+      adImage.naturalWidth>0
+    ){
+      queueMicrotask(()=>{
+        if(!finished)adImage.onload?.();
+      });
+    }
+
     loadTimer=setTimeout(()=>{
-      if(!finished && !(adImage.complete&&adImage.naturalWidth>0)){
+      if(!finished && !adImage.complete){
         console.warn("Ad image load timeout:",src);
         finish(false,1,false);
       }
@@ -6575,40 +6466,7 @@ async function attemptAdVideoAutoplay(video,attempts=5){
   return !video.paused;
 }
 
-function primeAdOverlayForVideo(){
-  if(!adOverlay)return;
-  adOverlay.hidden=false;
-  adOverlay.setAttribute("aria-hidden","true");
-  adOverlay.classList.add("ad-priming");
-}
-
-async function waitForAdVideoFirstFrame(video,timeoutMs=260){
-  if(!video)return false;
-  if(!video.paused && video.readyState>=2 && video.currentTime>0)return true;
-
-  return new Promise(resolve=>{
-    let done=false;
-    const finish=value=>{
-      if(done)return;
-      done=true;
-      clearTimeout(timerId);
-      video.removeEventListener("playing",onReady);
-      video.removeEventListener("timeupdate",onReady);
-      resolve(Boolean(value));
-    };
-    const onReady=()=>finish(true);
-    const timerId=setTimeout(()=>finish(!video.paused && video.readyState>=2),timeoutMs);
-    video.addEventListener("playing",onReady,{once:true});
-    video.addEventListener("timeupdate",onReady,{once:true});
-    requestAnimationFrame(()=>{
-      requestAnimationFrame(()=>{
-        if(!video.paused && video.readyState>=2)finish(true);
-      });
-    });
-  });
-}
-
-function waitForVideoAd(src){
+function waitForVideoAd(src,options={}){
   return new Promise(resolve=>{
     if(!adVideo){
       resolve({
@@ -6673,24 +6531,6 @@ function waitForVideoAd(src){
       if(started||finished)return;
       started=true;
 
-      /*
-        Android/WebView video görünür olur olmaz native büyük play posterini
-        boyayabiliyor. Reklam overlay'i opaklığı 0 olan priming modunda render
-        edilir; muted autoplay ve ilk frame başlamadan geçiş görünür yapılmaz.
-      */
-      try{
-        if(Number.isFinite(adVideo.duration) && adVideo.duration>0){
-          adVideo.currentTime=0;
-        }
-      }catch(e){}
-
-      primeAdOverlayForVideo();
-      let played=await attemptAdVideoAutoplay(adVideo,3);
-      if(played){
-        await waitForAdVideoFirstFrame(adVideo,260);
-      }
-      if(finished)return;
-
       const entered=await transitionAdIn(
         adEntryDirection
       );
@@ -6709,13 +6549,15 @@ function waitForVideoAd(src){
         return;
       }
 
-      if(!played){
-        played=await attemptAdVideoAutoplay(adVideo,3);
-      }
+      const played=await attemptAdVideoAutoplay(adVideo,5);
       if(finished)return;
 
       if(!played){
-        /* İlk frame hazırdır; native play chrome CSS ile gizlidir. */
+        /*
+          Mobil autoplay yine de engellenirse reklamı bitmiş sayıp bir sonraki
+          habere sıçrama. İlk kareyi kısa süre reklam olarak tut; kullanıcı
+          swipe ederse normal reklam-history davranışı çalışmaya devam eder.
+        */
         console.warn("Flöw ads: video autoplay engellendi; sabit-kare fallback.");
         try{adVideo.pause()}catch(e){}
         adVideo.controls=false;
@@ -6744,14 +6586,16 @@ function waitForVideoAd(src){
     };
     adVideo.onabort=()=>finish(adHasEntered,1,false);
 
-    const alreadyReady=
-      adVideo.getAttribute("src")===src &&
-      adVideo.readyState>=2;
-    if(alreadyReady){
-      queueMicrotask(start);
-    }else{
+    const alreadyPrepared=Boolean(options.prepared);
+    if(adVideo.getAttribute("src")!==src){
       adVideo.src=src;
       adVideo.load();
+    }else if(!alreadyPrepared){
+      adVideo.load();
+    }
+
+    if(alreadyPrepared && adVideo.readyState>=2){
+      queueMicrotask(start);
     }
 
     loadTimer=setTimeout(()=>{
@@ -6764,43 +6608,43 @@ function waitForVideoAd(src){
 }
 
 async function playAdBreak(options={}){
-  if(adActive)return false;
-  if(!adCatalog.length && !options.record && !options.ad)return false;
+  if(adActive||!adCatalog.length)return false;
 
-  const replayRecord=options.record||null;
   const ad=
-    replayRecord?.ad ||
     options.ad ||
     takeUpcomingAd() ||
     chooseRandomAd();
 
   if(!ad)return false;
 
-  const record=
-    replayRecord || {
-      ad,
-      beforeHistoryPos:state.historyPos,
-      beforeStoryIndex:state.index,
-      beforeIndex:state.index,
-      beforeKey:storyIdentity(state.stories[state.index]),
-      afterHistoryPos:null,
-      afterStoryIndex:null,
-      afterIndex:null,
-      afterKey:""
-    };
-
-  activeAdRecord=record;
   currentAd=ad;
-  adEntryDirection=options.entryDir<0?-1:1;
-  historicalAdContext=options.historyContext || (replayRecord ? record : null);
+  adEntryDirection=
+    options.entryDir<0
+      ? -1
+      : 1;
+
+  historicalAdContext=
+    options.historyContext ||
+    null;
+
+  const preEntered=Boolean(options.preEntered);
+  const mediaPrepared=Boolean(options.mediaPrepared);
 
   adActive=true;
-  adHasEntered=false;
+  adHasEntered=preEntered;
   adSkipRequestedDirection=0;
-  adSkipEnabledAt=0;
+  adSkipEnabledAt=preEntered
+    ? performance.now()+AD_SKIP_GRACE_MS
+    : 0;
   adPlaybackFinish=null;
   clearTimeout(state.timer);
-  resetAdMedia();
+
+  if(!mediaPrepared){
+    resetAdMedia();
+  }else{
+    showAdOverlay();
+    clearFlowTransitionClasses(adOverlay);
+  }
 
   let result={
     shown:false,
@@ -6811,8 +6655,8 @@ async function playAdBreak(options={}){
   try{
     result=
       ad.type==="video"
-        ? await waitForVideoAd(ad.src)
-        : await waitForImageAd(ad.src);
+        ? await waitForVideoAd(ad.src,{prepared:mediaPrepared})
+        : await waitForImageAd(ad.src,{prepared:mediaPrepared});
   }catch(err){
     console.warn("Ad playback:",err);
     result={
@@ -6830,16 +6674,17 @@ async function playAdBreak(options={}){
     adSkipEnabledAt=0;
     adPlaybackFinish=null;
     currentAd=null;
-    activeAdRecord=null;
     historicalAdContext=null;
     slides[state.active].className="slide active";
     return false;
   }
 
   /*
-    Geçmiş reklamına geri dönmek yeni bir 10-haber sayacı başlangıcı değildir.
+    İlk normal reklam gösteriminde sayaç sıfırlanır.
+    History içinden aynı reklam tekrar ziyaret edildiğinde yeni bir reklam
+    gösterimi gibi sayaç sıfırlamayız.
   */
-  if(!replayRecord && !options.historyContext){
+  if(!options.historyContext){
     newsShownSinceAd=0;
   }
 
@@ -6847,8 +6692,7 @@ async function playAdBreak(options={}){
     shown:true,
     direction:result.direction<0?-1:1,
     skipped:Boolean(result.skipped),
-    ad,
-    record
+    ad
   };
 }
 
@@ -6862,56 +6706,23 @@ function adBreakDue(){
 async function tryPlayDueAd(){
   if(!adBreakDue())return false;
 
-  const mobileAdFlow=Boolean(
-    window.matchMedia?.("(pointer: coarse)")?.matches ||
-    window.matchMedia?.("(max-width: 700px)")?.matches
-  );
-
-  /* Masaüstündeki mevcut reklam davranışına dokunma. */
-  if(!mobileAdFlow){
-    if(!adCatalog.length){
-      await loadAdsCatalog(getAdsLayout());
-    }
-    if(!adCatalog.length)return false;
-
-    const ad=upcomingAd || chooseRandomAdCandidate();
-    if(!ad)return false;
-    markAdChosen(ad);
-    clearUpcomingAdPreload();
-    return playAdBreak({ad});
-  }
-
   /*
-    Mobilde kullanıcının swipe'ı reklam ağını beklemez. Katalog veya medya henüz
-    hazır değilse bu hareket normal habere gider; reklam hazır olduğunda ilk
-    sonraki ileri harekette gösterilir. Böylece başarısız bir dikey reklam her
-    haberde yeniden 5-15 saniyelik "reklam denemesi" yaratmaz.
+    Önceki sürümde katalog ilk istekte boş kalırsa reklam arası sessizce
+    atlanıyordu ve bir sonraki katalog yenilemesine kadar bekliyordu.
+    Artık 10. haberden sonra katalog boşsa o anda yeniden yüklemeyi deniyoruz.
   */
   if(!adCatalog.length){
-    void loadAdsCatalog(getAdsLayout())
-      .then(()=>maybeScheduleUpcomingAdPreload())
-      .catch(()=>{});
+    await loadAdsCatalog();
+  }
+
+  if(!adCatalog.length){
+    console.warn(
+      "Flöw ads: reklam sırası geldi ancak katalog hâlâ boş."
+    );
     return false;
   }
 
-  if(!upcomingAd){
-    void prepareUpcomingAd();
-    return false;
-  }
-
-  if(upcomingAdPreloadFailed){
-    clearUpcomingAdPreload();
-    void prepareUpcomingAd();
-    return false;
-  }
-
-  if(!upcomingAdPreloadReady){
-    return false;
-  }
-
-  const ad=takeUpcomingAd();
-  if(!ad)return false;
-  return playAdBreak({ad});
+  return playAdBreak();
 }
 
 let mouseFlowPaused=false;
@@ -7539,117 +7350,129 @@ function scheduleNextStoryPreload(delay=70){
 }
 
 
-async function finalizeNewAdForward(record){
-  if(!record)return false;
+function findAdHistoryStopAtBefore(){
+  if(adActive || !adHistoryStops.length)return null;
 
-  const beforePos=state.historyPos;
-  const beforeIndex=state.index;
-
-  if(state.historyPos < state.history.length-1){
-    const target=state.history[state.historyPos+1];
-    await transitionFromAdTo(target,true,1);
-    state.historyPos++;
-  }else{
-    const next=chooseForward();
-    if(next<0)return false;
-
-    await transitionFromAdTo(next,false,1);
-    state.history.push(next);
-    state.historyPos=state.history.length-1;
+  for(let i=adHistoryStops.length-1;i>=0;i--){
+    const stop=adHistoryStops[i];
+    if(
+      state.historyPos===stop.beforeHistoryPos &&
+      state.index===stop.beforeIndex
+    ){
+      return stop;
+    }
   }
 
-  record.beforeHistoryPos=beforePos;
-  record.beforeStoryIndex=beforeIndex;
-  record.beforeIndex=beforeIndex;
-  record.beforeKey=storyIdentity(state.stories[beforeIndex]);
-  record.afterHistoryPos=state.historyPos;
-  record.afterStoryIndex=state.index;
-  record.afterIndex=state.index;
-  record.afterKey=storyIdentity(state.stories[state.index]);
-
-  adHistoryByAfterPos.set(record.afterHistoryPos,record);
-  if(pendingAdRecordAfterCurrent===record){
-    pendingAdRecordAfterCurrent=null;
-  }
-  activeAdRecord=null;
-  historicalAdContext=null;
-  return true;
+  return null;
 }
 
-/*
-  Kaydedilmiş reklam story history içindeki iki komşu haberin arasında gerçek
-  bir navigation öğesi gibi davranır. Reklam yarıda geçilmiş olsa da aynı
-  record tekrar oynatılır; yeni reklam seçilmez.
-*/
-async function navigateRecordedAd(record,entryDir){
-  if(!record)return false;
+function findAdHistoryStopAtAfter(){
+  if(adActive || !adHistoryStops.length)return null;
 
-  historicalAdContext=record;
+  for(let i=adHistoryStops.length-1;i>=0;i--){
+    const stop=adHistoryStops[i];
+    if(
+      state.historyPos===stop.afterHistoryPos &&
+      state.index===stop.afterIndex
+    ){
+      return stop;
+    }
+  }
+
+  return null;
+}
+
+function isAtSkippedAdBefore(){
+  return Boolean(findAdHistoryStopAtBefore());
+}
+
+function isAtSkippedAdAfter(){
+  return Boolean(findAdHistoryStopAtAfter());
+}
+
+function recordAdHistoryStop(stop){
+  if(!stop?.ad)return;
+
+  const beforeKey=String(stop.beforeKey||"");
+  const afterKey=String(stop.afterKey||"");
+
+  adHistoryStops=adHistoryStops.filter(existing=>!(
+    existing.beforeKey===beforeKey &&
+    existing.afterKey===afterKey &&
+    existing.beforeHistoryPos===stop.beforeHistoryPos &&
+    existing.afterHistoryPos===stop.afterHistoryPos
+  ));
+
+  adHistoryStops.push(stop);
+
+  /* Uzun oturumlarda sınırsız büyümesin; 24 reklam durağı 240+ haberlik
+     bir geri gezinme penceresini korur. */
+  if(adHistoryStops.length>24){
+    adHistoryStops.splice(0,adHistoryStops.length-24);
+  }
+}
+
+async function enterSkippedAdHistory(entryDir,stop=null,playOptions={}){
+  const historyStop=stop || (
+    entryDir<0
+      ? findAdHistoryStopAtAfter()
+      : findAdHistoryStopAtBefore()
+  );
+
+  if(!historyStop)return false;
+
+  const context={
+    ...historyStop,
+    entryDir:entryDir<0?-1:1
+  };
+
+  await loadAdsCatalog(getAdsLayout());
+
+  const layoutAd=
+    adCatalog.find(
+      item=>
+        item.name &&
+        item.name===context.ad?.name
+    ) ||
+    context.ad;
+
   const result=await playAdBreak({
-    record,
-    entryDir,
-    historyContext:record
+    ad:layoutAd,
+    entryDir:context.entryDir,
+    historyContext:context,
+    ...playOptions
   });
 
   if(!result?.shown){
-    adHistoryByAfterPos.delete(record.afterHistoryPos);
-    activeAdRecord=null;
     historicalAdContext=null;
     return false;
   }
 
-  const exitDir=result.skipped
-    ? result.direction
-    : (entryDir<0?-1:1);
-
-  /*
-    Reklam ilk kez görülüp geriye dönüldüyse henüz bir "sonraki haber" yoktur.
-    Bu pending kayıt A -> Reklam sınırını korur. A'dan tekrar ileri gidildiğinde
-    aynı reklam açılır; ancak reklamdan ileri geçildiği anda B seçilip kayıt
-    tam bir A -> Reklam -> B history durağına dönüştürülür.
-  */
-  if(record.afterHistoryPos==null){
-    if(exitDir<0){
-      await transitionAdBackToCurrent(-1);
-      pendingAdRecordAfterCurrent=record;
-      activeAdRecord=null;
-      historicalAdContext=null;
-      return true;
-    }
-
-    const ok=await finalizeNewAdForward(record);
-    if(!ok){
-      pendingAdRecordAfterCurrent=record;
-      await transitionAdBackToCurrent(-1);
-    }
-    activeAdRecord=null;
-    historicalAdContext=null;
-    return true;
-  }
-
-  if(entryDir>0 && exitDir<0){
-    await transitionAdBackToCurrent(-1);
-    activeAdRecord=null;
-    historicalAdContext=null;
-    return true;
-  }
-
-  if(entryDir<0 && exitDir>0){
-    await transitionAdBackToCurrent(1);
-    activeAdRecord=null;
-    historicalAdContext=null;
-    return true;
-  }
+  /* Kullanıcı history reklamında yön seçerse o yön kazanır. Reklam doğal
+     biterse history'de hangi yönde ilerleniyorsa o yönde devam eder. */
+  const exitDir=
+    result.skipped
+      ? result.direction
+      : context.entryDir;
 
   if(exitDir<0){
-    await transitionFromAdTo(record.beforeStoryIndex,true,-1);
-    state.historyPos=record.beforeHistoryPos;
+    await transitionFromAdTo(
+      context.beforeIndex,
+      true,
+      -1
+    );
+
+    state.historyPos=context.beforeHistoryPos;
   }else{
-    await transitionFromAdTo(record.afterStoryIndex,true,1);
-    state.historyPos=record.afterHistoryPos;
+    await transitionFromAdTo(
+      context.afterIndex,
+      true,
+      1
+    );
+
+    state.historyPos=context.afterHistoryPos;
   }
 
-  activeAdRecord=null;
   historicalAdContext=null;
   return true;
 }
@@ -7667,6 +7490,9 @@ async function move(dir,options={}){
     filterReturnStoryKey="";
   }
 
+  /*
+    Reklam ekrandayken normal gezinme reklamı atlama isteğine dönüşür.
+  */
   if(adActive && !options.fromAd){
     requestAdSkip(dir);
     return;
@@ -7674,19 +7500,19 @@ async function move(dir,options={}){
 
   if(state.busy||state.stories.length<2)return;
 
-  if(!options.skipRecordedAd && !options.skipHistoricalAd){
-    if(dir<0){
-      const recorded=adRecordBeforeCurrent();
-      if(recorded){
-        const handled=await navigateRecordedAd(recorded,-1);
-        if(handled)return;
-      }
-    }else if(dir>0 && state.historyPos<state.history.length-1){
-      const recorded=adRecordAfterCurrent();
-      if(recorded){
-        const handled=await navigateRecordedAd(recorded,1);
-        if(handled)return;
-      }
+  /*
+    Kullanıcının bitmeden geçtiği reklam history'de gerçek bir ara duraktır.
+    Haber B'den geri -> reklam; haber A'dan ileri -> aynı reklam.
+  */
+  if(!options.skipHistoricalAd){
+    if(dir<0 && isAtSkippedAdAfter()){
+      await enterSkippedAdHistory(-1);
+      return;
+    }
+
+    if(dir>0 && isAtSkippedAdBefore()){
+      await enterSkippedAdHistory(1);
+      return;
     }
   }
 
@@ -7695,31 +7521,65 @@ async function move(dir,options={}){
     !options.skipAd &&
     adBreakDue()
   ){
+    const beforeIndex=state.index;
+    const beforeHistoryPos=state.historyPos;
+
     const adResult=await tryPlayDueAd();
 
     if(adResult?.shown){
       if(adResult.direction<0){
         await transitionAdBackToCurrent(-1);
-        pendingAdRecordAfterCurrent=adResult.record||activeAdRecord||null;
-        activeAdRecord=null;
       }else{
-        await finalizeNewAdForward(adResult.record);
+        await move(1,{
+          skipAd:true,
+          skipHistoricalAd:true,
+          fromAd:true
+        });
+
+        /*
+          Reklam kullanıcı tarafından atlanmış olsun ya da doğal olarak sonuna
+          kadar oynasın, gerçek bir history durağıdır. Böylece reklamdan sonraki
+          haberde geri gidildiğinde aynı reklam yeniden ziyaret edilebilir.
+        */
+        recordAdHistoryStop({
+          ad:adResult.ad,
+          beforeIndex,
+          beforeKey:storyIdentity(state.stories[beforeIndex]),
+          beforeHistoryPos,
+          afterIndex:state.index,
+          afterKey:storyIdentity(state.stories[state.index]),
+          afterHistoryPos:state.historyPos
+        });
       }
+
       return;
     }
   }
 
+  /*
+    GERİ:
+    Daha önce gerçekten gösterilmiş habere dön.
+  */
   if(dir<0){
     if(state.historyPos<=0)return;
 
-    const target=state.history[state.historyPos-1];
+    const target=
+      state.history[state.historyPos-1];
+
     await transitionTo(target,true,dir);
+
     state.historyPos--;
+
     return;
   }
 
+  /*
+    İLERİ:
+    Eğer geri gelmişsek history'deki sonraki habere dön.
+  */
   if(state.historyPos < state.history.length-1){
-    const target=state.history[state.historyPos+1];
+    const target=
+      state.history[state.historyPos+1];
 
     if(options.fromAd){
       await transitionFromAdTo(target,true,dir);
@@ -7728,10 +7588,12 @@ async function move(dir,options={}){
     }
 
     state.historyPos++;
+
     return;
   }
 
   const next=chooseForward();
+
   if(next<0)return;
 
   if(options.fromAd){
@@ -8658,7 +8520,7 @@ async function performNewsLoad(){
       state.index=0;
       state.history=[0];
       state.historyPos=0;
-      clearAdNavigationHistory();
+      adHistoryStops=[];
       historicalAdContext=null;
       preloadImage(list[0].image).catch(()=>{});
       fill(slides[0],list[0],{prepareMedia:false});
@@ -8799,91 +8661,52 @@ async function performNewsLoad(){
     state.history=remappedHistory;
     state.historyPos=remappedHistoryPos;
 
-    if(pendingAdRecordAfterCurrent){
-      const record=pendingAdRecordAfterCurrent;
-      const beforeIndex=record.beforeKey
-        ? indexByKey.get(record.beforeKey)
-        : undefined;
+    if(adHistoryStops.length){
+      const remappedStops=[];
 
-      if(Number.isInteger(beforeIndex)){
-        let beforeHistoryPos=-1;
-        let bestDistance=Infinity;
-        for(let pos=0;pos<state.history.length;pos++){
-          if(state.history[pos]!==beforeIndex)continue;
-          const distance=Math.abs(pos-(record.beforeHistoryPos??pos));
-          if(distance<bestDistance){
-            bestDistance=distance;
-            beforeHistoryPos=pos;
-          }
-        }
-
-        if(beforeHistoryPos>=0){
-          pendingAdRecordAfterCurrent={
-            ...record,
-            beforeStoryIndex:beforeIndex,
-            beforeIndex,
-            beforeHistoryPos,
-            afterHistoryPos:null,
-            afterStoryIndex:null,
-            afterIndex:null,
-            afterKey:""
-          };
-        }else{
-          pendingAdRecordAfterCurrent=null;
-        }
-      }else{
-        pendingAdRecordAfterCurrent=null;
-      }
-    }
-
-    if(adHistoryByAfterPos.size){
-      const oldRecords=[...adHistoryByAfterPos.values()];
-      adHistoryByAfterPos.clear();
-
-      for(const record of oldRecords){
-        const beforeIndex=record.beforeKey
-          ? indexByKey.get(record.beforeKey)
+      for(const stop of adHistoryStops){
+        const beforeIndex=stop.beforeKey
+          ? indexByKey.get(stop.beforeKey)
           : undefined;
-        const afterIndex=record.afterKey
-          ? indexByKey.get(record.afterKey)
+        const afterIndex=stop.afterKey
+          ? indexByKey.get(stop.afterKey)
           : undefined;
 
         if(!Number.isInteger(beforeIndex) || !Number.isInteger(afterIndex)){
           continue;
         }
 
-        const candidates=[];
-        for(let pos=0;pos<state.history.length-1;pos++){
+        let beforeHistoryPos=-1;
+        let afterHistoryPos=-1;
+
+        for(let pos=0;pos<state.history.length;pos++){
+          const historyIndex=state.history[pos];
+          if(beforeHistoryPos<0 && historyIndex===beforeIndex){
+            beforeHistoryPos=pos;
+          }
           if(
-            state.history[pos]===beforeIndex &&
-            state.history[pos+1]===afterIndex
+            beforeHistoryPos>=0 &&
+            pos>beforeHistoryPos &&
+            historyIndex===afterIndex
           ){
-            candidates.push(pos);
+            afterHistoryPos=pos;
+            break;
           }
         }
 
-        if(!candidates.length)continue;
+        if(beforeHistoryPos<0 || afterHistoryPos<0)continue;
 
-        const beforeHistoryPos=candidates.reduce((best,pos)=>
-          Math.abs(pos-(record.beforeHistoryPos??pos)) <
-          Math.abs(best-(record.beforeHistoryPos??best)) ? pos : best
-        ,candidates[0]);
-        const afterHistoryPos=beforeHistoryPos+1;
-
-        const remapped={
-          ...record,
-          beforeStoryIndex:beforeIndex,
+        remappedStops.push({
+          ...stop,
           beforeIndex,
-          afterStoryIndex:afterIndex,
           afterIndex,
           beforeHistoryPos,
           afterHistoryPos
-        };
-
-        adHistoryByAfterPos.set(afterHistoryPos,remapped);
+        });
       }
 
-      if(!adHistoryByAfterPos.size){
+      adHistoryStops=remappedStops;
+      if(!adHistoryStops.length){
         historicalAdContext=null;
       }
     }
@@ -13264,6 +13087,358 @@ window.addEventListener("keydown",e=>{
 });
 
 
+
+function resetTouchAdEntryState(){
+  touchAdEntryActive=false;
+  touchAdEntryDirection=0;
+  touchAdEntryDy=0;
+  touchAdEntryLastY=0;
+  touchAdEntryLastT=0;
+  touchAdEntryVelocityY=0;
+  touchAdEntryAd=null;
+  touchAdEntryHistoryStop=null;
+  touchAdEntryBeforeIndex=-1;
+  touchAdEntryBeforeHistoryPos=-1;
+}
+
+function clearTouchAdEntryVisuals(options={}){
+  const current=slides[state.active];
+
+  if(current){
+    current.classList.remove("touch-dragging");
+    current.style.removeProperty("transform");
+    current.style.removeProperty("transition");
+    current.style.removeProperty("z-index");
+  }
+
+  if(adOverlay){
+    adOverlay.classList.remove("touch-dragging");
+    adOverlay.style.removeProperty("transform");
+    adOverlay.style.removeProperty("transition");
+  }
+
+  if(options.keepAdVisible!==true){
+    document.body.classList.remove("ad-mode");
+    if(adOverlay){
+      adOverlay.hidden=true;
+      adOverlay.setAttribute("aria-hidden","true");
+    }
+    resetAdMedia();
+  }
+}
+
+function adEntryTargetForDirection(direction){
+  const historyStop=
+    direction<0
+      ? findAdHistoryStopAtAfter()
+      : findAdHistoryStopAtBefore();
+
+  if(historyStop?.ad){
+    return {
+      ad:historyStop.ad,
+      historyStop
+    };
+  }
+
+  if(direction>0 && adBreakDue()){
+    const ad=upcomingAd || chooseRandomAdCandidate();
+
+    if(!ad){
+      /* Katalog henüz hazır değilse gesture'ı bloklamadan yüklemeyi başlat.
+         Parmak hareketi sürerken katalog yetişirse sonraki pointermove'da
+         reklam direct-drag hedefi haline gelir. */
+      if(!adCatalog.length){
+        void loadAdsCatalog(getAdsLayout())
+          .then(()=>prepareUpcomingAd())
+          .catch(()=>{});
+      }
+      return null;
+    }
+
+    return {
+      ad,
+      historyStop:null
+    };
+  }
+
+  return null;
+}
+
+function prepareTouchAdEntryMedia(ad){
+  if(!ad?.src)return false;
+
+  resetAdMedia();
+
+  if(ad.type==="video"){
+    if(!adVideo)return false;
+
+    adVideo.__floewShouldPlay=false;
+    adVideo.muted=true;
+    adVideo.defaultMuted=true;
+    adVideo.volume=0;
+    adVideo.autoplay=false;
+    adVideo.loop=false;
+    adVideo.playsInline=true;
+    adVideo.controls=false;
+    adVideo.preload="auto";
+    adVideo.hidden=false;
+    adVideo.removeAttribute("autoplay");
+    adVideo.removeAttribute("loop");
+    adVideo.setAttribute("muted","");
+    adVideo.setAttribute("playsinline","");
+    adVideo.setAttribute("webkit-playsinline","");
+    adVideo.setAttribute("preload","auto");
+
+    if(adVideo.getAttribute("src")!==ad.src){
+      adVideo.src=ad.src;
+      try{adVideo.load()}catch(e){}
+    }
+
+    try{adVideo.pause()}catch(e){}
+    return true;
+  }
+
+  if(!adImage)return false;
+  adImage.hidden=false;
+  if(adImage.getAttribute("src")!==ad.src){
+    adImage.src=ad.src;
+  }
+  return true;
+}
+
+function prepareTouchAdEntryTarget(direction){
+  if(touchAdEntryActive){
+    return Boolean(touchAdEntryAd);
+  }
+
+  const target=adEntryTargetForDirection(direction);
+  if(!target?.ad)return false;
+
+  const current=slides[state.active];
+  const height=Math.max(1,window.innerHeight||document.documentElement.clientHeight||1);
+
+  touchAdEntryActive=true;
+  touchAdEntryDirection=direction<0?-1:1;
+  touchAdEntryAd=target.ad;
+  touchAdEntryHistoryStop=target.historyStop||null;
+  touchAdEntryBeforeIndex=state.index;
+  touchAdEntryBeforeHistoryPos=state.historyPos;
+
+  clearTimeout(state.timer);
+  state.timer=null;
+
+  prepareTouchAdEntryMedia(target.ad);
+  showAdOverlay();
+  clearFlowTransitionClasses(adOverlay);
+
+  current.classList.add("touch-dragging");
+  current.style.zIndex="1189";
+  adOverlay?.classList.add("touch-dragging");
+
+  /* İlk frame'de reklam komşu slayt gibi ekranın hemen dışında bekler. */
+  if(adOverlay){
+    adOverlay.style.transition="none";
+    adOverlay.style.transform=`translate3d(0,${touchAdEntryDirection>0?height:-height}px,0)`;
+  }
+
+  return true;
+}
+
+function updateTouchAdEntryDrag(dy,e){
+  const initialDirection=dy<0 ? 1 : -1;
+  if(!prepareTouchAdEntryTarget(initialDirection))return false;
+
+  const current=slides[state.active];
+  if(!current || !adOverlay)return false;
+
+  const direction=touchAdEntryDirection;
+  const height=Math.max(1,window.innerHeight||document.documentElement.clientHeight||1);
+  const now=performance.now();
+
+  if(touchAdEntryLastT>0){
+    const dt=Math.max(1,now-touchAdEntryLastT);
+    touchAdEntryVelocityY=(e.clientY-touchAdEntryLastY)/dt;
+  }
+  touchAdEntryLastY=e.clientY;
+  touchAdEntryLastT=now;
+
+  /* Yön tersine çevrilirse yeni bir hedefe sıçramak yerine aynı reklamı
+     doğal biçimde başlangıç konumuna geri götür. */
+  const clamped=direction>0
+    ? Math.max(-height,Math.min(0,dy))
+    : Math.min(height,Math.max(0,dy));
+
+  touchAdEntryDy=clamped;
+  const adOffset=direction>0 ? height : -height;
+
+  current.style.transition="none";
+  adOverlay.style.transition="none";
+  current.style.transform=`translate3d(0,${clamped}px,0)`;
+  adOverlay.style.transform=`translate3d(0,${adOffset+clamped}px,0)`;
+  return true;
+}
+
+function animateTouchAdEntryPair(current,currentY,adY,duration=260){
+  return new Promise(resolve=>{
+    if(!current || !adOverlay){resolve();return;}
+
+    let done=false;
+    const finish=()=>{
+      if(done)return;
+      done=true;
+      current.removeEventListener("transitionend",onEnd);
+      clearTimeout(timeout);
+      resolve();
+    };
+    const onEnd=e=>{
+      if(e.target===current && e.propertyName==="transform")finish();
+    };
+    const timeout=setTimeout(finish,duration+120);
+
+    current.addEventListener("transitionend",onEnd);
+    const transition=`transform ${duration}ms cubic-bezier(.22,.61,.36,1)`;
+    current.style.transition=transition;
+    adOverlay.style.transition=transition;
+
+    requestAnimationFrame(()=>{
+      current.style.transform=`translate3d(0,${currentY}px,0)`;
+      adOverlay.style.transform=`translate3d(0,${adY}px,0)`;
+    });
+  });
+}
+
+async function cancelTouchAdEntryDrag(){
+  if(!touchAdEntryActive)return;
+
+  const current=slides[state.active];
+  const height=Math.max(1,window.innerHeight||document.documentElement.clientHeight||1);
+  const direction=touchAdEntryDirection || 1;
+
+  state.busy=true;
+  await animateTouchAdEntryPair(
+    current,
+    0,
+    direction>0 ? height : -height,
+    220
+  );
+
+  clearTouchAdEntryVisuals();
+  resetTouchAdEntryState();
+  state.busy=false;
+  timer();
+}
+
+async function runCommittedTouchAdEntry(context){
+  if(!context?.ad)return false;
+
+  if(context.historyStop){
+    return enterSkippedAdHistory(
+      context.direction,
+      context.historyStop,
+      {
+        preEntered:true,
+        mediaPrepared:true
+      }
+    );
+  }
+
+  const beforeIndex=context.beforeIndex;
+  const beforeHistoryPos=context.beforeHistoryPos;
+
+  if(upcomingAd===context.ad){
+    clearUpcomingAdPreload();
+  }
+  markAdChosen(context.ad);
+
+  const adResult=await playAdBreak({
+    ad:context.ad,
+    entryDir:context.direction,
+    preEntered:true,
+    mediaPrepared:true
+  });
+
+  if(!adResult?.shown)return false;
+
+  if(adResult.direction<0){
+    await transitionAdBackToCurrent(-1);
+    return true;
+  }
+
+  await move(1,{
+    skipAd:true,
+    skipHistoricalAd:true,
+    fromAd:true
+  });
+
+  recordAdHistoryStop({
+    ad:adResult.ad,
+    beforeIndex,
+    beforeKey:storyIdentity(state.stories[beforeIndex]),
+    beforeHistoryPos,
+    afterIndex:state.index,
+    afterKey:storyIdentity(state.stories[state.index]),
+    afterHistoryPos:state.historyPos
+  });
+
+  return true;
+}
+
+async function finishTouchAdEntryDrag(){
+  if(!touchAdEntryActive)return false;
+
+  const height=Math.max(1,window.innerHeight||document.documentElement.clientHeight||1);
+  const distance=Math.abs(touchAdEntryDy);
+  const velocity=Math.abs(touchAdEntryVelocityY);
+  const threshold=Math.max(TOUCH_DRAG_MIN_COMMIT_PX,height*TOUCH_DRAG_COMMIT_RATIO);
+  const direction=touchAdEntryDirection;
+  const strongGesture=
+    distance>=threshold ||
+    (distance>=24 && velocity>=TOUCH_DRAG_VELOCITY_PX_MS);
+
+  if(!strongGesture || !touchAdEntryAd){
+    await cancelTouchAdEntryDrag();
+    return true;
+  }
+
+  const current=slides[state.active];
+  const context={
+    ad:touchAdEntryAd,
+    historyStop:touchAdEntryHistoryStop,
+    beforeIndex:touchAdEntryBeforeIndex,
+    beforeHistoryPos:touchAdEntryBeforeHistoryPos,
+    direction:direction<0?-1:1
+  };
+
+  state.busy=true;
+  clearTimeout(state.timer);
+  state.timer=null;
+
+  await animateTouchAdEntryPair(
+    current,
+    direction>0 ? -height : height,
+    0,
+    260
+  );
+
+  /* Parmakla yapılan bölüm burada biter. Reklam ekranda tam konumunda kalır;
+     playAdBreak preEntered sayesinde ikinci bir giriş animasyonu başlatmaz. */
+  current.classList.remove("touch-dragging");
+  current.style.removeProperty("transform");
+  current.style.removeProperty("transition");
+  current.style.removeProperty("z-index");
+  stopSlideMedia(current);
+
+  adOverlay?.classList.remove("touch-dragging");
+  adOverlay?.style.removeProperty("transform");
+  adOverlay?.style.removeProperty("transition");
+
+  resetTouchAdEntryState();
+  state.busy=false;
+
+  await runCommittedTouchAdEntry(context);
+  return true;
+}
+
 function resetTouchAdDragState(options={}){
   touchAdDragActive=false;
   touchAdDragDirection=0;
@@ -13466,7 +13641,7 @@ async function finishTouchAdDrag(){
   const canSkip=
     adActive &&
     adHasEntered &&
-    (state.swipeTouch || performance.now()>=adSkipEnabledAt);
+    performance.now()>=adSkipEnabledAt;
 
   if(!strongGesture || !canSkip || touchAdDragTargetIndex<0){
     await cancelTouchAdDrag();
@@ -13586,14 +13761,14 @@ function clearTouchDragVisuals(){
 
 function touchDragTargetForDirection(direction){
   if(direction<0){
-    if(Boolean(adRecordBeforeCurrent()) || state.historyPos<=0)return null;
+    if(isAtSkippedAdAfter() || state.historyPos<=0)return null;
     const index=state.history[state.historyPos-1];
     return Number.isInteger(index)
       ? {index,fromHistory:true}
       : null;
   }
 
-  if(Boolean(adRecordAfterCurrent()) || (adBreakDue() && Boolean(upcomingAd && upcomingAdPreloadReady)))return null;
+  if(isAtSkippedAdBefore() || adBreakDue())return null;
 
   if(state.historyPos<state.history.length-1){
     const index=state.history[state.historyPos+1];
@@ -13837,8 +14012,8 @@ async function finishTouchStoryDrag(){
     const shouldDeferToNormalNavigation=
       strongGesture &&
       (
-        (direction>0 && (Boolean(adRecordAfterCurrent()) || (adBreakDue() && Boolean(upcomingAd && upcomingAdPreloadReady)))) ||
-        (direction<0 && Boolean(adRecordBeforeCurrent()))
+        (direction>0 && (isAtSkippedAdBefore() || adBreakDue())) ||
+        (direction<0 && isAtSkippedAdAfter())
       );
 
     if(shouldDeferToNormalNavigation){
@@ -14083,7 +14258,7 @@ async function commitTouchFeedDrag(direction){
   state.index=targetIndex;
   state.history=[targetIndex];
   state.historyPos=0;
-  clearAdNavigationHistory();
+  adHistoryStops=[];
   historicalAdContext=null;
 
   renderFeedMode();
@@ -14181,6 +14356,7 @@ window.addEventListener("pointerdown",e=>{
   state.pointerId=e.pointerId;
   resetTouchDragState();
   resetTouchFeedDragState();
+  resetTouchAdEntryState();
   if(!touchAdDragCommitted){
     resetTouchAdDragState();
   }
@@ -14230,31 +14406,25 @@ window.addEventListener("pointermove",e=>{
     return;
   }
 
-  /* Reklam bir sonraki gerçek duraksa mobil swipe'ı önce direnç/cancel
-     animasyonuna sokma. Hareket eşiği geçildiği anda aynı gesture reklam
-     geçişini başlatır; pointerup bu gesture'ı ikinci kez işlemez. */
+  /* Reklam bir sonraki gerçek duraksa reklamı da normal haber gibi parmakla
+     birlikte taşı. Yeni reklam ve history reklamı aynı direct-drag yolunu
+     kullanır; programatik giriş animasyonu pointerup sonrasına bırakılmaz. */
   if(
     !state.touchDragActive &&
     !state.swipeHandled &&
-    absY>=TOUCH_DRAG_START_PX &&
-    absY>=absX
+    (
+      touchAdEntryActive ||
+      (absY>=TOUCH_DRAG_START_PX && absY>=absX)
+    )
   ){
-    const direction=dy<0 ? 1 : -1;
-    const recordedAdNext=
-      direction>0
-        ? Boolean(adRecordAfterCurrent())
-        : Boolean(adRecordBeforeCurrent());
-    const freshAdReady=
-      direction>0 &&
-      adBreakDue() &&
-      Boolean(upcomingAd && upcomingAdPreloadReady);
+    const direction=touchAdEntryActive
+      ? touchAdEntryDirection
+      : (dy<0 ? 1 : -1);
+    const adIsNext=touchAdEntryActive || Boolean(adEntryTargetForDirection(direction));
 
-    if(recordedAdNext || freshAdReady){
+    if(adIsNext){
       e.preventDefault();
-      state.swipeHandled=true;
-      clearTouchDragVisuals();
-      resetTouchDragState();
-      void move(direction,{origin:"touch_ad_entry"});
+      updateTouchAdEntryDrag(dy,e);
       return;
     }
   }
@@ -14286,12 +14456,15 @@ window.addEventListener("pointercancel",e=>{
 
   if(touchFeedDragActive){
     cancelTouchFeedDrag();
+  }else if(touchAdEntryActive){
+    cancelTouchAdEntryDrag();
   }else if(touchAdDragActive){
     cancelTouchAdDrag();
   }else if(state.touchDragActive){
     cancelTouchStoryDrag();
   }else{
     resetTouchFeedDragState();
+    resetTouchAdEntryState();
     resetTouchDragState();
     resetTouchAdDragState();
   }
@@ -14303,6 +14476,18 @@ window.addEventListener("pointercancel",e=>{
 
 window.addEventListener("pointerup",e=>{
   if(e.button!==0)return;
+
+  /* Haber -> reklam geçişi de pointerup'a kadar doğrudan manipülasyondur. */
+  if(
+    touchAdEntryActive &&
+    e.pointerId===state.pointerId
+  ){
+    finishTouchAdEntryDrag();
+    state.pointerId=null;
+    state.swipeHandled=false;
+    state.swipeTouch=false;
+    return;
+  }
 
   /* Yatay akış sekmeleri de dikey haberler gibi parmağı doğrudan takip eder. */
   if(

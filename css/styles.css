@@ -1103,35 +1103,6 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 #ad-overlay[hidden]{
   display:none;
 }
-
-/*
-  Mobil Chromium/WebView video reklamı hazırlanırken native büyük play
-  katmanını bir frame boyamasın. Priming modu görünmezdir; reklamın gerçek
-  geçişi video ilk karesi hazır olduktan sonra başlar.
-*/
-#ad-overlay.ad-priming{
-  opacity:0 !important;
-  pointer-events:none !important;
-  animation:none !important;
-  transition:none !important;
-  transform:none !important;
-}
-
-#ad-video{
-  pointer-events:none;
-  -webkit-appearance:none;
-}
-#ad-video::-webkit-media-controls,
-#ad-video::-webkit-media-controls-enclosure,
-#ad-video::-webkit-media-controls-panel,
-#ad-video::-webkit-media-controls-overlay-play-button,
-#ad-video::-webkit-media-controls-start-playback-button,
-#ad-video::-webkit-media-controls-play-button{
-  display:none !important;
-  opacity:0 !important;
-  -webkit-appearance:none !important;
-}
-
 .ad-media{
   width:100%;
   height:100%;
