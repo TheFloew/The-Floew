@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.79.3";
+window.__floewAppVersion="31.79.4";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -6302,14 +6302,27 @@ function requestAdSkip(dir=1){
     isteğini kaydetmiyoruz.
   */
   const touchSkip=Boolean(state.swipeTouch || touchAdDragActive);
-  if(
-    !adHasEntered ||
-    (!touchSkip && performance.now()<adSkipEnabledAt)
-  ){
+  const requestedDirection=dir<0?-1:1;
+
+  /*
+    Mobil touch ile reklam giriş animasyonu sürerken yapılan ikinci hızlı
+    swipe'ı kaybetme. Trackpad/mouse-wheel momentum koruması aynen kalır;
+    yalnız gerçek touch isteğini reklam tamamen girdikten sonra mevcut
+    waitForImageAd / waitForVideoAd akışı tüketmek üzere kuyruğa alırız.
+  */
+  if(!adHasEntered){
+    if(touchSkip){
+      adSkipRequestedDirection=requestedDirection;
+      return true;
+    }
     return false;
   }
 
-  adSkipRequestedDirection=dir<0?-1:1;
+  if(!touchSkip && performance.now()<adSkipEnabledAt){
+    return false;
+  }
+
+  adSkipRequestedDirection=requestedDirection;
 
   if(adPlaybackFinish){
     adPlaybackFinish(adSkipRequestedDirection);
