@@ -24,8 +24,8 @@
 html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#000;color:#fff}
 body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 #wall{position:fixed;inset:0;overflow:hidden;background:#000}
-.slide{position:absolute;inset:0;overflow:hidden;background:#000;transform:translateY(100%);will-change:transform}
-.slide.active{transform:translateY(0)}
+.slide{position:absolute;inset:0;overflow:hidden;background:#000;transform:translate3d(0,100%,0);will-change:transform;backface-visibility:hidden}
+.slide.active{transform:translate3d(0,0,0)}
 .slide-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#111;pointer-events:none;user-select:none;-webkit-user-drag:none}
 .shade{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,0) 35%,rgba(0,0,0,.10) 55%,rgba(0,0,0,.88) 100%);pointer-events:none}
 
@@ -237,6 +237,7 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
   text-align:right;
   text-shadow:0 1px 4px rgba(0,0,0,.68),0 2px 9px rgba(0,0,0,.42);
   pointer-events:none;
+  contain:layout style;
 }
 
 .source-line{
@@ -322,18 +323,18 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 .exit-up{animation:exitUp .7s cubic-bezier(.22,.61,.36,1) forwards}
 .enter-down{animation:enterDown .7s cubic-bezier(.22,.61,.36,1) forwards}
 .exit-down{animation:exitDown .7s cubic-bezier(.22,.61,.36,1) forwards}
-@keyframes enterUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
-@keyframes exitUp{from{transform:translateY(0)}to{transform:translateY(-100%)}}
-@keyframes enterDown{from{transform:translateY(-100%)}to{transform:translateY(0)}}
-@keyframes exitDown{from{transform:translateY(0)}to{transform:translateY(100%)}}
+@keyframes enterUp{from{transform:translate3d(0,100%,0)}to{transform:translate3d(0,0,0)}}
+@keyframes exitUp{from{transform:translate3d(0,0,0)}to{transform:translate3d(0,-100%,0)}}
+@keyframes enterDown{from{transform:translate3d(0,-100%,0)}to{transform:translate3d(0,0,0)}}
+@keyframes exitDown{from{transform:translate3d(0,0,0)}to{transform:translate3d(0,100%,0)}}
 .enter-left{animation:enterLeft .7s cubic-bezier(.22,.61,.36,1) forwards}
 .exit-left{animation:exitLeft .7s cubic-bezier(.22,.61,.36,1) forwards}
 .enter-right{animation:enterRight .7s cubic-bezier(.22,.61,.36,1) forwards}
 .exit-right{animation:exitRight .7s cubic-bezier(.22,.61,.36,1) forwards}
-@keyframes enterLeft{from{transform:translateX(100%)}to{transform:translateX(0)}}
-@keyframes exitLeft{from{transform:translateX(0)}to{transform:translateX(-100%)}}
-@keyframes enterRight{from{transform:translateX(-100%)}to{transform:translateX(0)}}
-@keyframes exitRight{from{transform:translateX(0)}to{transform:translateX(100%)}}
+@keyframes enterLeft{from{transform:translate3d(100%,0,0)}to{transform:translate3d(0,0,0)}}
+@keyframes exitLeft{from{transform:translate3d(0,0,0)}to{transform:translate3d(-100%,0,0)}}
+@keyframes enterRight{from{transform:translate3d(-100%,0,0)}to{transform:translate3d(0,0,0)}}
+@keyframes exitRight{from{transform:translate3d(0,0,0)}to{transform:translate3d(100%,0,0)}}
 
 #status{
   position:fixed;
@@ -2813,7 +2814,6 @@ body.foreign-mode #time-range-button{
   cursor:pointer;
   -webkit-user-select:text;
   user-select:text;
-  will-change:max-height;
   transition:
     max-height .42s cubic-bezier(.22,.72,.18,1),
     opacity .18s ease;
@@ -5990,99 +5990,5 @@ html,body{
     height:40px !important;
     flex-basis:40px !important;
     line-height:40px !important;
-  }
-}
-
-/* =====================================================================
-   V31.80.0 — smoother mobile copy, faster UI surfaces, ad/feed continuity
-   ===================================================================== */
-
-/* Loading artık ilk görsel hazır olduğunda kapanıyor; bitiş animasyonu da
-   gereksiz bekleme hissi yaratmayacak kadar kısa. */
-#loading-screen{
-  transition:opacity .22s ease,visibility .22s ease !important;
-}
-
-/* Tam ekran blur, özellikle mobil Safari/Chrome'da panel açılışında pahalı
-   bir yeniden örnekleme oluşturuyordu. Koyu zemin aynı ayrımı daha ucuz verir. */
-#menu-overlay,
-#stats-overlay,
-#source-viewer-overlay{
-  backdrop-filter:none !important;
-  -webkit-backdrop-filter:none !important;
-}
-
-#menu-overlay,
-#stats-overlay{
-  background:rgba(0,0,0,.86) !important;
-  transition:opacity .18s ease,visibility 0s linear .18s !important;
-}
-#menu-overlay.open,
-#stats-overlay.open{
-  transition:opacity .18s ease,visibility 0s linear 0s !important;
-}
-
-#source-viewer-overlay{
-  background:rgba(0,0,0,.84) !important;
-  transition:opacity .18s ease,visibility 0s linear .18s !important;
-}
-#source-viewer-overlay.open{
-  transition:opacity .18s ease,visibility 0s linear 0s !important;
-}
-
-#settings-menu{
-  transition:transform .18s cubic-bezier(.22,.61,.36,1) !important;
-  contain:layout paint style;
-}
-
-#public-stats-panel,
-#source-viewer-panel{
-  contain:layout paint style;
-}
-
-#control-menu-panel,
-#time-range-panel,
-.keyword-tool-panel,
-.flora-story-popover{
-  backdrop-filter:none !important;
-  -webkit-backdrop-filter:none !important;
-  background-color:rgba(16,16,16,.96) !important;
-}
-
-#control-menu-panel,
-#time-range-panel,
-.keyword-tool-panel{
-  transition-duration:.16s !important;
-}
-
-/* İki haber slaytı ve reklam katmanı geçiş sırasında kendi compositor
-   katmanlarında tutulur. */
-.slide,
-#ad-overlay{
-  will-change:transform;
-  backface-visibility:hidden;
-  -webkit-backface-visibility:hidden;
-}
-
-@media(max-width:700px), (pointer:coarse){
-  /* Mobilde max-height'i kare kare animasyonlamak layout thrash yaratıyordu.
-     JS yüksekliği tek seferde değiştirir; yalnız küçük compositor animasyonu
-     kalır. */
-  .description{
-    will-change:auto !important;
-    transition:opacity .14s ease !important;
-    contain:layout paint;
-  }
-
-  .headline{
-    contain:layout paint;
-  }
-
-  /* Mobil cihazlarda panel transformlarını da biraz daha kısa tut. */
-  #settings-menu,
-  #control-menu-panel,
-  #time-range-panel,
-  .keyword-tool-panel{
-    transition-duration:.14s !important;
   }
 }

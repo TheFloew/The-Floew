@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.80.0";
+window.__floewAppVersion="31.79.1";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -30,7 +30,8 @@ const NEWS_BATCH_COUNT=Math.max(1,Number(FLOEW_CONFIG.newsBatchCount)||12);
   bağlantı havuzunu ve Worker tarafındaki RSS isteklerini gereksiz biçimde
   sıkıştırabiliyor. Küçük bir kuyruk daha kararlı davranıyor.
 */
-const NEWS_BATCH_CONCURRENCY=3;
+const NEWS_BATCH_CONCURRENCY=4;
+const INITIAL_NEWS_BATCH_COUNT=Math.min(NEWS_BATCH_COUNT,4);
 const NEWS_FETCH_TIMEOUT_MS=22000;
 const NEWS_JSONP_TIMEOUT_MS=22000;
 const NEWS_BATCH_STALE_CACHE_MAX_AGE_MS=24*60*60*1000;
@@ -671,19 +672,17 @@ const AD_SKIP_GRACE_MS=180;
 
 let currentAd=null;
 let adEntryDirection=1;
-let plannedAd=null;
-const adAssetWarmupCache=new Map();
 
 /*
   Haber history dizisini bozmadan reklamı gerçek bir gezinme durağı gibi
   davranacak şekilde araya yerleştiriyoruz.
 
-  skippedAdHistory yalnızca kullanıcı reklamı bitmeden ileri geçtiğinde kurulur.
+  adHistoryStops, kullanıcının akışta gördüğü reklam duraklarını ileri/geri geçmişiyle birlikte korur.
   Böylece:
     haber A -> reklam -> haber B
   dizisinde B'den geri gidildiğinde reklama, reklamdan da A'ya dönülebilir.
 */
-let skippedAdHistory=null;
+let adHistoryStops=[];
 let historicalAdContext=null;
 
 /*
@@ -2513,7 +2512,44 @@ function renderFeedMode(){
   }
 }
 
-function switchFeedMode(nextMode){
+let adjacentFeedPreloadTimer=null;
+
+function feedModePreviewStory(mode){
+  const list=storiesForFeedMode(mode);
+  if(!list.length)return null;
+
+  const preferredKey=feedModeStoryKeys[mode];
+  if(preferredKey){
+    const preferred=list.find(story=>storyIdentity(story)===preferredKey);
+    if(preferred)return preferred;
+  }
+
+  return list[0]||null;
+}
+
+function scheduleAdjacentFeedPreload(delay=120){
+  clearTimeout(adjacentFeedPreloadTimer);
+
+  adjacentFeedPreloadTimer=setTimeout(()=>{
+    if(adActive || state.busy || !rawStories.length)return;
+
+    const order=currentFeedModeOrder();
+    const currentIndex=order.indexOf(feedMode);
+    if(currentIndex<0)return;
+
+    for(const index of [currentIndex-1,currentIndex+1]){
+      if(index<0 || index>=order.length)continue;
+      const story=feedModePreviewStory(order[index]);
+      if(!story)continue;
+
+      preloadStoryAssets(story);
+      preloadImage(story.image).catch(()=>{});
+      void detectSmartFocalPoint(story).catch(()=>null);
+    }
+  },Math.max(0,delay));
+}
+
+async function switchFeedMode(nextMode){
   closeFloraPopover({resume:false});
   const modeOrder=currentFeedModeOrder();
   const next=
@@ -2523,11 +2559,7 @@ function switchFeedMode(nextMode){
 
   if(next===feedMode || state.busy || adActive)return;
 
-  /*
-    Son dakika boşsa sekmeye hiç geçmiyoruz.
-    Böylece Gündem'in seçili butonu, mevcut haber, history ve timer durumu
-    aynen kalıyor.
-  */
+  /* Son dakika boşsa sekmeye hiç geçmiyoruz. */
   const previewList=storiesForFeedMode(next);
 
   if(next==="breaking" && !previewList.length){
@@ -2539,32 +2571,30 @@ function switchFeedMode(nextMode){
 
   const previousMode=feedMode;
   const currentStory=state.stories[state.index]||null;
-  feedModeStoryKeys[feedMode]=storyIdentity(currentStory);
+  const preferredKey=feedModeStoryKeys[next];
+  let idx=
+    preferredKey
+      ? previewList.findIndex(story=>storyIdentity(story)===preferredKey)
+      : -1;
+  if(idx<0)idx=0;
 
-  feedMode=next;
-  filterReturnStoryKey="";
+  if(!previewList.length){
+    feedModeStoryKeys[feedMode]=storyIdentity(currentStory);
+    feedMode=next;
+    filterReturnStoryKey="";
 
-  if(previousMode==="source" && next!=="source"){
-    clearTemporarySourceTab();
-  }
+    if(previousMode==="source" && next!=="source")clearTemporarySourceTab();
+    if(previousMode==="category" && next!=="category")clearTemporaryCategoryTab();
 
-  if(previousMode==="category" && next!=="category"){
-    clearTemporaryCategoryTab();
-  }
-
-  closeQuickPanels();
-  renderFeedMode();
-  showFullscreenButton();
-
-  const list=previewList;
-  renderOptions();
-
-  if(!list.length){
+    closeQuickPanels();
+    renderFeedMode();
+    renderOptions();
+    showFullscreenButton();
     state.stories=[];
     state.index=0;
     state.history=[];
     state.historyPos=0;
-    skippedAdHistory=null;
+    adHistoryStops=[];
     historicalAdContext=null;
     clearTimeout(state.timer);
     setStoryStageVisible(false);
@@ -2572,80 +2602,136 @@ function switchFeedMode(nextMode){
     return;
   }
 
-  clearStatus();
-  setStoryStageVisible(true);
-
-  const preferredKey=feedModeStoryKeys[feedMode];
-  let idx=
-    preferredKey
-      ? list.findIndex(story=>storyIdentity(story)===preferredKey)
-      : -1;
-
-  if(idx<0)idx=0;
-
   const currentSlide=slides[state.active];
   const nextSlide=slides[1-state.active];
-  const nextStory=list[idx];
+  const nextStory=previewList[idx];
 
-  /*
-    Sekme değişimi normal haber gezinmesiyle aynı dikey hareket dilini
-    kullanır. Sağdaki sekmeye geçiş ileri, soldaki sekmeye geçiş geri
-    hareket sayılır; kullanıcının seçtiği yukarı/aşağı yönü korunur.
-  */
   const previousModeIndex=modeOrder.indexOf(previousMode);
   const nextModeIndex=modeOrder.indexOf(next);
-  const movingForward=nextModeIndex>previousModeIndex;
-  const [enterClass,exitClass]=transitionPair(movingForward?1:-1);
+  const movingRight=nextModeIndex>previousModeIndex;
+  const enterClass=movingRight ? "enter-left" : "enter-right";
+  const exitClass=movingRight ? "exit-left" : "exit-right";
 
   state.busy=true;
   clearTimeout(state.timer);
 
-  preloadImage(nextStory.image);
+  /* Dikey haber geçişindeki hazırlık sırasını yatay akış geçişine de uygula:
+     hedef görsel decode ve odak noktası hazır olmadan animasyonu başlatma. */
+  try{await preloadImage(nextStory.image)}catch(e){}
   preloadStoryAssets(nextStory);
   prepareTransitionSlide(nextSlide,nextStory);
+
+  const nextImage=nextSlide.querySelector(".slide-image");
+  if(nextImage?.decode){
+    try{await nextImage.decode()}catch(e){}
+  }
+  if(nextImage){
+    await lockSmartFocalPointForTransition(nextImage,nextStory);
+  }
+
+  feedModeStoryKeys[feedMode]=storyIdentity(currentStory);
+  feedMode=next;
+  filterReturnStoryKey="";
+
+  if(previousMode==="source" && next!=="source")clearTemporarySourceTab();
+  if(previousMode==="category" && next!=="category")clearTemporaryCategoryTab();
+
+  closeQuickPanels();
+  renderFeedMode();
+  showFullscreenButton();
+  clearStatus();
+  setStoryStageVisible(true);
 
   currentSlide.className="slide";
   nextSlide.className="slide";
 
-  void nextSlide.offsetWidth;
+  /* offsetWidth ile zorunlu layout yerine frame sınırında compositor
+     animasyonuna giriyoruz. */
+  await new Promise(resolve=>requestAnimationFrame(()=>resolve()));
 
   nextSlide.classList.add(enterClass);
   currentSlide.classList.add(exitClass);
   activateSlideMedia(nextSlide,nextStory);
 
-  state.stories=list;
+  state.stories=previewList;
   state.index=idx;
   state.history=[idx];
   state.historyPos=0;
-  skippedAdHistory=null;
+  adHistoryStops=[];
   historicalAdContext=null;
   state.active=1-state.active;
 
   updateKeywordAlert(nextStory);
 
+  let finished=false;
   const finish=()=>{
+    if(finished)return;
+    finished=true;
     nextSlide.className="slide active";
     currentSlide.className="slide";
     stopSlideMedia(currentSlide);
     state.busy=false;
+
+    /* Menü kapalıyken seçenek listesini animasyonun kritik frame'lerinden
+       çıkar; açık ise kullanıcı güncel listeyi yine geçiş sonunda görür. */
+    renderOptions();
     timer();
+    scheduleAdjacentFeedPreload(120);
   };
 
   nextSlide.addEventListener("animationend",finish,{once:true});
   setTimeout(()=>{
-    if(state.busy && feedMode===next){
-      finish();
-    }
+    if(state.busy && feedMode===next)finish();
   },900);
 }
 
 
+
+let filterApplyFrame=0;
+let filterApplySecondFrame=0;
+let pendingNormalPreferenceSave=false;
+let pendingForeignPreferenceSave=false;
+
+function setOptionVisualState(el,on){
+  if(!el)return;
+  el.classList.toggle("on",Boolean(on));
+  const check=el.querySelector(".option-check");
+  if(check)check.textContent=on?"✓︎":"";
+}
+
+function scheduleFilterApply(saveKind="normal"){
+  if(saveKind==="foreign")pendingForeignPreferenceSave=true;
+  else pendingNormalPreferenceSave=true;
+  if(filterApplyFrame)cancelAnimationFrame(filterApplyFrame);
+  if(filterApplySecondFrame)cancelAnimationFrame(filterApplySecondFrame);
+
+  /* Seçim işaretini önce ekrana bastır, filtre listesinin yeniden kurulması ve
+     haber seçiminin hesabını bir sonraki frame'e bırak. Böylece dokunma geri
+     bildirimi ağır filtre işinden önce görünür. */
+  filterApplyFrame=requestAnimationFrame(()=>{
+    filterApplyFrame=0;
+    filterApplySecondFrame=requestAnimationFrame(()=>{
+      filterApplySecondFrame=0;
+      if(pendingNormalPreferenceSave){
+        pendingNormalPreferenceSave=false;
+        savePreferences();
+      }
+      if(pendingForeignPreferenceSave){
+        pendingForeignPreferenceSave=false;
+        saveForeignSourcePreferences();
+      }
+      applyFilters({skipRenderOptions:true});
+    });
+  });
+}
+
 function renderOptions(){
   const sourceBox=document.getElementById("source-options");
   const categoryBox=document.getElementById("category-options");
+  if(!sourceBox || !categoryBox)return;
 
-  sourceBox.innerHTML="";
-  categoryBox.innerHTML="";
+  const sourceFragment=document.createDocumentFragment();
+  const categoryFragment=document.createDocumentFragment();
 
   const foreignMode=feedMode==="foreign";
   const visibleSources=
@@ -2664,8 +2750,8 @@ function renderOptions(){
     el.className="option"+(on?" on":"");
     el.dataset.key=key;
     el.innerHTML=`<span class="option-name">${source}</span><span class="option-check">${on?"✓︎":""}</span>`;
-    el.addEventListener("click",()=>toggleSource(key));
-    sourceBox.appendChild(el);
+    el.addEventListener("click",()=>toggleSource(key,el));
+    sourceFragment.appendChild(el);
   }
 
   if(foreignMode){
@@ -2673,7 +2759,7 @@ function renderOptions(){
     el.className="option on foreign-category-option";
     el.dataset.key=FOREIGN_CATEGORY;
     el.innerHTML=`<span class="option-name">${FOREIGN_CATEGORY}</span><span class="option-check">✓︎</span>`;
-    categoryBox.appendChild(el);
+    categoryFragment.appendChild(el);
   }else{
     for(const category of CATEGORIES){
       const on=filters.categories.has(category);
@@ -2681,11 +2767,13 @@ function renderOptions(){
       el.className="option"+(on?" on":"");
       el.dataset.key=category;
       el.innerHTML=`<span class="option-name">${category}</span><span class="option-check">${on?"✓︎":""}</span>`;
-      el.addEventListener("click",()=>toggleCategory(category));
-      categoryBox.appendChild(el);
+      el.addEventListener("click",()=>toggleCategory(category,el));
+      categoryFragment.appendChild(el);
     }
   }
 
+  sourceBox.replaceChildren(sourceFragment);
+  categoryBox.replaceChildren(categoryFragment);
   updateFilterCount();
 }
 
@@ -2706,25 +2794,31 @@ function updateFilterCount(){
   count.textContent=`${filters.sources.size}/${totalSources} kaynak · ${filters.categories.size}/${CATEGORIES.length} kategori açık`;
 }
 
-function toggleSource(key){
+function toggleSource(key,optionEl=null){
+  let on=false;
+
   if(feedMode==="foreign"){
     if(foreignSourceFilters.has(key)) foreignSourceFilters.delete(key);
     else foreignSourceFilters.add(key);
-    saveForeignSourcePreferences();
+    on=foreignSourceFilters.has(key);
   }else{
     if(filters.sources.has(key)) filters.sources.delete(key);
     else filters.sources.add(key);
-    savePreferences();
+    on=filters.sources.has(key);
   }
 
-  applyFilters();
+  setOptionVisualState(optionEl,on);
+  updateFilterCount();
+  scheduleFilterApply(feedMode==="foreign"?"foreign":"normal");
 }
 
-function toggleCategory(cat){
+function toggleCategory(cat,optionEl=null){
   if(filters.categories.has(cat)) filters.categories.delete(cat);
   else filters.categories.add(cat);
-  savePreferences();
-  applyFilters();
+
+  setOptionVisualState(optionEl,filters.categories.has(cat));
+  updateFilterCount();
+  scheduleFilterApply();
 }
 
 
@@ -2743,7 +2837,8 @@ function applyFilters(options={}){
   const previousKey=storyIdentity(previousStory);
   const list=activeStories();
 
-  renderOptions();
+  if(!options?.skipRenderOptions)renderOptions();
+  else updateFilterCount();
 
   if(
     videoOnlyEnabled &&
@@ -2768,7 +2863,7 @@ function applyFilters(options={}){
       state.index=0;
       state.history=[];
       state.historyPos=0;
-      skippedAdHistory=null;
+      adHistoryStops=[];
       historicalAdContext=null;
       clearTimeout(state.timer);
       state.timer=null;
@@ -2869,7 +2964,7 @@ function applyFilters(options={}){
   }else{
     state.history=[idx];
     state.historyPos=0;
-    skippedAdHistory=null;
+    adHistoryStops=[];
     historicalAdContext=null;
   }
 
@@ -2894,9 +2989,8 @@ function applyFilters(options={}){
 }
 
 
-const INITIAL_LOADING_MIN_MS=420;
-const INITIAL_LOADING_MAX_MS=9000;
-const INITIAL_VISUAL_READY_MAX_MS=1800;
+const INITIAL_LOADING_MIN_MS=280;
+const INITIAL_LOADING_MAX_MS=12000;
 const initialLoadingStartedAt=Date.now();
 let initialLoadFinished=false;
 let initialLoadingWatchdog=null;
@@ -2953,83 +3047,61 @@ function finishInitialLoading(forceImmediate=false){
         screen.classList.add("is-done");
         screen.addEventListener("transitionend",remove,{once:true});
         // Güvenlik: transitionend herhangi bir nedenle gelmezse overlay kalmasın.
-        setTimeout(remove,450);
+        setTimeout(remove,700);
       },80);
     });
   },wait);
 }
 
-function waitForInitialVisualReady(el,story,timeoutMs=INITIAL_VISUAL_READY_MAX_MS){
-  if(!el || !story)return Promise.resolve();
-
-  const image=el.querySelector(".slide-image");
-  const video=el.querySelector(".slide-video");
-  const embed=el.querySelector(".slide-embed");
-  const storyKey=mediaKey(story);
-
+function waitForInitialStoryVisual(slide,timeoutMs=2600){
   return new Promise(resolve=>{
-    let finished=false;
-    let pollTimer=null;
-    let timeoutTimer=null;
+    const image=slide?.querySelector?.(".slide-image");
+    if(!image){resolve(false);return;}
 
-    const cleanup=()=>{
-      clearTimeout(pollTimer);
-      clearTimeout(timeoutTimer);
-      image?.removeEventListener("load",check);
-      image?.removeEventListener("error",check);
-      video?.removeEventListener("loadeddata",check);
-      video?.removeEventListener("canplay",check);
-      embed?.removeEventListener("load",check);
+    let settled=false;
+    const finish=value=>{
+      if(settled)return;
+      settled=true;
+      clearTimeout(timeout);
+      image.removeEventListener("load",check);
+      image.removeEventListener("error",check);
+      resolve(Boolean(value));
     };
 
-    const done=()=>{
-      if(finished)return;
-      finished=true;
-      cleanup();
-      resolve();
+    const check=async()=>{
+      /* setStoryImage küçük thumbnail'den article-proxy'ye aynı load olayı
+         içinde geçebilir. Bir microtask bekleyip gerçekten son src hazır mı
+         kontrol ediyoruz. */
+      await Promise.resolve();
+
+      if(image.dataset.imageStage==="failed"){
+        finish(false);
+        return;
+      }
+
+      if(!image.complete || !image.naturalWidth)return;
+
+      if(image.decode){
+        try{await image.decode()}catch(e){}
+      }
+
+      if(image.complete && image.naturalWidth){
+        finish(true);
+      }
     };
 
-    const imageReady=()=>Boolean(
-      image &&
-      image.style.visibility!=="hidden" &&
-      image.complete &&
-      image.naturalWidth>0 &&
-      image.naturalHeight>0
-    );
-
-    const mediaReady=()=>Boolean(
-      el.dataset.mediaReadyStoryKey===storyKey ||
-      (video?.classList.contains("media-visible") && video.readyState>=2) ||
-      (embed?.classList.contains("media-visible") && embed.src)
-    );
-
-    function check(){
-      if(finished)return;
-
-      /* setStoryImage küçük RSS thumbnail'ından article-proxy'ye aynı load
-         turunda geçebilir. İki frame bekleyip son src'nin gerçekten hazır
-         olduğunu kontrol etmek loading sonrası siyah/boş kareyi engeller. */
-      requestAnimationFrame(()=>{
-        requestAnimationFrame(()=>{
-          if(finished)return;
-          if(imageReady() || mediaReady()){
-            done();
-            return;
-          }
-          pollTimer=setTimeout(check,55);
-        });
-      });
-    }
-
-    image?.addEventListener("load",check);
-    image?.addEventListener("error",check);
-    video?.addEventListener("loadeddata",check);
-    video?.addEventListener("canplay",check);
-    embed?.addEventListener("load",check);
-
-    timeoutTimer=setTimeout(done,Math.max(250,timeoutMs));
-    check();
+    const timeout=setTimeout(()=>finish(false),timeoutMs);
+    image.addEventListener("load",check);
+    image.addEventListener("error",check);
+    void check();
   });
+}
+
+async function finishInitialLoadingAfterVisual(slide){
+  if(initialLoadFinished)return;
+  await waitForInitialStoryVisual(slide);
+  finishInitialLoading();
+  scheduleAdjacentFeedPreload(0);
 }
 
 /*
@@ -4613,9 +4685,9 @@ function storyExternalImageProxyUrl(story){
 
 const smartFocalCache=new Map();
 const smartFocalResolvedCache=new Map();
-const SMART_FOCAL_SAMPLE=48;
+const SMART_FOCAL_SAMPLE=64;
 const SMART_FOCAL_CACHE_MAX=160;
-const SMART_FOCAL_LOCK_TIMEOUT_MS=280;
+const SMART_FOCAL_LOCK_TIMEOUT_MS=520;
 
 function smartCropEnabled(){
   /*
@@ -4630,79 +4702,63 @@ function clampFocal(value,min,max){
   return Math.max(min,Math.min(max,value));
 }
 
-function smartFocalForFaceBounds(
-  naturalWidth,
-  naturalHeight,
-  left,
-  top,
-  right,
-  bottom
-){
-  const centerX=(left+right)/2;
-  const centerY=(top+bottom)/2;
+function smartFocalObjectPosition(img,focal){
+  if(!img || !focal)return "50% 50%";
 
-  let x=(centerX/naturalWidth)*100;
-  let y=(centerY/naturalHeight)*100;
+  const naturalWidth=img.naturalWidth||0;
+  const naturalHeight=img.naturalHeight||0;
+  const boxWidth=img.clientWidth||window.innerWidth||0;
+  const boxHeight=img.clientHeight||window.innerHeight||0;
 
-  const viewportWidth=Math.max(1,
-    document.documentElement?.clientWidth || window.innerWidth || naturalWidth
-  );
-  const viewportHeight=Math.max(1,
-    document.documentElement?.clientHeight || window.innerHeight || naturalHeight
-  );
-
-  const viewportAspect=viewportWidth/viewportHeight;
-  const imageAspect=naturalWidth/naturalHeight;
-
-  /* object-fit:cover yatay kırpıyorsa yüz grubunun tamamını mümkün olduğunca
-     görünür pencerenin içinde tut. Eski 20–80 clamp'i kenardaki yüzlerin
-     ekrandan tamamen çıkmasına neden olabiliyordu. */
-  if(imageAspect>viewportAspect){
-    const visibleWidth=naturalHeight*viewportAspect;
-    const overflow=Math.max(0,naturalWidth-visibleWidth);
-    const groupWidth=Math.max(1,right-left);
-    const margin=Math.min(
-      visibleWidth*.09,
-      Math.max(0,(visibleWidth-groupWidth)/2)
-    );
-
-    let cropLeft=centerX-visibleWidth*.5;
-    const minCrop=right-(visibleWidth-margin);
-    const maxCrop=left-margin;
-
-    if(minCrop<=maxCrop){
-      cropLeft=Math.max(minCrop,Math.min(maxCrop,cropLeft));
-    }
-
-    cropLeft=Math.max(0,Math.min(overflow,cropLeft));
-    x=overflow>0 ? (cropLeft/overflow)*100 : 50;
-    y=50;
-  }else if(imageAspect<viewportAspect){
-    const visibleHeight=naturalWidth/viewportAspect;
-    const overflow=Math.max(0,naturalHeight-visibleHeight);
-    const groupHeight=Math.max(1,bottom-top);
-    const topMargin=Math.min(visibleHeight*.08,Math.max(0,(visibleHeight-groupHeight)/2));
-    const bottomMargin=Math.min(visibleHeight*.18,Math.max(0,(visibleHeight-groupHeight)/2));
-
-    /* Yüzü tam merkeze değil, manşet alanından biraz uzağa — görünür alanın
-       yaklaşık %43'üne — taşımayı hedefle. */
-    let cropTop=centerY-visibleHeight*.43;
-    const minCrop=bottom-(visibleHeight-bottomMargin);
-    const maxCrop=top-topMargin;
-
-    if(minCrop<=maxCrop){
-      cropTop=Math.max(minCrop,Math.min(maxCrop,cropTop));
-    }
-
-    cropTop=Math.max(0,Math.min(overflow,cropTop));
-    y=overflow>0 ? (cropTop/overflow)*100 : 50;
-    x=50;
+  if(!naturalWidth || !naturalHeight || !boxWidth || !boxHeight){
+    return `${clampFocal(focal.x,0,100).toFixed(1)}% ${clampFocal(focal.y,0,100).toFixed(1)}%`;
   }
 
-  return {
-    x:clampFocal(x,0,100),
-    y:clampFocal(y,0,100)
+  const scale=Math.max(boxWidth/naturalWidth,boxHeight/naturalHeight);
+  const renderedWidth=naturalWidth*scale;
+  const renderedHeight=naturalHeight*scale;
+  const bounds=focal.faceBounds||null;
+
+  const solveAxis=(rendered,viewport,focusPercent,minPercent,maxPercent,targetRatio=.5)=>{
+    const excess=rendered-viewport;
+    if(excess<=.5)return 50;
+
+    const focus=(clampFocal(focusPercent,0,100)/100)*rendered;
+    let position=(focus-(viewport*targetRatio))/excess;
+
+    if(Number.isFinite(minPercent) && Number.isFinite(maxPercent)){
+      const min=(clampFocal(minPercent,0,100)/100)*rendered;
+      const max=(clampFocal(maxPercent,0,100)/100)*rendered;
+      const margin=Math.min(viewport*.045,28);
+      const lower=(max-(viewport-margin))/excess;
+      const upper=(min-margin)/excess;
+
+      if(lower<=upper){
+        position=clampFocal(position,Math.max(0,lower),Math.min(1,upper));
+      }
+    }
+
+    return clampFocal(position,0,1)*100;
   };
+
+  const x=solveAxis(
+    renderedWidth,
+    boxWidth,
+    focal.x,
+    bounds?.left,
+    bounds?.right,
+    .5
+  );
+  const y=solveAxis(
+    renderedHeight,
+    boxHeight,
+    focal.y,
+    bounds?.top,
+    bounds?.bottom,
+    .44
+  );
+
+  return `${x.toFixed(1)}% ${y.toFixed(1)}%`;
 }
 
 function smartFocalFromPixels(data,width,height){
@@ -4734,21 +4790,22 @@ function smartFocalFromPixels(data,width,height){
         Math.abs(luminance[i-1]-luminance[i+1])+
         Math.abs(luminance[i-width]-luminance[i+width]);
 
-      /* FaceDetector bulunmayan Safari/Firefox türevlerinde yalnız kenar/renk
-         kontrastı saç, tabela veya logoya kayabiliyordu. Geniş YCbCr ten
-         aralığını küçük bir ek sinyal olarak kullan; tek başına belirleyici
-         olmadığı için farklı ten tonlarında ve sıcak arka planlarda saliency
-         sinyali hâlâ baskın kalır. */
-      const cb=128-.168736*r-.331264*g+.5*b;
-      const cr=128+.5*r-.418688*g-.081312*b;
-      const skinLike=(cb>=72 && cb<=138 && cr>=122 && cr<=182) ? 1 : 0;
-
       const nx=(x/(width-1))-.5;
       const ny=(y/(height-1))-.45;
       const centerDistance=Math.min(1,Math.hypot(nx,ny)*1.35);
       const centerBias=.78+.22*(1-centerDistance);
 
-      saliency[i]=(edge+saturation*.18+skinLike*24)*centerBias;
+      /* FaceDetector olmayan Safari/iOS için düşük maliyetli bir yüz/ten
+         ipucu. Tek başına karar vermez; kenar ve doygunluk haritasına yalnız
+         orta ağırlıkta katkı sağlar. */
+      const skinLike=(
+        r>70 && g>35 && b>20 &&
+        r>g*.92 && r>b*1.05 &&
+        Math.max(r,g,b)-Math.min(r,g,b)>12
+      );
+      const skinScore=skinLike?34:0;
+
+      saliency[i]=(edge+saturation*.18+skinScore)*centerBias;
     }
   }
 
@@ -4801,7 +4858,7 @@ function smartFocalFromPixels(data,width,height){
 
   return {
     x:clampFocal((bestX/(width-1))*100,8,92),
-    y:clampFocal((bestY/(height-1))*100,8,84)
+    y:clampFocal((bestY/(height-1))*100,8,88)
   };
 }
 
@@ -4907,16 +4964,19 @@ function detectSmartFocalPoint(story){
                 const right=Math.max(...group.map(box=>box.x+box.width));
                 const bottom=Math.max(...group.map(box=>box.y+box.height));
 
-                finish(
-                  smartFocalForFaceBounds(
-                    naturalWidth,
-                    naturalHeight,
-                    left,
-                    top,
-                    right,
-                    bottom
-                  )
-                );
+                const centerX=(left+right)/2;
+                const centerY=(top+bottom)/2;
+
+                finish({
+                  x:clampFocal((centerX/naturalWidth)*100,2,98),
+                  y:clampFocal((centerY/naturalHeight)*100,2,96),
+                  faceBounds:{
+                    left:clampFocal((left/naturalWidth)*100,0,100),
+                    top:clampFocal((top/naturalHeight)*100,0,100),
+                    right:clampFocal((right/naturalWidth)*100,0,100),
+                    bottom:clampFocal((bottom/naturalHeight)*100,0,100)
+                  }
+                });
                 return;
               }
             }
@@ -5023,8 +5083,7 @@ async function lockSmartFocalPoint(
   }
 
   if(focal){
-    img.style.objectPosition=
-      `${focal.x.toFixed(1)}% ${focal.y.toFixed(1)}%`;
+    img.style.objectPosition=smartFocalObjectPosition(img,focal);
   }else{
     img.style.objectPosition="50% 50%";
   }
@@ -5072,8 +5131,7 @@ function lockSmartFocalPointImmediate(img,story){
       : null;
 
   if(focal){
-    img.style.objectPosition=
-      `${focal.x.toFixed(1)}% ${focal.y.toFixed(1)}%`;
+    img.style.objectPosition=smartFocalObjectPosition(img,focal);
   }else{
     img.style.objectPosition="50% 50%";
 
@@ -5355,7 +5413,12 @@ function prepareTransitionSlide(el,story){
 
 
 
+const descriptionMetricCache=new WeakMap();
+
 function descriptionPreviewHeight(description){
+  const cached=descriptionMetricCache.get(description);
+  if(cached?.previewHeight)return cached.previewHeight;
+
   const computed=getComputedStyle(description);
   const fontSize=parseFloat(computed.fontSize)||16;
 
@@ -5367,21 +5430,23 @@ function descriptionPreviewHeight(description){
   const mobile=Boolean(
     window.matchMedia?.("(max-width:700px), (pointer:coarse)")?.matches
   );
-  return Math.ceil(lineHeight*(mobile?4:5));
+  const previewHeight=Math.ceil(lineHeight*(mobile?4:5));
+
+  descriptionMetricCache.set(description,{previewHeight,lineHeight});
+  return previewHeight;
 }
 
 function prepareDescriptionPreview(description){
   if(!description || description.hidden)return;
 
+  descriptionMetricCache.delete(description);
   description.classList.add("description-no-motion");
   description.classList.remove("is-expanded");
   description.style.maxHeight=
     `${descriptionPreviewHeight(description)}px`;
+  description.dataset.descriptionAnimating="0";
 
-  /*
-    Yeni haber fill edilirken görünür bir "kapanma" animasyonu oluşmasın.
-    Bir sonraki frame'de normal hareketi tekrar etkinleştiriyoruz.
-  */
+  /* Yeni haber fill edilirken görünür bir kapanma animasyonu oluşmasın. */
   requestAnimationFrame(()=>{
     requestAnimationFrame(()=>{
       description.classList.remove("description-no-motion");
@@ -5389,71 +5454,45 @@ function prepareDescriptionPreview(description){
   });
 }
 
-function descriptionUsesLightweightExpand(){
-  try{
-    return Boolean(
-      window.matchMedia?.("(max-width:700px), (pointer:coarse)")?.matches
-    );
-  }catch(e){
-    return window.innerWidth<=700;
-  }
-}
-
 function setDescriptionExpanded(description,expanded){
   if(!description || description.hidden)return;
 
+  const isExpanded=description.classList.contains("is-expanded");
+  if(isExpanded===expanded)return;
+
   const collapsedHeight=descriptionPreviewHeight(description);
+  const targetHeight=expanded
+    ? Math.ceil(description.scrollHeight)
+    : collapsedHeight;
+
+  /* Normal aç/kapa yolunda mevcut inline max-height zaten animasyonun doğru
+     başlangıç değeridir. Eski kod her tıklamada getBoundingClientRect + RAF ile
+     iki ayrı zorunlu layout yaptırıyordu; görünür hareketi değiştirmeden bu
+     senkron reflow'ları kaldırıyoruz. */
+  if(description.dataset.descriptionAnimating==="1"){
+    const current=parseFloat(getComputedStyle(description).maxHeight);
+    if(Number.isFinite(current)){
+      description.classList.add("description-no-motion");
+      description.style.maxHeight=`${current}px`;
+      void description.offsetHeight;
+      description.classList.remove("description-no-motion");
+    }
+  }
 
   description.classList.toggle("is-expanded",expanded);
   description.setAttribute("aria-expanded",expanded?"true":"false");
   description.title=expanded
     ?"Metni daraltmak için tıklayın"
     :"Tamamını okumak için tıklayın";
+  description.dataset.descriptionAnimating="1";
+  description.style.maxHeight=`${targetHeight}px`;
 
-  if(descriptionUsesLightweightExpand()){
-    /* Mobilde max-height animasyonu her frame layout üretiyordu. Hedef
-       yüksekliği tek seferde uygula; yalnız opacity/translate compositor
-       animasyonu kullan. */
-    const targetHeight=expanded
-      ? Math.ceil(description.scrollHeight)
-      : collapsedHeight;
-
-    description.classList.add("description-no-motion");
-    description.style.maxHeight=`${targetHeight}px`;
-
-    requestAnimationFrame(()=>{
-      description.classList.remove("description-no-motion");
-      try{
-        description.__floewExpandAnimation?.cancel?.();
-        const animation=description.animate(
-          [
-            {opacity:.82,transform:"translateY(2px)"},
-            {opacity:1,transform:"translateY(0)"}
-          ],
-          {duration:150,easing:"cubic-bezier(.22,.61,.36,1)"}
-        );
-        description.__floewExpandAnimation=animation;
-        animation.addEventListener("finish",()=>{
-          if(description.__floewExpandAnimation===animation){
-            description.__floewExpandAnimation=null;
-          }
-        },{once:true});
-      }catch(e){}
-    });
-  }else{
-    const currentHeight=
-      Math.ceil(description.getBoundingClientRect().height);
-
-    description.style.maxHeight=`${currentHeight}px`;
-
-    requestAnimationFrame(()=>{
-      const targetHeight=expanded
-        ? Math.ceil(description.scrollHeight)
-        : collapsedHeight;
-
-      description.style.maxHeight=`${targetHeight}px`;
-    });
-  }
+  const finish=event=>{
+    if(event.target!==description || event.propertyName!=="max-height")return;
+    description.dataset.descriptionAnimating="0";
+    description.removeEventListener("transitionend",finish);
+  };
+  description.addEventListener("transitionend",finish);
 
   if(expanded){
     clearTimeout(state.timer);
@@ -5461,6 +5500,7 @@ function setDescriptionExpanded(description,expanded){
     timer();
   }
 }
+
 
 function toggleDescription(description){
   setDescriptionExpanded(
@@ -5558,6 +5598,7 @@ document.querySelectorAll(".description").forEach(description=>{
 
 window.addEventListener("resize",()=>{
   document.querySelectorAll(".description").forEach(description=>{
+    descriptionMetricCache.delete(description);
     if(description.hidden)return;
 
     description.style.maxHeight=description.classList.contains("is-expanded")
@@ -5830,7 +5871,6 @@ async function actuallyLoadAdsCatalog(layout=getAdsLayout()){
       adCatalog.map(item=>item.name).join(", ")
     );
 
-    scheduleUpcomingAdWarmup();
     return adCatalog;
   }catch(err){
     console.warn(`Flöw ads catalog (${layout}):`,err);
@@ -5917,90 +5957,17 @@ function refreshAdsLayoutIfNeeded(){
     */
     adCatalog=cached;
     adCatalogLayout=current;
-    plannedAd=null;
+    clearUpcomingAdPreload();
 
-    scheduleUpcomingAdWarmup();
     loadAdsCatalog(current);
   },180);
 }
 
-function preloadAdAsset(ad){
-  if(!ad?.src)return Promise.resolve(false);
+let upcomingAd=null;
+let upcomingAdPreloadPromise=null;
+let upcomingAdPreloadKey="";
 
-  const key=`${ad.type||"image"}|${ad.src}`;
-  if(adAssetWarmupCache.has(key))return adAssetWarmupCache.get(key);
-
-  const promise=new Promise(resolve=>{
-    let finished=false;
-    let timeoutId=null;
-    const done=value=>{
-      if(finished)return;
-      finished=true;
-      clearTimeout(timeoutId);
-      resolve(Boolean(value));
-    };
-
-    timeoutId=setTimeout(()=>done(false),5000);
-
-    if(ad.type==="video"){
-      try{
-        const video=document.createElement("video");
-        setMutedInlinePlaybackAttributes(video);
-        video.preload="auto";
-        video.onloadeddata=()=>done(true);
-        video.oncanplay=()=>done(true);
-        video.onerror=()=>done(false);
-        video.src=ad.src;
-        video.load();
-      }catch(e){
-        done(false);
-      }
-      return;
-    }
-
-    const image=new Image();
-    image.decoding="async";
-    image.onload=()=>{
-      if(image.decode){
-        image.decode().catch(()=>{}).finally(()=>done(true));
-      }else{
-        done(true);
-      }
-    };
-    image.onerror=()=>done(false);
-    image.src=ad.src;
-  });
-
-  adAssetWarmupCache.set(key,promise);
-  if(adAssetWarmupCache.size>12){
-    const first=adAssetWarmupCache.keys().next().value;
-    if(first)adAssetWarmupCache.delete(first);
-  }
-
-  return promise;
-}
-
-function scheduleUpcomingAdWarmup(force=false){
-  if(adActive || !adCatalog.length)return;
-
-  const closeToBreak=
-    newsShownSinceAd>=Math.max(1,ADS_INTERVAL_NEWS-2);
-
-  if(!force && !closeToBreak)return;
-
-  if(
-    !plannedAd ||
-    !adCatalog.some(item=>(item.name||item.src)===(plannedAd.name||plannedAd.src))
-  ){
-    plannedAd=chooseRandomAd();
-  }
-
-  if(plannedAd){
-    void preloadAdAsset(plannedAd);
-  }
-}
-
-function chooseRandomAd(){
+function chooseRandomAdCandidate(){
   if(!adCatalog.length)return null;
 
   const candidates=
@@ -6011,13 +5978,112 @@ function chooseRandomAd(){
       : adCatalog;
 
   const pool=candidates.length?candidates:adCatalog;
-  const chosen=pool[Math.floor(Math.random()*pool.length)]||null;
+  return pool[Math.floor(Math.random()*pool.length)]||null;
+}
 
-  if(chosen){
-    lastAdName=chosen.name||chosen.src;
+function markAdChosen(ad){
+  if(ad){
+    lastAdName=ad.name||ad.src;
+  }
+  return ad||null;
+}
+
+function chooseRandomAd(){
+  return markAdChosen(chooseRandomAdCandidate());
+}
+
+function clearUpcomingAdPreload(){
+  upcomingAd=null;
+  upcomingAdPreloadPromise=null;
+  upcomingAdPreloadKey="";
+}
+
+function preloadAdAsset(ad){
+  if(!ad?.src)return Promise.resolve(false);
+
+  const key=`${ad.type||"image"}|${ad.src}`;
+  if(upcomingAdPreloadPromise && upcomingAdPreloadKey===key){
+    return upcomingAdPreloadPromise;
   }
 
-  return chosen;
+  upcomingAdPreloadKey=key;
+  upcomingAdPreloadPromise=new Promise(resolve=>{
+    let settled=false;
+    const done=value=>{
+      if(settled)return;
+      settled=true;
+      clearTimeout(timeout);
+      resolve(Boolean(value));
+    };
+
+    const timeout=setTimeout(()=>done(false),5000);
+
+    if(ad.type==="video"){
+      const video=document.createElement("video");
+      video.muted=true;
+      video.defaultMuted=true;
+      video.preload="auto";
+      video.playsInline=true;
+      video.onloadeddata=()=>done(true);
+      video.oncanplay=()=>done(true);
+      video.onerror=()=>done(false);
+      video.src=ad.src;
+      try{video.load()}catch(e){done(false)}
+      return;
+    }
+
+    const image=new Image();
+    image.decoding="async";
+    image.onload=()=>done(true);
+    image.onerror=()=>done(false);
+    image.src=ad.src;
+  });
+
+  return upcomingAdPreloadPromise;
+}
+
+async function prepareUpcomingAd(){
+  if(
+    adActive ||
+    upcomingAd ||
+    newsShownSinceAd<Math.max(1,ADS_INTERVAL_NEWS-2)
+  ){
+    return upcomingAd;
+  }
+
+  if(!adCatalog.length){
+    await loadAdsCatalog(getAdsLayout());
+  }
+
+  if(adActive || upcomingAd || !adCatalog.length)return upcomingAd;
+
+  const candidate=chooseRandomAdCandidate();
+  if(!candidate)return null;
+
+  upcomingAd=candidate;
+  void preloadAdAsset(candidate).catch(()=>false);
+  return upcomingAd;
+}
+
+function maybeScheduleUpcomingAdPreload(){
+  if(
+    adActive ||
+    upcomingAd ||
+    newsShownSinceAd<Math.max(1,ADS_INTERVAL_NEWS-2)
+  ) return;
+
+  const run=()=>{ void prepareUpcomingAd(); };
+  if("requestIdleCallback" in window){
+    requestIdleCallback(run,{timeout:900});
+  }else{
+    setTimeout(run,80);
+  }
+}
+
+function takeUpcomingAd(){
+  const ad=upcomingAd;
+  clearUpcomingAdPreload();
+  return markAdChosen(ad);
 }
 
 const FLOW_TRANSITION_CLASSES=[
@@ -6500,13 +6566,10 @@ async function playAdBreak(options={}){
 
   const ad=
     options.ad ||
-    plannedAd ||
+    takeUpcomingAd() ||
     chooseRandomAd();
 
   if(!ad)return false;
-
-  if(ad===plannedAd)plannedAd=null;
-  void preloadAdAsset(ad);
 
   currentAd=ad;
   adEntryDirection=
@@ -6630,10 +6693,8 @@ function timer(durationMs=null){
     return;
   }
 
-  /* Otomatik ilerleme kapalı olsa bile sıradaki haber ve yaklaşan reklam
-     hazır tutulur. */
-  scheduleNextStoryPreload(35);
-  scheduleUpcomingAdWarmup();
+  /* Otomatik ilerleme kapalı olsa bile sıradaki haber hazır tutulur. */
+  scheduleNextStoryPreload();
 
   const hasExplicitDuration=(durationMs!==null && durationMs!==undefined);
   const requested=hasExplicitDuration ? Number(durationMs) : NaN;
@@ -7232,29 +7293,79 @@ function scheduleNextStoryPreload(delay=70){
 }
 
 
+function findAdHistoryStopAtBefore(){
+  if(adActive || !adHistoryStops.length)return null;
+
+  for(let i=adHistoryStops.length-1;i>=0;i--){
+    const stop=adHistoryStops[i];
+    if(
+      state.historyPos===stop.beforeHistoryPos &&
+      state.index===stop.beforeIndex
+    ){
+      return stop;
+    }
+  }
+
+  return null;
+}
+
+function findAdHistoryStopAtAfter(){
+  if(adActive || !adHistoryStops.length)return null;
+
+  for(let i=adHistoryStops.length-1;i>=0;i--){
+    const stop=adHistoryStops[i];
+    if(
+      state.historyPos===stop.afterHistoryPos &&
+      state.index===stop.afterIndex
+    ){
+      return stop;
+    }
+  }
+
+  return null;
+}
+
 function isAtSkippedAdBefore(){
-  return Boolean(
-    skippedAdHistory &&
-    !adActive &&
-    state.historyPos===skippedAdHistory.beforeHistoryPos &&
-    state.index===skippedAdHistory.beforeIndex
-  );
+  return Boolean(findAdHistoryStopAtBefore());
 }
 
 function isAtSkippedAdAfter(){
-  return Boolean(
-    skippedAdHistory &&
-    !adActive &&
-    state.historyPos===skippedAdHistory.afterHistoryPos &&
-    state.index===skippedAdHistory.afterIndex
-  );
+  return Boolean(findAdHistoryStopAtAfter());
 }
 
-async function enterSkippedAdHistory(entryDir){
-  if(!skippedAdHistory)return false;
+function recordAdHistoryStop(stop){
+  if(!stop?.ad)return;
+
+  const beforeKey=String(stop.beforeKey||"");
+  const afterKey=String(stop.afterKey||"");
+
+  adHistoryStops=adHistoryStops.filter(existing=>!(
+    existing.beforeKey===beforeKey &&
+    existing.afterKey===afterKey &&
+    existing.beforeHistoryPos===stop.beforeHistoryPos &&
+    existing.afterHistoryPos===stop.afterHistoryPos
+  ));
+
+  adHistoryStops.push(stop);
+
+  /* Uzun oturumlarda sınırsız büyümesin; 24 reklam durağı 240+ haberlik
+     bir geri gezinme penceresini korur. */
+  if(adHistoryStops.length>24){
+    adHistoryStops.splice(0,adHistoryStops.length-24);
+  }
+}
+
+async function enterSkippedAdHistory(entryDir,stop=null){
+  const historyStop=stop || (
+    entryDir<0
+      ? findAdHistoryStopAtAfter()
+      : findAdHistoryStopAtBefore()
+  );
+
+  if(!historyStop)return false;
 
   const context={
-    ...skippedAdHistory,
+    ...historyStop,
     entryDir:entryDir<0?-1:1
   };
 
@@ -7279,11 +7390,8 @@ async function enterSkippedAdHistory(entryDir){
     return false;
   }
 
-  /*
-    Kullanıcı history reklamında yön seçerse o yön kazanır.
-    Reklamı hiç atlamaz ve kendi kendine biterse, history'de hangi yönde
-    ilerliyorsa o yönde devam eder.
-  */
+  /* Kullanıcı history reklamında yön seçerse o yön kazanır. Reklam doğal
+     biterse history'de hangi yönde ilerleniyorsa o yönde devam eder. */
   const exitDir=
     result.skipped
       ? result.direction
@@ -7296,8 +7404,7 @@ async function enterSkippedAdHistory(entryDir){
       -1
     );
 
-    state.historyPos=
-      context.beforeHistoryPos;
+    state.historyPos=context.beforeHistoryPos;
   }else{
     await transitionFromAdTo(
       context.afterIndex,
@@ -7305,8 +7412,7 @@ async function enterSkippedAdHistory(entryDir){
       1
     );
 
-    state.historyPos=
-      context.afterHistoryPos;
+    state.historyPos=context.afterHistoryPos;
   }
 
   historicalAdContext=null;
@@ -7377,7 +7483,7 @@ async function move(dir,options={}){
           kadar oynasın, gerçek bir history durağıdır. Böylece reklamdan sonraki
           haberde geri gidildiğinde aynı reklam yeniden ziyaret edilebilir.
         */
-        skippedAdHistory={
+        recordAdHistoryStop({
           ad:adResult.ad,
           beforeIndex,
           beforeKey:storyIdentity(state.stories[beforeIndex]),
@@ -7385,7 +7491,7 @@ async function move(dir,options={}){
           afterIndex:state.index,
           afterKey:storyIdentity(state.stories[state.index]),
           afterHistoryPos:state.historyPos
-        };
+        });
       }
 
       return;
@@ -7450,6 +7556,7 @@ async function transitionFromAdTo(nextIndex,fromHistory,dir=1){
     const ok=await finalizeCommittedAdDragToStory(nextIndex,dir);
     if(ok && dir>0 && nextIndex!==previousIndex){
       newsShownSinceAd++;
+      maybeScheduleUpcomingAdPreload();
     }
     return;
   }
@@ -7508,6 +7615,7 @@ async function transitionFromAdTo(nextIndex,fromHistory,dir=1){
 
   if(dir>0){
     newsShownSinceAd++;
+    maybeScheduleUpcomingAdPreload();
   }
 
   clearFlowTransitionClasses(adOverlay);
@@ -7658,6 +7766,7 @@ async function transitionTo(nextIndex,fromHistory,dir){
 
       if(dir>0){
         newsShownSinceAd++;
+        maybeScheduleUpcomingAdPreload();
       }
 
       state.busy=false;
@@ -7763,6 +7872,36 @@ function loadNewsBatchCache(
   }catch(e){
     return null;
   }
+}
+
+function loadInitialNewsBatchCacheSnapshot(){
+  const results=[];
+  let cachedBatchCount=0;
+  let cachedStoryCount=0;
+
+  for(let batch=0;batch<NEWS_BATCH_COUNT;batch++){
+    const cached=loadNewsBatchCache(batch);
+    if(cached?.length){
+      cachedBatchCount++;
+      cachedStoryCount+=cached.length;
+      results.push({status:"fulfilled",value:cached});
+    }else{
+      /* İlk çizim cache snapshot'ında eksik batch hata değildir; canlı
+         yenileme hemen arkasından bütün batch'leri yeniden çeker. */
+      results.push({status:"fulfilled",value:[]});
+    }
+  }
+
+  const minimumBatches=Math.min(
+    NEWS_BATCH_COUNT,
+    Math.max(3,Math.ceil(NEWS_BATCH_COUNT/3))
+  );
+
+  if(cachedBatchCount<minimumBatches || cachedStoryCount<24){
+    return null;
+  }
+
+  return results;
 }
 
 function waitForNewsRetry(ms){
@@ -8064,13 +8203,38 @@ async function performNewsLoad(){
         ? Promise.resolve(knownSources)
         : fetchSourceCatalog();
 
-    const [settled,customStories]=await Promise.all([
-      settleNewsBatches(
-        NEWS_BATCH_COUNT,
-        NEWS_BATCH_CONCURRENCY
-      ),
-      loadCustomRssStories()
-    ]);
+    const initialCacheSnapshot=
+      !state.stories.length
+        ? loadInitialNewsBatchCacheSnapshot()
+        : null;
+    const usedInitialCacheSnapshot=Boolean(initialCacheSnapshot);
+    const usedInitialNetworkFastPass=Boolean(
+      !initialCacheSnapshot &&
+      !state.stories.length &&
+      INITIAL_NEWS_BATCH_COUNT<NEWS_BATCH_COUNT
+    );
+
+    let settled;
+    let customStories;
+
+    if(initialCacheSnapshot){
+      settled=initialCacheSnapshot;
+      customStories=[];
+    }else if(usedInitialNetworkFastPass){
+      settled=await settleNewsBatches(
+        INITIAL_NEWS_BATCH_COUNT,
+        Math.min(NEWS_BATCH_CONCURRENCY,INITIAL_NEWS_BATCH_COUNT)
+      );
+      customStories=[];
+    }else{
+      [settled,customStories]=await Promise.all([
+        settleNewsBatches(
+          NEWS_BATCH_COUNT,
+          NEWS_BATCH_CONCURRENCY
+        ),
+        loadCustomRssStories()
+      ]);
+    }
 
     await catalogPromise;
 
@@ -8298,28 +8462,26 @@ async function performNewsLoad(){
       state.index=0;
       state.history=[0];
       state.historyPos=0;
-      skippedAdHistory=null;
+      adHistoryStops=[];
       historicalAdContext=null;
+      preloadImage(list[0].image).catch(()=>{});
       fill(slides[0],list[0],{prepareMedia:false});
       slides[0].className="slide active";
       activateSlideMedia(slides[0],list[0]);
       updateKeywordAlert(list[0]);
       newsShownSinceAd=1;
       clearStatus();
+      void finishInitialLoadingAfterVisual(slides[0]);
+      timerAfterLikelyMediaWarmup(slides[0],list[0]);
 
-      /* Loader'ı sabit uzun bir süre tutmak yerine ilk gerçek görsel/video
-         hazır olur olmaz kapat. Ağ yavaşsa kısa bir üst sınır sonrası yine
-         akışı aç; böylece hem bekleme kısalır hem loading sonrası boş kare
-         olasılığı ciddi biçimde azalır. */
-      void waitForInitialVisualReady(slides[0],list[0])
-        .catch(()=>{})
-        .finally(()=>{
-          finishInitialLoading();
-          setTimeout(
-            ()=>timerAfterLikelyMediaWarmup(slides[0],list[0]),
-            220
-          );
-        });
+      if(usedInitialCacheSnapshot || usedInitialNetworkFastPass){
+        const refreshLive=()=>setTimeout(()=>load(),260);
+        if(window.__floewInitialReady){
+          refreshLive();
+        }else{
+          window.addEventListener("floew:ready",refreshLive,{once:true});
+        }
+      }
 
       if(ADS_TEST_MODE){
         setTimeout(runAdTestOnce,900);
@@ -8441,19 +8603,52 @@ async function performNewsLoad(){
     state.history=remappedHistory;
     state.historyPos=remappedHistoryPos;
 
-    if(skippedAdHistory){
-      const beforeIndex=skippedAdHistory.beforeKey
-        ? indexByKey.get(skippedAdHistory.beforeKey)
-        : undefined;
-      const afterIndex=skippedAdHistory.afterKey
-        ? indexByKey.get(skippedAdHistory.afterKey)
-        : undefined;
+    if(adHistoryStops.length){
+      const remappedStops=[];
 
-      if(Number.isInteger(beforeIndex) && Number.isInteger(afterIndex)){
-        skippedAdHistory.beforeIndex=beforeIndex;
-        skippedAdHistory.afterIndex=afterIndex;
-      }else{
-        skippedAdHistory=null;
+      for(const stop of adHistoryStops){
+        const beforeIndex=stop.beforeKey
+          ? indexByKey.get(stop.beforeKey)
+          : undefined;
+        const afterIndex=stop.afterKey
+          ? indexByKey.get(stop.afterKey)
+          : undefined;
+
+        if(!Number.isInteger(beforeIndex) || !Number.isInteger(afterIndex)){
+          continue;
+        }
+
+        let beforeHistoryPos=-1;
+        let afterHistoryPos=-1;
+
+        for(let pos=0;pos<state.history.length;pos++){
+          const historyIndex=state.history[pos];
+          if(beforeHistoryPos<0 && historyIndex===beforeIndex){
+            beforeHistoryPos=pos;
+          }
+          if(
+            beforeHistoryPos>=0 &&
+            pos>beforeHistoryPos &&
+            historyIndex===afterIndex
+          ){
+            afterHistoryPos=pos;
+            break;
+          }
+        }
+
+        if(beforeHistoryPos<0 || afterHistoryPos<0)continue;
+
+        remappedStops.push({
+          ...stop,
+          beforeIndex,
+          afterIndex,
+          beforeHistoryPos,
+          afterHistoryPos
+        });
+      }
+
+      adHistoryStops=remappedStops;
+      if(!adHistoryStops.length){
         historicalAdContext=null;
       }
     }
@@ -8466,7 +8661,9 @@ async function performNewsLoad(){
 
     updateKeywordAlert(state.stories[state.index]);
     clearStatus();
-    finishInitialLoading();
+    if(!initialLoadFinished){
+      void finishInitialLoadingAfterVisual(slides[state.active]);
+    }
   }catch(err){
     console.error("NEWS WALL:",err);
 
@@ -12362,14 +12559,20 @@ function refreshOpenFaqAccordionHeights(){
     });
 }
 
-document.querySelectorAll(".menu-tab").forEach(tab=>{
-  tab.addEventListener("click",()=>{
-    document.querySelectorAll(".menu-tab").forEach(x=>x.classList.remove("active"));
-    document.querySelectorAll(".menu-panel").forEach(x=>x.classList.remove("active"));
-    tab.classList.add("active");
-    document.querySelector(`[data-panel="${tab.dataset.tab}"]`).classList.add("active");
-    updateFilterCount();
-  });
+document.querySelector("#settings-menu .menu-tabs")?.addEventListener("click",event=>{
+  const tab=event.target?.closest?.(".menu-tab");
+  if(!tab || tab.classList.contains("active"))return;
+
+  const nextPanel=document.querySelector(`[data-panel="${tab.dataset.tab}"]`);
+  if(!nextPanel)return;
+
+  /* Her sekme tıklamasında bütün panel koleksiyonunu dolaşma. Yalnız o anda
+     açık olan iki düğümü değiştir; görünüm ve animasyon aynen kalır. */
+  document.querySelector("#settings-menu .menu-tab.active")?.classList.remove("active");
+  document.querySelector("#settings-menu .menu-panel.active")?.classList.remove("active");
+  tab.classList.add("active");
+  nextPanel.classList.add("active");
+  updateFilterCount();
 });
 
 
@@ -13353,6 +13556,7 @@ async function commitTouchStoryDrag(direction){
       plannedForwardStory=null;
     }
     newsShownSinceAd++;
+    maybeScheduleUpcomingAdPreload();
     telemetryQueueEvent("story_forward",{
       direction:1,
       origin:"touch_drag"
@@ -13402,10 +13606,292 @@ async function finishTouchStoryDrag(){
         (direction<0 && isAtSkippedAdAfter())
       );
 
-    await cancelTouchStoryDrag();
-
     if(shouldDeferToNormalNavigation){
+      /* Reklam/history durağı için önce 220 ms geri-sekme animasyonu oynatmak
+         ilk swipe'ın yutulduğu hissini veriyordu. Görsel state'i anında temizle
+         ve aynı gesture'ın gerçek hedefini hemen başlat. */
+      clearTouchDragVisuals();
+      resetTouchDragState();
       move(direction,{origin:"touch_drag"});
+    }else{
+      await cancelTouchStoryDrag();
+    }
+  }
+
+  return true;
+}
+
+let touchFeedDragActive=false;
+let touchFeedDragDirection=0;
+let touchFeedDragTargetMode="";
+let touchFeedDragTargetList=null;
+let touchFeedDragTargetIndex=-1;
+let touchFeedDragDx=0;
+let touchFeedDragLastX=0;
+let touchFeedDragLastT=0;
+let touchFeedDragVelocityX=0;
+
+function resetTouchFeedDragState(){
+  touchFeedDragActive=false;
+  touchFeedDragDirection=0;
+  touchFeedDragTargetMode="";
+  touchFeedDragTargetList=null;
+  touchFeedDragTargetIndex=-1;
+  touchFeedDragDx=0;
+  touchFeedDragLastX=0;
+  touchFeedDragLastT=0;
+  touchFeedDragVelocityX=0;
+}
+
+function clearTouchFeedDragVisuals(){
+  slides.forEach(slide=>{
+    slide.classList.remove("touch-dragging");
+    slide.style.removeProperty("transform");
+    slide.style.removeProperty("transition");
+    slide.style.removeProperty("z-index");
+  });
+}
+
+function touchFeedDragTarget(direction){
+  const order=currentFeedModeOrder();
+  const current=order.indexOf(feedMode);
+  const targetIndex=current+direction;
+  if(current<0 || targetIndex<0 || targetIndex>=order.length)return null;
+
+  const mode=order[targetIndex];
+  const list=storiesForFeedMode(mode);
+  if(!list.length)return {mode,list,index:-1};
+
+  const preferredKey=feedModeStoryKeys[mode];
+  let index=preferredKey
+    ? list.findIndex(story=>storyIdentity(story)===preferredKey)
+    : -1;
+  if(index<0)index=0;
+
+  return {mode,list,index};
+}
+
+function prepareTouchFeedDragTarget(direction){
+  if(
+    touchFeedDragActive &&
+    touchFeedDragDirection===direction &&
+    touchFeedDragTargetMode
+  ){
+    return touchFeedDragTargetIndex>=0;
+  }
+
+  const target=touchFeedDragTarget(direction);
+  const standby=slides[1-state.active];
+
+  touchFeedDragActive=true;
+  touchFeedDragDirection=direction;
+
+  if(!target || target.index<0){
+    touchFeedDragTargetMode=target?.mode||"";
+    touchFeedDragTargetList=target?.list||null;
+    touchFeedDragTargetIndex=-1;
+    standby.className="slide touch-dragging";
+    slides[state.active].classList.add("touch-dragging");
+    return false;
+  }
+
+  touchFeedDragTargetMode=target.mode;
+  touchFeedDragTargetList=target.list;
+  touchFeedDragTargetIndex=target.index;
+
+  const story=target.list[target.index];
+  preloadStoryAssets(story);
+  preloadImage(story.image).catch(()=>{});
+  prepareTransitionSlide(standby,story);
+
+  const image=standby.querySelector(".slide-image");
+  if(image){
+    lockSmartFocalPoint(image,story,180).catch(()=>{});
+  }
+
+  standby.className="slide touch-dragging";
+  standby.style.zIndex="3";
+  slides[state.active].classList.add("touch-dragging");
+  slides[state.active].style.zIndex="4";
+  return true;
+}
+
+function updateTouchFeedDrag(dx,e){
+  const direction=dx<0 ? 1 : -1;
+  const width=Math.max(1,window.innerWidth||document.documentElement.clientWidth||1);
+  const current=slides[state.active];
+  const standby=slides[1-state.active];
+
+  const hasTarget=prepareTouchFeedDragTarget(direction);
+
+  const now=performance.now();
+  if(touchFeedDragLastT>0){
+    const dt=Math.max(1,now-touchFeedDragLastT);
+    touchFeedDragVelocityX=(e.clientX-touchFeedDragLastX)/dt;
+  }
+  touchFeedDragLastX=e.clientX;
+  touchFeedDragLastT=now;
+  touchFeedDragDx=dx;
+
+  if(!hasTarget){
+    const resisted=Math.max(-width*.14,Math.min(width*.14,dx*.22));
+    current.style.transition="none";
+    current.style.transform=`translate3d(${resisted}px,0,0)`;
+    return;
+  }
+
+  const clamped=Math.max(-width,Math.min(width,dx));
+  const standbyOffset=direction>0 ? width : -width;
+
+  current.style.transition="none";
+  standby.style.transition="none";
+  current.style.transform=`translate3d(${clamped}px,0,0)`;
+  standby.style.transform=`translate3d(${standbyOffset+clamped}px,0,0)`;
+}
+
+function animateTouchFeedPair(current,standby,currentX,standbyX,duration=260){
+  return new Promise(resolve=>{
+    let done=false;
+    const finish=()=>{
+      if(done)return;
+      done=true;
+      current.removeEventListener("transitionend",onEnd);
+      clearTimeout(timeout);
+      resolve();
+    };
+    const onEnd=event=>{
+      if(event.target===current && event.propertyName==="transform")finish();
+    };
+    const timeout=setTimeout(finish,duration+100);
+    current.addEventListener("transitionend",onEnd);
+
+    const transition=`transform ${duration}ms cubic-bezier(.22,.61,.36,1)`;
+    current.style.transition=transition;
+    standby.style.transition=transition;
+
+    requestAnimationFrame(()=>{
+      current.style.transform=`translate3d(${currentX}px,0,0)`;
+      standby.style.transform=`translate3d(${standbyX}px,0,0)`;
+    });
+  });
+}
+
+async function cancelTouchFeedDrag(){
+  if(!touchFeedDragActive)return;
+
+  const current=slides[state.active];
+  const standby=slides[1-state.active];
+  const width=Math.max(1,window.innerWidth||document.documentElement.clientWidth||1);
+  const direction=touchFeedDragDirection || (touchFeedDragDx<0?1:-1);
+
+  state.busy=true;
+  await animateTouchFeedPair(
+    current,
+    standby,
+    0,
+    direction>0 ? width : -width,
+    220
+  );
+
+  current.className="slide active";
+  standby.className="slide";
+  clearTouchFeedDragVisuals();
+  resetTouchFeedDragState();
+  state.busy=false;
+  timer();
+}
+
+async function commitTouchFeedDrag(direction){
+  const targetMode=touchFeedDragTargetMode;
+  const list=touchFeedDragTargetList;
+  const targetIndex=touchFeedDragTargetIndex;
+  const story=list?.[targetIndex]||null;
+
+  if(!targetMode || !story){
+    await cancelTouchFeedDrag();
+    return;
+  }
+
+  const previousMode=feedMode;
+  const beforeStory=state.stories[state.index]||null;
+  const current=slides[state.active];
+  const standby=slides[1-state.active];
+  const width=Math.max(1,window.innerWidth||document.documentElement.clientWidth||1);
+
+  state.busy=true;
+  clearTimeout(state.timer);
+  state.timer=null;
+
+  activateSlideMedia(standby,story);
+  await animateTouchFeedPair(
+    current,
+    standby,
+    direction>0 ? -width : width,
+    0,
+    260
+  );
+
+  feedModeStoryKeys[previousMode]=storyIdentity(beforeStory);
+  feedMode=targetMode;
+  filterReturnStoryKey="";
+
+  if(previousMode==="source" && targetMode!=="source")clearTemporarySourceTab();
+  if(previousMode==="category" && targetMode!=="category")clearTemporaryCategoryTab();
+
+  standby.className="slide active";
+  current.className="slide";
+  stopSlideMedia(current);
+  clearTouchFeedDragVisuals();
+
+  state.active=1-state.active;
+  state.stories=list;
+  state.index=targetIndex;
+  state.history=[targetIndex];
+  state.historyPos=0;
+  adHistoryStops=[];
+  historicalAdContext=null;
+
+  renderFeedMode();
+  closeQuickPanels();
+  clearStatus();
+  setStoryStageVisible(true);
+  updateKeywordAlert(story);
+  renderOptions();
+  showFullscreenButton();
+
+  resetTouchFeedDragState();
+  state.busy=false;
+  timer();
+  scheduleAdjacentFeedPreload(120);
+}
+
+async function finishTouchFeedDrag(){
+  if(!touchFeedDragActive){
+    resetTouchFeedDragState();
+    return false;
+  }
+
+  const width=Math.max(1,window.innerWidth||document.documentElement.clientWidth||1);
+  const distance=Math.abs(touchFeedDragDx);
+  const velocity=Math.abs(touchFeedDragVelocityX);
+  const threshold=Math.max(TOUCH_DRAG_MIN_COMMIT_PX,width*TOUCH_DRAG_COMMIT_RATIO);
+  const direction=touchFeedDragDirection;
+  const strongGesture=
+    distance>=threshold ||
+    (distance>=24 && velocity>=TOUCH_DRAG_VELOCITY_PX_MS);
+
+  if(touchFeedDragTargetIndex>=0 && strongGesture){
+    await commitTouchFeedDrag(direction);
+  }else{
+    const emptyBreaking=
+      strongGesture &&
+      touchFeedDragTargetMode==="breaking" &&
+      touchFeedDragTargetIndex<0;
+
+    await cancelTouchFeedDrag();
+
+    if(emptyBreaking){
+      status("Son 20 dakikada Son dakika, Türkiye, Dünya veya Siyaset haberi bulunamadı.");
     }
   }
 
@@ -13459,9 +13945,12 @@ window.addEventListener("pointerdown",e=>{
   state.x=e.clientX;state.y=e.clientY;state.t=performance.now();
   state.pointerId=e.pointerId;
   resetTouchDragState();
+  resetTouchFeedDragState();
   if(!touchAdDragCommitted){
     resetTouchAdDragState();
   }
+  touchFeedDragLastX=e.clientX;
+  touchFeedDragLastT=state.t;
   state.touchDragLastY=e.clientY;
   state.touchDragLastT=state.t;
   touchAdDragLastY=e.clientY;
@@ -13506,25 +13995,41 @@ window.addEventListener("pointermove",e=>{
     return;
   }
 
+  /* Reklam bir sonraki gerçek duraksa mobil swipe'ı önce direnç/cancel
+     animasyonuna sokma. Hareket eşiği geçildiği anda aynı gesture reklam
+     geçişini başlatır; pointerup bu gesture'ı ikinci kez işlemez. */
   if(
     !state.touchDragActive &&
     !state.swipeHandled &&
-    absX>=SWIPE &&
-    absX>absY*1.1
+    absY>=TOUCH_DRAG_START_PX &&
+    absY>=absX
   ){
-    const order=currentFeedModeOrder();
-    const currentModeIndex=order.indexOf(feedMode);
-    const targetModeIndex=
-      currentModeIndex + (dx<0 ? 1 : -1);
+    const direction=dy<0 ? 1 : -1;
+    const adIsNext=
+      direction>0
+        ? (adBreakDue() || isAtSkippedAdBefore())
+        : isAtSkippedAdAfter();
 
-    state.swipeHandled=true;
-
-    if(
-      targetModeIndex>=0 &&
-      targetModeIndex<order.length
-    ){
-      switchFeedMode(order[targetModeIndex]);
+    if(adIsNext){
+      e.preventDefault();
+      state.swipeHandled=true;
+      clearTouchDragVisuals();
+      resetTouchDragState();
+      void move(direction,{origin:"touch_ad_entry"});
+      return;
     }
+  }
+
+  if(
+    !state.touchDragActive &&
+    !state.swipeHandled &&
+    (
+      touchFeedDragActive ||
+      (absX>=TOUCH_DRAG_START_PX && absX>absY*1.1)
+    )
+  ){
+    e.preventDefault();
+    updateTouchFeedDrag(dx,e);
     return;
   }
 
@@ -13540,11 +14045,14 @@ window.addEventListener("pointermove",e=>{
 window.addEventListener("pointercancel",e=>{
   if(e.pointerId!==state.pointerId)return;
 
-  if(touchAdDragActive){
+  if(touchFeedDragActive){
+    cancelTouchFeedDrag();
+  }else if(touchAdDragActive){
     cancelTouchAdDrag();
   }else if(state.touchDragActive){
     cancelTouchStoryDrag();
   }else{
+    resetTouchFeedDragState();
     resetTouchDragState();
     resetTouchAdDragState();
   }
@@ -13556,6 +14064,18 @@ window.addEventListener("pointercancel",e=>{
 
 window.addEventListener("pointerup",e=>{
   if(e.button!==0)return;
+
+  /* Yatay akış sekmeleri de dikey haberler gibi parmağı doğrudan takip eder. */
+  if(
+    touchFeedDragActive &&
+    e.pointerId===state.pointerId
+  ){
+    finishTouchFeedDrag();
+    state.pointerId=null;
+    state.swipeHandled=false;
+    state.swipeTouch=false;
+    return;
+  }
 
   /* Reklam da haberlerle aynı direct-drag davranışını kullanır. */
   if(
