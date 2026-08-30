@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.79.1";
+window.__floewAppVersion="31.79.2";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -674,16 +674,45 @@ let currentAd=null;
 let adEntryDirection=1;
 
 /*
-  Haber history dizisini bozmadan reklamı gerçek bir gezinme durağı gibi
-  davranacak şekilde araya yerleştiriyoruz.
-
-  adHistoryStops, kullanıcının akışta gördüğü reklam duraklarını ileri/geri geçmişiyle birlikte korur.
-  Böylece:
-    haber A -> reklam -> haber B
-  dizisinde B'den geri gidildiğinde reklama, reklamdan da A'ya dönülebilir.
+  Reklamlar haber history dizisini bozmadan iki komşu haber arasındaki gerçek
+  navigation kayıtları olarak tutulur. Bu, daha önce çalışan replayRecord
+  modelinin güncel sürüme uyarlanmış halidir. Reklam tamamlanmadan geçilse de
+  A -> reklam -> B sınırı history'de kalır ve geri/ileri gezinmede aynı reklam
+  yeniden açılır.
 */
-let adHistoryStops=[];
+const adHistoryByAfterPos=new Map();
+let activeAdRecord=null;
 let historicalAdContext=null;
+
+function clearAdNavigationHistory(){
+  adHistoryByAfterPos.clear();
+  activeAdRecord=null;
+  historicalAdContext=null;
+}
+
+function adRecordAfterCurrent(){
+  const record=adHistoryByAfterPos.get(state.historyPos+1);
+  if(
+    record &&
+    record.beforeHistoryPos===state.historyPos &&
+    record.afterHistoryPos===state.historyPos+1
+  ){
+    return record;
+  }
+  return null;
+}
+
+function adRecordBeforeCurrent(){
+  const record=adHistoryByAfterPos.get(state.historyPos);
+  if(
+    record &&
+    record.afterHistoryPos===state.historyPos &&
+    record.beforeHistoryPos===state.historyPos-1
+  ){
+    return record;
+  }
+  return null;
+}
 
 /*
   V31.26.1 — mobil reklam direct-drag durumu.
@@ -2594,7 +2623,7 @@ async function switchFeedMode(nextMode){
     state.index=0;
     state.history=[];
     state.historyPos=0;
-    adHistoryStops=[];
+    clearAdNavigationHistory();
     historicalAdContext=null;
     clearTimeout(state.timer);
     setStoryStageVisible(false);
@@ -2657,7 +2686,7 @@ async function switchFeedMode(nextMode){
   state.index=idx;
   state.history=[idx];
   state.historyPos=0;
-  adHistoryStops=[];
+  clearAdNavigationHistory();
   historicalAdContext=null;
   state.active=1-state.active;
 
@@ -2863,7 +2892,7 @@ function applyFilters(options={}){
       state.index=0;
       state.history=[];
       state.historyPos=0;
-      adHistoryStops=[];
+      clearAdNavigationHistory();
       historicalAdContext=null;
       clearTimeout(state.timer);
       state.timer=null;
@@ -2964,7 +2993,7 @@ function applyFilters(options={}){
   }else{
     state.history=[idx];
     state.historyPos=0;
-    adHistoryStops=[];
+    clearAdNavigationHistory();
     historicalAdContext=null;
   }
 
@@ -5966,6 +5995,11 @@ function refreshAdsLayoutIfNeeded(){
 let upcomingAd=null;
 let upcomingAdPreloadPromise=null;
 let upcomingAdPreloadKey="";
+let stagedAdAssetKey="";
+
+function adAssetKey(ad){
+  return ad?.src ? `${ad.type||"image"}|${ad.src}` : "";
+}
 
 function chooseRandomAdCandidate(){
   if(!adCatalog.length)return null;
@@ -5992,21 +6026,28 @@ function chooseRandomAd(){
   return markAdChosen(chooseRandomAdCandidate());
 }
 
-function clearUpcomingAdPreload(){
+function clearUpcomingAdPreload(options={}){
   upcomingAd=null;
   upcomingAdPreloadPromise=null;
   upcomingAdPreloadKey="";
+
+  if(!options.preserveStaged && !adActive){
+    stagedAdAssetKey="";
+    resetAdMedia();
+  }
 }
 
 function preloadAdAsset(ad){
   if(!ad?.src)return Promise.resolve(false);
 
-  const key=`${ad.type||"image"}|${ad.src}`;
+  const key=adAssetKey(ad);
   if(upcomingAdPreloadPromise && upcomingAdPreloadKey===key){
     return upcomingAdPreloadPromise;
   }
 
   upcomingAdPreloadKey=key;
+  stagedAdAssetKey=key;
+
   upcomingAdPreloadPromise=new Promise(resolve=>{
     let settled=false;
     const done=value=>{
@@ -6018,17 +6059,47 @@ function preloadAdAsset(ad){
 
     const timeout=setTimeout(()=>done(false),5000);
 
-    if(ad.type==="video"){
-      const video=document.createElement("video");
-      video.muted=true;
-      video.defaultMuted=true;
-      video.preload="auto";
-      video.playsInline=true;
-      video.onloadeddata=()=>done(true);
-      video.oncanplay=()=>done(true);
-      video.onerror=()=>done(false);
-      video.src=ad.src;
-      try{video.load()}catch(e){done(false)}
+    if(ad.type==="video" && adVideo){
+      try{adVideo.pause()}catch(e){}
+      adVideo.hidden=true;
+      adVideo.muted=true;
+      adVideo.defaultMuted=true;
+      adVideo.autoplay=false;
+      adVideo.loop=false;
+      adVideo.playsInline=true;
+      adVideo.preload="auto";
+      adVideo.onloadeddata=()=>done(true);
+      adVideo.oncanplay=()=>done(true);
+      adVideo.onerror=()=>done(false);
+
+      if(adVideo.getAttribute("src")!==ad.src){
+        adVideo.src=ad.src;
+        try{adVideo.load()}catch(e){done(false)}
+      }else if(adVideo.readyState>=2){
+        done(true);
+      }
+      return;
+    }
+
+    if(adImage){
+      adImage.hidden=true;
+      adImage.decoding="async";
+
+      const finishImage=async()=>{
+        try{
+          if(adImage.decode)await adImage.decode();
+        }catch(e){}
+        done(adImage.naturalWidth>0);
+      };
+
+      adImage.onload=finishImage;
+      adImage.onerror=()=>done(false);
+
+      if(adImage.getAttribute("src")!==ad.src){
+        adImage.src=ad.src;
+      }else if(adImage.complete && adImage.naturalWidth>0){
+        finishImage();
+      }
       return;
     }
 
@@ -6046,7 +6117,7 @@ async function prepareUpcomingAd(){
   if(
     adActive ||
     upcomingAd ||
-    newsShownSinceAd<Math.max(1,ADS_INTERVAL_NEWS-2)
+    newsShownSinceAd<Math.max(1,ADS_INTERVAL_NEWS-4)
   ){
     return upcomingAd;
   }
@@ -6069,7 +6140,7 @@ function maybeScheduleUpcomingAdPreload(){
   if(
     adActive ||
     upcomingAd ||
-    newsShownSinceAd<Math.max(1,ADS_INTERVAL_NEWS-2)
+    newsShownSinceAd<Math.max(1,ADS_INTERVAL_NEWS-4)
   ) return;
 
   const run=()=>{ void prepareUpcomingAd(); };
@@ -6082,7 +6153,7 @@ function maybeScheduleUpcomingAdPreload(){
 
 function takeUpcomingAd(){
   const ad=upcomingAd;
-  clearUpcomingAdPreload();
+  clearUpcomingAdPreload({preserveStaged:true});
   return markAdChosen(ad);
 }
 
@@ -6182,9 +6253,10 @@ function requestAdSkip(dir=1){
     Reklam tamamen görünür olmadan ve kısa grace süresi dolmadan skip
     isteğini kaydetmiyoruz.
   */
+  const touchSkip=Boolean(state.swipeTouch || touchAdDragActive);
   if(
     !adHasEntered ||
-    performance.now()<adSkipEnabledAt
+    (!touchSkip && performance.now()<adSkipEnabledAt)
   ){
     return false;
   }
@@ -6198,31 +6270,47 @@ function requestAdSkip(dir=1){
   return true;
 }
 
-function resetAdMedia(){
+function resetAdMedia(options={}){
+  const preserveKey=adAssetKey(options.preserveAd);
+  const preserveStaged=Boolean(
+    preserveKey &&
+    stagedAdAssetKey===preserveKey
+  );
+
   if(adImage){
     adImage.hidden=true;
-    adImage.removeAttribute("src");
+    adImage.onload=null;
+    adImage.onerror=null;
+    if(!preserveStaged || !preserveKey.startsWith("image|")){
+      adImage.removeAttribute("src");
+    }
   }
 
   if(adVideo){
-    /*
-      Reklam player'ı haber videosu playback guard'larından bağımsızdır.
-      Özellikle loop/restart state'i her reklam çıkışında sıfırlanır.
-    */
     adVideo.__floewShouldPlay=false;
-
     try{adVideo.pause()}catch(e){}
 
     adVideo.autoplay=false;
     adVideo.loop=false;
     adVideo.controls=false;
     adVideo.hidden=true;
+    adVideo.onloadeddata=null;
+    adVideo.oncanplay=null;
+    adVideo.onended=null;
+    adVideo.onerror=null;
+    adVideo.onabort=null;
 
     adVideo.removeAttribute("autoplay");
     adVideo.removeAttribute("loop");
-    adVideo.removeAttribute("src");
 
-    adVideo.load();
+    if(!preserveStaged || !preserveKey.startsWith("video|")){
+      adVideo.removeAttribute("src");
+      try{adVideo.load()}catch(e){}
+    }
+  }
+
+  if(!preserveStaged){
+    stagedAdAssetKey="";
   }
 }
 
@@ -6300,41 +6388,36 @@ function waitForImageAd(src){
 
     adPlaybackFinish=skip;
 
-    adImage.onload=async()=>{
-      const entered=await transitionAdIn(
-        adEntryDirection
-      );
-
-      if(!entered){
-        finish(false,1,false);
-        return;
-      }
-
+    const start=async()=>{
+      if(finished)return;
+      const entered=await transitionAdIn(adEntryDirection);
+      if(!entered){finish(false,1,false);return;}
       if(adSkipRequestedDirection){
-        finish(
-          true,
-          adSkipRequestedDirection,
-          true
-        );
+        finish(true,adSkipRequestedDirection,true);
         return;
       }
-
-      timerId=setTimeout(
-        ()=>finish(true,1,false),
-        AD_IMAGE_MS
-      );
+      timerId=setTimeout(()=>finish(true,1,false),AD_IMAGE_MS);
     };
 
+    adImage.onload=start;
     adImage.onerror=()=>{
       console.warn("Ad image could not load:",src);
       finish(false,1,false);
     };
 
     adImage.hidden=false;
-    adImage.src=src;
+    const alreadyReady=
+      adImage.getAttribute("src")===src &&
+      adImage.complete &&
+      adImage.naturalWidth>0;
+    if(alreadyReady){
+      queueMicrotask(start);
+    }else{
+      adImage.src=src;
+    }
 
     loadTimer=setTimeout(()=>{
-      if(!finished && !adImage.complete){
+      if(!finished && !(adImage.complete&&adImage.naturalWidth>0)){
         console.warn("Ad image load timeout:",src);
         finish(false,1,false);
       }
@@ -6549,8 +6632,15 @@ function waitForVideoAd(src){
     };
     adVideo.onabort=()=>finish(adHasEntered,1,false);
 
-    adVideo.src=src;
-    adVideo.load();
+    const alreadyReady=
+      adVideo.getAttribute("src")===src &&
+      adVideo.readyState>=2;
+    if(alreadyReady){
+      queueMicrotask(start);
+    }else{
+      adVideo.src=src;
+      adVideo.load();
+    }
 
     loadTimer=setTimeout(()=>{
       if(!started&&!finished){
@@ -6562,24 +6652,35 @@ function waitForVideoAd(src){
 }
 
 async function playAdBreak(options={}){
-  if(adActive||!adCatalog.length)return false;
+  if(adActive)return false;
+  if(!adCatalog.length && !options.record && !options.ad)return false;
 
+  const replayRecord=options.record||null;
   const ad=
+    replayRecord?.ad ||
     options.ad ||
     takeUpcomingAd() ||
     chooseRandomAd();
 
   if(!ad)return false;
 
-  currentAd=ad;
-  adEntryDirection=
-    options.entryDir<0
-      ? -1
-      : 1;
+  const record=
+    replayRecord || {
+      ad,
+      beforeHistoryPos:state.historyPos,
+      beforeStoryIndex:state.index,
+      beforeIndex:state.index,
+      beforeKey:storyIdentity(state.stories[state.index]),
+      afterHistoryPos:null,
+      afterStoryIndex:null,
+      afterIndex:null,
+      afterKey:""
+    };
 
-  historicalAdContext=
-    options.historyContext ||
-    null;
+  activeAdRecord=record;
+  currentAd=ad;
+  adEntryDirection=options.entryDir<0?-1:1;
+  historicalAdContext=options.historyContext || (replayRecord ? record : null);
 
   adActive=true;
   adHasEntered=false;
@@ -6587,7 +6688,7 @@ async function playAdBreak(options={}){
   adSkipEnabledAt=0;
   adPlaybackFinish=null;
   clearTimeout(state.timer);
-  resetAdMedia();
+  resetAdMedia({preserveAd:ad});
 
   let result={
     shown:false,
@@ -6617,17 +6718,16 @@ async function playAdBreak(options={}){
     adSkipEnabledAt=0;
     adPlaybackFinish=null;
     currentAd=null;
+    activeAdRecord=null;
     historicalAdContext=null;
     slides[state.active].className="slide active";
     return false;
   }
 
   /*
-    İlk normal reklam gösteriminde sayaç sıfırlanır.
-    History içinden aynı reklam tekrar ziyaret edildiğinde yeni bir reklam
-    gösterimi gibi sayaç sıfırlamayız.
+    Geçmiş reklamına geri dönmek yeni bir 10-haber sayacı başlangıcı değildir.
   */
-  if(!options.historyContext){
+  if(!replayRecord && !options.historyContext){
     newsShownSinceAd=0;
   }
 
@@ -6635,7 +6735,8 @@ async function playAdBreak(options={}){
     shown:true,
     direction:result.direction<0?-1:1,
     skipped:Boolean(result.skipped),
-    ad
+    ad,
+    record
   };
 }
 
@@ -7293,128 +7394,89 @@ function scheduleNextStoryPreload(delay=70){
 }
 
 
-function findAdHistoryStopAtBefore(){
-  if(adActive || !adHistoryStops.length)return null;
+async function finalizeNewAdForward(record){
+  if(!record)return false;
 
-  for(let i=adHistoryStops.length-1;i>=0;i--){
-    const stop=adHistoryStops[i];
-    if(
-      state.historyPos===stop.beforeHistoryPos &&
-      state.index===stop.beforeIndex
-    ){
-      return stop;
-    }
+  const beforePos=state.historyPos;
+  const beforeIndex=state.index;
+
+  if(state.historyPos < state.history.length-1){
+    const target=state.history[state.historyPos+1];
+    await transitionFromAdTo(target,true,1);
+    state.historyPos++;
+  }else{
+    const next=chooseForward();
+    if(next<0)return false;
+
+    await transitionFromAdTo(next,false,1);
+    state.history.push(next);
+    state.historyPos=state.history.length-1;
   }
 
-  return null;
+  record.beforeHistoryPos=beforePos;
+  record.beforeStoryIndex=beforeIndex;
+  record.beforeIndex=beforeIndex;
+  record.beforeKey=storyIdentity(state.stories[beforeIndex]);
+  record.afterHistoryPos=state.historyPos;
+  record.afterStoryIndex=state.index;
+  record.afterIndex=state.index;
+  record.afterKey=storyIdentity(state.stories[state.index]);
+
+  adHistoryByAfterPos.set(record.afterHistoryPos,record);
+  activeAdRecord=null;
+  historicalAdContext=null;
+  return true;
 }
 
-function findAdHistoryStopAtAfter(){
-  if(adActive || !adHistoryStops.length)return null;
+/*
+  Kaydedilmiş reklam story history içindeki iki komşu haberin arasında gerçek
+  bir navigation öğesi gibi davranır. Reklam yarıda geçilmiş olsa da aynı
+  record tekrar oynatılır; yeni reklam seçilmez.
+*/
+async function navigateRecordedAd(record,entryDir){
+  if(!record)return false;
 
-  for(let i=adHistoryStops.length-1;i>=0;i--){
-    const stop=adHistoryStops[i];
-    if(
-      state.historyPos===stop.afterHistoryPos &&
-      state.index===stop.afterIndex
-    ){
-      return stop;
-    }
-  }
-
-  return null;
-}
-
-function isAtSkippedAdBefore(){
-  return Boolean(findAdHistoryStopAtBefore());
-}
-
-function isAtSkippedAdAfter(){
-  return Boolean(findAdHistoryStopAtAfter());
-}
-
-function recordAdHistoryStop(stop){
-  if(!stop?.ad)return;
-
-  const beforeKey=String(stop.beforeKey||"");
-  const afterKey=String(stop.afterKey||"");
-
-  adHistoryStops=adHistoryStops.filter(existing=>!(
-    existing.beforeKey===beforeKey &&
-    existing.afterKey===afterKey &&
-    existing.beforeHistoryPos===stop.beforeHistoryPos &&
-    existing.afterHistoryPos===stop.afterHistoryPos
-  ));
-
-  adHistoryStops.push(stop);
-
-  /* Uzun oturumlarda sınırsız büyümesin; 24 reklam durağı 240+ haberlik
-     bir geri gezinme penceresini korur. */
-  if(adHistoryStops.length>24){
-    adHistoryStops.splice(0,adHistoryStops.length-24);
-  }
-}
-
-async function enterSkippedAdHistory(entryDir,stop=null){
-  const historyStop=stop || (
-    entryDir<0
-      ? findAdHistoryStopAtAfter()
-      : findAdHistoryStopAtBefore()
-  );
-
-  if(!historyStop)return false;
-
-  const context={
-    ...historyStop,
-    entryDir:entryDir<0?-1:1
-  };
-
-  await loadAdsCatalog(getAdsLayout());
-
-  const layoutAd=
-    adCatalog.find(
-      item=>
-        item.name &&
-        item.name===context.ad?.name
-    ) ||
-    context.ad;
-
+  historicalAdContext=record;
   const result=await playAdBreak({
-    ad:layoutAd,
-    entryDir:context.entryDir,
-    historyContext:context
+    record,
+    entryDir,
+    historyContext:record
   });
 
   if(!result?.shown){
+    adHistoryByAfterPos.delete(record.afterHistoryPos);
+    activeAdRecord=null;
     historicalAdContext=null;
     return false;
   }
 
-  /* Kullanıcı history reklamında yön seçerse o yön kazanır. Reklam doğal
-     biterse history'de hangi yönde ilerleniyorsa o yönde devam eder. */
-  const exitDir=
-    result.skipped
-      ? result.direction
-      : context.entryDir;
+  const exitDir=result.skipped
+    ? result.direction
+    : (entryDir<0?-1:1);
 
-  if(exitDir<0){
-    await transitionFromAdTo(
-      context.beforeIndex,
-      true,
-      -1
-    );
-
-    state.historyPos=context.beforeHistoryPos;
-  }else{
-    await transitionFromAdTo(
-      context.afterIndex,
-      true,
-      1
-    );
-
-    state.historyPos=context.afterHistoryPos;
+  if(entryDir>0 && exitDir<0){
+    await transitionAdBackToCurrent(-1);
+    activeAdRecord=null;
+    historicalAdContext=null;
+    return true;
   }
 
+  if(entryDir<0 && exitDir>0){
+    await transitionAdBackToCurrent(1);
+    activeAdRecord=null;
+    historicalAdContext=null;
+    return true;
+  }
+
+  if(exitDir<0){
+    await transitionFromAdTo(record.beforeStoryIndex,true,-1);
+    state.historyPos=record.beforeHistoryPos;
+  }else{
+    await transitionFromAdTo(record.afterStoryIndex,true,1);
+    state.historyPos=record.afterHistoryPos;
+  }
+
+  activeAdRecord=null;
   historicalAdContext=null;
   return true;
 }
@@ -7432,9 +7494,6 @@ async function move(dir,options={}){
     filterReturnStoryKey="";
   }
 
-  /*
-    Reklam ekrandayken normal gezinme reklamı atlama isteğine dönüşür.
-  */
   if(adActive && !options.fromAd){
     requestAdSkip(dir);
     return;
@@ -7442,19 +7501,19 @@ async function move(dir,options={}){
 
   if(state.busy||state.stories.length<2)return;
 
-  /*
-    Kullanıcının bitmeden geçtiği reklam history'de gerçek bir ara duraktır.
-    Haber B'den geri -> reklam; haber A'dan ileri -> aynı reklam.
-  */
-  if(!options.skipHistoricalAd){
-    if(dir<0 && isAtSkippedAdAfter()){
-      await enterSkippedAdHistory(-1);
-      return;
-    }
-
-    if(dir>0 && isAtSkippedAdBefore()){
-      await enterSkippedAdHistory(1);
-      return;
+  if(!options.skipRecordedAd && !options.skipHistoricalAd){
+    if(dir<0){
+      const recorded=adRecordBeforeCurrent();
+      if(recorded){
+        const handled=await navigateRecordedAd(recorded,-1);
+        if(handled)return;
+      }
+    }else if(dir>0 && state.historyPos<state.history.length-1){
+      const recorded=adRecordAfterCurrent();
+      if(recorded){
+        const handled=await navigateRecordedAd(recorded,1);
+        if(handled)return;
+      }
     }
   }
 
@@ -7463,65 +7522,30 @@ async function move(dir,options={}){
     !options.skipAd &&
     adBreakDue()
   ){
-    const beforeIndex=state.index;
-    const beforeHistoryPos=state.historyPos;
-
     const adResult=await tryPlayDueAd();
 
     if(adResult?.shown){
       if(adResult.direction<0){
         await transitionAdBackToCurrent(-1);
+        activeAdRecord=null;
       }else{
-        await move(1,{
-          skipAd:true,
-          skipHistoricalAd:true,
-          fromAd:true
-        });
-
-        /*
-          Reklam kullanıcı tarafından atlanmış olsun ya da doğal olarak sonuna
-          kadar oynasın, gerçek bir history durağıdır. Böylece reklamdan sonraki
-          haberde geri gidildiğinde aynı reklam yeniden ziyaret edilebilir.
-        */
-        recordAdHistoryStop({
-          ad:adResult.ad,
-          beforeIndex,
-          beforeKey:storyIdentity(state.stories[beforeIndex]),
-          beforeHistoryPos,
-          afterIndex:state.index,
-          afterKey:storyIdentity(state.stories[state.index]),
-          afterHistoryPos:state.historyPos
-        });
+        await finalizeNewAdForward(adResult.record);
       }
-
       return;
     }
   }
 
-  /*
-    GERİ:
-    Daha önce gerçekten gösterilmiş habere dön.
-  */
   if(dir<0){
     if(state.historyPos<=0)return;
 
-    const target=
-      state.history[state.historyPos-1];
-
+    const target=state.history[state.historyPos-1];
     await transitionTo(target,true,dir);
-
     state.historyPos--;
-
     return;
   }
 
-  /*
-    İLERİ:
-    Eğer geri gelmişsek history'deki sonraki habere dön.
-  */
   if(state.historyPos < state.history.length-1){
-    const target=
-      state.history[state.historyPos+1];
+    const target=state.history[state.historyPos+1];
 
     if(options.fromAd){
       await transitionFromAdTo(target,true,dir);
@@ -7530,12 +7554,10 @@ async function move(dir,options={}){
     }
 
     state.historyPos++;
-
     return;
   }
 
   const next=chooseForward();
-
   if(next<0)return;
 
   if(options.fromAd){
@@ -8462,7 +8484,7 @@ async function performNewsLoad(){
       state.index=0;
       state.history=[0];
       state.historyPos=0;
-      adHistoryStops=[];
+      clearAdNavigationHistory();
       historicalAdContext=null;
       preloadImage(list[0].image).catch(()=>{});
       fill(slides[0],list[0],{prepareMedia:false});
@@ -8603,52 +8625,54 @@ async function performNewsLoad(){
     state.history=remappedHistory;
     state.historyPos=remappedHistoryPos;
 
-    if(adHistoryStops.length){
-      const remappedStops=[];
+    if(adHistoryByAfterPos.size){
+      const oldRecords=[...adHistoryByAfterPos.values()];
+      adHistoryByAfterPos.clear();
 
-      for(const stop of adHistoryStops){
-        const beforeIndex=stop.beforeKey
-          ? indexByKey.get(stop.beforeKey)
+      for(const record of oldRecords){
+        const beforeIndex=record.beforeKey
+          ? indexByKey.get(record.beforeKey)
           : undefined;
-        const afterIndex=stop.afterKey
-          ? indexByKey.get(stop.afterKey)
+        const afterIndex=record.afterKey
+          ? indexByKey.get(record.afterKey)
           : undefined;
 
         if(!Number.isInteger(beforeIndex) || !Number.isInteger(afterIndex)){
           continue;
         }
 
-        let beforeHistoryPos=-1;
-        let afterHistoryPos=-1;
-
-        for(let pos=0;pos<state.history.length;pos++){
-          const historyIndex=state.history[pos];
-          if(beforeHistoryPos<0 && historyIndex===beforeIndex){
-            beforeHistoryPos=pos;
-          }
+        const candidates=[];
+        for(let pos=0;pos<state.history.length-1;pos++){
           if(
-            beforeHistoryPos>=0 &&
-            pos>beforeHistoryPos &&
-            historyIndex===afterIndex
+            state.history[pos]===beforeIndex &&
+            state.history[pos+1]===afterIndex
           ){
-            afterHistoryPos=pos;
-            break;
+            candidates.push(pos);
           }
         }
 
-        if(beforeHistoryPos<0 || afterHistoryPos<0)continue;
+        if(!candidates.length)continue;
 
-        remappedStops.push({
-          ...stop,
+        const beforeHistoryPos=candidates.reduce((best,pos)=>
+          Math.abs(pos-(record.beforeHistoryPos??pos)) <
+          Math.abs(best-(record.beforeHistoryPos??best)) ? pos : best
+        ,candidates[0]);
+        const afterHistoryPos=beforeHistoryPos+1;
+
+        const remapped={
+          ...record,
+          beforeStoryIndex:beforeIndex,
           beforeIndex,
+          afterStoryIndex:afterIndex,
           afterIndex,
           beforeHistoryPos,
           afterHistoryPos
-        });
+        };
+
+        adHistoryByAfterPos.set(afterHistoryPos,remapped);
       }
 
-      adHistoryStops=remappedStops;
-      if(!adHistoryStops.length){
+      if(!adHistoryByAfterPos.size){
         historicalAdContext=null;
       }
     }
@@ -13231,7 +13255,7 @@ async function finishTouchAdDrag(){
   const canSkip=
     adActive &&
     adHasEntered &&
-    performance.now()>=adSkipEnabledAt;
+    (state.swipeTouch || performance.now()>=adSkipEnabledAt);
 
   if(!strongGesture || !canSkip || touchAdDragTargetIndex<0){
     await cancelTouchAdDrag();
@@ -13351,14 +13375,14 @@ function clearTouchDragVisuals(){
 
 function touchDragTargetForDirection(direction){
   if(direction<0){
-    if(isAtSkippedAdAfter() || state.historyPos<=0)return null;
+    if(Boolean(adRecordBeforeCurrent()) || state.historyPos<=0)return null;
     const index=state.history[state.historyPos-1];
     return Number.isInteger(index)
       ? {index,fromHistory:true}
       : null;
   }
 
-  if(isAtSkippedAdBefore() || adBreakDue())return null;
+  if(Boolean(adRecordAfterCurrent()) || adBreakDue())return null;
 
   if(state.historyPos<state.history.length-1){
     const index=state.history[state.historyPos+1];
@@ -13602,8 +13626,8 @@ async function finishTouchStoryDrag(){
     const shouldDeferToNormalNavigation=
       strongGesture &&
       (
-        (direction>0 && (isAtSkippedAdBefore() || adBreakDue())) ||
-        (direction<0 && isAtSkippedAdAfter())
+        (direction>0 && (Boolean(adRecordAfterCurrent()) || adBreakDue())) ||
+        (direction<0 && Boolean(adRecordBeforeCurrent()))
       );
 
     if(shouldDeferToNormalNavigation){
@@ -13848,7 +13872,7 @@ async function commitTouchFeedDrag(direction){
   state.index=targetIndex;
   state.history=[targetIndex];
   state.historyPos=0;
-  adHistoryStops=[];
+  clearAdNavigationHistory();
   historicalAdContext=null;
 
   renderFeedMode();
@@ -14007,8 +14031,8 @@ window.addEventListener("pointermove",e=>{
     const direction=dy<0 ? 1 : -1;
     const adIsNext=
       direction>0
-        ? (adBreakDue() || isAtSkippedAdBefore())
-        : isAtSkippedAdAfter();
+        ? (adBreakDue() || Boolean(adRecordAfterCurrent()))
+        : Boolean(adRecordBeforeCurrent());
 
     if(adIsNext){
       e.preventDefault();
