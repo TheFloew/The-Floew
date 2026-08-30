@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.79.0";
+window.__floewAppVersion="31.80.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -671,6 +671,8 @@ const AD_SKIP_GRACE_MS=180;
 
 let currentAd=null;
 let adEntryDirection=1;
+let plannedAd=null;
+const adAssetWarmupCache=new Map();
 
 /*
   Haber history dizisini bozmadan reklamı gerçek bir gezinme durağı gibi
@@ -2586,17 +2588,14 @@ function switchFeedMode(nextMode){
   const nextStory=list[idx];
 
   /*
-    Sekmeler soldan sağa:
-      Son dakika | Gündem | Yabancı
-
-    Soldaki bir sekmeye geçiliyorsa yeni içerik soldan,
-    sağdaki bir sekmeye geçiliyorsa sağdan gelir.
+    Sekme değişimi normal haber gezinmesiyle aynı dikey hareket dilini
+    kullanır. Sağdaki sekmeye geçiş ileri, soldaki sekmeye geçiş geri
+    hareket sayılır; kullanıcının seçtiği yukarı/aşağı yönü korunur.
   */
   const previousModeIndex=modeOrder.indexOf(previousMode);
   const nextModeIndex=modeOrder.indexOf(next);
-  const movingRight=nextModeIndex>previousModeIndex;
-  const enterClass=movingRight ? "enter-left" : "enter-right";
-  const exitClass=movingRight ? "exit-left" : "exit-right";
+  const movingForward=nextModeIndex>previousModeIndex;
+  const [enterClass,exitClass]=transitionPair(movingForward?1:-1);
 
   state.busy=true;
   clearTimeout(state.timer);
@@ -2895,8 +2894,9 @@ function applyFilters(options={}){
 }
 
 
-const INITIAL_LOADING_MIN_MS=1200;
-const INITIAL_LOADING_MAX_MS=12000;
+const INITIAL_LOADING_MIN_MS=420;
+const INITIAL_LOADING_MAX_MS=9000;
+const INITIAL_VISUAL_READY_MAX_MS=1800;
 const initialLoadingStartedAt=Date.now();
 let initialLoadFinished=false;
 let initialLoadingWatchdog=null;
@@ -2953,10 +2953,83 @@ function finishInitialLoading(forceImmediate=false){
         screen.classList.add("is-done");
         screen.addEventListener("transitionend",remove,{once:true});
         // Güvenlik: transitionend herhangi bir nedenle gelmezse overlay kalmasın.
-        setTimeout(remove,700);
-      },190);
+        setTimeout(remove,450);
+      },80);
     });
   },wait);
+}
+
+function waitForInitialVisualReady(el,story,timeoutMs=INITIAL_VISUAL_READY_MAX_MS){
+  if(!el || !story)return Promise.resolve();
+
+  const image=el.querySelector(".slide-image");
+  const video=el.querySelector(".slide-video");
+  const embed=el.querySelector(".slide-embed");
+  const storyKey=mediaKey(story);
+
+  return new Promise(resolve=>{
+    let finished=false;
+    let pollTimer=null;
+    let timeoutTimer=null;
+
+    const cleanup=()=>{
+      clearTimeout(pollTimer);
+      clearTimeout(timeoutTimer);
+      image?.removeEventListener("load",check);
+      image?.removeEventListener("error",check);
+      video?.removeEventListener("loadeddata",check);
+      video?.removeEventListener("canplay",check);
+      embed?.removeEventListener("load",check);
+    };
+
+    const done=()=>{
+      if(finished)return;
+      finished=true;
+      cleanup();
+      resolve();
+    };
+
+    const imageReady=()=>Boolean(
+      image &&
+      image.style.visibility!=="hidden" &&
+      image.complete &&
+      image.naturalWidth>0 &&
+      image.naturalHeight>0
+    );
+
+    const mediaReady=()=>Boolean(
+      el.dataset.mediaReadyStoryKey===storyKey ||
+      (video?.classList.contains("media-visible") && video.readyState>=2) ||
+      (embed?.classList.contains("media-visible") && embed.src)
+    );
+
+    function check(){
+      if(finished)return;
+
+      /* setStoryImage küçük RSS thumbnail'ından article-proxy'ye aynı load
+         turunda geçebilir. İki frame bekleyip son src'nin gerçekten hazır
+         olduğunu kontrol etmek loading sonrası siyah/boş kareyi engeller. */
+      requestAnimationFrame(()=>{
+        requestAnimationFrame(()=>{
+          if(finished)return;
+          if(imageReady() || mediaReady()){
+            done();
+            return;
+          }
+          pollTimer=setTimeout(check,55);
+        });
+      });
+    }
+
+    image?.addEventListener("load",check);
+    image?.addEventListener("error",check);
+    video?.addEventListener("loadeddata",check);
+    video?.addEventListener("canplay",check);
+    embed?.addEventListener("load",check);
+
+    timeoutTimer=setTimeout(done,Math.max(250,timeoutMs));
+    check();
+  });
 }
 
 /*
@@ -4542,7 +4615,7 @@ const smartFocalCache=new Map();
 const smartFocalResolvedCache=new Map();
 const SMART_FOCAL_SAMPLE=48;
 const SMART_FOCAL_CACHE_MAX=160;
-const SMART_FOCAL_LOCK_TIMEOUT_MS=520;
+const SMART_FOCAL_LOCK_TIMEOUT_MS=280;
 
 function smartCropEnabled(){
   /*
@@ -4555,6 +4628,81 @@ function smartCropEnabled(){
 
 function clampFocal(value,min,max){
   return Math.max(min,Math.min(max,value));
+}
+
+function smartFocalForFaceBounds(
+  naturalWidth,
+  naturalHeight,
+  left,
+  top,
+  right,
+  bottom
+){
+  const centerX=(left+right)/2;
+  const centerY=(top+bottom)/2;
+
+  let x=(centerX/naturalWidth)*100;
+  let y=(centerY/naturalHeight)*100;
+
+  const viewportWidth=Math.max(1,
+    document.documentElement?.clientWidth || window.innerWidth || naturalWidth
+  );
+  const viewportHeight=Math.max(1,
+    document.documentElement?.clientHeight || window.innerHeight || naturalHeight
+  );
+
+  const viewportAspect=viewportWidth/viewportHeight;
+  const imageAspect=naturalWidth/naturalHeight;
+
+  /* object-fit:cover yatay kırpıyorsa yüz grubunun tamamını mümkün olduğunca
+     görünür pencerenin içinde tut. Eski 20–80 clamp'i kenardaki yüzlerin
+     ekrandan tamamen çıkmasına neden olabiliyordu. */
+  if(imageAspect>viewportAspect){
+    const visibleWidth=naturalHeight*viewportAspect;
+    const overflow=Math.max(0,naturalWidth-visibleWidth);
+    const groupWidth=Math.max(1,right-left);
+    const margin=Math.min(
+      visibleWidth*.09,
+      Math.max(0,(visibleWidth-groupWidth)/2)
+    );
+
+    let cropLeft=centerX-visibleWidth*.5;
+    const minCrop=right-(visibleWidth-margin);
+    const maxCrop=left-margin;
+
+    if(minCrop<=maxCrop){
+      cropLeft=Math.max(minCrop,Math.min(maxCrop,cropLeft));
+    }
+
+    cropLeft=Math.max(0,Math.min(overflow,cropLeft));
+    x=overflow>0 ? (cropLeft/overflow)*100 : 50;
+    y=50;
+  }else if(imageAspect<viewportAspect){
+    const visibleHeight=naturalWidth/viewportAspect;
+    const overflow=Math.max(0,naturalHeight-visibleHeight);
+    const groupHeight=Math.max(1,bottom-top);
+    const topMargin=Math.min(visibleHeight*.08,Math.max(0,(visibleHeight-groupHeight)/2));
+    const bottomMargin=Math.min(visibleHeight*.18,Math.max(0,(visibleHeight-groupHeight)/2));
+
+    /* Yüzü tam merkeze değil, manşet alanından biraz uzağa — görünür alanın
+       yaklaşık %43'üne — taşımayı hedefle. */
+    let cropTop=centerY-visibleHeight*.43;
+    const minCrop=bottom-(visibleHeight-bottomMargin);
+    const maxCrop=top-topMargin;
+
+    if(minCrop<=maxCrop){
+      cropTop=Math.max(minCrop,Math.min(maxCrop,cropTop));
+    }
+
+    cropTop=Math.max(0,Math.min(overflow,cropTop));
+    y=overflow>0 ? (cropTop/overflow)*100 : 50;
+    x=50;
+  }
+
+  return {
+    x:clampFocal(x,0,100),
+    y:clampFocal(y,0,100)
+  };
 }
 
 function smartFocalFromPixels(data,width,height){
@@ -4586,12 +4734,21 @@ function smartFocalFromPixels(data,width,height){
         Math.abs(luminance[i-1]-luminance[i+1])+
         Math.abs(luminance[i-width]-luminance[i+width]);
 
+      /* FaceDetector bulunmayan Safari/Firefox türevlerinde yalnız kenar/renk
+         kontrastı saç, tabela veya logoya kayabiliyordu. Geniş YCbCr ten
+         aralığını küçük bir ek sinyal olarak kullan; tek başına belirleyici
+         olmadığı için farklı ten tonlarında ve sıcak arka planlarda saliency
+         sinyali hâlâ baskın kalır. */
+      const cb=128-.168736*r-.331264*g+.5*b;
+      const cr=128+.5*r-.418688*g-.081312*b;
+      const skinLike=(cb>=72 && cb<=138 && cr>=122 && cr<=182) ? 1 : 0;
+
       const nx=(x/(width-1))-.5;
       const ny=(y/(height-1))-.45;
       const centerDistance=Math.min(1,Math.hypot(nx,ny)*1.35);
       const centerBias=.78+.22*(1-centerDistance);
 
-      saliency[i]=(edge+saturation*.18)*centerBias;
+      saliency[i]=(edge+saturation*.18+skinLike*24)*centerBias;
     }
   }
 
@@ -4643,8 +4800,8 @@ function smartFocalFromPixels(data,width,height){
   if(!(bestScore>0))return null;
 
   return {
-    x:clampFocal((bestX/(width-1))*100,20,80),
-    y:clampFocal((bestY/(height-1))*100,14,74)
+    x:clampFocal((bestX/(width-1))*100,8,92),
+    y:clampFocal((bestY/(height-1))*100,8,84)
   };
 }
 
@@ -4750,13 +4907,16 @@ function detectSmartFocalPoint(story){
                 const right=Math.max(...group.map(box=>box.x+box.width));
                 const bottom=Math.max(...group.map(box=>box.y+box.height));
 
-                const centerX=(left+right)/2;
-                const centerY=(top+bottom)/2;
-
-                finish({
-                  x:clampFocal((centerX/naturalWidth)*100,20,80),
-                  y:clampFocal((centerY/naturalHeight)*100,14,74)
-                });
+                finish(
+                  smartFocalForFaceBounds(
+                    naturalWidth,
+                    naturalHeight,
+                    left,
+                    top,
+                    right,
+                    bottom
+                  )
+                );
                 return;
               }
             }
@@ -5229,33 +5389,71 @@ function prepareDescriptionPreview(description){
   });
 }
 
+function descriptionUsesLightweightExpand(){
+  try{
+    return Boolean(
+      window.matchMedia?.("(max-width:700px), (pointer:coarse)")?.matches
+    );
+  }catch(e){
+    return window.innerWidth<=700;
+  }
+}
+
 function setDescriptionExpanded(description,expanded){
   if(!description || description.hidden)return;
 
-  const collapsedHeight=
-    descriptionPreviewHeight(description);
+  const collapsedHeight=descriptionPreviewHeight(description);
 
-  /*
-    Geçişe mevcut gerçek yükseklikten başla. Böylece açma ve kapama
-    sırasında metin bir anda sıçramak yerine dikey olarak kayar.
-  */
-  const currentHeight=
-    Math.ceil(description.getBoundingClientRect().height);
-
-  description.style.maxHeight=`${currentHeight}px`;
   description.classList.toggle("is-expanded",expanded);
   description.setAttribute("aria-expanded",expanded?"true":"false");
   description.title=expanded
     ?"Metni daraltmak için tıklayın"
     :"Tamamını okumak için tıklayın";
 
-  requestAnimationFrame(()=>{
+  if(descriptionUsesLightweightExpand()){
+    /* Mobilde max-height animasyonu her frame layout üretiyordu. Hedef
+       yüksekliği tek seferde uygula; yalnız opacity/translate compositor
+       animasyonu kullan. */
     const targetHeight=expanded
       ? Math.ceil(description.scrollHeight)
       : collapsedHeight;
 
+    description.classList.add("description-no-motion");
     description.style.maxHeight=`${targetHeight}px`;
-  });
+
+    requestAnimationFrame(()=>{
+      description.classList.remove("description-no-motion");
+      try{
+        description.__floewExpandAnimation?.cancel?.();
+        const animation=description.animate(
+          [
+            {opacity:.82,transform:"translateY(2px)"},
+            {opacity:1,transform:"translateY(0)"}
+          ],
+          {duration:150,easing:"cubic-bezier(.22,.61,.36,1)"}
+        );
+        description.__floewExpandAnimation=animation;
+        animation.addEventListener("finish",()=>{
+          if(description.__floewExpandAnimation===animation){
+            description.__floewExpandAnimation=null;
+          }
+        },{once:true});
+      }catch(e){}
+    });
+  }else{
+    const currentHeight=
+      Math.ceil(description.getBoundingClientRect().height);
+
+    description.style.maxHeight=`${currentHeight}px`;
+
+    requestAnimationFrame(()=>{
+      const targetHeight=expanded
+        ? Math.ceil(description.scrollHeight)
+        : collapsedHeight;
+
+      description.style.maxHeight=`${targetHeight}px`;
+    });
+  }
 
   if(expanded){
     clearTimeout(state.timer);
@@ -5632,6 +5830,7 @@ async function actuallyLoadAdsCatalog(layout=getAdsLayout()){
       adCatalog.map(item=>item.name).join(", ")
     );
 
+    scheduleUpcomingAdWarmup();
     return adCatalog;
   }catch(err){
     console.warn(`Flöw ads catalog (${layout}):`,err);
@@ -5718,9 +5917,87 @@ function refreshAdsLayoutIfNeeded(){
     */
     adCatalog=cached;
     adCatalogLayout=current;
+    plannedAd=null;
 
+    scheduleUpcomingAdWarmup();
     loadAdsCatalog(current);
   },180);
+}
+
+function preloadAdAsset(ad){
+  if(!ad?.src)return Promise.resolve(false);
+
+  const key=`${ad.type||"image"}|${ad.src}`;
+  if(adAssetWarmupCache.has(key))return adAssetWarmupCache.get(key);
+
+  const promise=new Promise(resolve=>{
+    let finished=false;
+    let timeoutId=null;
+    const done=value=>{
+      if(finished)return;
+      finished=true;
+      clearTimeout(timeoutId);
+      resolve(Boolean(value));
+    };
+
+    timeoutId=setTimeout(()=>done(false),5000);
+
+    if(ad.type==="video"){
+      try{
+        const video=document.createElement("video");
+        setMutedInlinePlaybackAttributes(video);
+        video.preload="auto";
+        video.onloadeddata=()=>done(true);
+        video.oncanplay=()=>done(true);
+        video.onerror=()=>done(false);
+        video.src=ad.src;
+        video.load();
+      }catch(e){
+        done(false);
+      }
+      return;
+    }
+
+    const image=new Image();
+    image.decoding="async";
+    image.onload=()=>{
+      if(image.decode){
+        image.decode().catch(()=>{}).finally(()=>done(true));
+      }else{
+        done(true);
+      }
+    };
+    image.onerror=()=>done(false);
+    image.src=ad.src;
+  });
+
+  adAssetWarmupCache.set(key,promise);
+  if(adAssetWarmupCache.size>12){
+    const first=adAssetWarmupCache.keys().next().value;
+    if(first)adAssetWarmupCache.delete(first);
+  }
+
+  return promise;
+}
+
+function scheduleUpcomingAdWarmup(force=false){
+  if(adActive || !adCatalog.length)return;
+
+  const closeToBreak=
+    newsShownSinceAd>=Math.max(1,ADS_INTERVAL_NEWS-2);
+
+  if(!force && !closeToBreak)return;
+
+  if(
+    !plannedAd ||
+    !adCatalog.some(item=>(item.name||item.src)===(plannedAd.name||plannedAd.src))
+  ){
+    plannedAd=chooseRandomAd();
+  }
+
+  if(plannedAd){
+    void preloadAdAsset(plannedAd);
+  }
 }
 
 function chooseRandomAd(){
@@ -6223,9 +6500,13 @@ async function playAdBreak(options={}){
 
   const ad=
     options.ad ||
+    plannedAd ||
     chooseRandomAd();
 
   if(!ad)return false;
+
+  if(ad===plannedAd)plannedAd=null;
+  void preloadAdAsset(ad);
 
   currentAd=ad;
   adEntryDirection=
@@ -6349,8 +6630,10 @@ function timer(durationMs=null){
     return;
   }
 
-  /* Otomatik ilerleme kapalı olsa bile sıradaki haber hazır tutulur. */
-  scheduleNextStoryPreload();
+  /* Otomatik ilerleme kapalı olsa bile sıradaki haber ve yaklaşan reklam
+     hazır tutulur. */
+  scheduleNextStoryPreload(35);
+  scheduleUpcomingAdWarmup();
 
   const hasExplicitDuration=(durationMs!==null && durationMs!==undefined);
   const requested=hasExplicitDuration ? Number(durationMs) : NaN;
@@ -8023,8 +8306,20 @@ async function performNewsLoad(){
       updateKeywordAlert(list[0]);
       newsShownSinceAd=1;
       clearStatus();
-      finishInitialLoading();
-      timerAfterLikelyMediaWarmup(slides[0],list[0]);
+
+      /* Loader'ı sabit uzun bir süre tutmak yerine ilk gerçek görsel/video
+         hazır olur olmaz kapat. Ağ yavaşsa kısa bir üst sınır sonrası yine
+         akışı aç; böylece hem bekleme kısalır hem loading sonrası boş kare
+         olasılığı ciddi biçimde azalır. */
+      void waitForInitialVisualReady(slides[0],list[0])
+        .catch(()=>{})
+        .finally(()=>{
+          finishInitialLoading();
+          setTimeout(
+            ()=>timerAfterLikelyMediaWarmup(slides[0],list[0]),
+            220
+          );
+        });
 
       if(ADS_TEST_MODE){
         setTimeout(runAdTestOnce,900);

@@ -5992,3 +5992,97 @@ html,body{
     line-height:40px !important;
   }
 }
+
+/* =====================================================================
+   V31.80.0 — smoother mobile copy, faster UI surfaces, ad/feed continuity
+   ===================================================================== */
+
+/* Loading artık ilk görsel hazır olduğunda kapanıyor; bitiş animasyonu da
+   gereksiz bekleme hissi yaratmayacak kadar kısa. */
+#loading-screen{
+  transition:opacity .22s ease,visibility .22s ease !important;
+}
+
+/* Tam ekran blur, özellikle mobil Safari/Chrome'da panel açılışında pahalı
+   bir yeniden örnekleme oluşturuyordu. Koyu zemin aynı ayrımı daha ucuz verir. */
+#menu-overlay,
+#stats-overlay,
+#source-viewer-overlay{
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
+}
+
+#menu-overlay,
+#stats-overlay{
+  background:rgba(0,0,0,.86) !important;
+  transition:opacity .18s ease,visibility 0s linear .18s !important;
+}
+#menu-overlay.open,
+#stats-overlay.open{
+  transition:opacity .18s ease,visibility 0s linear 0s !important;
+}
+
+#source-viewer-overlay{
+  background:rgba(0,0,0,.84) !important;
+  transition:opacity .18s ease,visibility 0s linear .18s !important;
+}
+#source-viewer-overlay.open{
+  transition:opacity .18s ease,visibility 0s linear 0s !important;
+}
+
+#settings-menu{
+  transition:transform .18s cubic-bezier(.22,.61,.36,1) !important;
+  contain:layout paint style;
+}
+
+#public-stats-panel,
+#source-viewer-panel{
+  contain:layout paint style;
+}
+
+#control-menu-panel,
+#time-range-panel,
+.keyword-tool-panel,
+.flora-story-popover{
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
+  background-color:rgba(16,16,16,.96) !important;
+}
+
+#control-menu-panel,
+#time-range-panel,
+.keyword-tool-panel{
+  transition-duration:.16s !important;
+}
+
+/* İki haber slaytı ve reklam katmanı geçiş sırasında kendi compositor
+   katmanlarında tutulur. */
+.slide,
+#ad-overlay{
+  will-change:transform;
+  backface-visibility:hidden;
+  -webkit-backface-visibility:hidden;
+}
+
+@media(max-width:700px), (pointer:coarse){
+  /* Mobilde max-height'i kare kare animasyonlamak layout thrash yaratıyordu.
+     JS yüksekliği tek seferde değiştirir; yalnız küçük compositor animasyonu
+     kalır. */
+  .description{
+    will-change:auto !important;
+    transition:opacity .14s ease !important;
+    contain:layout paint;
+  }
+
+  .headline{
+    contain:layout paint;
+  }
+
+  /* Mobil cihazlarda panel transformlarını da biraz daha kısa tut. */
+  #settings-menu,
+  #control-menu-panel,
+  #time-range-panel,
+  .keyword-tool-panel{
+    transition-duration:.14s !important;
+  }
+}
