@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.79.2";
+window.__floewAppVersion="31.79.3";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -702,6 +702,7 @@ let touchAdDragVelocityY=0;
 let touchAdDragCommitted=null;
 
 /*
+  V31.79.3 — iki reklamlık sürekli arka plan preload kuyruğu.
   V31.79.2 — haber -> reklam doğrudan parmak takibi.
   Yeni reklam veya history içindeki reklam, haber slaytı gibi parmakla birlikte
   ekrana girer; pointerup sonrası yalnız kalan mesafe tamamlanır.
@@ -5939,9 +5940,12 @@ function startAdsCatalogRefresh(){
 
   if(cached.length){
     adCatalog=cached;
+    topUpUpcomingAdQueue();
   }
 
-  loadAdsCatalog(layout);
+  void loadAdsCatalog(layout)
+    .then(()=>ensureUpcomingAdsPreloaded())
+    .catch(()=>{});
 
   if(adCatalogRefreshTimer){
     clearInterval(adCatalogRefreshTimer);
@@ -5975,31 +5979,106 @@ function refreshAdsLayoutIfNeeded(){
     adCatalogLayout=current;
     clearUpcomingAdPreload();
 
-    loadAdsCatalog(current);
+    void loadAdsCatalog(current)
+      .then(()=>ensureUpcomingAdsPreloaded())
+      .catch(()=>{});
   },180);
 }
 
-let upcomingAd=null;
-let upcomingAdPreloadPromise=null;
-let upcomingAdPreloadKey="";
+const UPCOMING_AD_PRELOAD_COUNT=2;
+let upcomingAds=[];
+const adAssetPreloadPromises=new Map();
+const adAssetWarmers=new Map();
+const adAssetWarmOrder=[];
 
-function chooseRandomAdCandidate(){
+function adAssetKey(ad){
+  return ad?.src
+    ? `${ad.type||"image"}|${ad.src}`
+    : "";
+}
+
+function adIdentity(ad){
+  return String(ad?.name||ad?.src||"");
+}
+
+function sameAd(a,b){
+  return Boolean(
+    a && b &&
+    adIdentity(a) &&
+    adIdentity(a)===adIdentity(b)
+  );
+}
+
+function rememberAdWarmer(key,warmer){
+  if(!key||!warmer)return;
+
+  adAssetWarmers.set(key,warmer);
+  const oldIndex=adAssetWarmOrder.indexOf(key);
+  if(oldIndex>=0)adAssetWarmOrder.splice(oldIndex,1);
+  adAssetWarmOrder.push(key);
+
+  /* Sıradaki iki reklamın medya buffer'ını bellekte tut; uzun oturumlarda
+     eski warmer nesnelerinin sınırsız birikmesine izin verme. */
+  while(adAssetWarmOrder.length>6){
+    const staleKey=adAssetWarmOrder.shift();
+    if(!staleKey)continue;
+
+    const stillNeeded=
+      upcomingAds.some(ad=>adAssetKey(ad)===staleKey) ||
+      (currentAd && adAssetKey(currentAd)===staleKey);
+
+    if(stillNeeded){
+      adAssetWarmOrder.push(staleKey);
+      if(adAssetWarmOrder.length<=7)break;
+      continue;
+    }
+
+    const warmer=adAssetWarmers.get(staleKey);
+    if(warmer?.tagName==="VIDEO"){
+      try{warmer.pause()}catch(e){}
+      try{warmer.removeAttribute("src");warmer.load()}catch(e){}
+    }
+    adAssetWarmers.delete(staleKey);
+    adAssetPreloadPromises.delete(staleKey);
+  }
+}
+
+function chooseRandomAdCandidate(excludedIdentities=null){
   if(!adCatalog.length)return null;
 
-  const candidates=
-    adCatalog.length>1
-      ? adCatalog.filter(
-          item=>(item.name||item.src)!==lastAdName
-        )
-      : adCatalog;
+  const excluded=
+    excludedIdentities instanceof Set
+      ? excludedIdentities
+      : new Set();
 
-  const pool=candidates.length?candidates:adCatalog;
-  return pool[Math.floor(Math.random()*pool.length)]||null;
+  let candidates=adCatalog.filter(item=>{
+    const identity=adIdentity(item);
+    return (
+      !excluded.has(identity) &&
+      (adCatalog.length<=1 || identity!==lastAdName)
+    );
+  });
+
+  if(!candidates.length){
+    candidates=adCatalog.filter(
+      item=>!excluded.has(adIdentity(item))
+    );
+  }
+
+  /* Katalog iki reklamdan küçükse aynı kreatifi sırada yeniden kullanmak
+     zorunda kalabiliriz. Preload cache aynı medyayı ikinci kez indirmez. */
+  if(!candidates.length){
+    candidates=[...adCatalog];
+  }
+
+  return candidates[
+    Math.floor(Math.random()*candidates.length)
+  ]||null;
 }
 
 function markAdChosen(ad){
   if(ad){
-    lastAdName=ad.name||ad.src;
+    lastAdName=adIdentity(ad);
   }
   return ad||null;
 }
@@ -6009,21 +6088,17 @@ function chooseRandomAd(){
 }
 
 function clearUpcomingAdPreload(){
-  upcomingAd=null;
-  upcomingAdPreloadPromise=null;
-  upcomingAdPreloadKey="";
+  upcomingAds=[];
 }
 
 function preloadAdAsset(ad){
   if(!ad?.src)return Promise.resolve(false);
 
-  const key=`${ad.type||"image"}|${ad.src}`;
-  if(upcomingAdPreloadPromise && upcomingAdPreloadKey===key){
-    return upcomingAdPreloadPromise;
-  }
+  const key=adAssetKey(ad);
+  const existing=adAssetPreloadPromises.get(key);
+  if(existing)return existing;
 
-  upcomingAdPreloadKey=key;
-  upcomingAdPreloadPromise=new Promise(resolve=>{
+  const promise=new Promise(resolve=>{
     let settled=false;
     const done=value=>{
       if(settled)return;
@@ -6032,74 +6107,158 @@ function preloadAdAsset(ad){
       resolve(Boolean(value));
     };
 
-    const timeout=setTimeout(()=>done(false),5000);
+    const timeout=setTimeout(()=>done(false),12000);
 
     if(ad.type==="video"){
       const video=document.createElement("video");
       video.muted=true;
       video.defaultMuted=true;
+      video.volume=0;
       video.preload="auto";
       video.playsInline=true;
+      video.disablePictureInPicture=true;
+      try{video.disableRemotePlayback=true}catch(e){}
       video.onloadeddata=()=>done(true);
       video.oncanplay=()=>done(true);
       video.onerror=()=>done(false);
       video.src=ad.src;
+      rememberAdWarmer(key,video);
       try{video.load()}catch(e){done(false)}
       return;
     }
 
     const image=new Image();
     image.decoding="async";
+    try{image.fetchPriority="low"}catch(e){}
     image.onload=()=>done(true);
     image.onerror=()=>done(false);
     image.src=ad.src;
+    rememberAdWarmer(key,image);
   });
 
-  return upcomingAdPreloadPromise;
+  adAssetPreloadPromises.set(key,promise);
+
+  promise.then(ok=>{
+    if(ok)return;
+    if(adAssetPreloadPromises.get(key)===promise){
+      adAssetPreloadPromises.delete(key);
+    }
+    const warmer=adAssetWarmers.get(key);
+    if(warmer?.tagName==="VIDEO"){
+      try{warmer.pause()}catch(e){}
+      try{warmer.removeAttribute("src");warmer.load()}catch(e){}
+    }
+    adAssetWarmers.delete(key);
+
+    /* Ağ o anda meşgulse sıradaki reklamı bir kez daha arka planda dene.
+       Bu retry akış veya loading ekranını hiçbir zaman bekletmez. */
+    setTimeout(()=>{
+      if(upcomingAds.some(item=>adAssetKey(item)===key)){
+        void preloadAdAsset(ad).catch(()=>false);
+      }
+    },1400);
+  });
+
+  return promise;
 }
 
-async function prepareUpcomingAd(){
-  if(
-    adActive ||
-    upcomingAd ||
-    newsShownSinceAd<Math.max(1,ADS_INTERVAL_NEWS-2)
+function topUpUpcomingAdQueue(){
+  if(!adCatalog.length)return upcomingAds;
+
+  /* Yön/oran değişiminden sonra eski layout reklamını gelecekteki kuyruğa
+     taşımıyoruz. */
+  upcomingAds=upcomingAds.filter(ad=>
+    ad &&
+    (!ad.layout || ad.layout===adCatalogLayout) &&
+    adCatalog.some(item=>sameAd(item,ad))
+  );
+
+  const excluded=new Set(
+    upcomingAds.map(ad=>adIdentity(ad)).filter(Boolean)
+  );
+
+  let guard=0;
+  while(
+    upcomingAds.length<UPCOMING_AD_PRELOAD_COUNT &&
+    guard<UPCOMING_AD_PRELOAD_COUNT*4
   ){
-    return upcomingAd;
+    guard++;
+    const candidate=chooseRandomAdCandidate(excluded);
+    if(!candidate)break;
+
+    upcomingAds.push(candidate);
+    excluded.add(adIdentity(candidate));
+
+    /* Tek kreatifli katalogda iki fiziksel sıra öğesi tutmak gereksiz;
+       aynı medya zaten cache'te sıcak kalır ve tüketildiği anda tekrar kuyruğa
+       eklenir. */
+    if(adCatalog.length===1)break;
   }
 
+  for(const ad of upcomingAds){
+    void preloadAdAsset(ad).catch(()=>false);
+  }
+
+  return upcomingAds;
+}
+
+async function ensureUpcomingAdsPreloaded(){
   if(!adCatalog.length){
     await loadAdsCatalog(getAdsLayout());
   }
 
-  if(adActive || upcomingAd || !adCatalog.length)return upcomingAd;
+  if(!adCatalog.length)return upcomingAds;
+  return topUpUpcomingAdQueue();
+}
 
-  const candidate=chooseRandomAdCandidate();
-  if(!candidate)return null;
-
-  upcomingAd=candidate;
-  void preloadAdAsset(candidate).catch(()=>false);
-  return upcomingAd;
+async function prepareUpcomingAd(){
+  await ensureUpcomingAdsPreloaded();
+  return upcomingAds[0]||null;
 }
 
 function maybeScheduleUpcomingAdPreload(){
-  if(
-    adActive ||
-    upcomingAd ||
-    newsShownSinceAd<Math.max(1,ADS_INTERVAL_NEWS-2)
-  ) return;
+  /* Reklam sırasına kaç haber kaldığına bakma. Site açıldığı andan itibaren
+     sıradaki iki reklamı sürekli sıcak tut. */
+  if(upcomingAds.length>=UPCOMING_AD_PRELOAD_COUNT)return;
 
-  const run=()=>{ void prepareUpcomingAd(); };
+  const run=()=>{ void ensureUpcomingAdsPreloaded(); };
   if("requestIdleCallback" in window){
-    requestIdleCallback(run,{timeout:900});
+    requestIdleCallback(run,{timeout:350});
   }else{
-    setTimeout(run,80);
+    setTimeout(run,0);
   }
 }
 
+function peekUpcomingAd(){
+  topUpUpcomingAdQueue();
+  return upcomingAds[0]||null;
+}
+
 function takeUpcomingAd(){
-  const ad=upcomingAd;
-  clearUpcomingAdPreload();
-  return markAdChosen(ad);
+  topUpUpcomingAdQueue();
+  const ad=upcomingAds.shift()||null;
+  const chosen=markAdChosen(ad);
+
+  /* Reklam gösterilmeye başlar başlamaz üçüncü kreatifi kuyruğa al. Böylece
+     kullanıcı mevcut reklamı geçerken arkasındaki iki reklam yükleniyor olur. */
+  topUpUpcomingAdQueue();
+  maybeScheduleUpcomingAdPreload();
+
+  return chosen;
+}
+
+function consumeUpcomingAd(ad){
+  if(!ad)return null;
+
+  const index=upcomingAds.findIndex(item=>sameAd(item,ad));
+  if(index>=0){
+    upcomingAds.splice(index,1);
+  }
+
+  const chosen=markAdChosen(ad);
+  topUpUpcomingAdQueue();
+  maybeScheduleUpcomingAdPreload();
+  return chosen;
 }
 
 const FLOW_TRANSITION_CLASSES=[
@@ -13141,7 +13300,7 @@ function adEntryTargetForDirection(direction){
   }
 
   if(direction>0 && adBreakDue()){
-    const ad=upcomingAd || chooseRandomAdCandidate();
+    const ad=peekUpcomingAd() || chooseRandomAdCandidate();
 
     if(!ad){
       /* Katalog henüz hazır değilse gesture'ı bloklamadan yüklemeyi başlat.
@@ -13149,7 +13308,7 @@ function adEntryTargetForDirection(direction){
          reklam direct-drag hedefi haline gelir. */
       if(!adCatalog.length){
         void loadAdsCatalog(getAdsLayout())
-          .then(()=>prepareUpcomingAd())
+          .then(()=>ensureUpcomingAdsPreloaded())
           .catch(()=>{});
       }
       return null;
@@ -13345,10 +13504,7 @@ async function runCommittedTouchAdEntry(context){
   const beforeIndex=context.beforeIndex;
   const beforeHistoryPos=context.beforeHistoryPos;
 
-  if(upcomingAd===context.ad){
-    clearUpcomingAdPreload();
-  }
-  markAdChosen(context.ad);
+  consumeUpcomingAd(context.ad);
 
   const adResult=await playAdBreak({
     ad:context.ad,
