@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.79.3";
+window.__floewAppVersion="31.79.4";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -864,19 +864,48 @@ let rawStories=[];
 const videoOnlyVerdicts=new Map();
 const VIDEO_ONLY_TRUE_TTL_MS=20*60*1000;
 const VIDEO_ONLY_FALSE_TTL_MS=3*60*1000;
-const VIDEO_ONLY_BATCH_SIZE=36;
-const VIDEO_ONLY_TARGET_COUNT=18;
-const VIDEO_ONLY_MIN_PER_SOURCE=2;
+const VIDEO_ONLY_BATCH_SIZE=48;
+const VIDEO_ONLY_ACTIVATION_MIN=4;
 const VIDEO_ONLY_SOURCE_SAMPLE_MAX=6;
-const VIDEO_ONLY_CONCURRENCY=5;
+const VIDEO_ONLY_CONCURRENCY=4;
 let videoOnlyScanRunning=false;
 let videoOnlyScanQueued=false;
 let videoOnlyScanRerun=false;
 let videoOnlyScanGeneration=0;
 let videoOnlyFilterRefreshTimer=null;
+let videoOnlyActivationPending=false;
 
 function videoOnlyVerdictKey(story){
   return mediaKey(story);
+}
+
+function rememberConfirmedVideoStory(story,{refresh=true}={}){
+  const key=videoOnlyVerdictKey(story);
+  if(!key)return false;
+
+  videoOnlyVerdicts.set(
+    key,
+    {
+      hasVideo:true,
+      checkedAt:Date.now()
+    }
+  );
+
+  /*
+    Normal akışta gerçekten oynatılmış bir video, video-only modu için en
+    güvenilir kanıttır. Böylece kullanıcı normal akışta gördüğü videoları
+    bu moda geçtiğinde yeniden keşfetmek zorunda kalmaz. İlk tarama sırasında
+    ise görünür haberi sıçratmamak için filtre yenilemesini bekletiyoruz.
+  */
+  if(
+    refresh &&
+    videoOnlyEnabled &&
+    !videoOnlyActivationPending
+  ){
+    videoOnlyFilterRefresh();
+  }
+
+  return true;
 }
 
 function currentVideoOnlyVerdict(story){
@@ -937,17 +966,43 @@ function videoOnlyBaseCandidates(mode=feedMode){
 }
 
 function videoOnlyFilterRefresh(){
-  if(!videoOnlyEnabled)return;
+  if(!videoOnlyEnabled || videoOnlyActivationPending)return;
 
   clearTimeout(videoOnlyFilterRefreshTimer);
   videoOnlyFilterRefreshTimer=setTimeout(()=>{
-    if(videoOnlyEnabled){
+    if(videoOnlyEnabled && !videoOnlyActivationPending){
       applyFilters({
         preserveScan:true,
         preserveHistory:true
       });
     }
-  },90);
+  },180);
+}
+
+function activateVideoOnlyResults(){
+  if(!videoOnlyEnabled || !videoOnlyActivationPending)return false;
+
+  const confirmed=videoOnlyBaseCandidates(feedMode).filter(
+    story=>currentVideoOnlyVerdict(story)===true
+  );
+
+  if(!confirmed.length)return false;
+
+  videoOnlyActivationPending=false;
+  clearStatus();
+  setStoryStageVisible(true);
+
+  /*
+    Mod açılırken ekranda bulunan normal haberin yerine video akışına yalnız
+    bir kez geç. Sonraki tarama sonuçları preserveHistory ile listeye eklenir;
+    görünür haber artık her yeni video bulunduğunda değişmez.
+  */
+  applyFilters({
+    resetToStart:true,
+    preserveScan:true
+  });
+
+  return true;
 }
 
 function queueVideoOnlyScan(){
@@ -1069,88 +1124,25 @@ function videoOnlySourceCoverage(candidates){
 }
 
 function videoOnlyBalancedBatch(candidates){
-  const groups=videoOnlySourceStats(candidates);
+  /*
+    Video-only taraması artık kaynak başına eski örnekler seçmek yerine mevcut
+    akışın kendi sırasını izler. Bu, normal Gündem/Son dakika/Yabancı akışında
+    kullanıcının karşısına çıkan güncel haberlerle video-only listesinin aynı
+    haber havuzundan beslenmesini sağlar.
+  */
   const ordered=[];
   const used=new Set();
 
-  const addStory=story=>{
+  for(const story of candidates){
+    if(currentVideoOnlyVerdict(story)!==null)continue;
+
     const key=videoOnlyVerdictKey(story);
-    if(!key || used.has(key))return false;
+    if(!key || used.has(key))continue;
 
     used.add(key);
     ordered.push(story);
-    return true;
-  };
 
-  /*
-    Öncelik: Henüz tek bir video bile bulamadığımız kaynaklar.
-    Kaynakları "kaç haber kontrol edildi" sayısına göre sırala.
-    Böylece ilk 36 kaynak dolunca sonraki batch'te aynı kaynaklar tekrar
-    başa geçmez; henüz hiç kontrol edilmemiş kaynaklar otomatik olarak öne gelir.
-  */
-  const uncovered=[...groups.values()]
-    .filter(group=>
-      group.confirmed===0 &&
-      group.unknown.length &&
-      group.checked<
-        Math.min(
-          VIDEO_ONLY_SOURCE_SAMPLE_MAX,
-          group.total
-        )
-    )
-    .sort((a,b)=>
-      (a.checked-b.checked) ||
-      (a.order-b.order)
-    );
-
-  let progress=true;
-
-  while(
-    progress &&
-    ordered.length<VIDEO_ONLY_BATCH_SIZE
-  ){
-    progress=false;
-
-    for(const group of uncovered){
-      const story=group.unknown.shift();
-      if(!story)continue;
-
-      if(addStory(story)){
-        progress=true;
-      }
-
-      if(ordered.length>=VIDEO_ONLY_BATCH_SIZE){
-        return ordered;
-      }
-    }
-  }
-
-  /*
-    Kaynak kapsaması için ayrılan kapasiteden sonra, kalan yerleri
-    video olma ihtimali en yüksek bilinmeyen haberlerle doldur.
-  */
-  const remainder=[];
-
-  for(const group of groups.values()){
-    for(const story of group.unknown){
-      remainder.push({
-        story,
-        score:videoOnlyLikelyScore(story),
-        sourceOrder:group.order
-      });
-    }
-  }
-
-  remainder.sort((a,b)=>
-    (b.score-a.score) ||
-    (a.sourceOrder-b.sourceOrder)
-  );
-
-  for(const item of remainder){
-    if(addStory(item.story) &&
-       ordered.length>=VIDEO_ONLY_BATCH_SIZE){
-      break;
-    }
+    if(ordered.length>=VIDEO_ONLY_BATCH_SIZE)break;
   }
 
   return ordered;
@@ -1217,8 +1209,17 @@ async function runVideoOnlyScan(){
           }
         );
 
-        if(media){
-          videoOnlyFilterRefresh();
+        if(
+          media &&
+          videoOnlyActivationPending
+        ){
+          const confirmedCount=videoOnlyBaseCandidates(feedMode).filter(
+            item=>currentVideoOnlyVerdict(item)===true
+          ).length;
+
+          if(confirmedCount>=VIDEO_ONLY_ACTIVATION_MIN){
+            activateVideoOnlyResults();
+          }
         }
       }
     };
@@ -1239,8 +1240,6 @@ async function runVideoOnlyScan(){
       videoOnlyScanRunning=false;
 
       if(videoOnlyEnabled){
-        videoOnlyFilterRefresh();
-
         const candidates=videoOnlyBaseCandidates(feedMode);
         const confirmedCount=candidates.filter(
           story=>currentVideoOnlyVerdict(story)===true
@@ -1248,24 +1247,25 @@ async function runVideoOnlyScan(){
         const stillUnknown=candidates.some(
           story=>currentVideoOnlyVerdict(story)===null
         );
-        const coverage=
-          videoOnlySourceCoverage(candidates);
+
+        if(videoOnlyActivationPending){
+          /* İlk batch 4 videoya ulaşmadan bittiyse, bulunan sonuçlarla bir kez
+             video akışına geç; hiç video yoksa sıradaki güncel batch'i tara. */
+          if(confirmedCount>0){
+            activateVideoOnlyResults();
+          }
+        }else{
+          /* Yeni sonuçları görünür haberi koruyarak tek toplu güncellemede ekle. */
+          videoOnlyFilterRefresh();
+        }
 
         /*
-          Global hedefe ulaşmış olsak bile her aktif kaynağa asgari tarama
-          şansı verilmeden durma. Böylece NTV/Halk TV gibi RSS'inde video hint'i
-          taşımayan kaynaklar diğer kaynaklar tarafından aç bırakılmaz.
+          Önceki sürüm 18 video / kaynak örneklemi hedefine ulaşınca taramayı
+          durduruyordu. Bu yüzden normal akıştaki daha sonraki videolar asla
+          video-only listesine girmeyebiliyordu. Etkin modda mevcut akış
+          havuzundaki bilinmeyen haberleri batch batch bitiriyoruz.
         */
-        if(
-          videoOnlyScanRerun ||
-          (
-            stillUnknown &&
-            (
-              confirmedCount<VIDEO_ONLY_TARGET_COUNT ||
-              !coverage.complete
-            )
-          )
-        ){
+        if(videoOnlyScanRerun || stillUnknown){
           videoOnlyScanRerun=false;
           queueVideoOnlyScan();
         }
@@ -2309,7 +2309,12 @@ function storiesForFeedMode(mode,options={}){
 }
 
 function activeStories(){
-  return storiesForFeedMode(feedMode);
+  return storiesForFeedMode(
+    feedMode,
+    videoOnlyActivationPending
+      ? {skipVideoOnly:true}
+      : {}
+  );
 }
 
 function emptyStoriesMessage(){
@@ -3790,6 +3795,10 @@ function markSlideMediaReady(el,story,kind){
   el.dataset.mediaReadyStoryKey=mediaKey(story);
   el.dataset.mediaKind=kind;
 
+  /* Gerçekten ekranda/slide'da başarıyla hazırlanmış medya artık video-only
+     için doğrudan doğrulanmış kabul edilir. */
+  rememberConfirmedVideoStory(story);
+
   /*
     İlk ziyarette /video çözümü geç tamamlanırsa eski sayaç haberi video
     görünmeden ilerletebiliyordu. Medya aktif slaytta sonradan gerçekten hazır
@@ -4554,26 +4563,27 @@ function applyVideoOnlySetting(){
 
   if(videoOnlyEnabled){
     /*
-      Mevcut görünür haber zaten çözülmüş bir videoysa onu anında doğrula.
-      Aksi halde sahneyi temizleyip arka plan taramasından ilk gerçek videoyu
-      bekle.
+      31.79.4: Modu açar açmaz state.stories'i boş/tek elemanlı doğrulama
+      sonuçlarıyla tekrar tekrar kurmuyoruz. Mevcut haber ekranda sabit kalır,
+      otomatik sayaç durur; güncel akış sırasındaki ilk tarama yeterli sonucu
+      bulunca video akışına yalnız bir kez geçilir.
     */
-    const current=
-      state.stories[
-        state.index
-      ] || null;
+    videoOnlyActivationPending=true;
+    clearTimeout(state.timer);
+    state.timer=null;
+    state.timerDeadline=0;
 
-    /*
-      Normal oynatma cache'i video-only için kanıt sayılmaz. Mevcut haber de
-      diğerleri gibi strict resolver üzerinden doğrulanır; aksi halde sayfa
-      altındaki önerilen bir player filtreyi yanlış pozitif yapabilir.
-    */
+    const confirmedCount=videoOnlyBaseCandidates(feedMode).filter(
+      story=>currentVideoOnlyVerdict(story)===true
+    ).length;
 
-    applyFilters({
-      preserveScan:true
-    });
+    if(confirmedCount>=VIDEO_ONLY_ACTIVATION_MIN){
+      activateVideoOnlyResults();
+    }
+
     queueVideoOnlyScan();
   }else{
+    videoOnlyActivationPending=false;
     clearStatus();
     setStoryStageVisible(true);
     applyFilters({
