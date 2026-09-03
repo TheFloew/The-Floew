@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.79.4";
+window.__floewAppVersion="31.79.5";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -14687,6 +14687,23 @@ window.addEventListener("pointerup",e=>{
   ){
     suppressHeadlineActionClickUntil=performance.now()+450;
     finishTouchStoryDrag();
+    state.pointerId=null;
+    state.swipeHandled=false;
+    state.swipeTouch=false;
+    return;
+  }
+
+  /*
+    v31.79.5 — Manşet altı aksiyonları global "boş alana tıkla, sonraki
+    habere geç" davranışından ayır. Pointerdown'ı özellikle engellemiyoruz:
+    mobilde Paylaş / Geri bildirim / Kaynağı gör / Flöra üstünden başlayan
+    gerçek swipe yukarıdaki direct-drag yollarında çalışmaya devam eder.
+    Yalnız sürükleme oluşmamış kısa tap/click burada tüketilir.
+  */
+  if(
+    e.target.closest &&
+    e.target.closest(".headline-actions")
+  ){
     state.pointerId=null;
     state.swipeHandled=false;
     state.swipeTouch=false;
