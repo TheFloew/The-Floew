@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.79.5";
+window.__floewAppVersion="31.79.6";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -864,10 +864,10 @@ let rawStories=[];
 const videoOnlyVerdicts=new Map();
 const VIDEO_ONLY_TRUE_TTL_MS=20*60*1000;
 const VIDEO_ONLY_FALSE_TTL_MS=3*60*1000;
-const VIDEO_ONLY_BATCH_SIZE=48;
+const VIDEO_ONLY_BATCH_SIZE=24;
 const VIDEO_ONLY_ACTIVATION_MIN=4;
 const VIDEO_ONLY_SOURCE_SAMPLE_MAX=6;
-const VIDEO_ONLY_CONCURRENCY=4;
+const VIDEO_ONLY_CONCURRENCY=2;
 let videoOnlyScanRunning=false;
 let videoOnlyScanQueued=false;
 let videoOnlyScanRerun=false;
@@ -1208,6 +1208,9 @@ async function runVideoOnlyScan(){
             checkedAt:Date.now()
           }
         );
+
+        /* Worker'ı aynı anda aralıksız yeni resolver istekleriyle doldurma. */
+        await new Promise(resolve=>setTimeout(resolve,80));
 
         if(
           media &&
@@ -3219,6 +3222,7 @@ function timeText(v){
 
 
 const storyMediaCache=new Map();
+const STORY_MEDIA_NEGATIVE_TTL_MS=3*60*1000;
 const VIDEO_RESOLVER_VERSION="20260825-6";
 const SUPPORTED_EMBED_VIDEO_PROVIDERS=new Set([
   "youtube",
@@ -3267,7 +3271,9 @@ function normalizeResolvedStoryMedia(value){
       type:String(value.type||""),
       provider:"native",
       source:String(value.source||""),
-      confidence:Number(value.confidence)||0
+      confidence:Number(value.confidence)||0,
+      articleLinked:value.articleLinked===true,
+      videoOnlyEligible:value.videoOnlyEligible===true
     };
   }
 
@@ -3280,7 +3286,9 @@ function normalizeResolvedStoryMedia(value){
       type:"",
       provider,
       source:String(value.source||""),
-      confidence:Number(value.confidence)||0
+      confidence:Number(value.confidence)||0,
+      articleLinked:value.articleLinked===true,
+      videoOnlyEligible:value.videoOnlyEligible===true
     };
   }
 
@@ -3399,33 +3407,35 @@ async function resolveStoryMedia(story,options={}){
   if(!key)return null;
 
   /*
-    Normal oynatma ile "Sadece videolu haberler" doğrulaması aynı cache'i
-    paylaşamaz. Normal resolver önerilen/site-geneli bir player bulmuş olsa
-    bile strict tarama bunu yeniden Worker'da article-linked olarak
-    doğrulamalıdır.
+    31.79.6 — Normal oynatma ile video-only doğrulaması artık aynı /video
+    sonucunu paylaşır. Worker her medya sonucunda articleLinked /
+    videoOnlyEligible bilgisini zaten döndürüyor; strict mod için aynı makaleyi
+    ikinci kez resolve etmeye gerek yoktur.
   */
-  const cacheKey=strict
-    ? `${key}|video-only-strict`
-    : key;
+  const applyStrict=media=>{
+    if(!strict)return media||null;
+    return media?.videoOnlyEligible===true ? media : null;
+  };
 
-  if(storyMediaCache.has(cacheKey)){
-    return storyMediaCache.get(cacheKey);
+  if(storyMediaCache.has(key)){
+    try{
+      const cached=await storyMediaCache.get(key);
+      return applyStrict(cached);
+    }catch(e){
+      return null;
+    }
   }
 
   const promise=(async()=>{
-    /*
-      RSS media:content/enclosure URL'si doğrudan oynatılabilir olsa bile
-      artık frontend tarafından körlemesine kullanılmıyor. Worker'a hint olarak
-      gönderiliyor; aynı haber sayfası ve başlık bağlamında normalize ediliyor.
-    */
     if(!story.link){
-      const direct=normalizeResolvedStoryMedia({
+      return normalizeResolvedStoryMedia({
         kind:"video",
         url:story.video,
         type:story.videoType||"",
-        source:"feed"
+        source:"feed",
+        articleLinked:story.videoArticleHint===true,
+        videoOnlyEligible:story.videoArticleHint===true
       });
-      return direct;
     }
 
     const controller=new AbortController();
@@ -3437,10 +3447,8 @@ async function resolveStoryMedia(story,options={}){
       requestUrl.searchParams.set("title",String(story.title||""));
       requestUrl.searchParams.set("rv",VIDEO_RESOLVER_VERSION);
 
-      if(strict){
-        requestUrl.searchParams.set("strict","1");
-      }
-
+      /* strict=1 gönderilmez: tek canonical resolver sonucu hem normal akış
+         hem video-only filtresi tarafından paylaşılır. */
       if(story.video){
         requestUrl.searchParams.set("hint",String(story.video));
         requestUrl.searchParams.set("hintType",String(story.videoType||""));
@@ -3468,41 +3476,51 @@ async function resolveStoryMedia(story,options={}){
     }
   })();
 
-  storyMediaCache.set(cacheKey,promise);
+  storyMediaCache.set(key,promise);
 
   promise.then(media=>{
-    /* Null/error sonucunu oturum boyunca kilitleme; sonraki preload tekrar deneyebilir. */
-    if(!media && storyMediaCache.get(cacheKey)===promise){
-      storyMediaCache.delete(cacheKey);
+    /*
+      Null/hata sonucunu hemen silmek aynı makalenin birkaç saniye içinde
+      tekrar tekrar /video'ya gitmesine yol açıyordu. Negatif sonucu kısa bir
+      süre tut; gerçek haber refresh'i geldiğinde veya TTL dolduğunda yeniden
+      denenebilir.
+    */
+    if(!media && storyMediaCache.get(key)===promise){
+      setTimeout(()=>{
+        if(storyMediaCache.get(key)===promise){
+          storyMediaCache.delete(key);
+        }
+      },STORY_MEDIA_NEGATIVE_TTL_MS);
       return;
     }
 
-    /*
-      Dailymotion metadata'sından çözülen native URL'ler imzalı/geçici olabilir.
-      Oturum boyunca sonsuza kadar cache'leme; birkaç dakika sonra yeniden çöz.
-    */
     if(
       media?.source==="cumhuriyet-dailymotion-native" &&
-      storyMediaCache.get(cacheKey)===promise
+      storyMediaCache.get(key)===promise
     ){
       setTimeout(()=>{
-        if(storyMediaCache.get(cacheKey)===promise){
-          storyMediaCache.delete(cacheKey);
+        if(storyMediaCache.get(key)===promise){
+          storyMediaCache.delete(key);
         }
       },4*60*1000);
     }
   }).catch(()=>{
-    if(storyMediaCache.get(cacheKey)===promise){
-      storyMediaCache.delete(cacheKey);
+    if(storyMediaCache.get(key)===promise){
+      setTimeout(()=>{
+        if(storyMediaCache.get(key)===promise){
+          storyMediaCache.delete(key);
+        }
+      },60*1000);
     }
   });
 
-  if(storyMediaCache.size>160){
+  if(storyMediaCache.size>220){
     const first=storyMediaCache.keys().next().value;
     if(first)storyMediaCache.delete(first);
   }
 
-  return promise;
+  const media=await promise;
+  return applyStrict(media);
 }
 
 const HLS_JS_URL="https://cdn.jsdelivr.net/npm/hls.js@1.6.17/dist/hls.min.js";
