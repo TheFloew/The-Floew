@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.79.6";
+window.__floewAppVersion="31.79.8";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -1512,6 +1512,9 @@ function orderStoriesForFeed(list,mode){
 const floraScoreMap=new Map();
 const floraStatsMap=new Map();
 const floraStoryRequestCache=new Map();
+const floraStoryMissingUntil=new Map();
+const FLORA_STORY_NEGATIVE_CACHE_MS=30*60*1000;
+const FLORA_STORY_ERROR_BACKOFF_MS=5*60*1000;
 let floraScoresLoading=false;
 let floraScoresLoadedAt=0;
 let floraPopoverOpen=false;
@@ -1553,6 +1556,7 @@ function cacheFloraStatsRow(row){
   if(!normalized)return null;
 
   floraStatsMap.set(normalized.story_key,normalized);
+  floraStoryMissingUntil.delete(normalized.story_key);
   if(Number.isFinite(normalized.flora)){
     floraScoreMap.set(normalized.story_key,normalized.flora);
   }
@@ -1714,6 +1718,12 @@ async function loadFloraStoryStats(story,{force=false}={}){
     return floraStatsMap.get(key);
   }
 
+  if(!force){
+    const retryAt=Number(floraStoryMissingUntil.get(key)||0);
+    if(retryAt>Date.now())return null;
+    if(retryAt)floraStoryMissingUntil.delete(key);
+  }
+
   if(!force && floraStoryRequestCache.has(key)){
     return floraStoryRequestCache.get(key);
   }
@@ -1742,10 +1752,25 @@ async function loadFloraStoryStats(story,{force=false}={}){
       throw new Error(data?.error||"Flöra detay yanıtı okunamadı");
     }
 
-    if(!data?.stats)return null;
+    if(!data?.stats){
+      floraStoryMissingUntil.set(
+        key,
+        Date.now()+FLORA_STORY_NEGATIVE_CACHE_MS
+      );
+      return null;
+    }
     return cacheFloraStatsRow(data.stats);
   })()
     .catch(error=>{
+      /*
+        D1/bağlantı hatasında aynı görünür haber render oldukça endpoint'i
+        tekrar tekrar dövmeyelim. Bu yalnız kısa bir retry backoff'udur;
+        gerçek "istatistik yok" sonucu daha uzun süre tutulur.
+      */
+      floraStoryMissingUntil.set(
+        key,
+        Date.now()+FLORA_STORY_ERROR_BACKOFF_MS
+      );
       console.warn("Flöra story details:",error);
       return null;
     })
@@ -1872,6 +1897,27 @@ function setSlideFloraScore(el,story){
     "aria-label",
     scoreEl.title
   );
+
+  /*
+    v31.79.7 — Flöra skorlarını bütün site için 5 dakikada bir 5000'lik
+    toplu sorguyla çekmek yerine yalnız gerçekten ekrana gelen haber için
+    iste. /stats/flora-story story_key indeksini kullanır ve istemci cache'i
+    aynı haberi tekrar istemeyi engeller. Görsel davranış değişmez; skor
+    hazır olduğunda mevcut buton sessizce güncellenir.
+  */
+  if(
+    key &&
+    !story?.customRss &&
+    !hasScore &&
+    !floraStoryRequestCache.has(key) &&
+    Number(floraStoryMissingUntil.get(key)||0)<=Date.now()
+  ){
+    loadFloraStoryStats(story)
+      .then(stats=>{
+        if(stats)refreshVisibleFloraScores();
+      })
+      .catch(()=>{});
+  }
 }
 
 function refreshVisibleFloraScores(){
@@ -14765,6 +14811,10 @@ window.addEventListener("pointerup",e=>{
   const dx=e.clientX-state.x;
   const dy=e.clientY-state.y;
   const dt=performance.now()-state.t;
+  const headlineTapTarget=Boolean(
+    e.target.closest &&
+    e.target.closest(".headline")
+  );
 
   /*
     Yatay swipe = sekmeler arasında komşu akışa geçiş.
@@ -14806,8 +14856,15 @@ window.addEventListener("pointerup",e=>{
     ) &&
     dt<=1000 &&
     Math.abs(dx)<10 &&
-    Math.abs(dy)<10
+    Math.abs(dy)<10 &&
+    !headlineTapTarget
   ){
+    /*
+      v31.79.8 — Manşet metnine yapılan kısa masaüstü/web tıklaması haber
+      navigasyonu değildir. Başlık, açıklama, kaynak satırı ve saat üzerinde
+      gerçek swipe hâlâ yukarıdaki dx/dy yollarından çalışır; yalnız tap artık
+      move(1) üretmez.
+    */
     move(1);
   }
 
@@ -16314,7 +16371,6 @@ setTimeout(requestDesktopWakeLock,0);
 setFullscreenIcon();
 startAdsCatalogRefresh();
 load();
-loadInlineFloraScores();
 loadGa4Config();
 setInterval(load,REFRESH_MS);
 
@@ -16342,11 +16398,6 @@ document.addEventListener("visibilitychange",()=>{
     if(fxRatesVisible || stockTickerVisible)refreshMarketData(true);
   }
 });
-setInterval(
-  ()=>loadInlineFloraScores(true),
-  FLORA_SCORES_REFRESH_MS
-);
-
 if(window.__floewInitialReady){
   showCookieNoticeIfNeeded();
   initWeather();
