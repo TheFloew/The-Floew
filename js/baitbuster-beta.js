@@ -69,7 +69,7 @@
     const description=clean(slide.querySelector(".description")?.textContent);
     const source=clean(slide.querySelector(".source")?.textContent);
     const category=clean(slide.querySelector(".category")?.textContent);
-    const key=`${url}|${title}`;
+    const key=`${url}|${title}`.slice(0,900);
 
     return {key,url,title,description,source,category};
   }
