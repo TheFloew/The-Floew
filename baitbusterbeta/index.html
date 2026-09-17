@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex,nofollow">
+<base href="/">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Flöw | Haber akışı</title>
+<link rel="icon" href="assets/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+
+<link rel="stylesheet" href="css/styles.css?v=d5286daf22df">
+
+<style id="boot-black-style">
+  html,body{background:#000}
+  #boot-black{
+    position:fixed;
+    inset:0;
+    z-index:2147483647;
+    background:#000;
+    pointer-events:none;
+  }
+</style>
+<style id="baitbuster-beta-style">
+  #baitbuster-beta-label{
+    position:fixed;
+    right:max(14px, env(safe-area-inset-right));
+    bottom:max(14px, env(safe-area-inset-bottom));
+    z-index:2147483000;
+    padding:6px 9px;
+    border:1px solid rgba(255,255,255,.45);
+    border-radius:999px;
+    background:rgba(0,0,0,.72);
+    color:#fff;
+    font:600 11px/1.1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    letter-spacing:.02em;
+    pointer-events:none;
+    backdrop-filter:blur(8px);
+    -webkit-backdrop-filter:blur(8px);
+  }
+</style>
+
+</head>
+
+<body>
+<div id="boot-black" aria-hidden="true"></div>
+<script>
+(function(){
+  setTimeout(function(){
+    var cover=document.getElementById("boot-black");
+    if(cover)cover.remove();
+
+    var style=document.getElementById("boot-black-style");
+    if(style)style.remove();
+  },10);
+})();
+</script>
+
+<div id="loading-screen" aria-live="polite" aria-label="Yükleniyor">
+  <div class="loading-stage" aria-hidden="true">
+    <div class="loading-marquee">
+      <div class="loading-set">
+        <img class="loading-logo loading-logo-active" src="assets/logo.png" alt="">
+        <img class="loading-logo" src="assets/logo.png" alt="">
+        <img class="loading-logo" src="assets/logo.png" alt="">
+      </div>
+      <div class="loading-set" aria-hidden="true">
+        <img class="loading-logo loading-logo-active" src="assets/logo.png" alt="">
+        <img class="loading-logo" src="assets/logo.png" alt="">
+        <img class="loading-logo" src="assets/logo.png" alt="">
+      </div>
+    </div>
+  </div>
+  <div class="loading-progress" aria-hidden="true"><span></span></div>
+</div>
+
+<main id="wall">
+  <div id="baitbuster-beta-label" aria-label="BaitBuster beta">BaitBuster β</div>
+  <img id="logo" src="assets/logo-beta.png" alt="Flöw" draggable="false">
+
+  <nav id="feed-tabs" aria-label="Haber akışı">
+    <button class="feed-tab" data-feed-mode="breaking" type="button">Son dakika</button>
+    <button class="feed-tab active" data-feed-mode="agenda" type="button">Gündem</button>
+    <button class="feed-tab" data-feed-mode="foreign" type="button">Yabancı</button>
+  </nav>
+
+  <button id="fullscreen-button" type="button" aria-label="Tam ekran" title="Tam ekran">⤢︎</button>
+  <button id="control-menu-button" type="button" aria-label="Araçlar" title="Araçlar" aria-expanded="false" aria-controls="control-menu-panel">☰︎</button>
+
+  <div id="control-menu-panel" aria-hidden="true" inert>
+    <button id="pip-button" class="control-menu-item" type="button" aria-label="Picture-in-Picture" title="Köşeye indir">⧉︎</button>
+    <button id="time-range-button" class="control-menu-item" type="button" aria-label="Haber zaman aralığı" title="Haber zaman aralığı">⏲︎</button>
+    <button id="keyword-filter-button" class="control-menu-item" type="button" aria-label="Anahtar kelime filtresi" title="Anahtar kelime filtresi">±</button>
+    <button id="keyword-watch-button" class="control-menu-item" type="button" aria-label="Anahtar kelime takibi" title="Anahtar kelime takibi">⌖︎</button>
+    <button id="info-button" class="control-menu-item" type="button" aria-label="Flöw hakkında bazı bilgiler" title="Flöw hakkında bazı bilgiler">ⓘ︎</button>
+    <button id="menu-button" class="control-menu-item" type="button" aria-label="Tercihler" title="Tercihler">⚙︎</button>
+  </div>
+
+  <div id="time-range-panel" aria-hidden="true">
+    <div class="time-range-heading">
+      <strong>Zaman aralığı</strong>
+      <span id="time-range-current">Algoritmik · Tüm zamanlar</span>
+    </div>
+    <div class="feed-order-row">
+      <span class="feed-order-label">Sıralama</span>
+      <div class="feed-order-strip" role="group" aria-label="Haber sıralama biçimi">
+        <button class="feed-order-option" data-order-mode="algorithmic" type="button">Algoritmik</button>
+        <button class="feed-order-option" data-order-mode="chronological" type="button">Kronolojik</button>
+      </div>
+    </div>
+    <div class="time-range-strip" role="group" aria-label="Gösterilecek haberlerin zaman aralığı">
+      <button class="time-range-option" data-hours="1" type="button">1 saat</button>
+      <button class="time-range-option" data-hours="2" type="button">2 saat</button>
+      <button class="time-range-option" data-hours="4" type="button">4 saat</button>
+      <button class="time-range-option" data-hours="8" type="button">8 saat</button>
+      <button class="time-range-option" data-hours="16" type="button">16 saat</button>
+      <button class="time-range-option" data-hours="24" type="button">1 gün</button>
+      <button class="time-range-option" data-hours="120" type="button">5 gün</button>
+      <button class="time-range-option" data-hours="all" type="button">Tüm zamanlar</button>
+    </div>
+  </div>
+
+  <div id="keyword-filter-panel" class="keyword-tool-panel" aria-hidden="true">
+    <div class="keyword-tool-row">
+      <input id="keyword-filter-input" class="keyword-tool-input" type="text"
+        autocomplete="off" spellcheck="false"
+        placeholder="Anahtar kelimeler: ör. yapay zeka, İstanbul">
+      <button id="keyword-filter-clear" class="keyword-tool-clear" type="button"
+        aria-label="Anahtar kelime filtresini temizle" title="Temizle">×</button>
+      <button id="keyword-filter-show" class="keyword-tool-action" type="button">Göster</button>
+      <button id="keyword-filter-hide" class="keyword-tool-action" type="button">Gizle</button>
+    </div>
+  </div>
+
+  <div id="keyword-watch-panel" class="keyword-tool-panel" aria-hidden="true">
+    <div class="keyword-tool-row">
+      <input id="keyword-watch-input" class="keyword-tool-input" type="text"
+        autocomplete="off" spellcheck="false"
+        placeholder="Takip edilecek kelimeler: ör. deprem, seçim">
+      <button id="keyword-watch-clear" class="keyword-tool-clear" type="button"
+        aria-label="Anahtar kelime takibini temizle" title="Temizle">×</button>
+      <button id="keyword-watch-apply" class="keyword-tool-action" type="button">Uyar</button>
+    </div>
+  </div>
+
+  <div id="source-viewer-overlay" aria-hidden="true">
+    <section id="source-viewer-panel" role="dialog" aria-modal="true" aria-label="Haber kaynağı">
+      <header id="source-viewer-header">
+        <div id="source-viewer-heading">
+          <div id="source-viewer-title">Kaynak</div>
+          <div id="source-viewer-url"></div>
+        </div>
+        <div id="source-viewer-actions">
+          <a id="source-viewer-external" href="#" target="_blank" rel="noopener noreferrer" aria-label="Kaynağı yeni sekmede aç" title="Kaynağı yeni sekmede aç">↗︎</a>
+          <button id="source-viewer-close" type="button" aria-label="Kaynak penceresini kapat" title="Kapat">×</button>
+        </div>
+      </header>
+      <div id="source-viewer-stage">
+        <div id="source-viewer-status" role="status">Kaynak yükleniyor…</div>
+        <iframe
+          id="source-viewer-frame"
+          title="Haber kaynağı"
+          sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+          referrerpolicy="no-referrer"
+          loading="eager"
+        ></iframe>
+      </div>
+    </section>
+  </div>
+
+  <div id="stats-overlay" aria-hidden="true">
+    <section id="public-stats-panel" role="dialog" aria-modal="true" aria-label="Flöw hakkında bazı bilgiler">
+      <div class="menu-header about-main-header">
+        <div>
+          <div class="menu-title">Flöw hakkında</div>
+          <div class="menu-subtitle">Flöw'e dair bilgiler, belgeler ve iletişim.</div>
+        </div>
+        <button id="stats-close" type="button" aria-label="Bilgi ekranını kapat">×</button>
+      </div>
+
+      <div class="about-tabs" role="tablist" aria-label="Flöw hakkında bölümler">
+        <button class="about-tab active" data-about-tab="stats" type="button">İstatistikler</button>
+        <button class="about-tab" data-about-tab="report" type="button">Hata bildir</button>
+        <button class="about-tab" data-about-tab="faq" type="button">SSS</button>
+        <button class="about-tab" data-about-tab="legal" type="button">Legal</button>
+        <button class="about-tab" data-about-tab="ads" type="button">Reklam</button>
+        <button class="about-tab" data-about-tab="contact" type="button">İletişim</button>
+      </div>
+
+      <div class="about-panel active" data-about-panel="stats">
+        <div class="about-section-copy">
+          <div id="public-stats-title" class="about-section-title">Flöw İstatistikleri</div>
+          <div id="public-stats-subtitle" class="about-section-subtitle">Flöw'de son dönemde neler ilgi görüyor?</div>
+        </div>
+
+        <div class="public-stats-tabs" role="tablist" aria-label="İstatistik dönemi">
+          <button class="public-stats-tab active" data-stats-range="7d" type="button">Son 7 gün</button>
+          <button class="public-stats-tab" data-stats-range="all" type="button">Tüm zamanlar</button>
+        </div>
+
+        <div id="public-stats-summary" class="public-stats-summary"></div>
+
+        <div class="public-stats-grid">
+          <section class="public-stats-section">
+            <div class="public-stats-heading">Flöra'da öne çıkanlar</div>
+            <div id="public-stats-flora" class="public-stats-list"></div>
+          </section>
+
+          <section class="public-stats-section">
+            <div id="public-stats-secondary-heading" class="public-stats-heading">En çok ilgi gören kategoriler</div>
+            <div id="public-stats-categories" class="public-stats-list compact"></div>
+          </section>
+        </div>
+
+        <div class="public-stats-footer">
+          <span id="public-stats-status">İstatistikler hazırlanıyor...</span>
+          <a id="public-stats-detail-link" href="flora.html" target="_blank" rel="noopener noreferrer">Flöra'yı ayrıntılı gör →︎</a>
+        </div>
+      </div>
+
+      <div class="about-panel" data-about-panel="report">
+        <div class="about-placeholder">
+          <strong>Geri bildirim</strong>
+          <p>Geri bildirim ekranı hazırlanıyor...</p>
+        </div>
+      </div>
+
+      <div class="about-panel" data-about-panel="faq">
+        <div class="about-doc-text" data-about-doc="docs/SSS.txt">İçerik yükleniyor...</div>
+      </div>
+
+      <div class="about-panel" data-about-panel="legal">
+        <div class="about-legal-intro">Flöw'ün kullanım ve veri politikaları.</div>
+        <div class="about-legal-options">
+          <button class="about-legal-button" data-legal-doc="terms" type="button">Kullanım koşulları</button>
+          <button class="about-legal-button" data-legal-doc="privacy" type="button">Gizlilik</button>
+          <button class="about-legal-button" data-legal-doc="cookies" type="button">Çerezler</button>
+        </div>
+      </div>
+
+      <div class="about-panel" data-about-panel="ads">
+        <div class="about-doc-text" data-about-doc="docs/REKLAM.txt">İçerik yükleniyor...</div>
+      </div>
+
+      <div class="about-panel" data-about-panel="contact">
+        <div class="about-doc-text" data-about-doc="docs/ILETISIM.txt">İçerik yükleniyor...</div>
+      </div>
+    </section>
+
+    <section id="about-doc-viewer" role="dialog" aria-modal="true" aria-hidden="true" aria-label="Belge görüntüleyici">
+      <div class="about-doc-viewer-header">
+        <strong id="about-doc-viewer-title"></strong>
+        <button id="about-doc-viewer-close" type="button" aria-label="Belgeyi kapat">×</button>
+      </div>
+      <div id="about-doc-viewer-content" class="about-doc-text">İçerik yükleniyor...</div>
+    </section>
+  </div>
+
+  <div id="menu-overlay" aria-hidden="true">
+    <section id="settings-menu" role="dialog" aria-modal="true" aria-label="Haber ayarları">
+      <div class="menu-header">
+        <div>
+          <div class="menu-title">Tercihler</div>
+          <div class="menu-subtitle">Flöw'ü istediğiniz gibi kişiselleştirin...</div>
+        </div>
+        <button id="menu-close" type="button" aria-label="Menüyü kapat">×</button>
+      </div>
+
+      <div class="menu-tabs" role="tablist">
+        <button class="menu-tab active" data-tab="sources" type="button">Kaynaklar</button>
+        <button class="menu-tab" data-tab="custom-sources" type="button">Özel kaynaklar</button>
+        <button class="menu-tab" data-tab="categories" type="button">Kategoriler</button>
+        <button class="menu-tab" data-tab="motion" type="button">Görünüm</button>
+        <button class="menu-tab" data-tab="weather" type="button">Hava &amp; Su</button>
+        <button class="menu-tab" data-tab="advanced" type="button">Gelişmiş</button>
+      </div>
+
+      <div class="menu-panel active" id="sources-panel" data-panel="sources">
+        <div id="source-options" class="option-list"></div>
+      </div>
+
+      <div class="menu-panel" id="custom-sources-panel" data-panel="custom-sources">
+        <div class="custom-rss-setting">
+          <div class="setting-copy custom-rss-copy">
+            <strong>Özel RSS kaynakları</strong>
+            <small>RSS adresini ekleyin. Kaynaklar bu tarayıcıda localStorage içinde saklanır.</small>
+          </div>
+          <div class="custom-rss-add-row">
+            <input id="custom-rss-input" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://ornek.com/rss.xml" aria-label="RSS adresi">
+            <button id="custom-rss-add" type="button" aria-label="RSS kaynağı ekle" title="RSS kaynağı ekle">+</button>
+          </div>
+          <div id="custom-rss-feedback" class="custom-rss-feedback" hidden></div>
+          <div id="custom-rss-list" class="custom-rss-list"></div>
+        </div>
+      </div>
+
+      <div class="menu-panel" id="categories-panel" data-panel="categories">
+        <div id="category-options" class="option-list"></div>
+      </div>
+
+      <div class="menu-panel" id="motion-panel" data-panel="motion">
+        <div class="motion-label">Haber geçiş yönü</div>
+        <div class="direction-list">
+          <button class="direction-option" data-direction="up" type="button"><span>↑︎</span> Aşağıdan yukarı</button>
+          <button class="direction-option" data-direction="down" type="button"><span>↓︎</span> Yukarıdan aşağı</button>
+        </div>
+
+        <div class="duration-setting-group">
+          <div class="setting-copy">
+            <strong>Haber süresi</strong>
+            <small>Bir haberin ekranda kalacağı süre</small>
+          </div>
+          <div class="duration-control" role="group" aria-label="Haber süresi">
+            <button id="duration-minus" type="button" aria-label="Süreyi azalt">−︎</button>
+            <span id="duration-value">10 sn</span>
+            <button id="duration-plus" type="button" aria-label="Süreyi artır">+</button>
+            <button id="duration-play" class="duration-auto-button" type="button" aria-label="Otomatik kaydırmayı devam ettir" title="Otomatik kaydırmayı devam ettir">▶︎</button>
+            <button id="duration-pause" class="duration-auto-button" type="button" aria-label="Otomatik kaydırmayı durdur" title="Otomatik kaydırmayı durdur">⏸︎</button>
+          </div>
+        </div>
+
+        <div class="media-setting-group">
+          <button id="video-setting" class="media-setting" type="button" aria-pressed="true">
+            <span>
+              <strong>Haber videoları</strong>
+              <small>Varsa görsel yerine sessiz oynat</small>
+            </span>
+            <span class="media-setting-state">Açık</span>
+          </button>
+        </div>
+
+        <div class="media-setting-group">
+          <button id="video-only-setting" class="media-setting" type="button" aria-pressed="false">
+            <span>
+              <strong>Sadece videolu haberler</strong>
+              <small>Akışta yalnız video içeren haberleri göster</small>
+            </span>
+            <span class="media-setting-state">Kapalı</span>
+          </button>
+        </div>
+
+        <div class="media-setting-group market-visibility-settings">
+          <button id="fx-rates-setting" class="media-setting" type="button" aria-pressed="true">
+            <span>
+              <strong>Döviz kurları</strong>
+              <small>Saatin yanında USD, EUR ve GBP kurlarını göster</small>
+            </span>
+            <span class="media-setting-state">Açık</span>
+          </button>
+
+          <button id="stock-ticker-setting" class="media-setting" type="button" aria-pressed="false">
+            <span>
+              <strong>Borsa bandı</strong>
+              <small>BIST endeksleri ve seçili hisseleri iki bant halinde göster</small>
+            </span>
+            <span class="media-setting-state">Kapalı</span>
+          </button>
+
+          <div class="market-data-note">Piyasa verileri gecikmeli olabilir.</div>
+        </div>
+
+        <div class="ticker-size-setting">
+          <div class="setting-copy">
+            <strong>Borsa bandı boyutu</strong>
+            <small>Alt ve üst piyasa bantlarının yüksekliği</small>
+          </div>
+          <div class="duration-control ticker-size-control" role="group" aria-label="Borsa bandı boyutu">
+            <button id="stock-ticker-size-minus" type="button" aria-label="Borsa bandını küçült">−︎</button>
+            <span id="stock-ticker-size-value">%100</span>
+            <button id="stock-ticker-size-plus" type="button" aria-label="Borsa bandını büyüt">+</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="menu-panel" id="weather-panel" data-panel="weather">
+        <div class="weather-settings">
+          <label class="weather-field" for="weather-city">
+            <span>Şehir</span>
+            <div class="weather-city-row">
+              <input id="weather-city" type="text" autocomplete="off" spellcheck="false" placeholder="İstanbul">
+              <button id="weather-apply" type="button">Uygula</button>
+            </div>
+          </label>
+
+          <div class="weather-field">
+            <span>Sıcaklık birimi</span>
+            <div class="weather-unit-list" role="group" aria-label="Sıcaklık birimi">
+              <button class="weather-unit-option" data-unit="celsius" type="button">Selsiyus °C</button>
+              <button class="weather-unit-option" data-unit="fahrenheit" type="button">Fahrenayt °F</button>
+            </div>
+          </div>
+
+          <div id="weather-feedback" class="weather-feedback" aria-live="polite"></div>
+          <div class="weather-attribution">
+            Hava durumu verisi:
+            <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="menu-panel" id="advanced-panel" data-panel="advanced">
+        <div class="media-setting-group advanced-setting-group">
+          <button id="near-duplicate-setting" class="media-setting" type="button" aria-pressed="true">
+            <span>
+              <strong>Benzer haberleri azalt</strong>
+              <small>Algoritmik akışta farklı kaynakların aynı olayı anlatan çok benzer haberlerini peş peşe göstermemeye çalışır. Kronolojik sıralamayı etkilemez.</small>
+            </span>
+            <span class="media-setting-state">Açık</span>
+          </button>
+        </div>
+
+        <div class="preference-transfer-setting">
+          <div class="setting-copy">
+            <strong>Tercihleri aktarma</strong>
+            <small>Kaynak, kategori, görünüm, süre, hava durumu, anahtar kelime ve özel RSS tercihlerinizi tek bir Flöw dosyasıyla başka bir tarayıcıya taşıyın.</small>
+          </div>
+          <div class="preference-transfer-actions" role="group" aria-label="Tercihleri aktarma">
+            <button id="preferences-import" type="button">İçe aktar</button>
+            <button id="preferences-export" type="button">Dışa aktar</button>
+            <input id="preferences-import-file" type="file" accept="application/json,.json" hidden>
+          </div>
+          <div id="preference-transfer-feedback" class="preference-transfer-feedback" hidden aria-live="polite"></div>
+        </div>
+      </div>
+
+      <div class="menu-footer">
+        <span id="filter-count"></span>
+        <a class="flora-menu-link" href="flora.html" target="_blank" rel="noopener noreferrer">Flöra</a>
+      </div>
+    </section>
+  </div>
+
+  <div id="clock" aria-hidden="true">
+    <div id="weather-current" hidden>
+      <span id="weather-icon"></span>
+      <span id="weather-temp"></span>
+      <span id="weather-city-label"></span>
+    </div>
+    <div id="clock-time">00:00</div>
+    <div id="clock-date"></div>
+    <div id="fx-rates" hidden title="Piyasa verileri gecikmeli olabilir.">
+      <span class="fx-rate" data-fx="USD"><span class="fx-flag" aria-hidden="true">🇺🇸</span><strong>USD</strong><span class="fx-value">—</span></span>
+      <span class="fx-rate" data-fx="EUR"><span class="fx-flag" aria-hidden="true">🇪🇺</span><strong>EUR</strong><span class="fx-value">—</span></span>
+      <span class="fx-rate" data-fx="GBP"><span class="fx-flag" aria-hidden="true">🇬🇧</span><strong>GBP</strong><span class="fx-value">—</span></span>
+      <span class="fx-rate fx-rate-gold" data-fx="GOLD" title="Gram altın · TL"><span class="fx-gold-icon" aria-hidden="true"><img src="assets/gold.png?h=531e4eda9edf" alt="" draggable="false"></span><strong>XAU</strong><span class="fx-value">—</span></span>
+    </div>
+  </div>
+
+  <div id="market-ticker" hidden aria-hidden="true" title="Piyasa verileri gecikmeli olabilir.">
+    <div class="market-band market-index-band">
+      <div class="market-ticker-window">
+        <div class="market-ticker-track" data-market-track="indices"></div>
+      </div>
+    </div>
+    <div class="market-band market-company-band">
+      <div class="market-ticker-window">
+        <div class="market-ticker-track market-company-track" data-market-track="companies"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="iddqd-grid" aria-hidden="true" aria-label="Altı kategorili haber görünümü"></div>
+
+  <article class="slide active" id="a">
+    <img class="slide-image" alt="" draggable="false" referrerpolicy="no-referrer">
+    <video class="slide-video" muted autoplay playsinline preload="auto" loop aria-hidden="true"></video>
+    <iframe class="slide-embed" title="Haber videosu" allow="autoplay; encrypted-media" referrerpolicy="strict-origin-when-cross-origin" aria-hidden="true"></iframe>
+    <div class="shade"></div>
+    <div class="headline">
+      <div class="source-line">
+        <div class="category"></div>
+        <img class="source-logo" alt="" draggable="false">
+        <div class="source"></div>
+      </div>
+      <h1></h1>
+      <div class="description"></div>
+      <div class="time"></div>
+      <div class="headline-actions">
+        <span class="flora-inline" aria-label="Flöra puanı" title="Flöra puanı">
+          <span class="flora-inline-mark" aria-hidden="true">𝒇</span>
+          <span class="flora-inline-value">—</span>
+        </span>
+        <button class="share-link" type="button" aria-label="Haberi paylaş" title="Haberi paylaş">⤴︎</button>
+        <button class="feedback-inline-link" type="button" aria-label="Geri bildirim" title="Geri bildirim">⚑︎</button>
+        <a class="source-link" href="#" rel="noopener noreferrer" aria-label="Kaynağı gör" title="Kaynağı gör">⎋︎</a>
+      </div>
+    </div>
+  </article>
+
+  <article class="slide" id="b">
+    <img class="slide-image" alt="" draggable="false" referrerpolicy="no-referrer">
+    <video class="slide-video" muted autoplay playsinline preload="auto" loop aria-hidden="true"></video>
+    <iframe class="slide-embed" title="Haber videosu" allow="autoplay; encrypted-media" referrerpolicy="strict-origin-when-cross-origin" aria-hidden="true"></iframe>
+    <div class="shade"></div>
+    <div class="headline">
+      <div class="source-line">
+        <div class="category"></div>
+        <img class="source-logo" alt="" draggable="false">
+        <div class="source"></div>
+      </div>
+      <h1></h1>
+      <div class="description"></div>
+      <div class="time"></div>
+      <div class="headline-actions">
+        <span class="flora-inline" aria-label="Flöra puanı" title="Flöra puanı">
+          <span class="flora-inline-mark" aria-hidden="true">𝒇</span>
+          <span class="flora-inline-value">—</span>
+        </span>
+        <button class="share-link" type="button" aria-label="Haberi paylaş" title="Haberi paylaş">⤴︎</button>
+        <button class="feedback-inline-link" type="button" aria-label="Geri bildirim" title="Geri bildirim">⚑︎</button>
+        <a class="source-link" href="#" rel="noopener noreferrer" aria-label="Kaynağı gör" title="Kaynağı gör">⎋︎</a>
+      </div>
+    </div>
+  </article>
+  <div id="ad-overlay" hidden aria-hidden="true" aria-label="Reklam">
+    <div class="ad-badge">Reklam</div>
+    <img id="ad-image" class="ad-media" alt="Reklam" draggable="false" hidden>
+    <video id="ad-video" class="ad-media" muted playsinline preload="auto" hidden></video>
+  </div>
+</main>
+
+<button id="video-audio-toggle" type="button" hidden aria-hidden="true" aria-pressed="false" aria-label="Videonun sesini aç" title="Sesi aç"><img class="video-audio-icon" src="assets/video-audio-speaker.png?h=0478113d1df8" alt="" aria-hidden="true" draggable="false"></button>
+
+<div id="keyword-alert-frame" aria-hidden="true"></div>
+<div id="status" hidden></div>
+
+<div id="cookie-notice" hidden>
+  <div class="status-band">
+    <span class="status-message cookie-info-message">Çerez politikası hakkında bilgi.</span>
+    <span class="status-message cookie-consent-message">The Flöw deneyimi ve anonim kullanım ölçümü için çerezleri kullanabilir.</span>
+    <div class="cookie-actions" aria-label="Çerez tercihi">
+      <button id="cookie-reject" class="cookie-action secondary" type="button">Reddet</button>
+      <button id="cookie-accept" class="cookie-action" type="button">Kabul et</button>
+    </div>
+    <button id="cookie-close" class="status-close" type="button" aria-label="Kapat" title="Kapat">×</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  /*
+    app.js kendi bağlantı/retry uyarılarını yönetiyor. Bu failsafe yalnızca
+    beklenmedik bir JS parse/runtime sorunu loading katmanını sonsuza kadar
+    ekranda bırakmasın diye var; başarılı haber yüklemesinin üstüne sahte
+    "haberler alınamadı" mesajı üretmez.
+  */
+  var FAILSAFE_MS=15000;
+
+  setTimeout(function(){
+    var loader=document.getElementById("loading-screen");
+    if(loader && !window.__floewInitialReady){
+      loader.remove();
+    }
+  },FAILSAFE_MS);
+})();
+</script>
+
+<script src="js/config.js?h=beda7fe1ea23"></script>
+<script src="js/app.js?v=92afe52795d3" onerror="
+  var loader=document.getElementById('loading-screen');
+  if(loader)loader.remove();
+  var status=document.getElementById('status');
+  if(status){
+    status.innerHTML='<div class=&quot;status-band&quot;><span class=&quot;status-message&quot;>js/app.js yüklenemedi. GitHub dosya yollarını kontrol edin.</span><button class=&quot;status-close&quot; type=&quot;button&quot; aria-label=&quot;Uyarıyı kapat&quot;>×</button></div>';
+    status.hidden=false;
+    var close=status.querySelector('.status-close');
+    if(close)close.onclick=function(){status.hidden=true;status.innerHTML='';};
+  }
+"></script>
+<script src="js/share.js?h=e755523fd4c2"></script>
+<script src="js/feedback.js?h=2d661f40fcbd"></script>
+
+</body>
+</html>
