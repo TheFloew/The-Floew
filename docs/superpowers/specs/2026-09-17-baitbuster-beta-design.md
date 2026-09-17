@@ -24,9 +24,9 @@ Ana `flöw.tr/` deneyimi bu beta sürecinde değişmez. Tüm deneyler yalnızca 
 
 ### 1. Mevcut News Worker
 
-News Worker mevcut haber toplama davranışını korur. BaitBuster için zorunlu AI çağrısı eklenmez; böylece ana haber servisi AI gecikmelerinden ve AI servis hatalarından etkilenmez.
+News Worker mevcut haber toplama davranışını aynen korur. BaitBuster için AI çağrısı, queue veya ek bekleme eklenmez; böylece ana haber servisi AI gecikmelerinden ve AI servis hatalarından etkilenmez.
 
-News Worker veya onu tüketen beta katmanı haberleri şu temel alanlarla BaitBuster servisine gönderebilir:
+Beta istemci katmanı, News Worker'dan zaten aldığı haberleri şu temel alanlarla BaitBuster servisine gönderir:
 
 ```json
 {
@@ -43,13 +43,20 @@ News Worker veya onu tüketen beta katmanı haberleri şu temel alanlarla BaitBu
 
 Ayrı bir Cloudflare Worker olarak çalışır. Görevleri:
 
-1. Haber metadata paketlerini toplu halde sınıflandırmak.
-2. Her haber için clickbait olasılığı, güven düzeyi ve makale gövdesine ihtiyaç olup olmadığını üretmek.
-3. Yalnızca gerekli haberlerde kaynak makaleyi güvenli biçimde çekmek/çıkarma katmanına yönlendirmek.
-4. Yeterli içerik varsa tarafsız alternatif başlık üretmek.
-5. Sonucu cache'e yazmak ve beta istemcisine döndürmek.
+1. Önce KV cache'de mevcut sonuçları aramak.
+2. Cache miss olan haber metadata paketlerini toplu halde sınıflandırmak.
+3. Her haber için clickbait olasılığı, güven düzeyi ve makale gövdesine ihtiyaç olup olmadığını üretmek.
+4. Yalnızca gerekli haberlerde kaynak makaleyi güvenli biçimde çekmek/çıkarma katmanına yönlendirmek.
+5. Yeterli içerik varsa tarafsız alternatif başlık üretmek.
+6. Sonucu Cloudflare KV'ye yazmak ve beta istemcisine döndürmek.
 
 AI Worker arızası ana Flöw akışını durdurmaz.
+
+### 3. Cloudflare KV
+
+BaitBuster sonuç cache'i ayrı bir KV namespace kullanır. Her haber için tek bir analiz kaydı tutulur. KV yalnız türetilmiş haber analizi içerir; kullanıcı verisi içermez.
+
+Cache anahtarının başlık hash'ini de içermesi sayesinde yayıncı aynı URL'deki manşeti anlamlı biçimde değiştirirse haber yeniden değerlendirilebilir.
 
 ## İki aşamalı AI akışı
 
@@ -115,11 +122,11 @@ Yeterli bilgi yoksa:
 
 AI sonuçları tekrar tekrar hesaplanmaz.
 
-Önerilen anahtar:
+Anahtar:
 
 `sha256(normalizedCanonicalUrl + normalizedOriginalTitle)`
 
-Cache kaydı en az şu alanları içerir:
+KV kaydı en az şu alanları içerir:
 
 ```json
 {
@@ -135,13 +142,13 @@ Cache kaydı en az şu alanları içerir:
 }
 ```
 
-Aynı haber yeniden görüldüğünde cache sonucu doğrudan kullanılır. Kaynağın başlığı anlamlı biçimde değişirse başlık hash'e dahil olduğu için yeni değerlendirme yapılabilir.
+Aynı haber yeniden görüldüğünde cache sonucu doğrudan kullanılır. Kaynağın başlığı anlamlı biçimde değişirse başlık hash'e dahil olduğu için yeni değerlendirme yapılır.
 
 ## Kullanıcı gecikmesi
 
 AI işlemleri ilk haber yükleme zincirinin parçası değildir.
 
-Beta istemcisi haberleri normal biçimde açar. BaitBuster sonucu hazırsa alternatif başlık kullanılır. Hazır değilse özgün başlık gösterilir ve arka planda sonuç istenir/hazırlanır.
+Beta istemcisi haberleri normal biçimde açar. Ardından BaitBuster isteğini kullanıcı arayüzünü bloklamadan başlatır. Cache sonucu hazırsa alternatif başlık kullanılır. Sonuç henüz hazır değilse özgün başlık gösterilir; AI işlemi arka planda tamamlandığında sonuç sonraki render/geçişlerde kullanılabilir.
 
 Bu nedenle hedef kullanıcı tarafı ek gecikmesi yaklaşık sıfırdır; AI gecikmesi arka planda absorbe edilir.
 
@@ -154,6 +161,7 @@ Bu nedenle hedef kullanıcı tarafı ek gecikmesi yaklaşık sıfırdır; AI gec
 Bu script:
 
 - Haber objesini değiştirmeden BaitBuster sonucunu eşler.
+- Yüklenen haber metadata'sını batch halinde AI Worker'a yollar.
 - `rewriteStatus === "rewritten"` ve geçerli `flowTitle` varsa ekrandaki başlığı beta görünümünde değiştirir.
 - Sonuç yoksa veya hata varsa özgün `title`ı bırakır.
 - AI tarafından değiştirilmiş başlığın yanında küçük bir `✦` göstergesi kullanır.
@@ -171,7 +179,7 @@ Aşağıdaki tüm durumlarda kullanıcı özgün haber başlığını görmeye d
 - Makale gövdesi çekilemiyor.
 - İçerik çıkarma başarısız.
 - Model içeriği yetersiz buluyor.
-- Cache erişimi başarısız.
+- KV erişimi başarısız.
 
 BaitBuster hiçbir koşulda haber kartını boş bırakmaz ve ana akışı bloklamaz.
 
@@ -189,7 +197,7 @@ Maliyet üç mekanizmayla sınırlandırılır:
 
 1. İlk aşama metadata batch çağrılarıyla yapılır.
 2. Tam makale yalnızca şüpheli haberlerde işlenir.
-3. Sonuçlar kalıcı/uzun ömürlü cache ile tekrar kullanılır.
+3. Sonuçlar KV cache ile tekrar kullanılır.
 
 İlk beta sırasında gerçek oranlar ölçülecek: toplam haber sayısı, clickbait adayı oranı, makale okuma oranı, rewrite başarı oranı, cache hit oranı ve ortalama model kullanım maliyeti.
 
@@ -225,7 +233,7 @@ En az üç grup örnek haber kullanılacak:
 
 1. Beta istemci entegrasyonu.
 2. Flöw AI Worker'ın sınıflandırma + rewrite API'si.
-3. Cache katmanı.
+3. Cloudflare KV cache katmanı.
 4. Güvenli makale metni çıkarma yolu.
 5. Küçük `✦` beta göstergesi.
 6. Ölçüm için temel teknik sayaçlar/loglar.
