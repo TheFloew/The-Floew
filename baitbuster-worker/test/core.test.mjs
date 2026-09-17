@@ -7,6 +7,7 @@ import {
   sanitizeRewriteResult,
   originalResult
 } from "../src/core.js";
+import {extractStructuredOutput} from "../src/openai.js";
 
 test("normalizeStory keeps only required safe story fields",()=>{
   assert.deepEqual(normalizeStory({
@@ -55,4 +56,21 @@ test("rewrite sanitizer refuses empty rewritten titles",()=>{
 test("originalResult always preserves original title",()=>{
   const story=normalizeStory({key:"a",url:"https://example.com/a",title:"Orijinal"});
   assert.equal(originalResult(story,"ai_error").originalTitle,"Orijinal");
+});
+
+test("structured output extractor reads output_text JSON",()=>{
+  const payload={output:[{content:[{type:"output_text",text:'{"results":[]}'}]}]};
+  assert.deepEqual(extractStructuredOutput(payload),{results:[]});
+});
+
+test("structured output extractor reads top-level output_text",()=>{
+  assert.deepEqual(extractStructuredOutput({output_text:'{"results":[]}'}),{results:[]});
+});
+
+test("structured output extractor rejects malformed JSON",()=>{
+  assert.throws(()=>extractStructuredOutput({output:[{content:[{type:"output_text",text:"nope"}]}]}));
+});
+
+test("structured output extractor rejects refusals",()=>{
+  assert.throws(()=>extractStructuredOutput({output:[{content:[{type:"refusal",refusal:"no"}]}]}));
 });
