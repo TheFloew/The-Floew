@@ -415,6 +415,9 @@
     const title=
       clean(
         slide.querySelector("h1")
+          ?.dataset
+          ?.baitbusterOriginalTitle ||
+        slide.querySelector("h1")
           ?.textContent
       );
 
