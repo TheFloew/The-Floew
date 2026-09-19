@@ -31,7 +31,7 @@ test("AI mode tooltip uses the requested explanation",async()=>{
   const ui=await loadUI();
   assert.equal(
     ui.markerTitleForMode("ai"),
-    "Bu haberin manşeti Flöw yapay zekası ile değiştirildi. Orijinal metni görmek için tıklayın."
+    "Bu haberin manşeti β BaitBuster ile değiştirildi. Orijinal metni görmek için tıklayın."
   );
 });
 
@@ -39,6 +39,25 @@ test("original mode tooltip offers returning to AI version",async()=>{
   const ui=await loadUI();
   assert.equal(
     ui.markerTitleForMode("original"),
-    "Bu haberin manşeti Flöw yapay zekası ile değiştirildi. Yapay zeka versiyonunu görmek için tıklayın."
+    "Bu haberin manşeti β BaitBuster ile değiştirildi. Yapay zeka versiyonunu görmek için tıklayın."
   );
+});
+
+test("marker uses beta symbol",async()=>{
+  const ui=await loadUI();
+  assert.equal(ui.markerText(),"β");
+});
+
+test("BaitBuster defaults to enabled and persists off state",async()=>{
+  const ui=await loadUI();
+  const values=new Map();
+  const storage={
+    getItem:key=>values.has(key)?values.get(key):null,
+    setItem:(key,value)=>values.set(key,value)
+  };
+  assert.equal(ui.loadEnabled(storage),true);
+  ui.saveEnabled(storage,false);
+  assert.equal(ui.loadEnabled(storage),false);
+  assert.equal(ui.settingLabel(false),"Kapalı");
+  assert.equal(ui.settingLabel(true),"Açık");
 });

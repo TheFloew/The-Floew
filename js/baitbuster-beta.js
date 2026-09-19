@@ -7,6 +7,7 @@
   const FETCH_TIMEOUT_MS=20000;
   const slides=[...document.querySelectorAll("#a,#b")];
   const UI=globalThis.BaitBusterUI;
+  const settingButton=document.getElementById("baitbuster-setting");
   if(!slides.length||!UI)return;
 
   const pendingKeys=new Set();
@@ -16,6 +17,8 @@
   const appliedState=new WeakMap();
   let scanTimer=0;
   let requestInFlight=false;
+  let activeController=null;
+  let featureEnabled=UI.loadEnabled(localStorage);
 
   function clean(value){
     return String(value||"").replace(/\s+/g," ").trim();
@@ -133,7 +136,7 @@
     const marker=document.createElement("button");
     marker.type="button";
     marker.className="baitbuster-rewrite-mark";
-    marker.textContent="✦";
+    marker.textContent=UI.markerText();
     updateMarkerLabel(marker,state.mode);
 
     const stopGesture=event=>{
@@ -183,7 +186,7 @@
   }
 
   async function flushQueue(){
-    if(requestInFlight||!queued.size)return;
+    if(!featureEnabled||requestInFlight||!queued.size)return;
     const batch=[...queued.values()].slice(0,MAX_BATCH);
     for(const story of batch){
       queued.delete(story.key);
@@ -192,6 +195,7 @@
     requestInFlight=true;
 
     const controller=new AbortController();
+    activeController=controller;
     const timeout=setTimeout(()=>controller.abort(),FETCH_TIMEOUT_MS);
     try{
       const response=await fetch(ENDPOINT,{
@@ -226,13 +230,15 @@
       for(const story of batch)pendingKeys.delete(story.key);
     }finally{
       clearTimeout(timeout);
+      if(activeController===controller)activeController=null;
       requestInFlight=false;
-      if(queued.size)queueMicrotask(flushQueue);
+      if(featureEnabled&&queued.size)queueMicrotask(flushQueue);
     }
   }
 
   function scanSlides(){
     scanTimer=0;
+    if(!featureEnabled)return;
     queueUpcomingStories();
 
     for(const slide of slides){
@@ -260,8 +266,51 @@
 
   function scheduleScan(){
     clearTimeout(scanTimer);
+    if(!featureEnabled)return;
     scanTimer=setTimeout(scanSlides,SCAN_DEBOUNCE_MS);
   }
+
+  function restoreOriginalHeadlines(){
+    for(const slide of slides){
+      const current=appliedState.get(slide);
+      const heading=slide.querySelector("h1");
+      if(current&&heading){
+        heading.textContent=current.originalTitle;
+      }
+      clearRewritePresentation(slide);
+    }
+  }
+
+  function syncSettingButton(){
+    if(!settingButton)return;
+    settingButton.setAttribute("aria-pressed",featureEnabled?"true":"false");
+    const stateEl=settingButton.querySelector(".media-setting-state");
+    if(stateEl)stateEl.textContent=UI.settingLabel(featureEnabled);
+  }
+
+  function setFeatureEnabled(enabled){
+    featureEnabled=UI.saveEnabled(localStorage,Boolean(enabled));
+    syncSettingButton();
+
+    if(!featureEnabled){
+      clearTimeout(scanTimer);
+      scanTimer=0;
+      queued.clear();
+      pendingKeys.clear();
+      activeController?.abort();
+      restoreOriginalHeadlines();
+      return;
+    }
+
+    scheduleScan();
+  }
+
+  settingButton?.addEventListener("click",event=>{
+    event.preventDefault();
+    event.stopPropagation();
+    setFeatureEnabled(!featureEnabled);
+  });
+  syncSettingButton();
 
   const observer=new MutationObserver(scheduleScan);
   for(const slide of slides){
@@ -273,5 +322,5 @@
     });
   }
 
-  scheduleScan();
+  if(featureEnabled)scheduleScan();
 })();
