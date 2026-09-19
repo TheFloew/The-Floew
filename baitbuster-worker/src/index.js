@@ -12,7 +12,7 @@ import {
 } from "./ai.js";
 
 const SERVICE="thefloew-baitbuster";
-const VERSION="1.4.1";
+const VERSION="1.5.0";
 const ALLOWED_ORIGIN="https://xn--flw-tna.tr";
 const MAX_STORIES=12;
 const CACHE_TTL_SECONDS=30*24*60*60;
@@ -107,7 +107,7 @@ async function evaluateStories(rawStories,env,ctx){
   let cacheHits=0;
 
   await Promise.all(normalized.map(async story=>{
-    const cacheKey=`v4:${await storyCacheKey(story)}`;
+    const cacheKey=`v5:${await storyCacheKey(story)}`;
     cacheKeyByStory.set(story.key,cacheKey);
     const cached=await readCached(env,cacheKey);
     if(cached&&cached.originalTitle===story.title&&cached.key===story.key){
