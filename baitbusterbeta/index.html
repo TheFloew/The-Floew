@@ -34,17 +34,17 @@
   }
   .baitbuster-rewrite-mark{
     position:relative;
-    top:-.46em;
+    top:clamp(-22px,-1.22vw,-12px);
     z-index:4;
     display:inline-block;
-    margin:0 .10em 0 0;
-    padding:.06em .12em;
+    margin:0 3px 0 0;
+    padding:0;
     border:0;
     background:transparent;
     color:inherit;
-    font-size:clamp(27px,2.65vw,52px);
-    font-weight:700;
-    line-height:1;
+    font-size:18px;
+    font-weight:400;
+    line-height:.8;
     vertical-align:baseline;
     opacity:.98;
     cursor:pointer;
@@ -52,8 +52,13 @@
     touch-action:manipulation;
     appearance:none;
     -webkit-appearance:none;
-    font-family:"Comfortaa",sans-serif;
+    font-family:Georgia,"Times New Roman",serif;
     text-shadow:0 1px 3px rgba(0,0,0,.7);
+  }
+  .baitbuster-rewrite-mark::before{
+    content:"";
+    position:absolute;
+    inset:-9px;
   }
   .baitbuster-rewrite-mark:hover,
   .baitbuster-rewrite-mark:focus-visible{
