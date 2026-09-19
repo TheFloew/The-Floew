@@ -145,3 +145,75 @@ test("rewrite policy answers the missing question instead of preserving the teas
   assert.match(source,/answer the missingQuestion directly/i);
   assert.match(source,/do not output another question/i);
 });
+
+test("classifier uses compact ids instead of long story keys in AI payloads",async()=>{
+  const originalKey="https://example.com/very/long/path|Bu oldukça uzun bir haber başlığıdır";
+  let sentKey="";
+  const env={
+    AI:{
+      async run(model,input){
+        const payload=JSON.parse(input.messages[1].content);
+        sentKey=payload.stories[0].key;
+        return {response:{results:[{
+          key:sentKey,
+          clickbait:false,
+          confidence:.8,
+          needsArticle:false,
+          reasonCode:"clear_headline",
+          missingQuestion:"",
+          candidateFact:""
+        }]}};
+      }
+    }
+  };
+  const rows=await classifyStories([{
+    key:originalKey,
+    url:"https://example.com/a",
+    title:"Başlık",
+    description:"Açıklama",
+    source:"Kaynak",
+    category:"Gündem"
+  }],env);
+  assert.equal(sentKey,"0");
+  assert.equal(rows[0].key,originalKey);
+});
+
+test("classifier splits and retries a chunk when Workers AI structured output parsing fails",async()=>{
+  const calls=[];
+  const env={
+    AI:{
+      async run(model,input){
+        const payload=JSON.parse(input.messages[1].content);
+        calls.push(payload.stories.length);
+        if(payload.stories.length>1){
+          const error=new Error("JSON Mode couldn't be met");
+          error.name="Ai._parseError";
+          throw error;
+        }
+        return {response:{results:[{
+          key:payload.stories[0].key,
+          clickbait:false,
+          confidence:.8,
+          needsArticle:false,
+          reasonCode:"clear_headline",
+          missingQuestion:"",
+          candidateFact:""
+        }]}};
+      }
+    }
+  };
+  const stories=Array.from({length:4},(_,i)=>({
+    key:`original-${i}`,
+    url:`https://example.com/${i}`,
+    title:`Başlık ${i}`,
+    description:`Açıklama ${i}`,
+    source:"Kaynak",
+    category:"Gündem"
+  }));
+  const rows=await classifyStories(stories,env);
+  assert.equal(rows.length,4);
+  assert.deepEqual(rows.map(row=>row.key),stories.map(story=>story.key));
+  assert.ok(calls.some(size=>size===4));
+  assert.ok(calls.some(size=>size===2));
+  assert.ok(calls.some(size=>size===1));
+});
