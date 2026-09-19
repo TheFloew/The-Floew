@@ -1,3 +1,4 @@
+import {readFile} from "node:fs/promises";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {classifyStories,rewriteStory,AI_MODEL_DEFAULT} from "../src/ai.js";
@@ -121,4 +122,26 @@ test("classifier splits large batches into parallel groups of four",async()=>{
   assert.equal(rows.length,9);
   assert.equal(calls.length,3);
   assert.deepEqual(calls.map(group=>group.length).sort((a,b)=>a-b),[1,4,4]);
+});
+
+test("classification policy treats unanswered question-form headlines as information gaps",async()=>{
+  const source=await readFile(new URL("../src/ai.js",import.meta.url),"utf8");
+  assert.match(source,/question-form headline/i);
+  assert.match(source,/headline itself can establish the information gap/i);
+  assert.match(source,/description does not reveal the answer/i);
+  assert.match(source,/needsArticle=true/i);
+});
+
+test("classification policy escalates vague announcements that hide the substantive development",async()=>{
+  const source=await readFile(new URL("../src/ai.js",import.meta.url),"utf8");
+  assert.match(source,/new development/i);
+  assert.match(source,/first statement/i);
+  assert.match(source,/revealed who/i);
+  assert.match(source,/central substance/i);
+});
+
+test("rewrite policy answers the missing question instead of preserving the teaser",async()=>{
+  const source=await readFile(new URL("../src/ai.js",import.meta.url),"utf8");
+  assert.match(source,/answer the missingQuestion directly/i);
+  assert.match(source,/do not output another question/i);
 });
