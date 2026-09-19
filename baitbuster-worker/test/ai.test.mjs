@@ -36,7 +36,7 @@ test("classifier uses Workers AI JSON schema and default model",async()=>{
   assert.equal(rows[0].clickbait,true);
   assert.equal(call.model,AI_MODEL_DEFAULT);
   assert.equal(call.input.response_format.type,"json_schema");
-  assert.equal(call.input.max_tokens,1200);
+  assert.equal(call.input.max_tokens,700);
 });
 
 test("rewriter accepts structured Workers AI response",async()=>{
