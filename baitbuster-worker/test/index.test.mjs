@@ -30,7 +30,7 @@ test("evaluate rejects wrong origin before spending AI resources",async()=>{
     method:"POST",
     headers:{Origin:"https://evil.example","Content-Type":"application/json"},
     body:JSON.stringify({stories:[{key:"a",url:"https://example.com/a",title:"Başlık"}]})
-  }),{OPENAI_API_KEY:"x",BAITBUSTER_CACHE:{}},{});
+  }),{AI:{run:async()=>({response:{results:[]}})},BAITBUSTER_CACHE:{}},{});
   assert.equal(res.status,403);
 });
 

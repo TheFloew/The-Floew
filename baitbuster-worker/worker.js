@@ -1,7 +1,7 @@
 /*
   The Flöw — BaitBuster β Worker
-  Single-file Cloudflare Worker build generated from baitbuster-worker/src/*
-  Source modules remain authoritative for tests and development.
+  Cloudflare Workers AI + KV single-file build.
+  Generated from baitbuster-worker/src/*.
 */
 
 const RESULT_STATUSES=new Set([
@@ -309,9 +309,8 @@ export async function fetchArticleText(value,fetchImpl=fetch){
   }
 }
 
-const OPENAI_URL="https://api.openai.com/v1/responses";
-const OPENAI_TIMEOUT_MS=18000;
-const DEFAULT_MODEL="gpt-5.6-luna";
+const DEFAULT_MODEL="@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+const AI_TIMEOUT_MS=18000;
 
 const CLASSIFICATION_PROMPT=`Evaluate meaning, not keyword matches. Mark clickbait only when the headline materially withholds the core fact, creates an artificial curiosity gap, substitutes emotional shock for the event itself, or otherwise prevents the reader from knowing the central news fact from the headline. Do not penalize concise breaking-news headlines merely for being short. Do not rewrite in this step. Evaluate each Turkish news item independently. Return one result for every supplied key.`;
 
@@ -351,135 +350,119 @@ const rewriteSchema={
   required:["rewriteStatus","flowTitle","confidence"]
 };
 
-function outputTextFromResponse(value){
-  if(typeof value?.output_text==="string"&&value.output_text.trim()){
-    return value.output_text.trim();
+export function extractWorkersAIObject(value){
+  const response=value?.response;
+
+  if(response&&typeof response==="object"&&!Array.isArray(response)){
+    return response;
   }
-  for(const item of Array.isArray(value?.output)?value.output:[]){
-    for(const content of Array.isArray(item?.content)?item.content:[]){
-      if(content?.type==="refusal"){
-        throw new Error("openai_refusal");
-      }
-      if(content?.type==="output_text"&&typeof content.text==="string"&&content.text.trim()){
-        return content.text.trim();
-      }
-    }
+
+  if(typeof response==="string"&&response.trim()){
+    try{
+      const parsed=JSON.parse(response);
+      if(parsed&&typeof parsed==="object"&&!Array.isArray(parsed))return parsed;
+    }catch{}
   }
-  throw new Error("openai_missing_output");
+
+  const content=value?.choices?.[0]?.message?.content;
+  if(content&&typeof content==="object"&&!Array.isArray(content)){
+    return content;
+  }
+  if(typeof content==="string"&&content.trim()){
+    try{
+      const parsed=JSON.parse(content);
+      if(parsed&&typeof parsed==="object"&&!Array.isArray(parsed))return parsed;
+    }catch{}
+  }
+
+  throw new Error("workers_ai_invalid_json");
 }
 
-export function extractStructuredOutput(responseJson){
-  const text=outputTextFromResponse(responseJson);
-  let parsed;
-  try{parsed=JSON.parse(text);}catch{throw new Error("openai_invalid_json");}
-  if(!parsed||typeof parsed!=="object"||Array.isArray(parsed)){
-    throw new Error("openai_invalid_structure");
-  }
-  return parsed;
-}
-
-async function postStructured({env,systemPrompt,payload,schema,name,fetchImpl}){
-  const apiKey=String(env?.OPENAI_API_KEY||"").trim();
-  if(!apiKey)throw new Error("openai_api_key_missing");
-
-  const controller=new AbortController();
-  const timeout=setTimeout(()=>controller.abort(),OPENAI_TIMEOUT_MS);
+async function runWithTimeout(promise,ms=AI_TIMEOUT_MS){
+  let timeoutId;
+  const timeout=new Promise((_,reject)=>{
+    timeoutId=setTimeout(()=>reject(new Error("workers_ai_timeout")),ms);
+  });
   try{
-    const response=await fetchImpl(OPENAI_URL,{
-      method:"POST",
-      signal:controller.signal,
-      headers:{
-        "Authorization":`Bearer ${apiKey}`,
-        "Content-Type":"application/json"
-      },
-      body:JSON.stringify({
-        model:String(env?.OPENAI_MODEL||DEFAULT_MODEL),
-        store:false,
-        reasoning:{effort:"none"},
-        input:[
-          {role:"system",content:[{type:"input_text",text:systemPrompt}]},
-          {role:"user",content:[{type:"input_text",text:JSON.stringify(payload)}]}
-        ],
-        text:{
-          format:{
-            type:"json_schema",
-            name,
-            strict:true,
-            schema
-          }
-        }
-      })
-    });
-
-    if(!response.ok){
-      let detail="";
-      try{detail=(await response.text()).slice(0,500);}catch{}
-      const error=new Error(`openai_http_${response.status}`);
-      error.detail=detail;
-      throw error;
-    }
-
-    const json=await response.json();
-    if(json?.status==="incomplete")throw new Error("openai_incomplete");
-    return extractStructuredOutput(json);
-  }catch(error){
-    if(error?.name==="AbortError")throw new Error("openai_timeout");
-    throw error;
+    return await Promise.race([promise,timeout]);
   }finally{
-    clearTimeout(timeout);
+    clearTimeout(timeoutId);
   }
 }
 
-export async function classifyStories(stories,env,fetchImpl=fetch){
+async function runStructured({env,systemPrompt,payload,schema,maxTokens}){
+  if(!env?.AI||typeof env.AI.run!=="function"){
+    throw new Error("workers_ai_binding_missing");
+  }
+
+  const model=String(env.AI_MODEL||DEFAULT_MODEL).trim()||DEFAULT_MODEL;
+  const result=await runWithTimeout(
+    env.AI.run(model,{
+      messages:[
+        {role:"system",content:systemPrompt},
+        {role:"user",content:JSON.stringify(payload)}
+      ],
+      response_format:{
+        type:"json_schema",
+        json_schema:schema
+      },
+      temperature:0.1,
+      max_tokens:maxTokens
+    })
+  );
+
+  return extractWorkersAIObject(result);
+}
+
+export async function classifyStories(stories,env){
   if(!Array.isArray(stories)||!stories.length)return [];
-  const payload={
-    stories:stories.map(story=>({
-      key:story.key,
-      title:story.title,
-      description:story.description,
-      source:story.source,
-      category:story.category
-    }))
-  };
-  const parsed=await postStructured({
+
+  const parsed=await runStructured({
     env,
     systemPrompt:CLASSIFICATION_PROMPT,
-    payload,
+    payload:{
+      stories:stories.map(story=>({
+        key:story.key,
+        title:story.title,
+        description:story.description,
+        source:story.source,
+        category:story.category
+      }))
+    },
     schema:classificationSchema,
-    name:"baitbuster_classification",
-    fetchImpl
+    maxTokens:1200
   });
+
   const knownKeys=new Set(stories.map(story=>story.key));
   const sanitized=sanitizeClassificationResult(parsed.results,knownKeys);
   if(sanitized.length!==knownKeys.size){
-    throw new Error("openai_incomplete_classification");
+    throw new Error("workers_ai_incomplete_classification");
   }
   return sanitized;
 }
 
-export async function rewriteStory(story,articleText,env,fetchImpl=fetch){
-  const payload={
-    story:{
-      key:story.key,
-      title:story.title,
-      description:story.description,
-      source:story.source,
-      category:story.category
-    },
-    articleText:String(articleText||"").slice(0,18000)
-  };
-  const parsed=await postStructured({
+export async function rewriteStory(story,articleText,env){
+  const parsed=await runStructured({
     env,
     systemPrompt:REWRITE_PROMPT,
-    payload,
+    payload:{
+      story:{
+        key:story.key,
+        title:story.title,
+        description:story.description,
+        source:story.source,
+        category:story.category
+      },
+      articleText:String(articleText||"").slice(0,18000)
+    },
     schema:rewriteSchema,
-    name:"baitbuster_rewrite",
-    fetchImpl
+    maxTokens:220
   });
+
   return sanitizeRewriteResult(parsed,story);
 }
 
-export const OPENAI_MODEL_DEFAULT=DEFAULT_MODEL;
+export const AI_MODEL_DEFAULT=DEFAULT_MODEL;
 
 const SERVICE="thefloew-baitbuster";
 const VERSION="1.0.0";
@@ -513,7 +496,7 @@ function json(data,status=200,origin=""){
 }
 
 function deploymentReady(env){
-  return Boolean(env?.OPENAI_API_KEY&&env?.BAITBUSTER_CACHE);
+  return Boolean(env?.AI&&env?.BAITBUSTER_CACHE);
 }
 
 async function readCached(env,key){
@@ -594,7 +577,7 @@ async function evaluateStories(rawStories,env,ctx){
   let articleErrors=0;
   let aiErrors=0;
   const cacheWrites=[];
-  const modelVersion=String(env.OPENAI_MODEL||OPENAI_MODEL_DEFAULT);
+  const modelVersion=String(env.AI_MODEL||AI_MODEL_DEFAULT);
 
   if(uncached.length){
     let classifications;

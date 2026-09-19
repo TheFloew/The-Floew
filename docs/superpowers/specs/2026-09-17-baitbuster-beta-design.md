@@ -185,7 +185,7 @@ BaitBuster hiçbir koşulda haber kartını boş bırakmaz ve ana akışı blokl
 
 ## Güvenlik ve veri sınırları
 
-- AI API anahtarı yalnız Worker secret olarak tutulur; istemciye verilmez.
+- Harici model API anahtarı kullanılmaz. BaitBuster, Cloudflare Workers AI'ı yalnız Worker tarafındaki `AI` binding üzerinden çağırır; istemci doğrudan modele erişmez.
 - AI Worker yalnız gerekli haber alanlarını modele yollar.
 - Kullanıcıya ait kişisel tercih veya kimlik bilgileri BaitBuster model çağrısına dahil edilmez.
 - Kaynak URL'leri çekilirken SSRF güvenlik kontrolleri uygulanır; private/local adresler reddedilir.

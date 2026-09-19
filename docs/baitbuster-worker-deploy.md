@@ -5,27 +5,22 @@
 ```text
 Worker name: thefloew-baitbuster
 Production URL: https://thefloew-baitbuster.thefloewback.workers.dev
+Workers AI binding variable: AI
 KV binding variable: BAITBUSTER_CACHE
-Secret: OPENAI_API_KEY
-Optional text variable: OPENAI_MODEL=gpt-5.6-luna
+Optional text variable: AI_MODEL=@cf/meta/llama-3.3-70b-instruct-fp8-fast
 Allowed site origin: https://xn--flw-tna.tr
 ```
 
-The Worker uses the OpenAI Responses API. Keep `OPENAI_API_KEY` only as a Cloudflare Worker secret; never place it in GitHub or browser JavaScript.
-
-OpenAI API billing is separate from ChatGPT billing. The API account must have its own usable billing/credits before BaitBuster can make model calls.
+BaitBuster uses Cloudflare Workers AI directly through the `AI` binding. No OpenAI API key or other external model API key is required.
 
 ## Cloudflare Dashboard deployment
 
-1. Open **Cloudflare → Workers & Pages → Create application**.
-2. Choose **Start with Hello World! → Get started** (or the equivalent Worker-only starter shown in the current dashboard).
-3. Name the Worker `thefloew-baitbuster` and deploy the starter once.
-4. Open the Worker editor and replace the starter with the ES-module files from `baitbuster-worker/src/`: `index.js`, `core.js`, `article.js`, and `openai.js`. The entry module is `index.js`.
-5. Open **Workers KV → Create instance** and create a namespace named `thefloew-baitbuster-cache`.
-6. Return to the Worker → **Settings → Bindings → Add → KV Namespace**. Set **Variable name** to `BAITBUSTER_CACHE`, choose `thefloew-baitbuster-cache`, then deploy the binding.
-7. Open Worker → **Settings → Variables and Secrets → Add**. Add `OPENAI_API_KEY` as type **Secret**, paste the API key value, and deploy.
-8. Optionally add plaintext variable `OPENAI_MODEL` with value `gpt-5.6-luna`. If omitted, the Worker uses that model by default.
-9. Deploy the Worker code.
+1. Open **Cloudflare → Workers & Pages → thefloew-baitbuster**.
+2. Open **Bindings → Add binding → Workers AI** and set the variable name to `AI`.
+3. Open **Bindings → Add binding → KV Namespace** and bind `thefloew-baitbuster-cache` as `BAITBUSTER_CACHE`.
+4. Open **Edit code** and replace the Worker code with `baitbuster-worker/worker.js`.
+5. Deploy.
+6. Optional: add plaintext variable `AI_MODEL` if a different Workers AI model should be tested later. If omitted, BaitBuster uses `@cf/meta/llama-3.3-70b-instruct-fp8-fast`.
 
 ## Verification
 
@@ -60,4 +55,4 @@ Expected: HTTP `204` and `Access-Control-Allow-Origin: https://xn--flw-tna.tr`.
 {"stories":[{"key":"...","url":"https://...","title":"...","description":"...","source":"...","category":"..."}]}
 ```
 
-Maximum batch size: 12 stories. The Worker returns cached or newly evaluated BaitBuster results. AI/article failures degrade to the original headline and do not break the batch.
+Maximum batch size: 12 stories. The Worker checks KV first, classifies uncached headlines with Workers AI, fetches full article text only for suspicious stories, and falls back to the original headline if AI or article extraction fails.

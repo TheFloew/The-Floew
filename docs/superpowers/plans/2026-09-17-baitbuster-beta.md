@@ -10,6 +10,9 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-17-baitbuster-beta-design.md`
 
+> **Implementation update — 2026-09-19:** OpenAI-specific implementation details below are superseded by Cloudflare Workers AI. Runtime inference now uses the `AI` binding, default model `@cf/meta/llama-3.3-70b-instruct-fp8-fast`, and Cloudflare JSON Mode with JSON Schema. No external API key is required. Source file `baitbuster-worker/src/ai.js` replaces `src/openai.js`. All non-model architecture, cache, article-fetch, client, and acceptance requirements remain unchanged.
+
+
 ## Global Constraints
 
 - Main `flöw.tr/` behavior must not change.

@@ -8,8 +8,8 @@ import {fetchArticleText} from "./article.js";
 import {
   classifyStories,
   rewriteStory,
-  OPENAI_MODEL_DEFAULT
-} from "./openai.js";
+  AI_MODEL_DEFAULT
+} from "./ai.js";
 
 const SERVICE="thefloew-baitbuster";
 const VERSION="1.0.0";
@@ -43,7 +43,7 @@ function json(data,status=200,origin=""){
 }
 
 function deploymentReady(env){
-  return Boolean(env?.OPENAI_API_KEY&&env?.BAITBUSTER_CACHE);
+  return Boolean(env?.AI&&env?.BAITBUSTER_CACHE);
 }
 
 async function readCached(env,key){
@@ -124,7 +124,7 @@ async function evaluateStories(rawStories,env,ctx){
   let articleErrors=0;
   let aiErrors=0;
   const cacheWrites=[];
-  const modelVersion=String(env.OPENAI_MODEL||OPENAI_MODEL_DEFAULT);
+  const modelVersion=String(env.AI_MODEL||AI_MODEL_DEFAULT);
 
   if(uncached.length){
     let classifications;

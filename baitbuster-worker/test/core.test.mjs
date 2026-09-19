@@ -7,7 +7,7 @@ import {
   sanitizeRewriteResult,
   originalResult
 } from "../src/core.js";
-import {extractStructuredOutput} from "../src/openai.js";
+import {extractWorkersAIObject} from "../src/ai.js";
 
 test("normalizeStory keeps only required safe story fields",()=>{
   assert.deepEqual(normalizeStory({
@@ -58,19 +58,21 @@ test("originalResult always preserves original title",()=>{
   assert.equal(originalResult(story,"ai_error").originalTitle,"Orijinal");
 });
 
-test("structured output extractor reads output_text JSON",()=>{
-  const payload={output:[{content:[{type:"output_text",text:'{"results":[]}'}]}]};
-  assert.deepEqual(extractStructuredOutput(payload),{results:[]});
+
+test("Workers AI extractor reads JSON mode response objects",()=>{
+  assert.deepEqual(
+    extractWorkersAIObject({response:{results:[]}}),
+    {results:[]}
+  );
 });
 
-test("structured output extractor reads top-level output_text",()=>{
-  assert.deepEqual(extractStructuredOutput({output_text:'{"results":[]}'}),{results:[]});
+test("Workers AI extractor parses string responses",()=>{
+  assert.deepEqual(
+    extractWorkersAIObject({response:'{"results":[]}'}),
+    {results:[]}
+  );
 });
 
-test("structured output extractor rejects malformed JSON",()=>{
-  assert.throws(()=>extractStructuredOutput({output:[{content:[{type:"output_text",text:"nope"}]}]}));
-});
-
-test("structured output extractor rejects refusals",()=>{
-  assert.throws(()=>extractStructuredOutput({output:[{content:[{type:"refusal",refusal:"no"}]}]}));
+test("Workers AI extractor rejects malformed output",()=>{
+  assert.throws(()=>extractWorkersAIObject({response:"not-json"}));
 });
