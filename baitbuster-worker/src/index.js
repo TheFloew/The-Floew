@@ -152,7 +152,7 @@ async function evaluateStories(rawStories,env,ctx){
           continue;
         }
 
-        if(!classification.clickbait||!classification.needsArticle){
+        if(!classification.clickbait){
           const result=originalResult(story,"not_clickbait",{
             clickbait:false,
             classificationConfidence:classification.confidence,

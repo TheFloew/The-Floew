@@ -312,7 +312,7 @@ export async function fetchArticleText(value,fetchImpl=fetch){
 const DEFAULT_MODEL="@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const AI_TIMEOUT_MS=18000;
 
-const CLASSIFICATION_PROMPT=`Evaluate meaning, not keyword matches. Mark clickbait only when the headline materially withholds the core fact, creates an artificial curiosity gap, substitutes emotional shock for the event itself, or otherwise prevents the reader from knowing the central news fact from the headline. Do not penalize concise breaking-news headlines merely for being short. Do not rewrite in this step. Evaluate each Turkish news item independently. Return one result for every supplied key.`;
+const CLASSIFICATION_PROMPT=`Evaluate meaning, not keyword matches. Mark clickbait only when the headline materially withholds the core fact, creates an artificial curiosity gap, substitutes emotional shock for the event itself, or otherwise prevents the reader from knowing the central news fact from the headline. Do not penalize concise breaking-news headlines merely for being short. Do not rewrite in this step. Evaluate each Turkish news item independently. Return one result for every supplied key. Set needsArticle to true whenever clickbait is true, because every suspected clickbait headline must be verified against the article body; otherwise set needsArticle to false.`;
 
 const REWRITE_PROMPT=`Use only facts present in the supplied article text. Never infer motives, causes, numbers, identities or outcomes that are not explicit. If the article text does not reveal the fact hidden by the original headline, return insufficient_content. If rewritten, write a neutral Turkish news headline that states the subject and central event directly, normally in 8-15 words. Do not add commentary, labels, quotation marks, or facts absent from the article.`;
 
@@ -605,7 +605,7 @@ async function evaluateStories(rawStories,env,ctx){
           continue;
         }
 
-        if(!classification.clickbait||!classification.needsArticle){
+        if(!classification.clickbait){
           const result=originalResult(story,"not_clickbait",{
             clickbait:false,
             classificationConfidence:classification.confidence,
