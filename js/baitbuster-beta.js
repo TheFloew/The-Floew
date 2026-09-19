@@ -6,7 +6,8 @@
   const SCAN_DEBOUNCE_MS=180;
   const FETCH_TIMEOUT_MS=20000;
   const slides=[...document.querySelectorAll("#a,#b")];
-  if(!slides.length)return;
+  const UI=globalThis.BaitBusterUI;
+  if(!slides.length||!UI)return;
 
   const pendingKeys=new Set();
   const completedKeys=new Set();
@@ -49,8 +50,9 @@
     const rawHref=slide.querySelector(".source-link")?.getAttribute("href")||"";
     const currentUrl=httpUrl(rawHref);
     const currentHeading=clean(heading?.textContent);
+    const expectedHeading=clean(UI.headlineForMode(state,state.mode));
 
-    if(currentUrl!==state.url||currentHeading!==state.flowTitle){
+    if(currentUrl!==state.url||currentHeading!==expectedHeading){
       clearRewritePresentation(slide);
     }
   }
@@ -111,35 +113,69 @@
     return {key,url,title,description,source,category};
   }
 
+  function updateMarkerLabel(marker,mode){
+    const title=UI.markerTitleForMode(mode);
+    marker.title=title;
+    marker.dataset.tooltip=title;
+    marker.setAttribute("aria-label",title);
+    marker.setAttribute("aria-pressed",mode==="original"?"true":"false");
+  }
+
+  function renderAppliedState(slide,state){
+    const heading=slide.querySelector("h1");
+    if(!heading)return;
+
+    heading.dataset.baitbusterOriginalTitle=state.originalTitle;
+    heading.dataset.baitbusterApplied="1";
+    heading.textContent=UI.headlineForMode(state,state.mode);
+
+    markerFor(slide)?.remove();
+    const marker=document.createElement("button");
+    marker.type="button";
+    marker.className="baitbuster-rewrite-mark";
+    marker.textContent="✦";
+    updateMarkerLabel(marker,state.mode);
+
+    const stopGesture=event=>{
+      event.stopPropagation();
+    };
+    marker.addEventListener("pointerdown",stopGesture);
+    marker.addEventListener("touchstart",stopGesture,{passive:true});
+    marker.addEventListener("click",event=>{
+      event.preventDefault();
+      event.stopPropagation();
+
+      const current=appliedState.get(slide);
+      if(!current)return;
+
+      current.mode=UI.nextMode(current.mode);
+      heading.textContent=UI.headlineForMode(current,current.mode);
+      updateMarkerLabel(marker,current.mode);
+    });
+
+    heading.insertAdjacentElement("afterend",marker);
+  }
+
   function applyResultToSlide(slide,result){
     if(result?.rewriteStatus!=="rewritten"||!clean(result.flowTitle))return;
     resetIfSlideReused(slide);
     const story=readSlideStory(slide);
     if(!story||story.key!==result.key)return;
 
-    const heading=slide.querySelector("h1");
-    if(!heading)return;
     const flowTitle=clean(result.flowTitle);
-    if(!heading.dataset.baitbusterOriginalTitle){
-      heading.dataset.baitbusterOriginalTitle=story.title;
-    }
-    heading.textContent=flowTitle;
-    heading.dataset.baitbusterApplied="1";
-
-    markerFor(slide)?.remove();
-    const marker=document.createElement("span");
-    marker.className="baitbuster-rewrite-mark";
-    marker.textContent="✦";
-    marker.title="BaitBuster β tarafından sadeleştirildi";
-    marker.setAttribute("aria-label","BaitBuster beta tarafından sadeleştirildi");
-    heading.insertAdjacentElement("afterend",marker);
-
-    appliedState.set(slide,{
+    const previous=appliedState.get(slide);
+    const stateForSlide={
       key:story.key,
       url:story.url,
       originalTitle:story.title,
-      flowTitle
-    });
+      flowTitle,
+      mode:previous?.key===story.key
+        ? previous.mode
+        : "ai"
+    };
+
+    appliedState.set(slide,stateForSlide);
+    renderAppliedState(slide,stateForSlide);
   }
 
   function applyResult(result){
