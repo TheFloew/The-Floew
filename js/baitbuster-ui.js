@@ -21,7 +21,12 @@
   }
 
   function markerText(){
-    return "β";
+    return "Β";
+  }
+
+  function stopNavigationEvent(event){
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
   }
 
   function loadEnabled(storage){
@@ -49,6 +54,7 @@
     headlineForMode,
     markerTitleForMode,
     markerText,
+    stopNavigationEvent,
     loadEnabled,
     saveEnabled,
     settingLabel

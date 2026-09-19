@@ -140,13 +140,15 @@
     updateMarkerLabel(marker,state.mode);
 
     const stopGesture=event=>{
-      event.stopPropagation();
+      UI.stopNavigationEvent(event);
     };
     marker.addEventListener("pointerdown",stopGesture);
-    marker.addEventListener("touchstart",stopGesture,{passive:true});
+    marker.addEventListener("pointerup",stopGesture);
+    marker.addEventListener("pointercancel",stopGesture);
+    marker.addEventListener("touchstart",event=>event.stopPropagation(),{passive:true});
+    marker.addEventListener("touchend",event=>event.stopPropagation(),{passive:true});
     marker.addEventListener("click",event=>{
-      event.preventDefault();
-      event.stopPropagation();
+      UI.stopNavigationEvent(event);
 
       const current=appliedState.get(slide);
       if(!current)return;
@@ -156,7 +158,7 @@
       updateMarkerLabel(marker,current.mode);
     });
 
-    heading.insertAdjacentElement("afterend",marker);
+    heading.insertAdjacentElement("beforebegin",marker);
   }
 
   function applyResultToSlide(slide,result){

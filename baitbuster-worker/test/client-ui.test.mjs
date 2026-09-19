@@ -43,9 +43,19 @@ test("original mode tooltip offers returning to AI version",async()=>{
   );
 });
 
-test("marker uses beta symbol",async()=>{
+test("marker uses uppercase beta symbol",async()=>{
   const ui=await loadUI();
-  assert.equal(ui.markerText(),"β");
+  assert.equal(ui.markerText(),"Β");
+});
+
+test("navigation guard prevents default and propagation",async()=>{
+  const ui=await loadUI();
+  const calls=[];
+  ui.stopNavigationEvent({
+    preventDefault(){calls.push("preventDefault");},
+    stopPropagation(){calls.push("stopPropagation");}
+  });
+  assert.deepEqual(calls,["preventDefault","stopPropagation"]);
 });
 
 test("BaitBuster defaults to enabled and persists off state",async()=>{
