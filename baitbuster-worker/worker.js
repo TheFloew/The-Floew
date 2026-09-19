@@ -66,7 +66,13 @@ export function sanitizeClassificationResult(value,knownKeys){
       clickbait,
       confidence:clamp01(row.confidence),
       needsArticle:clickbait&&Boolean(row.needsArticle),
-      reasonCode:String(row.reasonCode||"").trim().slice(0,120)
+      reasonCode:String(row.reasonCode||"").trim().slice(0,120),
+      missingQuestion:clickbait
+        ? String(row.missingQuestion||"").replace(/\s+/g," ").trim().slice(0,240)
+        : "",
+      candidateFact:clickbait
+        ? String(row.candidateFact||"").replace(/\s+/g," ").trim().slice(0,700)
+        : ""
     });
   }
 
@@ -81,15 +87,30 @@ export function sanitizeRewriteResult(value,story){
   const flowTitle=typeof value?.flowTitle==="string"
     ?value.flowTitle.replace(/\s+/g," ").trim().slice(0,240)
     :"";
-  const rewriteStatus=requestedStatus==="rewritten"&&flowTitle
-    ?"rewritten"
-    :"insufficient_content";
+  const informationGain=clamp01(value?.informationGain);
+  const addedInformation=Array.isArray(value?.addedInformation)
+    ? value.addedInformation
+        .map(item=>String(item||"").replace(/\s+/g," ").trim().slice(0,260))
+        .filter(Boolean)
+        .slice(0,3)
+    : [];
+  const hasMaterialGain=
+    informationGain>=0.35 &&
+    addedInformation.length>0;
+  const rewriteStatus=
+    requestedStatus==="rewritten" &&
+    flowTitle &&
+    hasMaterialGain
+      ?"rewritten"
+      :"insufficient_content";
 
   return {
     key:String(story?.key||""),
     rewriteStatus,
     flowTitle:rewriteStatus==="rewritten"?flowTitle:null,
-    confidence:rewriteStatus==="rewritten"?clamp01(value?.confidence):0
+    confidence:rewriteStatus==="rewritten"?clamp01(value?.confidence):0,
+    informationGain:rewriteStatus==="rewritten"?informationGain:0,
+    addedInformation:rewriteStatus==="rewritten"?addedInformation:[]
   };
 }
 
@@ -102,6 +123,8 @@ export function originalResult(story,status="invalid_story",extra={}){
     clickbait:Boolean(extra.clickbait),
     classificationConfidence:clamp01(extra.classificationConfidence),
     rewriteConfidence:0,
+    informationGain:0,
+    addedInformation:[],
     rewriteStatus:safeStatus,
     reasonCode:String(extra.reasonCode||"").slice(0,120),
     modelVersion:String(extra.modelVersion||"").slice(0,120),
@@ -126,6 +149,10 @@ export function rewrittenResult(story,classification,rewrite,modelVersion=""){
     clickbait:true,
     classificationConfidence:clamp01(classification?.confidence),
     rewriteConfidence:clamp01(sanitized.confidence),
+    informationGain:clamp01(sanitized.informationGain),
+    addedInformation:Array.isArray(sanitized.addedInformation)
+      ? sanitized.addedInformation
+      : [],
     rewriteStatus:"rewritten",
     reasonCode:String(classification?.reasonCode||"").slice(0,120),
     modelVersion:String(modelVersion||"").slice(0,120),
@@ -312,9 +339,9 @@ export async function fetchArticleText(value,fetchImpl=fetch){
 const DEFAULT_MODEL="@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const AI_TIMEOUT_MS=18000;
 
-const CLASSIFICATION_PROMPT=`For each Turkish news item, judge headline informativeness semantically, not with keyword matching. The field clickbait means the headline should be BaitBusted: set it to true when the supplied description contains a concrete, newsworthy central fact that would make the headline materially more informative, but the headline withholds, obscures, generalizes or teases that fact. This includes missing identity, action, result, object, amount, location, timing, cause, consequence or practical detail when that omitted fact is central to why the story matters. Do not require exaggerated or sensational wording. Compare headline and description directly: if a reader learns a materially more concrete answer from the description than from the headline, prefer clickbait=true. Keep clickbait=false when the headline already communicates the central event adequately and extra details are merely secondary. Do not rewrite in this step. Return one result for every supplied key. Set needsArticle=false when the description itself contains enough explicit information to write a meaningfully more direct headline. Set needsArticle=true only when the headline needs improvement but the description still lacks the concrete fact required for a safe rewrite.`;
+const CLASSIFICATION_PROMPT=`Judge each Turkish headline by how much of the central news fact it lets a reader understand without opening the article. Work semantically, never by keyword matching. Set clickbait=true when the headline withholds, obscures or merely announces the existence of a central fact that the supplied description reveals or strongly indicates should be answered. A headline can need BaitBuster even without sensational language. In particular, when a headline says that a statement, decision, result, list, identity, amount, cause, consequence or practical detail exists but does not communicate its substantive content, treat the missing substance as the information gap. Keep clickbait=false when the headline already communicates the central event and the description only adds secondary detail. For clickbait=true, missingQuestion must be a short Turkish question describing exactly what the headline leaves unanswered. candidateFact must contain the concrete answer from the supplied description when the description explicitly provides it; do not paraphrase the headline itself as candidateFact. Set needsArticle=false only when candidateFact is concrete enough to produce a materially more informative headline. Otherwise set needsArticle=true and candidateFact may be empty. Return one result for every supplied key.`;
 
-const REWRITE_PROMPT=`Produce a more informative Turkish news headline only when the supplied publisher description and/or article text contain explicit facts that materially improve on the original headline. Use the description when it already reveals the missing central fact; article text is supplemental when needed. Never infer motives, causes, numbers, identities, outcomes or certainty that are not explicit. Preserve attribution and uncertainty. Prefer concrete subject + action/result over suspense or vague summary. If the available material still does not support a meaningfully more informative headline, return insufficient_content. If rewritten, normally use 7-18 words, keep it neutral and natural, and do not add commentary, labels, quotation marks or facts absent from the supplied material.`;
+const REWRITE_PROMPT=`The goal is INFORMATION GAIN, not paraphrasing. Write a Turkish headline that lets the reader understand materially more about the news without opening the article. First compare the original headline with missingQuestion, candidateFact, publisher description and article text. addedInformation must list 1-3 concrete facts that are explicit in the supplied material and semantically absent from the original headline. Restating the same event with synonyms, adding generic labels, or merely saying that someone made a statement/announcement does NOT count as added information. If candidateFact is non-empty, the rewritten headline must communicate its substantive content unless article text provides a more precise supported answer to the same missingQuestion. If you cannot identify at least one central concrete fact absent from the original, return insufficient_content. informationGain is 0 to 1: 0 means essentially a paraphrase, 1 means the headline now reveals the central fact that the original withheld. Use rewriteStatus=rewritten only when informationGain is at least 0.35 and flowTitle actually contains at least one item from addedInformation. Prefer one self-contained neutral headline of about 9-24 words. Preserve attribution and uncertainty. Never invent facts, motives, numbers, identities, outcomes or certainty not explicit in the supplied material.`;
 
 const classificationSchema={
   type:"object",
@@ -330,9 +357,11 @@ const classificationSchema={
           clickbait:{type:"boolean"},
           confidence:{type:"number"},
           needsArticle:{type:"boolean"},
-          reasonCode:{type:"string"}
+          reasonCode:{type:"string"},
+          missingQuestion:{type:"string"},
+          candidateFact:{type:"string"}
         },
-        required:["key","clickbait","confidence","needsArticle","reasonCode"]
+        required:["key","clickbait","confidence","needsArticle","reasonCode","missingQuestion","candidateFact"]
       }
     }
   },
@@ -345,9 +374,15 @@ const rewriteSchema={
   properties:{
     rewriteStatus:{type:"string",enum:["rewritten","insufficient_content"]},
     flowTitle:{type:["string","null"]},
-    confidence:{type:"number"}
+    confidence:{type:"number"},
+    informationGain:{type:"number"},
+    addedInformation:{
+      type:"array",
+      items:{type:"string"},
+      maxItems:3
+    }
   },
-  required:["rewriteStatus","flowTitle","confidence"]
+  required:["rewriteStatus","flowTitle","confidence","informationGain","addedInformation"]
 };
 
 export function extractWorkersAIObject(value){
@@ -441,7 +476,7 @@ export async function classifyStories(stories,env){
   return sanitized;
 }
 
-export async function rewriteStory(story,articleText,env){
+export async function rewriteStory(story,articleText,classification,env){
   const parsed=await runStructured({
     env,
     systemPrompt:REWRITE_PROMPT,
@@ -453,10 +488,15 @@ export async function rewriteStory(story,articleText,env){
         source:story.source,
         category:story.category
       },
+      informationGap:{
+        missingQuestion:String(classification?.missingQuestion||""),
+        candidateFact:String(classification?.candidateFact||""),
+        reasonCode:String(classification?.reasonCode||"")
+      },
       articleText:String(articleText||"").slice(0,18000)
     },
     schema:rewriteSchema,
-    maxTokens:220
+    maxTokens:420
   });
 
   return sanitizeRewriteResult(parsed,story);
@@ -465,7 +505,7 @@ export async function rewriteStory(story,articleText,env){
 export const AI_MODEL_DEFAULT=DEFAULT_MODEL;
 
 const SERVICE="thefloew-baitbuster";
-const VERSION="1.3.0";
+const VERSION="1.4.0";
 const ALLOWED_ORIGIN="https://xn--flw-tna.tr";
 const MAX_STORIES=12;
 const CACHE_TTL_SECONDS=30*24*60*60;
@@ -560,7 +600,7 @@ async function evaluateStories(rawStories,env,ctx){
   let cacheHits=0;
 
   await Promise.all(normalized.map(async story=>{
-    const cacheKey=`v3:${await storyCacheKey(story)}`;
+    const cacheKey=`v4:${await storyCacheKey(story)}`;
     cacheKeyByStory.set(story.key,cacheKey);
     const cached=await readCached(env,cacheKey);
     if(cached&&cached.originalTitle===story.title&&cached.key===story.key){
@@ -635,7 +675,7 @@ async function evaluateStories(rawStories,env,ctx){
         }
 
         try{
-          const rewrite=await rewriteStory(story,articleText,env);
+          const rewrite=await rewriteStory(story,articleText,classification,env);
           if(rewrite.rewriteStatus==="rewritten"){
             return {
               story,

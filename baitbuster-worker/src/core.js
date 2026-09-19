@@ -60,7 +60,13 @@ export function sanitizeClassificationResult(value,knownKeys){
       clickbait,
       confidence:clamp01(row.confidence),
       needsArticle:clickbait&&Boolean(row.needsArticle),
-      reasonCode:String(row.reasonCode||"").trim().slice(0,120)
+      reasonCode:String(row.reasonCode||"").trim().slice(0,120),
+      missingQuestion:clickbait
+        ? String(row.missingQuestion||"").replace(/\s+/g," ").trim().slice(0,240)
+        : "",
+      candidateFact:clickbait
+        ? String(row.candidateFact||"").replace(/\s+/g," ").trim().slice(0,700)
+        : ""
     });
   }
 
@@ -75,15 +81,30 @@ export function sanitizeRewriteResult(value,story){
   const flowTitle=typeof value?.flowTitle==="string"
     ?value.flowTitle.replace(/\s+/g," ").trim().slice(0,240)
     :"";
-  const rewriteStatus=requestedStatus==="rewritten"&&flowTitle
-    ?"rewritten"
-    :"insufficient_content";
+  const informationGain=clamp01(value?.informationGain);
+  const addedInformation=Array.isArray(value?.addedInformation)
+    ? value.addedInformation
+        .map(item=>String(item||"").replace(/\s+/g," ").trim().slice(0,260))
+        .filter(Boolean)
+        .slice(0,3)
+    : [];
+  const hasMaterialGain=
+    informationGain>=0.35 &&
+    addedInformation.length>0;
+  const rewriteStatus=
+    requestedStatus==="rewritten" &&
+    flowTitle &&
+    hasMaterialGain
+      ?"rewritten"
+      :"insufficient_content";
 
   return {
     key:String(story?.key||""),
     rewriteStatus,
     flowTitle:rewriteStatus==="rewritten"?flowTitle:null,
-    confidence:rewriteStatus==="rewritten"?clamp01(value?.confidence):0
+    confidence:rewriteStatus==="rewritten"?clamp01(value?.confidence):0,
+    informationGain:rewriteStatus==="rewritten"?informationGain:0,
+    addedInformation:rewriteStatus==="rewritten"?addedInformation:[]
   };
 }
 
@@ -96,6 +117,8 @@ export function originalResult(story,status="invalid_story",extra={}){
     clickbait:Boolean(extra.clickbait),
     classificationConfidence:clamp01(extra.classificationConfidence),
     rewriteConfidence:0,
+    informationGain:0,
+    addedInformation:[],
     rewriteStatus:safeStatus,
     reasonCode:String(extra.reasonCode||"").slice(0,120),
     modelVersion:String(extra.modelVersion||"").slice(0,120),
@@ -120,6 +143,10 @@ export function rewrittenResult(story,classification,rewrite,modelVersion=""){
     clickbait:true,
     classificationConfidence:clamp01(classification?.confidence),
     rewriteConfidence:clamp01(sanitized.confidence),
+    informationGain:clamp01(sanitized.informationGain),
+    addedInformation:Array.isArray(sanitized.addedInformation)
+      ? sanitized.addedInformation
+      : [],
     rewriteStatus:"rewritten",
     reasonCode:String(classification?.reasonCode||"").slice(0,120),
     modelVersion:String(modelVersion||"").slice(0,120),

@@ -13,8 +13,10 @@ test("classifier uses Workers AI JSON schema and default model",async()=>{
             key:"a",
             clickbait:true,
             confidence:.82,
-            needsArticle:true,
-            reasonCode:"withheld_core_fact"
+            needsArticle:false,
+            reasonCode:"withheld_statement_content",
+            missingQuestion:"Sefo açıklamasında ne söyledi?",
+            candidateFact:"Bağımsız bir merkezde test verdiğini ve sonuçları paylaşacağını söyledi."
           }]
         }};
       }
@@ -43,8 +45,10 @@ test("rewriter accepts structured Workers AI response",async()=>{
       async run(){
         return {response:{
           rewriteStatus:"rewritten",
-          flowTitle:"Açık ve doğrudan haber başlığı",
-          confidence:.91
+          flowTitle:"Sefo, bağımsız merkezde test verdiğini ve sonuçları paylaşacağını açıkladı",
+          confidence:.91,
+          informationGain:.82,
+          addedInformation:["Bağımsız merkezde test verdi","Sonuçları paylaşacağını söyledi"]
         }};
       }
     }
@@ -58,9 +62,19 @@ test("rewriter accepts structured Workers AI response",async()=>{
     source:"Kaynak",
     category:"Gündem"
   };
-  const result=await rewriteStory(story,"Yeterli uzunlukta doğrulanabilir haber metni burada yer alıyor.",env);
+  const result=await rewriteStory(
+    story,
+    "Yeterli uzunlukta doğrulanabilir haber metni burada yer alıyor.",
+    {
+      missingQuestion:"Ne söyledi?",
+      candidateFact:"Bağımsız merkezde test verdiğini ve sonuçları paylaşacağını söyledi.",
+      reasonCode:"withheld_statement_content"
+    },
+    env
+  );
   assert.equal(result.rewriteStatus,"rewritten");
-  assert.equal(result.flowTitle,"Açık ve doğrudan haber başlığı");
+  assert.equal(result.flowTitle,"Sefo, bağımsız merkezde test verdiğini ve sonuçları paylaşacağını açıkladı");
+  assert.equal(result.informationGain,.82);
 });
 
 test("classifier fails closed when AI binding is missing",async()=>{
