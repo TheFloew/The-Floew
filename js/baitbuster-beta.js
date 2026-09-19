@@ -209,6 +209,7 @@
       });
       if(!response.ok)throw new Error(`baitbuster_http_${response.status}`);
       const payload=await response.json();
+      if(!featureEnabled)return;
       if(payload?.ok!==true||!Array.isArray(payload.results)){
         throw new Error("baitbuster_invalid_response");
       }
@@ -283,6 +284,7 @@
 
   function syncSettingButton(){
     if(!settingButton)return;
+    settingButton.classList.toggle("active",featureEnabled);
     settingButton.setAttribute("aria-pressed",featureEnabled?"true":"false");
     const stateEl=settingButton.querySelector(".media-setting-state");
     if(stateEl)stateEl.textContent=UI.settingLabel(featureEnabled);
