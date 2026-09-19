@@ -71,3 +71,30 @@ test("BaitBuster defaults to enabled and persists off state",async()=>{
   assert.equal(ui.settingLabel(false),"Kapalı");
   assert.equal(ui.settingLabel(true),"Açık");
 });
+
+test("stable applied result can reuse the existing beta marker",async()=>{
+  const ui=await loadUI();
+  const current={
+    key:"https://example.com/a|Başlık",
+    url:"https://example.com/a",
+    flowTitle:"Daha açıklayıcı başlık",
+    mode:"ai"
+  };
+  const story={
+    key:"https://example.com/a|Başlık",
+    url:"https://example.com/a"
+  };
+
+  assert.equal(
+    ui.canReusePresentation(current,story,"Daha açıklayıcı başlık",true),
+    true
+  );
+  assert.equal(
+    ui.canReusePresentation(current,story,"Başka başlık",true),
+    false
+  );
+  assert.equal(
+    ui.canReusePresentation(current,story,"Daha açıklayıcı başlık",false),
+    false
+  );
+});

@@ -118,7 +118,7 @@
 
   function updateMarkerLabel(marker,mode){
     const title=UI.markerTitleForMode(mode);
-    marker.title=title;
+    marker.removeAttribute("title");
     marker.dataset.tooltip=title;
     marker.setAttribute("aria-label",title);
     marker.setAttribute("aria-pressed",mode==="original"?"true":"false");
@@ -177,6 +177,20 @@
 
     const flowTitle=clean(result.flowTitle);
     const previous=appliedState.get(slide);
+    const existingMarker=markerFor(slide);
+
+    if(UI.canReusePresentation(previous,story,flowTitle,Boolean(existingMarker))){
+      const heading=slide.querySelector("h1");
+      if(heading){
+        const expectedTitle=UI.headlineForMode(previous,previous.mode);
+        if(clean(heading.textContent)!==clean(expectedTitle)){
+          heading.textContent=expectedTitle;
+        }
+      }
+      updateMarkerLabel(existingMarker,previous.mode);
+      return;
+    }
+
     const stateForSlide={
       key:story.key,
       url:story.url,

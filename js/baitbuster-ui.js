@@ -49,6 +49,17 @@
     return enabled?"Açık":"Kapalı";
   }
 
+  function canReusePresentation(current,story,flowTitle,hasMarker){
+    return Boolean(
+      current &&
+      story &&
+      hasMarker &&
+      current.key===story.key &&
+      current.url===story.url &&
+      current.flowTitle===flowTitle
+    );
+  }
+
   root.BaitBusterUI={
     nextMode,
     headlineForMode,
@@ -57,6 +68,7 @@
     stopNavigationEvent,
     loadEnabled,
     saveEnabled,
-    settingLabel
+    settingLabel,
+    canReusePresentation
   };
 })(globalThis);
