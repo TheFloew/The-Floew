@@ -465,7 +465,7 @@ export async function rewriteStory(story,articleText,env){
 export const AI_MODEL_DEFAULT=DEFAULT_MODEL;
 
 const SERVICE="thefloew-baitbuster";
-const VERSION="1.0.0";
+const VERSION="1.1.0";
 const ALLOWED_ORIGIN="https://xn--flw-tna.tr";
 const MAX_STORIES=12;
 const CACHE_TTL_SECONDS=30*24*60*60;

@@ -8,7 +8,7 @@ const ORIGIN="https://xn--flw-tna.tr";
 test("health is public and reports service version",async()=>{
   const res=await handleRequest(new Request("https://worker.test/health"),{},{});
   assert.equal(res.status,200);
-  assert.deepEqual(await res.json(),{ok:true,service:"thefloew-baitbuster",version:"1.0.0"});
+  assert.deepEqual(await res.json(),{ok:true,service:"thefloew-baitbuster",version:"1.1.0"});
 });
 
 test("preflight allows only Flöw production origin",async()=>{
@@ -44,12 +44,12 @@ test("evaluate reports incomplete deployment",async()=>{
   assert.equal((await res.json()).error,"service_not_configured");
 });
 
-test("cached story returns without an OpenAI call",async()=>{
+test("cached story returns without a Workers AI call",async()=>{
   const story=normalizeStory({key:"a",url:"https://example.com/a",title:"Normal başlık"});
   const cacheKey=`v1:${await storyCacheKey(story)}`;
   const cached=originalResult(story,"not_clickbait",{classificationConfidence:.9,modelVersion:"test"});
   const env={
-    OPENAI_API_KEY:"unused",
+    AI:{run:async()=>{throw new Error("AI should not be called for cache hit");}},
     BAITBUSTER_CACHE:{
       async get(key,type){
         assert.equal(type,"json");
