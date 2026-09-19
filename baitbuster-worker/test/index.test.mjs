@@ -8,7 +8,7 @@ const ORIGIN="https://xn--flw-tna.tr";
 test("health is public and reports service version",async()=>{
   const res=await handleRequest(new Request("https://worker.test/health"),{},{});
   assert.equal(res.status,200);
-  assert.deepEqual(await res.json(),{ok:true,service:"thefloew-baitbuster",version:"1.2.0"});
+  assert.deepEqual(await res.json(),{ok:true,service:"thefloew-baitbuster",version:"1.3.0"});
 });
 
 test("preflight allows only Flöw production origin",async()=>{

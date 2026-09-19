@@ -312,9 +312,9 @@ export async function fetchArticleText(value,fetchImpl=fetch){
 const DEFAULT_MODEL="@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const AI_TIMEOUT_MS=18000;
 
-const CLASSIFICATION_PROMPT=`Evaluate meaning, not keyword matches. For each Turkish news item, decide whether the headline is materially clickbait. Treat it as clickbait when it withholds a concrete central fact, identity, action, result, object, amount, place or consequence that a reader would reasonably expect from a factual headline; creates an artificial curiosity gap; or foregrounds suspense/emotion while the supplied description already reveals the concrete news fact. Do not require extreme sensationalism. Compare the headline semantically with the description: if the description states the central fact more directly than the headline and the omission appears deliberate, that is strong evidence of clickbait. Do not penalize concise breaking-news headlines merely for being short, and do not penalize a headline that already states the central event clearly. Do not rewrite in this step. Return one result for every supplied key. Set needsArticle to true whenever clickbait is true, because every suspected clickbait headline must be verified against the article body; otherwise set needsArticle to false.`;
+const CLASSIFICATION_PROMPT=`For each Turkish news item, judge headline informativeness semantically, not with keyword matching. The field clickbait means the headline should be BaitBusted: set it to true when the supplied description contains a concrete, newsworthy central fact that would make the headline materially more informative, but the headline withholds, obscures, generalizes or teases that fact. This includes missing identity, action, result, object, amount, location, timing, cause, consequence or practical detail when that omitted fact is central to why the story matters. Do not require exaggerated or sensational wording. Compare headline and description directly: if a reader learns a materially more concrete answer from the description than from the headline, prefer clickbait=true. Keep clickbait=false when the headline already communicates the central event adequately and extra details are merely secondary. Do not rewrite in this step. Return one result for every supplied key. Set needsArticle=false when the description itself contains enough explicit information to write a meaningfully more direct headline. Set needsArticle=true only when the headline needs improvement but the description still lacks the concrete fact required for a safe rewrite.`;
 
-const REWRITE_PROMPT=`Rewrite only when the supplied publisher description and/or article text contain enough explicit facts to state the central news event more directly than the original headline. You may use facts that are explicit in either the supplied description or the article text. Never infer motives, causes, numbers, identities, outcomes or certainty that are not explicit. Prefer the most concrete fact that the original headline obscures. Preserve attribution and uncertainty when the source text uses them. If the available text still does not reveal a meaningful concrete fact beyond the original headline, return insufficient_content. If rewritten, produce a neutral Turkish news headline, normally 7-18 words, that states the subject and central event directly. Do not add commentary, labels, quotation marks, moral judgment or facts absent from the supplied material.`;
+const REWRITE_PROMPT=`Produce a more informative Turkish news headline only when the supplied publisher description and/or article text contain explicit facts that materially improve on the original headline. Use the description when it already reveals the missing central fact; article text is supplemental when needed. Never infer motives, causes, numbers, identities, outcomes or certainty that are not explicit. Preserve attribution and uncertainty. Prefer concrete subject + action/result over suspense or vague summary. If the available material still does not support a meaningfully more informative headline, return insufficient_content. If rewritten, normally use 7-18 words, keep it neutral and natural, and do not add commentary, labels, quotation marks or facts absent from the supplied material.`;
 
 const classificationSchema={
   type:"object",
@@ -465,7 +465,7 @@ export async function rewriteStory(story,articleText,env){
 export const AI_MODEL_DEFAULT=DEFAULT_MODEL;
 
 const SERVICE="thefloew-baitbuster";
-const VERSION="1.2.0";
+const VERSION="1.3.0";
 const ALLOWED_ORIGIN="https://xn--flw-tna.tr";
 const MAX_STORIES=12;
 const CACHE_TTL_SECONDS=30*24*60*60;
@@ -560,7 +560,7 @@ async function evaluateStories(rawStories,env,ctx){
   let cacheHits=0;
 
   await Promise.all(normalized.map(async story=>{
-    const cacheKey=`v2:${await storyCacheKey(story)}`;
+    const cacheKey=`v3:${await storyCacheKey(story)}`;
     cacheKeyByStory.set(story.key,cacheKey);
     const cached=await readCached(env,cacheKey);
     if(cached&&cached.originalTitle===story.title&&cached.key===story.key){
@@ -623,29 +623,42 @@ async function evaluateStories(rawStories,env,ctx){
       suspiciousCount=suspicious.length;
       const settled=await mapLimit(suspicious,REWRITE_CONCURRENCY,async entry=>{
         const {story,classification}=entry;
-        let articleText;
-        try{
-          articleText=await fetchArticleText(story.url);
-        }catch(error){
-          return {story,result:originalResult(story,"article_error",{
-            clickbait:true,
-            classificationConfidence:classification.confidence,
-            reasonCode:classification.reasonCode,
-            modelVersion
-          }),transient:true,kind:"article_error"};
+        let articleText="";
+        let articleFailed=false;
+
+        if(classification.needsArticle){
+          try{
+            articleText=await fetchArticleText(story.url);
+          }catch(error){
+            articleFailed=true;
+          }
         }
 
         try{
           const rewrite=await rewriteStory(story,articleText,env);
-          const result=rewrite.rewriteStatus==="rewritten"
-            ?rewrittenResult(story,classification,rewrite,modelVersion)
-            :originalResult(story,"insufficient_content",{
+          if(rewrite.rewriteStatus==="rewritten"){
+            return {
+              story,
+              result:rewrittenResult(story,classification,rewrite,modelVersion),
+              transient:false,
+              kind:"rewritten"
+            };
+          }
+
+          const status=articleFailed&&classification.needsArticle
+            ?"article_error"
+            :"insufficient_content";
+          return {
+            story,
+            result:originalResult(story,status,{
               clickbait:true,
               classificationConfidence:classification.confidence,
               reasonCode:classification.reasonCode,
               modelVersion
-            });
-          return {story,result,transient:false,kind:result.rewriteStatus};
+            }),
+            transient:status==="article_error",
+            kind:status
+          };
         }catch(error){
           return {story,result:originalResult(story,"ai_error",{
             clickbait:true,

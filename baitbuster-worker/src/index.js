@@ -12,7 +12,7 @@ import {
 } from "./ai.js";
 
 const SERVICE="thefloew-baitbuster";
-const VERSION="1.2.0";
+const VERSION="1.3.0";
 const ALLOWED_ORIGIN="https://xn--flw-tna.tr";
 const MAX_STORIES=12;
 const CACHE_TTL_SECONDS=30*24*60*60;
@@ -107,7 +107,7 @@ async function evaluateStories(rawStories,env,ctx){
   let cacheHits=0;
 
   await Promise.all(normalized.map(async story=>{
-    const cacheKey=`v2:${await storyCacheKey(story)}`;
+    const cacheKey=`v3:${await storyCacheKey(story)}`;
     cacheKeyByStory.set(story.key,cacheKey);
     const cached=await readCached(env,cacheKey);
     if(cached&&cached.originalTitle===story.title&&cached.key===story.key){
@@ -170,29 +170,42 @@ async function evaluateStories(rawStories,env,ctx){
       suspiciousCount=suspicious.length;
       const settled=await mapLimit(suspicious,REWRITE_CONCURRENCY,async entry=>{
         const {story,classification}=entry;
-        let articleText;
-        try{
-          articleText=await fetchArticleText(story.url);
-        }catch(error){
-          return {story,result:originalResult(story,"article_error",{
-            clickbait:true,
-            classificationConfidence:classification.confidence,
-            reasonCode:classification.reasonCode,
-            modelVersion
-          }),transient:true,kind:"article_error"};
+        let articleText="";
+        let articleFailed=false;
+
+        if(classification.needsArticle){
+          try{
+            articleText=await fetchArticleText(story.url);
+          }catch(error){
+            articleFailed=true;
+          }
         }
 
         try{
           const rewrite=await rewriteStory(story,articleText,env);
-          const result=rewrite.rewriteStatus==="rewritten"
-            ?rewrittenResult(story,classification,rewrite,modelVersion)
-            :originalResult(story,"insufficient_content",{
+          if(rewrite.rewriteStatus==="rewritten"){
+            return {
+              story,
+              result:rewrittenResult(story,classification,rewrite,modelVersion),
+              transient:false,
+              kind:"rewritten"
+            };
+          }
+
+          const status=articleFailed&&classification.needsArticle
+            ?"article_error"
+            :"insufficient_content";
+          return {
+            story,
+            result:originalResult(story,status,{
               clickbait:true,
               classificationConfidence:classification.confidence,
               reasonCode:classification.reasonCode,
               modelVersion
-            });
-          return {story,result,transient:false,kind:result.rewriteStatus};
+            }),
+            transient:status==="article_error",
+            kind:status
+          };
         }catch(error){
           return {story,result:originalResult(story,"ai_error",{
             clickbait:true,

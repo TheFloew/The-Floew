@@ -10,6 +10,7 @@
 
   const pendingKeys=new Set();
   const completedKeys=new Set();
+  const resultByKey=new Map();
   const queued=new Map();
   const appliedState=new WeakMap();
   let scanTimer=0;
@@ -52,6 +53,42 @@
     if(currentUrl!==state.url||currentHeading!==state.flowTitle){
       clearRewritePresentation(slide);
     }
+  }
+
+  function storyFromStateItem(item){
+    if(!item||typeof item!=="object")return null;
+    const title=clean(item.title);
+    const url=httpUrl(item.link||item.url);
+    if(!title||!url)return null;
+    const description=clean(item.description||item.summary);
+    const source=clean(item.source);
+    const category=clean(item.flowCategory||item.category);
+    const key=`${url}|${title}`.slice(0,900);
+    return {key,url,title,description,source,category};
+  }
+
+  function queueUpcomingStories(){
+    try{
+      if(
+        typeof state==="undefined" ||
+        !state ||
+        !Array.isArray(state.stories) ||
+        !state.stories.length
+      )return;
+
+      const start=Math.max(0,Number(state.index)||0);
+      const end=Math.min(state.stories.length,start+MAX_BATCH);
+      for(let i=start;i<end;i++){
+        const story=storyFromStateItem(state.stories[i]);
+        if(!story)continue;
+        if(
+          pendingKeys.has(story.key) ||
+          completedKeys.has(story.key) ||
+          queued.has(story.key)
+        )continue;
+        queued.set(story.key,story);
+      }
+    }catch{}
   }
 
   function readSlideStory(slide){
@@ -143,6 +180,7 @@
         returned.add(key);
         pendingKeys.delete(key);
         completedKeys.add(key);
+        resultByKey.set(key,result);
         applyResult(result);
       }
       for(const story of batch){
@@ -159,13 +197,28 @@
 
   function scanSlides(){
     scanTimer=0;
+    queueUpcomingStories();
+
     for(const slide of slides){
       resetIfSlideReused(slide);
       const story=readSlideStory(slide);
       if(!story)continue;
-      if(pendingKeys.has(story.key)||completedKeys.has(story.key)||queued.has(story.key))continue;
+
+      const cachedResult=resultByKey.get(story.key);
+      if(cachedResult){
+        applyResultToSlide(slide,cachedResult);
+        continue;
+      }
+
+      if(
+        pendingKeys.has(story.key) ||
+        completedKeys.has(story.key) ||
+        queued.has(story.key)
+      )continue;
+
       queued.set(story.key,story);
     }
+
     void flushQueue();
   }
 
