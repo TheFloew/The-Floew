@@ -43,9 +43,9 @@ test("original mode tooltip offers returning to AI version",async()=>{
   );
 });
 
-test("marker uses uppercase beta symbol",async()=>{
+test("marker uses lowercase beta glyph for superscript display",async()=>{
   const ui=await loadUI();
-  assert.equal(ui.markerText(),"Β");
+  assert.equal(ui.markerText(),"β");
 });
 
 test("navigation guard prevents default and propagation",async()=>{

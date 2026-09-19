@@ -140,14 +140,9 @@
     updateMarkerLabel(marker,state.mode);
 
     const stopGesture=event=>{
-      UI.stopNavigationEvent(event);
+      event.stopPropagation();
     };
-    marker.addEventListener("pointerdown",stopGesture);
-    marker.addEventListener("pointerup",stopGesture);
-    marker.addEventListener("pointercancel",stopGesture);
-    marker.addEventListener("touchstart",event=>event.stopPropagation(),{passive:true});
-    marker.addEventListener("touchend",event=>event.stopPropagation(),{passive:true});
-    marker.addEventListener("click",event=>{
+    const toggleHeadline=event=>{
       UI.stopNavigationEvent(event);
 
       const current=appliedState.get(slide);
@@ -156,6 +151,19 @@
       current.mode=UI.nextMode(current.mode);
       heading.textContent=UI.headlineForMode(current,current.mode);
       updateMarkerLabel(marker,current.mode);
+    };
+
+    marker.addEventListener("pointerdown",stopGesture);
+    marker.addEventListener("pointerup",toggleHeadline);
+    marker.addEventListener("pointercancel",stopGesture);
+    marker.addEventListener("touchstart",event=>event.stopPropagation(),{passive:true});
+    marker.addEventListener("touchend",event=>event.stopPropagation(),{passive:true});
+    marker.addEventListener("click",event=>{
+      UI.stopNavigationEvent(event);
+    });
+    marker.addEventListener("keydown",event=>{
+      if(event.key!=="Enter"&&event.key!==" ")return;
+      toggleHeadline(event);
     });
 
     heading.insertAdjacentElement("beforebegin",marker);

@@ -21,7 +21,7 @@
   }
 
   function markerText(){
-    return "Β";
+    return "β";
   }
 
   function stopNavigationEvent(event){
