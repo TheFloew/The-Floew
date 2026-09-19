@@ -12,7 +12,7 @@ import {
 } from "./ai.js";
 
 const SERVICE="thefloew-baitbuster";
-const VERSION="1.5.0";
+const VERSION="1.5.1";
 const ALLOWED_ORIGIN="https://xn--flw-tna.tr";
 const MAX_STORIES=12;
 const CACHE_TTL_SECONDS=30*24*60*60;
@@ -132,7 +132,11 @@ async function evaluateStories(rawStories,env,ctx){
       classifications=await classifyStories(uncached,env);
       classifiedCount=classifications.length;
     }catch(error){
-      console.error("BaitBuster classification",error);
+      console.error("BaitBuster classification",JSON.stringify({
+        name:String(error?.name||""),
+        message:String(error?.message||""),
+        stack:String(error?.stack||"").slice(0,1600)
+      }));
       aiErrors+=uncached.length;
       for(const story of uncached){
         finalByKey.set(story.key,originalResult(story,"ai_error",{modelVersion}));

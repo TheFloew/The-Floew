@@ -132,13 +132,29 @@ async function runStructured({env,systemPrompt,payload,schema,maxTokens}){
 
 const CLASSIFICATION_CHUNK_SIZE=4;
 
-async function classifyStoryChunk(stories,env){
+function isStructuredOutputError(error){
+  const name=String(error?.name||"");
+  const message=String(error?.message||"");
+  return (
+    name.includes("_parseError") ||
+    /JSON Mode couldn't be met/i.test(message) ||
+    /workers_ai_invalid_json/i.test(message) ||
+    /workers_ai_incomplete_classification/i.test(message)
+  );
+}
+
+async function classifyStoryChunkOnce(stories,env){
+  const indexed=stories.map((story,index)=>({
+    aiKey:String(index),
+    story
+  }));
+
   const parsed=await runStructured({
     env,
     systemPrompt:CLASSIFICATION_PROMPT,
     payload:{
-      stories:stories.map(story=>({
-        key:story.key,
+      stories:indexed.map(({aiKey,story})=>({
+        key:aiKey,
         title:story.title,
         description:story.description,
         source:story.source,
@@ -149,12 +165,35 @@ async function classifyStoryChunk(stories,env){
     maxTokens:700
   });
 
-  const knownKeys=new Set(stories.map(story=>story.key));
+  const knownKeys=new Set(indexed.map(item=>item.aiKey));
   const sanitized=sanitizeClassificationResult(parsed.results,knownKeys);
   if(sanitized.length!==knownKeys.size){
     throw new Error("workers_ai_incomplete_classification");
   }
-  return sanitized;
+
+  const originalKeyByAiKey=new Map(
+    indexed.map(item=>[item.aiKey,item.story.key])
+  );
+
+  return sanitized.map(row=>({
+    ...row,
+    key:originalKeyByAiKey.get(row.key)||row.key
+  }));
+}
+
+async function classifyStoryChunk(stories,env){
+  try{
+    return await classifyStoryChunkOnce(stories,env);
+  }catch(error){
+    if(!isStructuredOutputError(error)||stories.length<=1)throw error;
+
+    const middle=Math.ceil(stories.length/2);
+    const [left,right]=await Promise.all([
+      classifyStoryChunk(stories.slice(0,middle),env),
+      classifyStoryChunk(stories.slice(middle),env)
+    ]);
+    return [...left,...right];
+  }
 }
 
 export async function classifyStories(stories,env){
