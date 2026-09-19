@@ -449,9 +449,9 @@ async function runStructured({env,systemPrompt,payload,schema,maxTokens}){
   return extractWorkersAIObject(result);
 }
 
-export async function classifyStories(stories,env){
-  if(!Array.isArray(stories)||!stories.length)return [];
+const CLASSIFICATION_CHUNK_SIZE=4;
 
+async function classifyStoryChunk(stories,env){
   const parsed=await runStructured({
     env,
     systemPrompt:CLASSIFICATION_PROMPT,
@@ -465,7 +465,7 @@ export async function classifyStories(stories,env){
       }))
     },
     schema:classificationSchema,
-    maxTokens:1200
+    maxTokens:700
   });
 
   const knownKeys=new Set(stories.map(story=>story.key));
@@ -474,6 +474,20 @@ export async function classifyStories(stories,env){
     throw new Error("workers_ai_incomplete_classification");
   }
   return sanitized;
+}
+
+export async function classifyStories(stories,env){
+  if(!Array.isArray(stories)||!stories.length)return [];
+
+  const chunks=[];
+  for(let i=0;i<stories.length;i+=CLASSIFICATION_CHUNK_SIZE){
+    chunks.push(stories.slice(i,i+CLASSIFICATION_CHUNK_SIZE));
+  }
+
+  const groups=await Promise.all(
+    chunks.map(chunk=>classifyStoryChunk(chunk,env))
+  );
+  return groups.flat();
 }
 
 export async function rewriteStory(story,articleText,classification,env){
@@ -505,7 +519,7 @@ export async function rewriteStory(story,articleText,classification,env){
 export const AI_MODEL_DEFAULT=DEFAULT_MODEL;
 
 const SERVICE="thefloew-baitbuster";
-const VERSION="1.4.0";
+const VERSION="1.4.1";
 const ALLOWED_ORIGIN="https://xn--flw-tna.tr";
 const MAX_STORIES=12;
 const CACHE_TTL_SECONDS=30*24*60*60;

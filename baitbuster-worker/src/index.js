@@ -12,7 +12,7 @@ import {
 } from "./ai.js";
 
 const SERVICE="thefloew-baitbuster";
-const VERSION="1.4.0";
+const VERSION="1.4.1";
 const ALLOWED_ORIGIN="https://xn--flw-tna.tr";
 const MAX_STORIES=12;
 const CACHE_TTL_SECONDS=30*24*60*60;

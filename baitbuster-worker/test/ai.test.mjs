@@ -83,3 +83,42 @@ test("classifier fails closed when AI binding is missing",async()=>{
     /workers_ai_binding_missing/
   );
 });
+
+test("classifier splits large batches into parallel groups of four",async()=>{
+  const calls=[];
+  const env={
+    AI:{
+      async run(model,input){
+        const payload=JSON.parse(input.messages[1].content);
+        calls.push(payload.stories.map(story=>story.key));
+        return {
+          response:{
+            results:payload.stories.map(story=>({
+              key:story.key,
+              clickbait:false,
+              confidence:.8,
+              needsArticle:false,
+              reasonCode:"clear_headline",
+              missingQuestion:"",
+              candidateFact:""
+            }))
+          }
+        };
+      }
+    }
+  };
+
+  const stories=Array.from({length:9},(_,i)=>({
+    key:String(i),
+    url:`https://example.com/${i}`,
+    title:`Başlık ${i}`,
+    description:`Açıklama ${i}`,
+    source:"Kaynak",
+    category:"Gündem"
+  }));
+
+  const rows=await classifyStories(stories,env);
+  assert.equal(rows.length,9);
+  assert.equal(calls.length,3);
+  assert.deepEqual(calls.map(group=>group.length).sort((a,b)=>a-b),[1,4,4]);
+});
