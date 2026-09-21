@@ -1,25 +1,89 @@
 import {readFile} from "node:fs/promises";
 import test from "node:test";
 import assert from "node:assert/strict";
-import {classifyStories,rewriteStory,AI_MODEL_DEFAULT} from "../src/ai.js";
+import {classifyStories,rewriteStory,AI_MODEL_DEFAULT,AI_GATE_MODEL_DEFAULT,GATE_CONFIDENCE_THRESHOLD} from "../src/ai.js";
 
-test("classifier uses Workers AI JSON schema and default model",async()=>{
-  let call=null;
+test("8B gate skips 70B only for clearly non-clickbait headlines at the confidence threshold",async()=>{
+  const calls=[];
   const env={
     AI:{
       async run(model,input){
-        call={model,input};
-        return {response:{
-          results:[{
-            key:"a",
-            clickbait:true,
-            confidence:.82,
-            needsArticle:false,
-            reasonCode:"withheld_statement_content",
-            missingQuestion:"Sefo açıklamasında ne söyledi?",
-            candidateFact:"Bağımsız bir merkezde test verdiğini ve sonuçları paylaşacağını söyledi."
-          }]
-        }};
+        calls.push({model,input});
+        if(model!==AI_GATE_MODEL_DEFAULT)throw new Error("70B should not run");
+        return {response:"0|clear|0.90"};
+      }
+    }
+  };
+
+  const rows=await classifyStories([{
+    key:"a",
+    url:"https://example.com/a",
+    title:"Merkez Bankası politika faizini yüzde 42,5'e indirdi",
+    description:"Para Politikası Kurulu faiz kararını açıkladı.",
+    source:"Kaynak",
+    category:"Gündem"
+  }],env);
+
+  assert.equal(GATE_CONFIDENCE_THRESHOLD,.90);
+  assert.equal(rows.length,1);
+  assert.equal(rows[0].clickbait,false);
+  assert.equal(rows[0].reasonCode,"clear_headline_8b_gate");
+  assert.equal(rows[0].modelVersion,AI_GATE_MODEL_DEFAULT);
+  assert.deepEqual(calls.map(call=>call.model),[AI_GATE_MODEL_DEFAULT]);
+});
+
+test("8B gate escalates uncertain clear headlines to the 70B classifier",async()=>{
+  const calls=[];
+  const env={
+    AI:{
+      async run(model,input){
+        calls.push(model);
+        if(model===AI_GATE_MODEL_DEFAULT)return {response:"0|clear|0.89"};
+        const payload=JSON.parse(input.messages[1].content);
+        return {response:{results:[{
+          key:payload.stories[0].key,
+          clickbait:true,
+          confidence:.82,
+          needsArticle:false,
+          reasonCode:"withheld_statement_content",
+          missingQuestion:"Ne açıklandı?",
+          candidateFact:"Somut açıklama"
+        }]}};
+      }
+    }
+  };
+
+  const rows=await classifyStories([{
+    key:"a",
+    url:"https://example.com/a",
+    title:"Beklenen açıklama geldi",
+    description:"Somut açıklama",
+    source:"Kaynak",
+    category:"Gündem"
+  }],env);
+
+  assert.deepEqual(calls,[AI_GATE_MODEL_DEFAULT,AI_MODEL_DEFAULT]);
+  assert.equal(rows[0].clickbait,true);
+  assert.equal(rows[0].modelVersion,AI_MODEL_DEFAULT);
+});
+
+test("8B gate escalates review decisions even with high confidence",async()=>{
+  const calls=[];
+  const env={
+    AI:{
+      async run(model,input){
+        calls.push(model);
+        if(model===AI_GATE_MODEL_DEFAULT)return {response:"0|review|0.99"};
+        const payload=JSON.parse(input.messages[1].content);
+        return {response:{results:[{
+          key:payload.stories[0].key,
+          clickbait:false,
+          confidence:.94,
+          needsArticle:false,
+          reasonCode:"clear_headline",
+          missingQuestion:"",
+          candidateFact:""
+        }]}};
       }
     }
   };
@@ -33,11 +97,44 @@ test("classifier uses Workers AI JSON schema and default model",async()=>{
     category:"Gündem"
   }],env);
 
-  assert.equal(rows.length,1);
-  assert.equal(rows[0].clickbait,true);
-  assert.equal(call.model,AI_MODEL_DEFAULT);
-  assert.equal(call.input.response_format.type,"json_schema");
-  assert.equal(call.input.max_tokens,700);
+  assert.deepEqual(calls,[AI_GATE_MODEL_DEFAULT,AI_MODEL_DEFAULT]);
+  assert.equal(rows[0].clickbait,false);
+  assert.equal(rows[0].reasonCode,"clear_headline");
+});
+
+test("8B gate failure safely falls back to the 70B classifier",async()=>{
+  const calls=[];
+  const env={
+    AI:{
+      async run(model,input){
+        calls.push(model);
+        if(model===AI_GATE_MODEL_DEFAULT)throw new Error("gate unavailable");
+        const payload=JSON.parse(input.messages[1].content);
+        return {response:{results:[{
+          key:payload.stories[0].key,
+          clickbait:false,
+          confidence:.96,
+          needsArticle:false,
+          reasonCode:"clear_headline",
+          missingQuestion:"",
+          candidateFact:""
+        }]}};
+      }
+    }
+  };
+
+  const rows=await classifyStories([{
+    key:"a",
+    url:"https://example.com/a",
+    title:"Başlık",
+    description:"Açıklama",
+    source:"Kaynak",
+    category:"Gündem"
+  }],env);
+
+  assert.deepEqual(calls,[AI_GATE_MODEL_DEFAULT,AI_MODEL_DEFAULT]);
+  assert.equal(rows[0].clickbait,false);
+  assert.equal(rows[0].modelVersion,AI_MODEL_DEFAULT);
 });
 
 test("rewriter accepts structured Workers AI response",async()=>{
@@ -85,25 +182,16 @@ test("classifier fails closed when AI binding is missing",async()=>{
   );
 });
 
-test("classifier splits large batches into parallel groups of four",async()=>{
+test("8B gate evaluates the full incoming batch in one compact request",async()=>{
   const calls=[];
   const env={
     AI:{
       async run(model,input){
+        calls.push({model,input});
+        assert.equal(model,AI_GATE_MODEL_DEFAULT);
         const payload=JSON.parse(input.messages[1].content);
-        calls.push(payload.stories.map(story=>story.key));
         return {
-          response:{
-            results:payload.stories.map(story=>({
-              key:story.key,
-              clickbait:false,
-              confidence:.8,
-              needsArticle:false,
-              reasonCode:"clear_headline",
-              missingQuestion:"",
-              candidateFact:""
-            }))
-          }
+          response:payload.stories.map(story=>`${story.key}|clear|0.95`).join("\n")
         };
       }
     }
@@ -120,8 +208,8 @@ test("classifier splits large batches into parallel groups of four",async()=>{
 
   const rows=await classifyStories(stories,env);
   assert.equal(rows.length,9);
-  assert.equal(calls.length,3);
-  assert.deepEqual(calls.map(group=>group.length).sort((a,b)=>a-b),[1,4,4]);
+  assert.equal(calls.length,1);
+  assert.equal(JSON.parse(calls[0].input.messages[1].content).stories.length,9);
 });
 
 test("classification policy treats unanswered question-form headlines as information gaps",async()=>{
@@ -146,23 +234,16 @@ test("rewrite policy answers the missing question instead of preserving the teas
   assert.match(source,/do not output another question/i);
 });
 
-test("classifier uses compact ids instead of long story keys in AI payloads",async()=>{
+test("8B gate uses compact ids instead of long story keys in its payload",async()=>{
   const originalKey="https://example.com/very/long/path|Bu oldukça uzun bir haber başlığıdır";
   let sentKey="";
   const env={
     AI:{
       async run(model,input){
+        assert.equal(model,AI_GATE_MODEL_DEFAULT);
         const payload=JSON.parse(input.messages[1].content);
         sentKey=payload.stories[0].key;
-        return {response:{results:[{
-          key:sentKey,
-          clickbait:false,
-          confidence:.8,
-          needsArticle:false,
-          reasonCode:"clear_headline",
-          missingQuestion:"",
-          candidateFact:""
-        }]}};
+        return {response:"0|clear|0.95"};
       }
     }
   };
@@ -178,13 +259,16 @@ test("classifier uses compact ids instead of long story keys in AI payloads",asy
   assert.equal(rows[0].key,originalKey);
 });
 
-test("classifier splits and retries a chunk when Workers AI structured output parsing fails",async()=>{
-  const calls=[];
+test("70B classifier still splits and retries structured-output parse failures after gate escalation",async()=>{
+  const classifierCalls=[];
   const env={
     AI:{
       async run(model,input){
         const payload=JSON.parse(input.messages[1].content);
-        calls.push(payload.stories.length);
+        if(model===AI_GATE_MODEL_DEFAULT){
+          return {response:payload.stories.map(story=>`${story.key}|review|0.99`).join("\n")};
+        }
+        classifierCalls.push(payload.stories.length);
         if(payload.stories.length>1){
           const error=new Error("JSON Mode couldn't be met");
           error.name="Ai._parseError";
@@ -213,7 +297,7 @@ test("classifier splits and retries a chunk when Workers AI structured output pa
   const rows=await classifyStories(stories,env);
   assert.equal(rows.length,4);
   assert.deepEqual(rows.map(row=>row.key),stories.map(story=>story.key));
-  assert.ok(calls.some(size=>size===4));
-  assert.ok(calls.some(size=>size===2));
-  assert.ok(calls.some(size=>size===1));
+  assert.ok(classifierCalls.some(size=>size===4));
+  assert.ok(classifierCalls.some(size=>size===2));
+  assert.ok(classifierCalls.some(size=>size===1));
 });
