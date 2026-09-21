@@ -115,3 +115,10 @@ test("production homepage keeps BaitBuster enabled by default in Advanced settin
     /id="baitbuster-setting"[\s\S]*?aria-pressed="true"[\s\S]*?<span class="media-setting-state">Açık<\/span>/
   );
 });
+
+test("production BaitBuster setting stays inside the Advanced media setting group",async()=>{
+  const html=await readFile(new URL("../../index.html",import.meta.url),"utf8");
+  const panel=html.match(/<div class="media-setting-group advanced-setting-group">([\s\S]*?)<\/div>\s*<div class="preference-transfer-setting">/)?.[1]||"";
+  assert.match(panel,/id="near-duplicate-setting"/);
+  assert.match(panel,/id="baitbuster-setting"/);
+});
