@@ -140,3 +140,14 @@ test("production constrains BaitBuster tooltip inside mobile viewport",async()=>
     /@media\s*\(max-width:900px\)[\s\S]*?\.baitbuster-rewrite-mark::after\s*\{[\s\S]*?position:fixed;[\s\S]*?left:12px;[\s\S]*?right:12px;/
   );
 });
+
+test("mobile BaitBuster tooltip is controlled by press state, not sticky hover or focus",async()=>{
+  const html=await readFile(new URL("../../index.html",import.meta.url),"utf8");
+  const client=await readFile(new URL("../../js/baitbuster-beta.js",import.meta.url),"utf8");
+
+  assert.match(html,/@media\(max-width:900px\)[\s\S]*?\.baitbuster-rewrite-mark\.is-pressing::after\s*\{[\s\S]*?opacity:1;[\s\S]*?visibility:visible;/);
+  assert.match(html,/@media\(max-width:900px\)[\s\S]*?\.baitbuster-rewrite-mark:hover::after,[\s\S]*?\.baitbuster-rewrite-mark:focus-visible::after\s*\{[\s\S]*?opacity:0;[\s\S]*?visibility:hidden;/);
+  assert.match(client,/pointerdown[\s\S]*?classList\.add\("is-pressing"\)/);
+  assert.match(client,/pointerup[\s\S]*?classList\.remove\("is-pressing"\)/);
+  assert.match(client,/pointercancel[\s\S]*?classList\.remove\("is-pressing"\)/);
+});
