@@ -132,3 +132,11 @@ test("production keeps BaitBuster styles outside the disposable boot style",asyn
   assert.match(bait,/\.headline h1\[data-baitbuster-applied="1"\]\s*\{\s*display:inline;\s*\}/);
   assert.match(bait,/\.baitbuster-rewrite-mark\{/);
 });
+
+test("production constrains BaitBuster tooltip inside mobile viewport",async()=>{
+  const html=await readFile(new URL("../../index.html",import.meta.url),"utf8");
+  assert.match(
+    html,
+    /@media\s*\(max-width:900px\)[\s\S]*?\.baitbuster-rewrite-mark::after\s*\{[\s\S]*?position:fixed;[\s\S]*?left:12px;[\s\S]*?right:12px;/
+  );
+});
