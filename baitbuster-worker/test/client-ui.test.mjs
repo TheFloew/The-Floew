@@ -98,3 +98,20 @@ test("stable applied result can reuse the existing beta marker",async()=>{
     false
   );
 });
+
+test("production homepage includes the approved BaitBuster integration",async()=>{
+  const html=await readFile(new URL("../../index.html",import.meta.url),"utf8");
+  assert.match(html,/id="baitbuster-setting"/);
+  assert.match(html,/\.baitbuster-rewrite-mark\{/);
+  assert.match(html,/js\/baitbuster-ui\.js\?v=5/);
+  assert.match(html,/js\/baitbuster-beta\.js\?v=9/);
+  assert.doesNotMatch(html,/name="robots"[^>]*noindex/i);
+});
+
+test("production homepage keeps BaitBuster enabled by default in Advanced settings",async()=>{
+  const html=await readFile(new URL("../../index.html",import.meta.url),"utf8");
+  assert.match(
+    html,
+    /id="baitbuster-setting"[\s\S]*?aria-pressed="true"[\s\S]*?<span class="media-setting-state">Açık<\/span>/
+  );
+});
