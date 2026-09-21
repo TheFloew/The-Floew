@@ -142,7 +142,21 @@
     const stopGesture=event=>{
       event.stopPropagation();
     };
+    const beginPress=event=>{
+      event.stopPropagation();
+      marker.classList.add("is-pressing");
+      try{marker.setPointerCapture?.(event.pointerId);}catch{}
+    };
+    const endPress=event=>{
+      marker.classList.remove("is-pressing");
+      try{
+        if(marker.hasPointerCapture?.(event.pointerId)){
+          marker.releasePointerCapture?.(event.pointerId);
+        }
+      }catch{}
+    };
     const toggleHeadline=event=>{
+      endPress(event);
       UI.stopNavigationEvent(event);
 
       const current=appliedState.get(slide);
@@ -153,9 +167,13 @@
       updateMarkerLabel(marker,current.mode);
     };
 
-    marker.addEventListener("pointerdown",stopGesture);
+    marker.addEventListener("pointerdown",beginPress);
     marker.addEventListener("pointerup",toggleHeadline);
-    marker.addEventListener("pointercancel",stopGesture);
+    marker.addEventListener("pointercancel",event=>{
+      stopGesture(event);
+      endPress(event);
+    });
+    marker.addEventListener("lostpointercapture",()=>marker.classList.remove("is-pressing"));
     marker.addEventListener("touchstart",event=>event.stopPropagation(),{passive:true});
     marker.addEventListener("touchend",event=>event.stopPropagation(),{passive:true});
     marker.addEventListener("click",event=>{

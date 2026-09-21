@@ -111,7 +111,16 @@
     }
     .baitbuster-rewrite-mark:hover::after,
     .baitbuster-rewrite-mark:focus-visible::after{
+      opacity:0;
+      visibility:hidden;
       transform:none;
+      transition-delay:0s;
+    }
+    .baitbuster-rewrite-mark.is-pressing::after{
+      opacity:1;
+      visibility:visible;
+      transform:none;
+      transition-delay:0s;
     }
   }
 </style>
@@ -652,7 +661,7 @@
 <script src="js/share.js?h=e755523fd4c2"></script>
 <script src="js/feedback.js?h=2d661f40fcbd"></script>
 <script src="js/baitbuster-ui.js?v=5"></script>
-<script src="js/baitbuster-beta.js?v=9"></script>
+<script src="js/baitbuster-beta.js?v=10"></script>
 
 </body>
 </html>
