@@ -122,3 +122,13 @@ test("production BaitBuster setting stays inside the Advanced media setting grou
   assert.match(panel,/id="near-duplicate-setting"/);
   assert.match(panel,/id="baitbuster-setting"/);
 });
+
+test("production keeps BaitBuster styles outside the disposable boot style",async()=>{
+  const html=await readFile(new URL("../../index.html",import.meta.url),"utf8");
+  const boot=html.match(/<style id="boot-black-style">([\s\S]*?)<\/style>/)?.[1]||"";
+  const bait=html.match(/<style id="baitbuster-beta-style">([\s\S]*?)<\/style>/)?.[1]||"";
+
+  assert.doesNotMatch(boot,/baitbuster-rewrite-mark/);
+  assert.match(bait,/\.headline h1\[data-baitbuster-applied="1"\]\s*\{\s*display:inline;\s*\}/);
+  assert.match(bait,/\.baitbuster-rewrite-mark\{/);
+});
