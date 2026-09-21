@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex,nofollow">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BaitBuster β Tanı</title>
+<style>
+  :root{color-scheme:dark}
+  body{margin:0;background:#000;color:#fff;font:15px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+  main{max-width:760px;margin:0 auto;padding:24px}
+  h1{font-size:24px;margin:0 0 8px}
+  p{color:#bbb}
+  pre{white-space:pre-wrap;word-break:break-word;background:#111;border:1px solid #333;border-radius:10px;padding:14px;min-height:120px}
+  button{appearance:none;border:1px solid #666;border-radius:9px;background:#181818;color:#fff;padding:11px 14px;font:inherit}
+</style>
+</head>
+<body>
+<main>
+  <h1>BaitBuster β canlı tanı</h1>
+  <p>Bu sayfa ana akıştan bağımsız olarak canlı Worker sağlık ve değerlendirme isteklerini test eder.</p>
+  <button id="run" type="button">Testi yeniden çalıştır</button>
+  <pre id="out">Başlatılıyor…</pre>
+</main>
+<script>
+(()=>{
+  "use strict";
+  const BASE="https://thefloew-baitbuster.thefloewback.workers.dev";
+  const out=document.getElementById("out");
+  const button=document.getElementById("run");
+  const log=(label,value)=>{
+    out.textContent+=label+"\n"+(typeof value==="string"?value:JSON.stringify(value,null,2))+"\n\n";
+  };
+  async function run(){
+    button.disabled=true;
+    out.textContent="";
+    log("Sayfa origin:",location.origin);
+    try{
+      const health=await fetch(BASE+"/health",{cache:"no-store",credentials:"omit"});
+      const healthText=await health.text();
+      log("GET /health:",{status:health.status,ok:health.ok,body:healthText});
+    }catch(error){
+      log("GET /health fetch hatası:",String(error?.stack||error));
+    }
+
+    const story={
+      key:"diagnostic|baitbuster|1",
+      url:"https://example.com/baitbuster-diagnostic",
+      title:"Bu gelişme herkesi şaşırttı",
+      description:"Merkez Bankası politika faizini yüzde 45'ten yüzde 42,5'e indirdi.",
+      source:"BaitBuster Tanı",
+      category:"#Gündem"
+    };
+
+    try{
+      const started=performance.now();
+      const response=await fetch(BASE+"/v1/evaluate",{
+        method:"POST",
+        mode:"cors",
+        credentials:"omit",
+        cache:"no-store",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({stories:[story]})
+      });
+      const elapsed=Math.round(performance.now()-started);
+      const text=await response.text();
+      let parsed=text;
+      try{parsed=JSON.parse(text);}catch{}
+      log("POST /v1/evaluate:",{
+        status:response.status,
+        ok:response.ok,
+        elapsedMs:elapsed,
+        allowOrigin:response.headers.get("access-control-allow-origin"),
+        body:parsed
+      });
+    }catch(error){
+      log("POST /v1/evaluate fetch hatası:",String(error?.stack||error));
+    }finally{
+      button.disabled=false;
+    }
+  }
+  button.addEventListener("click",run);
+  void run();
+})();
+</script>
+</body>
+</html>
