@@ -96,6 +96,24 @@
     transform:translateY(0);
     transition-delay:0s;
   }
+
+  @media(max-width:900px){
+    .baitbuster-rewrite-mark::after{
+      position:fixed;
+      left:12px;
+      right:12px;
+      bottom:calc(88px + env(safe-area-inset-bottom,0px));
+      width:auto;
+      max-width:none;
+      box-sizing:border-box;
+      transform:none;
+      text-align:center;
+    }
+    .baitbuster-rewrite-mark:hover::after,
+    .baitbuster-rewrite-mark:focus-visible::after{
+      transform:none;
+    }
+  }
 </style>
 
 </head>
