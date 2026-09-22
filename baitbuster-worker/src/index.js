@@ -12,7 +12,7 @@ import {
 } from "./ai.js";
 
 const SERVICE="thefloew-baitbuster";
-const VERSION="1.6.0";
+const VERSION="1.6.1";
 const ALLOWED_ORIGIN="https://xn--flw-tna.tr";
 const MAX_STORIES=12;
 const CACHE_TTL_SECONDS=30*24*60*60;
@@ -22,7 +22,7 @@ function corsHeaders(origin){
   const headers={
     "Vary":"Origin",
     "Access-Control-Allow-Methods":"POST, OPTIONS",
-    "Access-Control-Allow-Headers":"Content-Type",
+    "Access-Control-Allow-Headers":"Content-Type, X-BaitBuster-Client, X-BaitBuster-Version",
     "Access-Control-Max-Age":"86400"
   };
   if(origin===ALLOWED_ORIGIN){
