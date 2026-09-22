@@ -55,6 +55,6 @@ test("production and beta pages cache-bust the visibility-aware client",async()=
     readFile(new URL("../../index.html",import.meta.url),"utf8"),
     readFile(new URL("../../baitbusterbeta/index.html",import.meta.url),"utf8")
   ]);
-  assert.match(production,/js\/baitbuster-beta\.js\?v=11/);
-  assert.match(beta,/js\/baitbuster-beta\.js\?v=11/);
+  assert.match(production,/js\/baitbuster-beta\.js\?v=12/);
+  assert.match(beta,/js\/baitbuster-beta\.js\?v=12/);
 });
