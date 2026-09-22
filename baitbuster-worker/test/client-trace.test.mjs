@@ -17,6 +17,12 @@ test("BaitBuster requests identify client type and client version",async()=>{
   assert.match(client,/return "web"/);
 });
 
+test("diagnostic requests identify themselves separately",async()=>{
+  const diagnostic=await source("baitbusterbeta/diagnostic.html");
+  assert.match(diagnostic,/X-BaitBuster-Client[^\n]*diagnostic/);
+  assert.match(diagnostic,/X-BaitBuster-Version[^\n]*1/);
+});
+
 test("BaitBuster Worker CORS allows trace headers",async()=>{
   const worker=await source("baitbuster-worker/src/index.js");
   assert.match(
