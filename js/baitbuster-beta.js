@@ -2,7 +2,7 @@
   "use strict";
 
   const ENDPOINT="https://thefloew-baitbuster.thefloewback.workers.dev/v1/evaluate";
-  const MAX_BATCH=12;
+  const MAX_BATCH=3;
   const SCAN_DEBOUNCE_MS=180;
   const FETCH_TIMEOUT_MS=20000;
   const slides=[...document.querySelectorAll("#a,#b")];
@@ -19,6 +19,10 @@
   let requestInFlight=false;
   let activeController=null;
   let featureEnabled=UI.loadEnabled(localStorage);
+
+  function isPageVisible(){
+    return document.visibilityState==="visible";
+  }
 
   function clean(value){
     return String(value||"").replace(/\s+/g," ").trim();
@@ -228,7 +232,7 @@
   }
 
   async function flushQueue(){
-    if(!featureEnabled||requestInFlight||!queued.size)return;
+    if(!featureEnabled||!isPageVisible()||requestInFlight||!queued.size)return;
     const batch=[...queued.values()].slice(0,MAX_BATCH);
     for(const story of batch){
       queued.delete(story.key);
@@ -251,7 +255,7 @@
       });
       if(!response.ok)throw new Error(`baitbuster_http_${response.status}`);
       const payload=await response.json();
-      if(!featureEnabled)return;
+      if(!featureEnabled||!isPageVisible())return;
       if(payload?.ok!==true||!Array.isArray(payload.results)){
         throw new Error("baitbuster_invalid_response");
       }
@@ -281,7 +285,7 @@
 
   function scanSlides(){
     scanTimer=0;
-    if(!featureEnabled)return;
+    if(!featureEnabled||!isPageVisible())return;
     queueUpcomingStories();
 
     for(const slide of slides){
@@ -309,7 +313,7 @@
 
   function scheduleScan(){
     clearTimeout(scanTimer);
-    if(!featureEnabled)return;
+    if(!featureEnabled||!isPageVisible())return;
     scanTimer=setTimeout(scanSlides,SCAN_DEBOUNCE_MS);
   }
 
@@ -355,6 +359,21 @@
     setFeatureEnabled(!featureEnabled);
   });
   syncSettingButton();
+
+  document.addEventListener("visibilitychange",()=>{
+    if(!featureEnabled)return;
+
+    if(!isPageVisible()){
+      clearTimeout(scanTimer);
+      scanTimer=0;
+      queued.clear();
+      pendingKeys.clear();
+      activeController?.abort();
+      return;
+    }
+
+    scheduleScan();
+  });
 
   const observer=new MutationObserver(scheduleScan);
   for(const slide of slides){
