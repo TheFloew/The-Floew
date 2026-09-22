@@ -2,6 +2,7 @@
   "use strict";
 
   const ENDPOINT="https://thefloew-baitbuster.thefloewback.workers.dev/v1/evaluate";
+  const CLIENT_VERSION="12";
   const MAX_BATCH=3;
   const SCAN_DEBOUNCE_MS=180;
   const FETCH_TIMEOUT_MS=20000;
@@ -23,6 +24,18 @@
   function isPageVisible(){
     return document.visibilityState==="visible";
   }
+
+  function detectClientType(){
+    const ua=String(navigator.userAgent||"");
+    if(/FloewIOS\//i.test(ua))return "ios-app";
+    if(/Android/i.test(ua)){
+      if(/Android TV|GoogleTV|AFT|\bTV\b/i.test(ua))return "android-tv";
+      if(/\bwv\b|;\s*wv\)/i.test(ua))return "android-app";
+    }
+    return "web";
+  }
+
+  const CLIENT_TYPE=detectClientType();
 
   function clean(value){
     return String(value||"").replace(/\s+/g," ").trim();
@@ -253,7 +266,11 @@
         credentials:"omit",
         cache:"no-store",
         signal:controller.signal,
-        headers:{"Content-Type":"application/json"},
+        headers:{
+          "Content-Type":"application/json",
+          "X-BaitBuster-Client":CLIENT_TYPE,
+          "X-BaitBuster-Version":CLIENT_VERSION
+        },
         body:JSON.stringify({stories:batch})
       });
       if(!response.ok)throw new Error(`baitbuster_http_${response.status}`);
