@@ -83,7 +83,7 @@
         !state ||
         !Array.isArray(state.stories) ||
         !state.stories.length
-      )return;
+      )return false;
 
       const start=Math.max(0,Number(state.index)||0);
       const end=Math.min(state.stories.length,start+MAX_BATCH);
@@ -97,7 +97,10 @@
         )continue;
         queued.set(story.key,story);
       }
-    }catch{}
+      return true;
+    }catch{
+      return false;
+    }
   }
 
   function readSlideStory(slide){
@@ -286,7 +289,7 @@
   function scanSlides(){
     scanTimer=0;
     if(!featureEnabled||!isPageVisible())return;
-    queueUpcomingStories();
+    const queuedFromState=queueUpcomingStories();
 
     for(const slide of slides){
       resetIfSlideReused(slide);
@@ -298,6 +301,8 @@
         applyResultToSlide(slide,cachedResult);
         continue;
       }
+
+      if(queuedFromState)continue;
 
       if(
         pendingKeys.has(story.key) ||
