@@ -105,7 +105,7 @@ test("production homepage includes the approved BaitBuster integration",async()=
   assert.match(html,/id="baitbuster-setting"/);
   assert.match(html,/\.baitbuster-rewrite-mark\{/);
   assert.match(html,/js\/baitbuster-ui\.js\?v=5/);
-  assert.match(html,/js\/baitbuster-beta\.js\?v=11/);
+  assert.match(html,/js\/baitbuster-beta\.js\?v=12/);
   assert.doesNotMatch(html,/name="robots"[^>]*noindex/i);
 });
 
