@@ -59,7 +59,7 @@
         mode:"cors",
         credentials:"omit",
         cache:"no-store",
-        headers:{"Content-Type":"application/json"},
+        headers:{"Content-Type":"application/json","X-BaitBuster-Client":"diagnostic","X-BaitBuster-Version":"1"},
         body:JSON.stringify({stories:[story]})
       });
       const elapsed=Math.round(performance.now()-started);
