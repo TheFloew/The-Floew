@@ -13,6 +13,15 @@ test("BaitBuster limits prefetch to current story plus next two",async()=>{
   assert.match(client,/const MAX_BATCH=3;/);
 });
 
+test("state-backed prefetch window cannot be expanded by rendered slide fallbacks",async()=>{
+  const client=await clientSource();
+  assert.match(client,/const queuedFromState=queueUpcomingStories\(\);/);
+  assert.match(
+    client,
+    /const cachedResult=resultByKey\.get\(story\.key\);[\s\S]*?if\(queuedFromState\)continue;[\s\S]*?queued\.set\(story\.key,story\);/
+  );
+});
+
 test("BaitBuster refuses to scan or post while the page is hidden",async()=>{
   const client=await clientSource();
   assert.match(
