@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+const {readFile}=fs;
 import vm from "node:vm";
 
 async function loadUI(){
@@ -104,7 +105,7 @@ test("production homepage includes the approved BaitBuster integration",async()=
   assert.match(html,/id="baitbuster-setting"/);
   assert.match(html,/\.baitbuster-rewrite-mark\{/);
   assert.match(html,/js\/baitbuster-ui\.js\?v=5/);
-  assert.match(html,/js\/baitbuster-beta\.js\?v=10/);
+  assert.match(html,/js\/baitbuster-beta\.js\?v=11/);
   assert.doesNotMatch(html,/name="robots"[^>]*noindex/i);
 });
 
