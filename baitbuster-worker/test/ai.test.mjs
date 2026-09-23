@@ -137,6 +137,36 @@ test("8B gate failure safely falls back to the 70B classifier",async()=>{
   assert.equal(rows[0].modelVersion,AI_MODEL_DEFAULT);
 });
 
+
+test("8B quota exhaustion stops before the 70B fallback",async()=>{
+  const calls=[];
+  const quotaError=new Error("4006: you have used up your daily free allocation of 10,000 neurons, please upgrade to Cloudflare's Workers Paid plan if you would like to continue usage.");
+  quotaError.name="AiError";
+  const env={
+    AI:{
+      async run(model){
+        calls.push(model);
+        if(model===AI_GATE_MODEL_DEFAULT)throw quotaError;
+        throw new Error("70B should not run after quota exhaustion");
+      }
+    }
+  };
+
+  await assert.rejects(
+    classifyStories([{
+      key:"a",
+      url:"https://example.com/a",
+      title:"Başlık",
+      description:"Açıklama",
+      source:"Kaynak",
+      category:"Gündem"
+    }],env),
+    /4006: you have used up your daily free allocation/
+  );
+
+  assert.deepEqual(calls,[AI_GATE_MODEL_DEFAULT]);
+});
+
 test("rewriter accepts structured Workers AI response",async()=>{
   const env={
     AI:{
