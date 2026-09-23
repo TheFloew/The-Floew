@@ -33,7 +33,7 @@ curl -i https://thefloew-baitbuster.thefloewback.workers.dev/health
 Expected body:
 
 ```json
-{"ok":true,"service":"thefloew-baitbuster","version":"1.6.0"}
+{"ok":true,"service":"thefloew-baitbuster","version":"1.6.2"}
 ```
 
 CORS preflight:
