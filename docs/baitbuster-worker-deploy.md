@@ -7,7 +7,7 @@ Worker name: thefloew-baitbuster
 Production URL: https://thefloew-baitbuster.thefloewback.workers.dev
 Workers AI binding variable: AI
 KV binding variable: BAITBUSTER_CACHE
-Optional text variable: AI_MODEL=@cf/meta/llama-3.3-70b-instruct-fp8-fast\nOptional text variable: AI_GATE_MODEL=@cf/meta/llama-3.1-8b-instruct-fp8
+Optional text variable: AI_MODEL=@cf/meta/llama-3.3-70b-instruct-fp8-fast
 Allowed site origin: https://xn--flw-tna.tr
 ```
 
@@ -20,7 +20,7 @@ BaitBuster uses Cloudflare Workers AI directly through the `AI` binding. Classif
 3. Open **Bindings → Add binding → KV Namespace** and bind `thefloew-baitbuster-cache` as `BAITBUSTER_CACHE`.
 4. Open **Edit code** and replace the Worker code with `baitbuster-worker/worker.js`.
 5. Deploy.
-6. Optional: add plaintext variable `AI_MODEL` to override the 70B classifier/rewriter model. If omitted, BaitBuster uses `@cf/meta/llama-3.3-70b-instruct-fp8-fast`.\n7. Optional: add plaintext variable `AI_GATE_MODEL` to override the first-pass gate. If omitted, BaitBuster uses `@cf/meta/llama-3.1-8b-instruct-fp8`.
+6. Optional: add plaintext variable `AI_MODEL` to override the 70B classifier/rewriter model. If omitted, BaitBuster uses `@cf/meta/llama-3.3-70b-instruct-fp8-fast`.
 
 ## Verification
 
