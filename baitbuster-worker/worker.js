@@ -569,6 +569,14 @@ async function runGate(stories,env){
 
 const CLASSIFICATION_CHUNK_SIZE=4;
 
+function isWorkersAIQuotaExhausted(error){
+  const message=String(error?.message||"");
+  return (
+    /\b4006\b/.test(message) &&
+    /daily free allocation/i.test(message)
+  );
+}
+
 function isStructuredOutputError(error){
   const name=String(error?.name||"");
   const message=String(error?.message||"");
@@ -660,6 +668,7 @@ export async function classifyStories(stories,env){
       name:String(error?.name||""),
       message:String(error?.message||"")
     }));
+    if(isWorkersAIQuotaExhausted(error))throw error;
   }
 
   const finalByKey=new Map();
@@ -725,7 +734,7 @@ export const AI_MODEL_DEFAULT=DEFAULT_MODEL;
 export const AI_GATE_MODEL_DEFAULT=DEFAULT_GATE_MODEL;
 
 const SERVICE="thefloew-baitbuster";
-const VERSION="1.6.1";
+const VERSION="1.6.2";
 const ALLOWED_ORIGIN="https://xn--flw-tna.tr";
 const MAX_STORIES=12;
 const CACHE_TTL_SECONDS=30*24*60*60;
