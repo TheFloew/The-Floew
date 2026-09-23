@@ -236,6 +236,14 @@ async function runGate(stories,env){
 
 const CLASSIFICATION_CHUNK_SIZE=4;
 
+function isWorkersAIQuotaExhausted(error){
+  const message=String(error?.message||"");
+  return (
+    /\b4006\b/.test(message) &&
+    /daily free allocation/i.test(message)
+  );
+}
+
 function isStructuredOutputError(error){
   const name=String(error?.name||"");
   const message=String(error?.message||"");
@@ -327,6 +335,7 @@ export async function classifyStories(stories,env){
       name:String(error?.name||""),
       message:String(error?.message||"")
     }));
+    if(isWorkersAIQuotaExhausted(error))throw error;
   }
 
   const finalByKey=new Map();
