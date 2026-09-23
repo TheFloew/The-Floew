@@ -12,7 +12,7 @@ import {
 } from "./ai.js";
 
 const SERVICE="thefloew-baitbuster";
-const VERSION="1.6.3";
+const VERSION="1.6.2";
 const ALLOWED_ORIGIN="https://xn--flw-tna.tr";
 const MAX_STORIES=12;
 const CACHE_TTL_SECONDS=30*24*60*60;
@@ -119,6 +119,7 @@ async function evaluateStories(rawStories,env,ctx){
   }));
 
   let classifiedCount=0;
+  let gateFiltered=0;
   let suspiciousCount=0;
   let rewrittenCount=0;
   let articleErrors=0;
@@ -157,6 +158,7 @@ async function evaluateStories(rawStories,env,ctx){
         }
 
         if(!classification.clickbait){
+          if(classification.reasonCode==="clear_headline_8b_gate")gateFiltered++;
           const result=originalResult(story,"not_clickbait",{
             clickbait:false,
             classificationConfidence:classification.confidence,
@@ -253,6 +255,7 @@ async function evaluateStories(rawStories,env,ctx){
     valid:normalized.length,
     cacheHits,
     classified:classifiedCount,
+    gateFiltered,
     suspicious:suspiciousCount,
     rewritten:rewrittenCount,
     articleErrors,
