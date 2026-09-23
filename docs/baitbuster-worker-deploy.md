@@ -11,7 +11,7 @@ Optional text variable: AI_MODEL=@cf/meta/llama-3.3-70b-instruct-fp8-fast\nOptio
 Allowed site origin: https://xn--flw-tna.tr
 ```
 
-BaitBuster uses Cloudflare Workers AI directly through the `AI` binding. A conservative 8B gate filters only clearly non-clickbait headlines at confidence 0.90 or above; every uncertain or suspicious headline is rechecked by the 70B model, and rewrites remain on 70B. No OpenAI API key or other external model API key is required.
+BaitBuster uses Cloudflare Workers AI directly through the `AI` binding. Classification and rewrites both use the 70B model by default. No OpenAI API key or other external model API key is required.
 
 ## Cloudflare Dashboard deployment
 
@@ -33,7 +33,7 @@ curl -i https://thefloew-baitbuster.thefloewback.workers.dev/health
 Expected body:
 
 ```json
-{"ok":true,"service":"thefloew-baitbuster","version":"1.6.2"}
+{"ok":true,"service":"thefloew-baitbuster","version":"1.6.3"}
 ```
 
 CORS preflight:
