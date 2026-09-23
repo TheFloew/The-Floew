@@ -8,7 +8,7 @@ const ORIGIN="https://xn--flw-tna.tr";
 test("health is public and reports service version",async()=>{
   const res=await handleRequest(new Request("https://worker.test/health"),{},{});
   assert.equal(res.status,200);
-  assert.deepEqual(await res.json(),{ok:true,service:"thefloew-baitbuster",version:"1.6.3"});
+  assert.deepEqual(await res.json(),{ok:true,service:"thefloew-baitbuster",version:"1.6.2"});
 });
 
 test("preflight allows only Flöw production origin",async()=>{
@@ -72,23 +72,14 @@ test("cached story returns without a Workers AI call",async()=>{
 });
 
 
-test("70B classification result is returned and cached",async()=>{
+test("high-confidence 8B gate result is returned and cached without a 70B call",async()=>{
   const calls=[];
   const writes=[];
   const env={
     AI:{
       async run(model,input){
         calls.push(model);
-        const payload=JSON.parse(input.messages[1].content);
-        return {response:{results:[{
-          key:payload.stories[0].key,
-          clickbait:false,
-          confidence:.95,
-          needsArticle:false,
-          reasonCode:"clear_headline",
-          missingQuestion:"",
-          candidateFact:""
-        }]}};
+        return {response:"0|clear|0.95"};
       }
     },
     BAITBUSTER_CACHE:{
@@ -100,8 +91,8 @@ test("70B classification result is returned and cached",async()=>{
     method:"POST",
     headers:{Origin:ORIGIN,"Content-Type":"application/json"},
     body:JSON.stringify({stories:[{
-      key:"clear",
-      url:"https://example.com/clear",
+      key:"gate-clear",
+      url:"https://example.com/gate-clear",
       title:"Merkez Bankası politika faizini yüzde 42,5'e indirdi",
       description:"Faiz kararı açıklandı.",
       source:"Kaynak",
@@ -110,8 +101,9 @@ test("70B classification result is returned and cached",async()=>{
   }),env,{});
   assert.equal(res.status,200);
   const body=await res.json();
-  assert.deepEqual(calls,["@cf/meta/llama-3.3-70b-instruct-fp8-fast"]);
+  assert.equal(calls.length,1);
+  assert.equal(calls[0],"@cf/meta/llama-3.1-8b-instruct-fp8");
   assert.equal(body.results[0].rewriteStatus,"not_clickbait");
-  assert.equal(body.results[0].modelVersion,"@cf/meta/llama-3.3-70b-instruct-fp8-fast");
+  assert.equal(body.results[0].modelVersion,"@cf/meta/llama-3.1-8b-instruct-fp8");
   assert.equal(writes.length,1);
 });
