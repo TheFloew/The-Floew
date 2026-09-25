@@ -78,6 +78,23 @@ test("rewrite sanitizer rejects paraphrases without material information gain",(
   assert.equal(result.flowTitle,null);
 });
 
+test("rewrite sanitizer rejects confident paraphrases that add no concrete fact",()=>{
+  const story=normalizeStory({
+    key:"a",
+    url:"https://example.com/a",
+    title:"Şarkıcı Sefo'dan ilk açıklama"
+  });
+  const result=sanitizeRewriteResult({
+    rewriteStatus:"rewritten",
+    flowTitle:"Sefo ilk açıklamasını yaptı",
+    confidence:.97,
+    informationGain:.91,
+    addedInformation:["Sefo ilk açıklamasını yaptı"]
+  },story);
+  assert.equal(result.rewriteStatus,"insufficient_content");
+  assert.equal(result.flowTitle,null);
+});
+
 test("rewrite sanitizer accepts a materially informative headline",()=>{
   const story=normalizeStory({
     key:"a",
