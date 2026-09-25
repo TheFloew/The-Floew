@@ -6,13 +6,15 @@ import {
 const DEFAULT_MODEL="@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const DEFAULT_GATE_MODEL="@cf/meta/llama-3.1-8b-instruct-fp8";
 const AI_TIMEOUT_MS=18000;
-export const GATE_CONFIDENCE_THRESHOLD=.90;
+export const GATE_CONFIDENCE_THRESHOLD=.95;
 
 const GATE_PROMPT=`Act as a conservative first-pass filter for Turkish news headlines. Your only job is to decide which headlines are so clearly informative and non-clickbait that a larger model can safely skip reviewing them.
 
-Mark clear ONLY when the headline itself states the central event or fact plainly enough that a reader understands the main news without opening the article. If the headline withholds an answer, result, identity, reason, statement, development, amount, date, or other central fact; asks a question whose answer is central; uses a teaser; is ambiguous; or you are not highly confident, mark review.
+Mark clear ONLY when the headline itself states the central event or fact plainly enough that a reader understands the main news without opening the article. Treat any open-ended or incomplete headline as review when the reader must open the article to learn the central fact. If the headline withholds an answer, result, identity, reason, statement, development, amount, date, or other central fact; asks a question whose answer is central; uses a teaser; is ambiguous; or you are not highly confident, mark review.
 
-The description may help you understand context, but do not mark a vague headline clear merely because the description contains the missing fact. When uncertain, always choose review.
+A clear headline must leave no unresolved who, what, why, where, when, or how much question that is central to the news. A headline that merely says something happened, was announced, was revealed, was said, became clear, or caused surprise without stating the substance is review.
+
+The description may help you understand context, but do not let the description rescue a vague headline. Judge whether the headline itself is sufficiently informative. When uncertain, always choose review.
 
 Return exactly one plain-text line for every supplied story and nothing else:
 key|clear|confidence
