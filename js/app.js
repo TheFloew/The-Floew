@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.80.1";
+window.__floewAppVersion="31.80.2";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -4754,12 +4754,10 @@ function applyVideoSetting(){
 const ARTICLE_FIRST_IMAGE_SOURCES=new Set([
   "halk tv",
   "aydınlık",
-  "aydinlik",
-  /*
-    Sputnik RSS görselleri zaman zaman başlık/metin basılmış bir türev
-    döndürüyor. Makale sayfasındaki OG/JSON-LD ana görselini önce çözerek
-    bu işlenmiş RSS varyantını pas geç.
-  */
+  "aydinlik"
+]);
+
+const SPUTNIK_INLINE_IMAGE_SOURCES=new Set([
   "sputnik türkiye",
   "sputnik"
 ]);
@@ -4856,6 +4854,219 @@ function storyExternalImageProxyUrl(story){
   proxy.searchParams.set("q","86");
 
   return proxy.href;
+}
+
+
+const sputnikInlineImageCache=new Map();
+
+function storyIsSputnik(story){
+  if(
+    SPUTNIK_INLINE_IMAGE_SOURCES.has(
+      sourceKey(story?.source)
+    )
+  ){
+    return true;
+  }
+
+  try{
+    const host=new URL(String(story?.link||"")).hostname.toLowerCase();
+    return (
+      host==="anlatilaninotesi.com.tr" ||
+      host.endsWith(".anlatilaninotesi.com.tr") ||
+      host==="sputniknews.com" ||
+      host.endsWith(".sputniknews.com")
+    );
+  }catch(e){
+    return false;
+  }
+}
+
+function exactImageProxyUrl(imageUrl,articleUrl=""){
+  const safe=String(imageUrl||"").trim();
+  if(!/^https?:\/\//i.test(safe))return "";
+
+  try{
+    const proxy=new URL(IMAGE_PROXY_API);
+    proxy.searchParams.set("url",safe);
+
+    const ref=String(articleUrl||"").trim();
+    if(/^https?:\/\//i.test(ref)){
+      proxy.searchParams.set("ref",ref);
+    }
+
+    return proxy.href;
+  }catch(e){
+    return safe;
+  }
+}
+
+function srcsetUrls(value=""){
+  return String(value||"")
+    .split(",")
+    .map(part=>part.trim().split(/\s+/)[0]||"")
+    .filter(Boolean);
+}
+
+function extractSputnikInlineImage(html="",articleUrl=""){
+  if(!html || !articleUrl || !globalThis.DOMParser)return "";
+
+  let doc;
+  try{
+    doc=new DOMParser().parseFromString(String(html),"text/html");
+  }catch(e){
+    return "";
+  }
+
+  const h1=doc.querySelector("h1");
+  const byUrl=new Map();
+
+  const add=(raw,node,srcsetRank=0)=>{
+    const value=String(raw||"").trim();
+    if(!value)return;
+
+    let url="";
+    try{
+      url=new URL(value,articleUrl).href;
+    }catch(e){
+      return;
+    }
+
+    if(!/^https?:\/\//i.test(url))return;
+
+    let host="";
+    try{host=new URL(url).hostname.toLowerCase()}catch(e){}
+
+    const context=[
+      url,
+      node?.getAttribute?.("alt")||"",
+      node?.getAttribute?.("class")||"",
+      node?.parentElement?.getAttribute?.("class")||""
+    ].join(" ").toLowerCase();
+
+    if(
+      /(?:logo|avatar|author|icon|sprite|emoji|placeholder|tracking|pixel)/i
+        .test(context)
+    ){
+      return;
+    }
+
+    let score=0;
+
+    if(
+      host==="cdn.img.anlatilaninotesi.com.tr" ||
+      host.endsWith(".anlatilaninotesi.com.tr")
+    ){
+      score+=520;
+    }
+
+    if(/\/img\//i.test(url))score+=100;
+    if(/[_/-](?:1920|1600|1440|1280|1200)x/i.test(url))score+=180;
+    if(/[_/-](?:960|1024)x/i.test(url))score+=100;
+    score+=Math.min(90,srcsetRank*18);
+
+    const figure=node?.closest?.("figure");
+    const article=node?.closest?.("article");
+    const main=node?.closest?.("main");
+    if(figure)score+=260;
+    if(article)score+=220;
+    else if(main)score+=90;
+
+    if(h1 && node){
+      try{
+        if(h1.compareDocumentPosition(node)&4)score+=120;
+      }catch(e){}
+    }
+
+    const width=Number(node?.getAttribute?.("width"))||0;
+    const height=Number(node?.getAttribute?.("height"))||0;
+
+    if(width>=900)score+=100;
+    else if(width>=600)score+=60;
+    else if(width>0 && width<320)score-=260;
+
+    if(height>0 && height<180)score-=180;
+
+    if(/(?:banner|promo|advert|reklam|social|share)/i.test(context)){
+      score-=260;
+    }
+
+    const previous=byUrl.get(url);
+    if(!previous || score>previous.score){
+      byUrl.set(url,{url,score});
+    }
+  };
+
+  const nodes=[
+    ...doc.querySelectorAll(
+      "article img, article source, main figure img, main figure source, main img, main source"
+    )
+  ];
+
+  for(const node of nodes){
+    for(const attr of [
+      "src",
+      "data-src",
+      "data-lazy-src",
+      "data-original",
+      "data-url"
+    ]){
+      add(node.getAttribute?.(attr),node,0);
+    }
+
+    for(const attr of ["srcset","data-srcset"]){
+      const urls=srcsetUrls(node.getAttribute?.(attr));
+      urls.forEach((url,index)=>add(url,node,index+1));
+    }
+  }
+
+  return [...byUrl.values()]
+    .sort((a,b)=>b.score-a.score)
+    .find(candidate=>candidate.score>=300)
+    ?.url || "";
+}
+
+function resolveSputnikInlineImage(story){
+  if(!storyIsSputnik(story))return Promise.resolve("");
+
+  const articleUrl=String(story?.link||"").trim();
+  if(!/^https?:\/\//i.test(articleUrl))return Promise.resolve("");
+
+  if(sputnikInlineImageCache.has(articleUrl)){
+    return sputnikInlineImageCache.get(articleUrl);
+  }
+
+  const task=(async()=>{
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),8000);
+
+    try{
+      const sourceUrl=new URL(SOURCE_VIEW_API);
+      sourceUrl.searchParams.set("url",articleUrl);
+
+      const response=await fetch(sourceUrl.href,{
+        method:"GET",
+        mode:"cors",
+        credentials:"omit",
+        cache:"force-cache",
+        signal:controller.signal,
+        headers:{
+          "Accept":"text/html,application/xhtml+xml"
+        }
+      });
+
+      if(!response.ok)return "";
+
+      const html=await response.text();
+      return extractSputnikInlineImage(html,articleUrl);
+    }catch(e){
+      return "";
+    }finally{
+      clearTimeout(timeout);
+    }
+  })();
+
+  sputnikInlineImageCache.set(articleUrl,task);
+  return task;
 }
 
 
@@ -5370,6 +5581,9 @@ function setStoryImage(img,story){
   );
   const externalProxy=storyExternalImageProxyUrl(story);
   const articleFirst=storyPrefersArticleImage(story) && articleProxy;
+  const sputnikInline=storyIsSputnik(story);
+  const imageResolveKey=mediaKey(story);
+  let focalStory=story;
 
   img.onerror=null;
   img.onload=null;
@@ -5379,16 +5593,13 @@ function setStoryImage(img,story){
   img.style.objectPosition="50% 50%";
   img.dataset.focalKey="";
   img.dataset.focalLockedKey="";
+  img.dataset.imageResolveKey=imageResolveKey;
 
   if(!direct){
     img.removeAttribute("src");
     img.style.visibility="hidden";
     return;
   }
-
-  img.dataset.imageStage=articleFirst
-    ? "article-proxy"
-    : "direct";
 
   img.onload=()=>{
     const stage=img.dataset.imageStage;
@@ -5413,11 +5624,22 @@ function setStoryImage(img,story){
     }
 
     img.style.visibility="visible";
-    applySmartFocalPoint(img,story);
+    applySmartFocalPoint(img,focalStory);
   };
 
   img.onerror=()=>{
     const stage=img.dataset.imageStage;
+
+    if(
+      stage==="sputnik-inline-proxy" &&
+      articleProxy &&
+      articleProxy!==img.src
+    ){
+      img.dataset.imageStage="article-proxy";
+      focalStory=story;
+      img.src=articleProxy;
+      return;
+    }
 
     if(
       stage==="direct" &&
@@ -5452,6 +5674,46 @@ function setStoryImage(img,story){
     img.dataset.imageStage="failed";
     img.style.visibility="hidden";
   };
+
+  if(sputnikInline){
+    /*
+      Sputnik'in OG/Twitter görseli sosyal paylaşım kartı olduğu için
+      başlığı ve büyük SPUTNIK logosunu görselin içine basıyor. Kaynak
+      görüntüleyicide zaten erişebildiğimiz makale HTML'inden figure/article
+      içindeki gerçek fotoğrafı bulup mevcut /image proxy'sinden geçiriyoruz.
+      Çözülene kadar sosyal kartı flaşlatmamak için eski görsel gizli kalır.
+    */
+    img.dataset.imageStage="sputnik-resolving";
+    img.style.visibility="hidden";
+    img.removeAttribute("src");
+
+    void resolveSputnikInlineImage(story).then(imageUrl=>{
+      if(img.dataset.imageResolveKey!==imageResolveKey)return;
+
+      if(imageUrl){
+        focalStory={...story,image:imageUrl};
+        img.dataset.imageStage="sputnik-inline-proxy";
+        img.src=
+          exactImageProxyUrl(
+            imageUrl,
+            String(story?.link||"")
+          ) || imageUrl;
+        return;
+      }
+
+      focalStory=story;
+      img.dataset.imageStage=articleProxy
+        ? "article-proxy"
+        : "direct";
+      img.src=articleProxy||direct;
+    });
+
+    return;
+  }
+
+  img.dataset.imageStage=articleFirst
+    ? "article-proxy"
+    : "direct";
 
   img.src=articleFirst ? articleProxy : direct;
 }
