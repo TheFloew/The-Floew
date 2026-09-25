@@ -8,18 +8,32 @@ async function clientSource(){
   return readFile(clientUrl,"utf8");
 }
 
-test("BaitBuster limits prefetch to current story plus next two",async()=>{
+test("BaitBuster gives the current story its own fast lane and prefetches only the next two",async()=>{
   const client=await clientSource();
-  assert.match(client,/const MAX_BATCH=3;/);
+  assert.match(client,/const PREFETCH_COUNT=2;/);
+  assert.match(client,/const foregroundQueue=new Map\(\);/);
+  assert.match(client,/const prefetchQueue=new Map\(\);/);
+  assert.match(client,/function queueStateWindow\(\)/);
+  assert.match(client,/flushForegroundQueue\(\)/);
+  assert.match(client,/flushPrefetchQueue\(\)/);
 });
 
-test("state-backed prefetch window cannot be expanded by rendered slide fallbacks",async()=>{
+test("state-backed priority window cannot be expanded by rendered slide fallbacks",async()=>{
   const client=await clientSource();
-  assert.match(client,/const queuedFromState=queueUpcomingStories\(\);/);
+  assert.match(client,/const queuedFromState=queueStateWindow\(\);/);
   assert.match(
     client,
-    /const cachedResult=resultByKey\.get\(story\.key\);[\s\S]*?if\(queuedFromState\)continue;[\s\S]*?queued\.set\(story\.key,story\);/
+    /const cachedResult=resultByKey\.get\(story\.key\);[\s\S]*?if\(queuedFromState\)continue;/
   );
+});
+
+test("slide reuse clears stale BaitBuster presentation before debounce",async()=>{
+  const client=await clientSource();
+  assert.match(
+    client,
+    /function handleSlideMutations\(records\)[\s\S]*?resetIfSlideReused\(slide\)[\s\S]*?scheduleScan\(\)/
+  );
+  assert.match(client,/new MutationObserver\(handleSlideMutations\)/);
 });
 
 test("BaitBuster refuses to scan or post while the page is hidden",async()=>{
