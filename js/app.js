@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.79.8";
+window.__floewAppVersion="31.80.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -47,6 +47,7 @@ const ALGO_SESSION_SEED=`${Date.now().toString(36)}-${Math.random().toString(36)
 const KEYWORD_FILTER_KEY="thefloew.keywordFilter.v1";
 const KEYWORD_WATCH_KEY="thefloew.keywordWatch.v1";
 const WEATHER_PREFS_KEY="thefloew.weather.v1";
+const VIDEO_AUDIO_DEFAULT_KEY="thefloew.videoAudioDefault.v1";
 const FX_RATES_VISIBLE_KEY="thefloew.fxRatesVisible.v1";
 const STOCK_TICKER_VISIBLE_KEY="thefloew.stockTickerVisible.v1";
 const STOCK_TICKER_SCALE_KEY="thefloew.stockTickerScale.v1";
@@ -142,6 +143,7 @@ function loadBooleanUiPreference(key,defaultValue){
   }
 }
 
+let videoAudioDefaultEnabled=loadBooleanUiPreference(VIDEO_AUDIO_DEFAULT_KEY,false);
 let fxRatesVisible=loadBooleanUiPreference(FX_RATES_VISIBLE_KEY,true);
 let stockTickerVisible=loadBooleanUiPreference(STOCK_TICKER_VISIBLE_KEY,false);
 
@@ -3275,7 +3277,7 @@ const SUPPORTED_EMBED_VIDEO_PROVIDERS=new Set([
   "vimeo",
   "dailymotion"
 ]);
-let videoAudioEnabled=false;
+let videoAudioEnabled=videoAudioDefaultEnabled;
 let videoAudioStoryKey="";
 let videoAudioUiSyncQueued=false;
 
@@ -3769,12 +3771,23 @@ function syncActiveVideoAudioUi(){
     return;
   }
 
-  if(videoAudioStoryKey!==storyKey){
-    videoAudioStoryKey=storyKey;
-    videoAudioEnabled=false;
+  /*
+    Ses düğmesi artık üst köşede sabit değil. Yalnız videolu haberde,
+    o haberin aksiyon satırına Flöra'nın hemen önüne taşınır.
+    Tek DOM düğmesini iki slide arasında gezdirmek, aynı id'nin çoğalmasını
+    ve gizli slide'daki bir düğmenin yanlış videoyu yönetmesini engeller.
+  */
+  const actions=slide?.querySelector(".headline-actions");
+  if(actions && button.parentElement!==actions){
+    const flora=actions.querySelector(".flora-inline");
+    actions.insertBefore(button,flora||actions.firstChild);
   }
 
-  /* Her yeni haber varsayılan olarak sessiz başlar. */
+  if(videoAudioStoryKey!==storyKey){
+    videoAudioStoryKey=storyKey;
+    videoAudioEnabled=videoAudioDefaultEnabled;
+  }
+
   applySlideVideoAudio(slide,videoAudioEnabled);
 
   button.hidden=false;
@@ -4676,7 +4689,14 @@ function applyVideoSetting(){
 const ARTICLE_FIRST_IMAGE_SOURCES=new Set([
   "halk tv",
   "aydınlık",
-  "aydinlik"
+  "aydinlik",
+  /*
+    Sputnik RSS görselleri zaman zaman başlık/metin basılmış bir türev
+    döndürüyor. Makale sayfasındaki OG/JSON-LD ana görselini önce çözerek
+    bu işlenmiş RSS varyantını pas geç.
+  */
+  "sputnik türkiye",
+  "sputnik"
 ]);
 
 function storyPrefersArticleImage(story){
@@ -11105,6 +11125,37 @@ function renderNearDuplicateSetting(){
   if(stateEl)stateEl.textContent=nearDuplicateDedupEnabled?"Açık":"Kapalı";
 }
 
+function renderVideoAudioDefaultSetting(){
+  const button=document.getElementById("video-audio-default-setting");
+  const stateEl=button?.querySelector(".media-setting-state");
+  if(!button)return;
+
+  button.classList.toggle("active",videoAudioDefaultEnabled);
+  button.setAttribute("aria-pressed",videoAudioDefaultEnabled?"true":"false");
+  if(stateEl)stateEl.textContent=videoAudioDefaultEnabled?"Açık":"Kapalı";
+}
+
+function setVideoAudioDefaultEnabled(value){
+  const next=Boolean(value);
+  if(next===videoAudioDefaultEnabled)return;
+
+  videoAudioDefaultEnabled=next;
+  saveBooleanUiPreference(VIDEO_AUDIO_DEFAULT_KEY,next);
+  renderVideoAudioDefaultSetting();
+
+  /*
+    Ayar değiştiğinde ekrandaki videoya da hemen uygula. Sonraki her
+    videolu haber bu değeri başlangıç durumu olarak kullanır.
+  */
+  const slide=activeVideoSlide();
+  if(slideVisibleMedia(slide)){
+    videoAudioStoryKey=String(slide?.dataset.storyKey||"");
+    videoAudioEnabled=next;
+    applySlideVideoAudio(slide,next);
+    queueVideoAudioUiSync();
+  }
+}
+
 function setNearDuplicateDedupEnabled(value){
   const next=Boolean(value);
   if(next===nearDuplicateDedupEnabled)return;
@@ -11204,6 +11255,7 @@ function preferenceTransferKeys(){
     WEATHER_PREFS_KEY,
     CUSTOM_RSS_STORAGE_KEY,
     NEAR_DUPLICATE_PREF_KEY,
+    VIDEO_AUDIO_DEFAULT_KEY,
     FX_RATES_VISIBLE_KEY,
     STOCK_TICKER_VISIBLE_KEY,
     STOCK_TICKER_SCALE_KEY
@@ -11299,6 +11351,7 @@ async function importPreferencesFile(file){
 function bindEnhancementUi(){
   renderCustomRssList();
   renderNearDuplicateSetting();
+  renderVideoAudioDefaultSetting();
 
   document.getElementById("duration-play")?.addEventListener("click",e=>{
     e.stopPropagation();
@@ -11313,6 +11366,11 @@ function bindEnhancementUi(){
   document.getElementById("near-duplicate-setting")?.addEventListener("click",e=>{
     e.stopPropagation();
     setNearDuplicateDedupEnabled(!nearDuplicateDedupEnabled);
+  });
+
+  document.getElementById("video-audio-default-setting")?.addEventListener("click",e=>{
+    e.stopPropagation();
+    setVideoAudioDefaultEnabled(!videoAudioDefaultEnabled);
   });
 
   document.getElementById("fx-rates-setting")?.addEventListener("click",e=>{
