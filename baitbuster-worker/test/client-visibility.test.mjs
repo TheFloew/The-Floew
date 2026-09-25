@@ -44,7 +44,7 @@ test("BaitBuster refuses to scan or post while the page is hidden",async()=>{
   );
   assert.match(
     client,
-    /async function flushQueue\(\)\s*\{[\s\S]*?!isPageVisible\(\)/
+    /async function flushLane\([^)]*\)\s*\{[\s\S]*?!isPageVisible\(\)/
   );
   assert.match(
     client,
@@ -60,7 +60,7 @@ test("BaitBuster aborts hidden-page work and resumes when visible",async()=>{
   const client=await clientSource();
   assert.match(
     client,
-    /document\.addEventListener\("visibilitychange"[\s\S]*?queued\.clear\(\)[\s\S]*?activeController\?\.abort\(\)[\s\S]*?scheduleScan\(\)/
+    /document\.addEventListener\("visibilitychange"[\s\S]*?foregroundQueue\.clear\(\)[\s\S]*?prefetchQueue\.clear\(\)[\s\S]*?requestState\.foreground\.controller\?\.abort\(\)[\s\S]*?requestState\.prefetch\.controller\?\.abort\(\)[\s\S]*?scheduleScan\(\)/
   );
 });
 
@@ -69,6 +69,6 @@ test("production and beta pages cache-bust the visibility-aware client",async()=
     readFile(new URL("../../index.html",import.meta.url),"utf8"),
     readFile(new URL("../../baitbusterbeta/index.html",import.meta.url),"utf8")
   ]);
-  assert.match(production,/js\/baitbuster-beta\.js\?v=12/);
-  assert.match(beta,/js\/baitbuster-beta\.js\?v=12/);
+  assert.match(production,/js\/baitbuster-beta\.js\?v=13/);
+  assert.match(beta,/js\/baitbuster-beta\.js\?v=13/);
 });
