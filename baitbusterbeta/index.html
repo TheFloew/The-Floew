@@ -16,7 +16,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
 <link rel="manifest" href="site.webmanifest">
 
-<link rel="stylesheet" href="css/styles.css?v=d5286daf22df">
+<link rel="stylesheet" href="css/styles.css?v=035f06500260">
 
 <style id="boot-black-style">
   html,body{background:#000}
@@ -493,6 +493,13 @@
             </span>
             <span class="media-setting-state">Açık</span>
           </button>
+          <button id="video-audio-default-setting" class="media-setting" type="button" aria-pressed="false">
+            <span>
+              <strong>Videolu haberlerde ses</strong>
+              <small>Her yeni videolu haberde sesin başlangıç durumunu belirler. Tarayıcı otomatik sesli oynatmaya izin vermezse video sessiz başlayabilir.</small>
+            </span>
+            <span class="media-setting-state">Kapalı</span>
+          </button>
           <button id="baitbuster-setting" class="media-setting" type="button" aria-pressed="true">
             <span>
               <strong>β BaitBuster</strong>
@@ -649,7 +656,7 @@
 </script>
 
 <script src="js/config.js?h=beda7fe1ea23"></script>
-<script src="js/app.js?v=92afe52795d3" onerror="
+<script src="js/app.js?v=6f2550faf8c9" onerror="
   var loader=document.getElementById('loading-screen');
   if(loader)loader.remove();
   var status=document.getElementById('status');
