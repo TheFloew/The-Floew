@@ -73,6 +73,57 @@ export function sanitizeClassificationResult(value,knownKeys){
   return out;
 }
 
+
+const MATERIAL_STOPWORDS=new Set([
+  "ve","veya","ile","bir","bu","şu","o","da","de","için","gibi","daha","çok",
+  "sonra","önce","ise","hem","ama","ancak","çünkü","ne","neden","nasıl","kim",
+  "nerede","nereye","hangi","kaç","tüm","bütün","ilk","son","yeni"
+]);
+
+const GENERIC_MATERIAL_STEMS=[
+  "açıkla","duyur","söyle","belirt","ifade","konuş","paylaş","geliş","haber",
+  "detay","olay","yap","gel","ol","belli","ortaya","iddia","açıklama"
+];
+
+function materialTokens(value){
+  const raw=String(value||"").match(/[\p{L}\p{N}]+/gu)||[];
+  return raw
+    .map(token=>({
+      raw:token,
+      normalized:token.toLocaleLowerCase("tr-TR")
+    }))
+    .filter(({raw,normalized})=>{
+      if(!normalized||MATERIAL_STOPWORDS.has(normalized))return false;
+      if(GENERIC_MATERIAL_STEMS.some(stem=>normalized.startsWith(stem)))return false;
+      if(/^\d+$/.test(normalized))return true;
+      const first=raw[0]||"";
+      const looksProper=
+        raw.length>=2 &&
+        first===first.toLocaleUpperCase("tr-TR") &&
+        first!==first.toLocaleLowerCase("tr-TR");
+      return normalized.length>=4||looksProper;
+    });
+}
+
+function rewriteHasNovelMaterial(story,flowTitle,addedInformation){
+  const original=new Set(
+    materialTokens(story?.title).map(token=>token.normalized)
+  );
+  const rewritten=new Set(
+    materialTokens(flowTitle).map(token=>token.normalized)
+  );
+
+  for(const item of addedInformation){
+    for(const token of materialTokens(item)){
+      if(
+        !original.has(token.normalized) &&
+        rewritten.has(token.normalized)
+      )return true;
+    }
+  }
+  return false;
+}
+
 export function sanitizeRewriteResult(value,story){
   const rawStatus=String(value?.rewriteStatus||"").trim();
   const requestedStatus=rawStatus==="rewritten"||rawStatus==="insufficient_content"
@@ -90,7 +141,8 @@ export function sanitizeRewriteResult(value,story){
     : [];
   const hasMaterialGain=
     informationGain>=0.35 &&
-    addedInformation.length>0;
+    addedInformation.length>0 &&
+    rewriteHasNovelMaterial(story,flowTitle,addedInformation);
   const rewriteStatus=
     requestedStatus==="rewritten" &&
     flowTitle &&
