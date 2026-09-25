@@ -2,9 +2,9 @@
   "use strict";
 
   const ENDPOINT="https://thefloew-baitbuster.thefloewback.workers.dev/v1/evaluate";
-  const CLIENT_VERSION="13";
+  const CLIENT_VERSION="14";
   const PREFETCH_COUNT=2;
-  const SCAN_DEBOUNCE_MS=180;
+  const SCAN_DEBOUNCE_MS=45;
   const FETCH_TIMEOUT_MS=20000;
   const slides=[...document.querySelectorAll("#a,#b")];
   const UI=globalThis.BaitBusterUI;
@@ -18,8 +18,8 @@
   const prefetchQueue=new Map();
   const appliedState=new WeakMap();
   const requestState={
-    foreground:{inFlight:false,controller:null},
-    prefetch:{inFlight:false,controller:null}
+    foreground:{inFlight:false,controller:null,keys:new Set()},
+    prefetch:{inFlight:false,controller:null,keys:new Set()}
   };
   let scanTimer=0;
   let featureEnabled=UI.loadEnabled(localStorage);
@@ -40,8 +40,27 @@
 
   const CLIENT_TYPE=detectClientType();
 
+  const entityDecoder=document.createElement("textarea");
+
+  function decodeHtmlEntities(value){
+    const raw=String(value||"");
+    if(!raw.includes("&"))return raw;
+
+    /*
+      BaitBuster çıktısı bazen kaynak metindeki HTML entity'lerini aynen
+      taşıyabiliyor (&ouml;, &uuml; vb.). textContent bunları yeniden
+      çözmediği için kullanıcı kodu görüyordu. '<' ve '>' önce escape
+      edilerek yalnız entity decoding yapılır; HTML çalıştırılmaz.
+    */
+    entityDecoder.innerHTML=raw
+      .replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;");
+
+    return entityDecoder.value;
+  }
+
   function clean(value){
-    return String(value||"").replace(/\s+/g," ").trim();
+    return decodeHtmlEntities(value).replace(/\s+/g," ").trim();
   }
 
   function httpUrl(value){
@@ -142,12 +161,42 @@
       }
 
       if(current){
-        prefetchQueue.delete(current.key);
+        /*
+          Görünür haber değiştiyse eski foreground isteğini bekletme.
+          Aynı şekilde yeni görünür haber bir prefetch batch'inin içindeyse
+          o batch'i iptal edip haberi tekli foreground isteğine yükselt.
+          Böylece hızlı kaydırmada eski AI çağrıları yeni manşeti 20 sn'ye
+          kadar bloke etmez.
+        */
+        const foregroundLane=requestState.foreground;
         if(
-          !pendingKeys.has(current.key) &&
-          !completedKeys.has(current.key) &&
-          !foregroundQueue.has(current.key)
+          foregroundLane.inFlight &&
+          !foregroundLane.keys.has(current.key)
         ){
+          for(const key of foregroundLane.keys)pendingKeys.delete(key);
+          foregroundLane.controller?.abort();
+        }
+
+        const prefetchLane=requestState.prefetch;
+        if(
+          prefetchLane.inFlight &&
+          prefetchLane.keys.has(current.key)
+        ){
+          pendingKeys.delete(current.key);
+          prefetchLane.controller?.abort();
+        }
+
+        prefetchQueue.delete(current.key);
+
+        if(
+          !completedKeys.has(current.key) &&
+          !foregroundQueue.has(current.key) &&
+          !(
+            requestState.foreground.inFlight &&
+            requestState.foreground.keys.has(current.key)
+          )
+        ){
+          pendingKeys.delete(current.key);
           foregroundQueue.set(current.key,current);
         }
       }
@@ -308,6 +357,7 @@
       pendingKeys.add(story.key);
     }
     lane.inFlight=true;
+    lane.keys=new Set(batch.map(story=>story.key));
 
     const controller=new AbortController();
     lane.controller=controller;
@@ -352,8 +402,18 @@
       clearTimeout(timeout);
       if(lane.controller===controller)lane.controller=null;
       lane.inFlight=false;
-      if(featureEnabled&&queue.size){
-        queueMicrotask(()=>flushLane(queue,laneName,batchSize));
+      lane.keys.clear();
+
+      if(!featureEnabled)return;
+
+      if(laneName==="foreground"){
+        if(foregroundQueue.size){
+          queueMicrotask(flushForegroundQueue);
+        }else{
+          queueMicrotask(flushPrefetchQueue);
+        }
+      }else if(prefetchQueue.size){
+        queueMicrotask(flushPrefetchQueue);
       }
     }
   }
@@ -363,6 +423,17 @@
   }
 
   function flushPrefetchQueue(){
+    /*
+      Arka plan hazırlığı görünür manşetin önüne geçmez. Foreground işi
+      varsa iki sonraki haberi taramak birkaç milisaniye bekleyebilir.
+    */
+    if(
+      requestState.foreground.inFlight ||
+      foregroundQueue.size
+    ){
+      return Promise.resolve();
+    }
+
     return flushLane(prefetchQueue,"prefetch",PREFETCH_COUNT);
   }
 
@@ -391,8 +462,15 @@
       enqueueStory(queue,story);
     }
 
-    void flushForegroundQueue();
-    void flushPrefetchQueue();
+    void flushForegroundQueue().finally(()=>{
+      if(
+        featureEnabled &&
+        !requestState.foreground.inFlight &&
+        !foregroundQueue.size
+      ){
+        void flushPrefetchQueue();
+      }
+    });
   }
 
   function scheduleScan(){
@@ -432,6 +510,8 @@
       pendingKeys.clear();
       requestState.foreground.controller?.abort();
       requestState.prefetch.controller?.abort();
+      requestState.foreground.keys.clear();
+      requestState.prefetch.keys.clear();
       restoreOriginalHeadlines();
       return;
     }
@@ -457,6 +537,8 @@
       pendingKeys.clear();
       requestState.foreground.controller?.abort();
       requestState.prefetch.controller?.abort();
+      requestState.foreground.keys.clear();
+      requestState.prefetch.keys.clear();
       return;
     }
 
