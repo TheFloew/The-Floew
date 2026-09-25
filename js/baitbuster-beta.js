@@ -409,9 +409,11 @@
     if(!featureEnabled){
       clearTimeout(scanTimer);
       scanTimer=0;
-      queued.clear();
+      foregroundQueue.clear();
+      prefetchQueue.clear();
       pendingKeys.clear();
-      activeController?.abort();
+      requestState.foreground.controller?.abort();
+      requestState.prefetch.controller?.abort();
       restoreOriginalHeadlines();
       return;
     }
@@ -432,16 +434,36 @@
     if(!isPageVisible()){
       clearTimeout(scanTimer);
       scanTimer=0;
-      queued.clear();
+      foregroundQueue.clear();
+      prefetchQueue.clear();
       pendingKeys.clear();
-      activeController?.abort();
+      requestState.foreground.controller?.abort();
+      requestState.prefetch.controller?.abort();
       return;
     }
 
     scheduleScan();
   });
 
-  const observer=new MutationObserver(scheduleScan);
+  function handleSlideMutations(records){
+    const touched=new Set();
+
+    for(const record of records){
+      const target=record?.target;
+      const element=target?.nodeType===1
+        ? target
+        : target?.parentElement;
+      const slide=element?.closest?.("#a,#b");
+      if(slide&&slides.includes(slide))touched.add(slide);
+    }
+
+    for(const slide of touched){
+      resetIfSlideReused(slide);
+    }
+    scheduleScan();
+  }
+
+  const observer=new MutationObserver(handleSlideMutations);
   for(const slide of slides){
     observer.observe(slide,{
       subtree:true,
