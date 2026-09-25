@@ -2,7 +2,7 @@
   "use strict";
 
   const ENDPOINT="https://thefloew-baitbuster.thefloewback.workers.dev/v1/evaluate";
-  const CLIENT_VERSION="14";
+  const CLIENT_VERSION="15";
   const PREFETCH_COUNT=2;
   const SCAN_DEBOUNCE_MS=45;
   const FETCH_TIMEOUT_MS=20000;
@@ -233,10 +233,20 @@
 
   function updateMarkerLabel(marker,mode){
     const title=UI.markerTitleForMode(mode);
-    marker.removeAttribute("title");
-    marker.dataset.tooltip=title;
-    marker.setAttribute("aria-label",title);
-    marker.setAttribute("aria-pressed",mode==="original"?"true":"false");
+    const pressed=mode==="original"?"true":"false";
+
+    if(marker.hasAttribute("title")){
+      marker.removeAttribute("title");
+    }
+    if(marker.dataset.tooltip!==title){
+      marker.dataset.tooltip=title;
+    }
+    if(marker.getAttribute("aria-label")!==title){
+      marker.setAttribute("aria-label",title);
+    }
+    if(marker.getAttribute("aria-pressed")!==pressed){
+      marker.setAttribute("aria-pressed",pressed);
+    }
   }
 
   function renderAppliedState(slide,state){
@@ -569,7 +579,13 @@
       subtree:true,
       childList:true,
       characterData:true,
-      attributes:true
+      attributes:true,
+      /*
+        BaitBuster'ın kendi tooltip/ARIA/data-* yazımlarını tekrar tarama
+        sebebi yapma. Akış için gerçekten anlamlı olanlar slide active class'ı,
+        story key ve source-link href değişimidir.
+      */
+      attributeFilter:["class","data-story-key","href"]
     });
   }
 
