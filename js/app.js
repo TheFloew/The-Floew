@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.80.0";
+window.__floewAppVersion="31.80.1";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -3761,21 +3761,27 @@ function syncActiveVideoAudioUi(){
   const button=document.getElementById("video-audio-toggle");
   if(!button)return;
 
+  const setAttrIfChanged=(name,value)=>{
+    if(button.getAttribute(name)!==value){
+      button.setAttribute(name,value);
+    }
+  };
+
   const slide=activeVideoSlide();
   const media=slideVisibleMedia(slide);
   const storyKey=String(slide?.dataset.storyKey||"");
 
   if(!media || !storyKey || adActive){
-    button.hidden=true;
-    button.setAttribute("aria-hidden","true");
+    if(!button.hidden)button.hidden=true;
+    setAttrIfChanged("aria-hidden","true");
     return;
   }
 
   /*
-    Ses düğmesi artık üst köşede sabit değil. Yalnız videolu haberde,
-    o haberin aksiyon satırına Flöra'nın hemen önüne taşınır.
-    Tek DOM düğmesini iki slide arasında gezdirmek, aynı id'nin çoğalmasını
-    ve gizli slide'daki bir düğmenin yanlış videoyu yönetmesini engeller.
+    Ses düğmesi yalnız aktif videolu haberin aksiyon satırında yaşar.
+    MutationObserver bu taşıma ve düğmenin kendi durum değişikliklerini
+    özellikle yok sayar; aksi halde Firefox'ta self-triggering microtask
+    döngüsü oluşup sayfayı kilitleyebiliyordu.
   */
   const actions=slide?.querySelector(".headline-actions");
   if(actions && button.parentElement!==actions){
@@ -3790,12 +3796,22 @@ function syncActiveVideoAudioUi(){
 
   applySlideVideoAudio(slide,videoAudioEnabled);
 
-  button.hidden=false;
-  button.setAttribute("aria-hidden","false");
-  button.classList.toggle("sound-on",videoAudioEnabled);
-  button.setAttribute("aria-pressed",videoAudioEnabled?"true":"false");
-  button.setAttribute("aria-label",videoAudioEnabled?"Videonun sesini kapat":"Videonun sesini aç");
-  button.title=videoAudioEnabled?"Sesi kapat":"Sesi aç";
+  if(button.hidden)button.hidden=false;
+  setAttrIfChanged("aria-hidden","false");
+
+  const shouldSoundOn=Boolean(videoAudioEnabled);
+  if(button.classList.contains("sound-on")!==shouldSoundOn){
+    button.classList.toggle("sound-on",shouldSoundOn);
+  }
+
+  setAttrIfChanged("aria-pressed",shouldSoundOn?"true":"false");
+  setAttrIfChanged(
+    "aria-label",
+    shouldSoundOn?"Videonun sesini kapat":"Videonun sesini aç"
+  );
+
+  const nextTitle=shouldSoundOn?"Sesi kapat":"Sesi aç";
+  if(button.title!==nextTitle)button.title=nextTitle;
 }
 
 function queueVideoAudioUiSync(){
@@ -3809,8 +3825,25 @@ function bindVideoAudioUi(){
   if(!button)return;
 
   const stop=e=>e.stopPropagation();
-  button.addEventListener("pointerdown",stop);
-  button.addEventListener("pointerup",stop);
+
+  for(const eventName of [
+    "pointerdown",
+    "pointerup",
+    "mousedown",
+    "mouseup",
+    "touchstart",
+    "touchend",
+    "dblclick",
+    "contextmenu",
+    "wheel"
+  ]){
+    button.addEventListener(
+      eventName,
+      stop,
+      eventName==="wheel" ? {passive:true} : {passive:false}
+    );
+  }
+
   button.addEventListener("click",e=>{
     e.preventDefault();
     e.stopPropagation();
@@ -3825,7 +3858,39 @@ function bindVideoAudioUi(){
 
   const root=document.querySelector("main");
   if(root && window.MutationObserver){
-    const observer=new MutationObserver(queueVideoAudioUiSync);
+    const observer=new MutationObserver(mutations=>{
+      for(const mutation of mutations){
+        const target=mutation.target;
+
+        /*
+          Ses düğmesini headline-actions içine taşıdığımız childList değişimi
+          ile düğmenin aria/class güncellemeleri gözlemciyi tekrar tetiklemesin.
+          Yalnız slide / medya tarafındaki gerçek görünürlük değişiklikleri
+          ses UI senkronizasyonu başlatır.
+        */
+        if(target===button || button.contains?.(target))continue;
+
+        if(mutation.type==="childList"){
+          const changedNodes=[
+            ...mutation.addedNodes,
+            ...mutation.removedNodes
+          ];
+
+          if(
+            changedNodes.some(node=>
+              node===button ||
+              (node?.nodeType===1 && node.contains?.(button))
+            )
+          ){
+            continue;
+          }
+        }
+
+        queueVideoAudioUiSync();
+        break;
+      }
+    });
+
     observer.observe(root,{
       subtree:true,
       childList:true,
