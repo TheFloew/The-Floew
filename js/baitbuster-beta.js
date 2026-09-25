@@ -118,6 +118,29 @@
 
       const start=Math.max(0,Number(state.index)||0);
       const current=storyFromStateItem(state.stories[start]);
+      const prefetched=[];
+      const end=Math.min(
+        state.stories.length,
+        start+1+PREFETCH_COUNT
+      );
+
+      for(let i=start+1;i<end;i++){
+        const story=storyFromStateItem(state.stories[i]);
+        if(story)prefetched.push(story);
+      }
+
+      const desiredForegroundKey=current?.key||"";
+      const desiredPrefetchKeys=new Set(
+        prefetched.map(story=>story.key)
+      );
+
+      for(const key of foregroundQueue.keys()){
+        if(key!==desiredForegroundKey)foregroundQueue.delete(key);
+      }
+      for(const key of prefetchQueue.keys()){
+        if(!desiredPrefetchKeys.has(key))prefetchQueue.delete(key);
+      }
+
       if(current){
         prefetchQueue.delete(current.key);
         if(
@@ -129,13 +152,8 @@
         }
       }
 
-      const end=Math.min(
-        state.stories.length,
-        start+1+PREFETCH_COUNT
-      );
-      for(let i=start+1;i<end;i++){
-        const story=storyFromStateItem(state.stories[i]);
-        if(!story||foregroundQueue.has(story.key))continue;
+      for(const story of prefetched){
+        if(foregroundQueue.has(story.key))continue;
         enqueueStory(prefetchQueue,story);
       }
       return true;
