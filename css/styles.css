@@ -5992,3 +5992,97 @@ html,body{
     line-height:40px !important;
   }
 }
+
+
+/* =====================================================================
+   V31.80.0 — video audio action lives with headline controls
+   ===================================================================== */
+
+/*
+  Ses kontrolü artık üst köşede sabit değildir. JS, yalnız videolu haberde
+  tek düğmeyi aktif slide'ın .headline-actions satırına ve Flöra'nın önüne
+  taşır. Boyut ritmi Paylaş / Geri bildirim / Kaynağa git ile aynıdır.
+*/
+.headline-actions > #video-audio-toggle{
+  position:static !important;
+  z-index:auto !important;
+  top:auto !important;
+  right:auto !important;
+  inset:auto !important;
+
+  inline-size:38px !important;
+  block-size:44px !important;
+  min-inline-size:38px !important;
+  min-block-size:44px !important;
+  max-inline-size:38px !important;
+  max-block-size:44px !important;
+
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  flex:0 0 auto !important;
+  margin:0 !important;
+  padding:0 !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  color:#fff !important;
+
+  opacity:.48;
+  filter:saturate(.55);
+  transform:none !important;
+  cursor:pointer;
+  pointer-events:auto;
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+}
+
+.headline-actions > #video-audio-toggle[hidden]{
+  display:none !important;
+}
+
+.headline-actions > #video-audio-toggle.sound-on{
+  opacity:1;
+  filter:none;
+}
+
+.headline-actions > #video-audio-toggle:hover,
+.headline-actions > #video-audio-toggle:focus-visible{
+  opacity:1;
+  transform:none !important;
+}
+
+.headline-actions > #video-audio-toggle:active{
+  transform:none !important;
+}
+
+.headline-actions > #video-audio-toggle:focus-visible{
+  outline:1px solid rgba(255,255,255,.72) !important;
+  outline-offset:3px !important;
+}
+
+.headline-actions > #video-audio-toggle .video-audio-icon{
+  display:block;
+  width:22px !important;
+  height:22px !important;
+  object-fit:contain;
+  pointer-events:none;
+  user-select:none;
+  -webkit-user-drag:none;
+}
+
+@media(max-width:700px), (pointer:coarse){
+  .headline-actions > #video-audio-toggle{
+    inline-size:40px !important;
+    block-size:48px !important;
+    min-inline-size:40px !important;
+    min-block-size:48px !important;
+    max-inline-size:40px !important;
+    max-block-size:48px !important;
+  }
+
+  .headline-actions > #video-audio-toggle .video-audio-icon{
+    width:23px !important;
+    height:23px !important;
+  }
+}
