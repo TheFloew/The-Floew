@@ -2,7 +2,9 @@
   The Flöw — BaitBuster β Worker
   Cloudflare Workers AI + KV single-file build.
   Generated from baitbuster-worker/src/*.
-*/\n\nconst RESULT_STATUSES=new Set([
+*/
+
+const RESULT_STATUSES=new Set([
   "rewritten",
   "not_clickbait",
   "insufficient_content",
@@ -208,7 +210,9 @@ export function rewrittenResult(story,classification,rewrite,modelVersion=""){
     modelVersion:String(modelVersion||"").slice(0,120),
     updatedAt:new Date().toISOString()
   };
-}\n\nconst MAX_HTML_BYTES=2*1024*1024;
+}
+
+const MAX_HTML_BYTES=2*1024*1024;
 const MAX_ARTICLE_CHARS=18000;
 const FETCH_TIMEOUT_MS=8000;
 const MAX_REDIRECTS=4;
@@ -382,7 +386,9 @@ export async function fetchArticleText(value,fetchImpl=fetch){
   }finally{
     clearTimeout(timeout);
   }
-}\n\nconst DEFAULT_MODEL="@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+}
+
+const DEFAULT_MODEL="@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const DEFAULT_GATE_MODEL="@cf/meta/llama-3.1-8b-instruct-fp8";
 const AI_TIMEOUT_MS=18000;
 export const GATE_CONFIDENCE_THRESHOLD=.95;
@@ -779,7 +785,9 @@ export async function rewriteStory(story,articleText,classification,env){
 }
 
 export const AI_MODEL_DEFAULT=DEFAULT_MODEL;
-export const AI_GATE_MODEL_DEFAULT=DEFAULT_GATE_MODEL;\n\nconst SERVICE="thefloew-baitbuster";
+export const AI_GATE_MODEL_DEFAULT=DEFAULT_GATE_MODEL;
+
+const SERVICE="thefloew-baitbuster";
 const VERSION="1.6.4";
 const ALLOWED_ORIGIN="https://xn--flw-tna.tr";
 const MAX_STORIES=12;
@@ -1072,4 +1080,4 @@ export async function handleRequest(request,env,ctx){
 
 export default {
   fetch:handleRequest
-};\n
+};
