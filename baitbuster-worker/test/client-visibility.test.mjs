@@ -18,6 +18,14 @@ test("BaitBuster gives the current story its own fast lane and prefetches only t
   assert.match(client,/flushPrefetchQueue\(\)/);
 });
 
+test("state window drops queued stories that are no longer current or next-two",async()=>{
+  const client=await clientSource();
+  assert.match(
+    client,
+    /function queueStateWindow\(\)[\s\S]*?desiredForegroundKey[\s\S]*?foregroundQueue\.delete\(key\)[\s\S]*?desiredPrefetchKeys[\s\S]*?prefetchQueue\.delete\(key\)/
+  );
+});
+
 test("state-backed priority window cannot be expanded by rendered slide fallbacks",async()=>{
   const client=await clientSource();
   assert.match(client,/const queuedFromState=queueStateWindow\(\);/);
