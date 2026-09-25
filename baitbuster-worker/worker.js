@@ -2,9 +2,7 @@
   The Flöw — BaitBuster β Worker
   Cloudflare Workers AI + KV single-file build.
   Generated from baitbuster-worker/src/*.
-*/
-
-const RESULT_STATUSES=new Set([
+*/\n\nconst RESULT_STATUSES=new Set([
   "rewritten",
   "not_clickbait",
   "insufficient_content",
@@ -79,6 +77,57 @@ export function sanitizeClassificationResult(value,knownKeys){
   return out;
 }
 
+
+const MATERIAL_STOPWORDS=new Set([
+  "ve","veya","ile","bir","bu","şu","o","da","de","için","gibi","daha","çok",
+  "sonra","önce","ise","hem","ama","ancak","çünkü","ne","neden","nasıl","kim",
+  "nerede","nereye","hangi","kaç","tüm","bütün","ilk","son","yeni"
+]);
+
+const GENERIC_MATERIAL_STEMS=[
+  "açıkla","duyur","söyle","belirt","ifade","konuş","paylaş","geliş","haber",
+  "detay","olay","yap","gel","ol","belli","ortaya","iddia","açıklama"
+];
+
+function materialTokens(value){
+  const raw=String(value||"").match(/[\p{L}\p{N}]+/gu)||[];
+  return raw
+    .map(token=>({
+      raw:token,
+      normalized:token.toLocaleLowerCase("tr-TR")
+    }))
+    .filter(({raw,normalized})=>{
+      if(!normalized||MATERIAL_STOPWORDS.has(normalized))return false;
+      if(GENERIC_MATERIAL_STEMS.some(stem=>normalized.startsWith(stem)))return false;
+      if(/^\d+$/.test(normalized))return true;
+      const first=raw[0]||"";
+      const looksProper=
+        raw.length>=2 &&
+        first===first.toLocaleUpperCase("tr-TR") &&
+        first!==first.toLocaleLowerCase("tr-TR");
+      return normalized.length>=4||looksProper;
+    });
+}
+
+function rewriteHasNovelMaterial(story,flowTitle,addedInformation){
+  const original=new Set(
+    materialTokens(story?.title).map(token=>token.normalized)
+  );
+  const rewritten=new Set(
+    materialTokens(flowTitle).map(token=>token.normalized)
+  );
+
+  for(const item of addedInformation){
+    for(const token of materialTokens(item)){
+      if(
+        !original.has(token.normalized) &&
+        rewritten.has(token.normalized)
+      )return true;
+    }
+  }
+  return false;
+}
+
 export function sanitizeRewriteResult(value,story){
   const rawStatus=String(value?.rewriteStatus||"").trim();
   const requestedStatus=rawStatus==="rewritten"||rawStatus==="insufficient_content"
@@ -96,7 +145,8 @@ export function sanitizeRewriteResult(value,story){
     : [];
   const hasMaterialGain=
     informationGain>=0.35 &&
-    addedInformation.length>0;
+    addedInformation.length>0 &&
+    rewriteHasNovelMaterial(story,flowTitle,addedInformation);
   const rewriteStatus=
     requestedStatus==="rewritten" &&
     flowTitle &&
@@ -158,9 +208,7 @@ export function rewrittenResult(story,classification,rewrite,modelVersion=""){
     modelVersion:String(modelVersion||"").slice(0,120),
     updatedAt:new Date().toISOString()
   };
-}
-
-const MAX_HTML_BYTES=2*1024*1024;
+}\n\nconst MAX_HTML_BYTES=2*1024*1024;
 const MAX_ARTICLE_CHARS=18000;
 const FETCH_TIMEOUT_MS=8000;
 const MAX_REDIRECTS=4;
@@ -334,18 +382,18 @@ export async function fetchArticleText(value,fetchImpl=fetch){
   }finally{
     clearTimeout(timeout);
   }
-}
-
-const DEFAULT_MODEL="@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+}\n\nconst DEFAULT_MODEL="@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const DEFAULT_GATE_MODEL="@cf/meta/llama-3.1-8b-instruct-fp8";
 const AI_TIMEOUT_MS=18000;
-export const GATE_CONFIDENCE_THRESHOLD=.90;
+export const GATE_CONFIDENCE_THRESHOLD=.95;
 
 const GATE_PROMPT=`Act as a conservative first-pass filter for Turkish news headlines. Your only job is to decide which headlines are so clearly informative and non-clickbait that a larger model can safely skip reviewing them.
 
-Mark clear ONLY when the headline itself states the central event or fact plainly enough that a reader understands the main news without opening the article. If the headline withholds an answer, result, identity, reason, statement, development, amount, date, or other central fact; asks a question whose answer is central; uses a teaser; is ambiguous; or you are not highly confident, mark review.
+Mark clear ONLY when the headline itself states the central event or fact plainly enough that a reader understands the main news without opening the article. Treat any open-ended or incomplete headline as review when the reader must open the article to learn the central fact. If the headline withholds an answer, result, identity, reason, statement, development, amount, date, or other central fact; asks a question whose answer is central; uses a teaser; is ambiguous; or you are not highly confident, mark review.
 
-The description may help you understand context, but do not mark a vague headline clear merely because the description contains the missing fact. When uncertain, always choose review.
+A clear headline must leave no unresolved who, what, why, where, when, or how much question that is central to the news. A headline that merely says something happened, was announced, was revealed, was said, became clear, or caused surprise without stating the substance is review.
+
+The description may help you understand context, but do not let the description rescue a vague headline. Judge whether the headline itself is sufficiently informative. When uncertain, always choose review.
 
 Return exactly one plain-text line for every supplied story and nothing else:
 key|clear|confidence
@@ -731,10 +779,8 @@ export async function rewriteStory(story,articleText,classification,env){
 }
 
 export const AI_MODEL_DEFAULT=DEFAULT_MODEL;
-export const AI_GATE_MODEL_DEFAULT=DEFAULT_GATE_MODEL;
-
-const SERVICE="thefloew-baitbuster";
-const VERSION="1.6.2";
+export const AI_GATE_MODEL_DEFAULT=DEFAULT_GATE_MODEL;\n\nconst SERVICE="thefloew-baitbuster";
+const VERSION="1.6.4";
 const ALLOWED_ORIGIN="https://xn--flw-tna.tr";
 const MAX_STORIES=12;
 const CACHE_TTL_SECONDS=30*24*60*60;
@@ -829,7 +875,7 @@ async function evaluateStories(rawStories,env,ctx){
   let cacheHits=0;
 
   await Promise.all(normalized.map(async story=>{
-    const cacheKey=`v5:${await storyCacheKey(story)}`;
+    const cacheKey=`v6:${await storyCacheKey(story)}`;
     cacheKeyByStory.set(story.key,cacheKey);
     const cached=await readCached(env,cacheKey);
     if(cached&&cached.originalTitle===story.title&&cached.key===story.key){
@@ -1026,4 +1072,4 @@ export async function handleRequest(request,env,ctx){
 
 export default {
   fetch:handleRequest
-};
+};\n
