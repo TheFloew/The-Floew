@@ -2,8 +2,8 @@
   "use strict";
 
   const ENDPOINT="https://thefloew-baitbuster.thefloewback.workers.dev/v1/evaluate";
-  const CLIENT_VERSION="12";
-  const MAX_BATCH=3;
+  const CLIENT_VERSION="13";
+  const PREFETCH_COUNT=2;
   const SCAN_DEBOUNCE_MS=180;
   const FETCH_TIMEOUT_MS=20000;
   const slides=[...document.querySelectorAll("#a,#b")];
@@ -14,11 +14,14 @@
   const pendingKeys=new Set();
   const completedKeys=new Set();
   const resultByKey=new Map();
-  const queued=new Map();
+  const foregroundQueue=new Map();
+  const prefetchQueue=new Map();
   const appliedState=new WeakMap();
+  const requestState={
+    foreground:{inFlight:false,controller:null},
+    prefetch:{inFlight:false,controller:null}
+  };
   let scanTimer=0;
-  let requestInFlight=false;
-  let activeController=null;
   let featureEnabled=UI.loadEnabled(localStorage);
 
   function isPageVisible(){
@@ -89,7 +92,22 @@
     return {key,url,title,description,source,category};
   }
 
-  function queueUpcomingStories(){
+  function storyAlreadyScheduled(key){
+    return Boolean(
+      pendingKeys.has(key) ||
+      completedKeys.has(key) ||
+      foregroundQueue.has(key) ||
+      prefetchQueue.has(key)
+    );
+  }
+
+  function enqueueStory(queue,story){
+    if(!story||storyAlreadyScheduled(story.key))return false;
+    queue.set(story.key,story);
+    return true;
+  }
+
+  function queueStateWindow(){
     try{
       if(
         typeof state==="undefined" ||
@@ -99,16 +117,26 @@
       )return false;
 
       const start=Math.max(0,Number(state.index)||0);
-      const end=Math.min(state.stories.length,start+MAX_BATCH);
-      for(let i=start;i<end;i++){
-        const story=storyFromStateItem(state.stories[i]);
-        if(!story)continue;
+      const current=storyFromStateItem(state.stories[start]);
+      if(current){
+        prefetchQueue.delete(current.key);
         if(
-          pendingKeys.has(story.key) ||
-          completedKeys.has(story.key) ||
-          queued.has(story.key)
-        )continue;
-        queued.set(story.key,story);
+          !pendingKeys.has(current.key) &&
+          !completedKeys.has(current.key) &&
+          !foregroundQueue.has(current.key)
+        ){
+          foregroundQueue.set(current.key,current);
+        }
+      }
+
+      const end=Math.min(
+        state.stories.length,
+        start+1+PREFETCH_COUNT
+      );
+      for(let i=start+1;i<end;i++){
+        const story=storyFromStateItem(state.stories[i]);
+        if(!story||foregroundQueue.has(story.key))continue;
+        enqueueStory(prefetchQueue,story);
       }
       return true;
     }catch{
@@ -247,17 +275,24 @@
     for(const slide of slides)applyResultToSlide(slide,result);
   }
 
-  async function flushQueue(){
-    if(!featureEnabled||!isPageVisible()||requestInFlight||!queued.size)return;
-    const batch=[...queued.values()].slice(0,MAX_BATCH);
+  async function flushLane(queue,laneName,batchSize){
+    const lane=requestState[laneName];
+    if(
+      !featureEnabled ||
+      !isPageVisible() ||
+      lane.inFlight ||
+      !queue.size
+    )return;
+
+    const batch=[...queue.values()].slice(0,batchSize);
     for(const story of batch){
-      queued.delete(story.key);
+      queue.delete(story.key);
       pendingKeys.add(story.key);
     }
-    requestInFlight=true;
+    lane.inFlight=true;
 
     const controller=new AbortController();
-    activeController=controller;
+    lane.controller=controller;
     const timeout=setTimeout(()=>controller.abort(),FETCH_TIMEOUT_MS);
     try{
       const response=await fetch(ENDPOINT,{
@@ -297,16 +332,26 @@
       for(const story of batch)pendingKeys.delete(story.key);
     }finally{
       clearTimeout(timeout);
-      if(activeController===controller)activeController=null;
-      requestInFlight=false;
-      if(featureEnabled&&queued.size)queueMicrotask(flushQueue);
+      if(lane.controller===controller)lane.controller=null;
+      lane.inFlight=false;
+      if(featureEnabled&&queue.size){
+        queueMicrotask(()=>flushLane(queue,laneName,batchSize));
+      }
     }
+  }
+
+  function flushForegroundQueue(){
+    return flushLane(foregroundQueue,"foreground",1);
+  }
+
+  function flushPrefetchQueue(){
+    return flushLane(prefetchQueue,"prefetch",PREFETCH_COUNT);
   }
 
   function scanSlides(){
     scanTimer=0;
     if(!featureEnabled||!isPageVisible())return;
-    const queuedFromState=queueUpcomingStories();
+    const queuedFromState=queueStateWindow();
 
     for(const slide of slides){
       resetIfSlideReused(slide);
@@ -320,17 +365,16 @@
       }
 
       if(queuedFromState)continue;
+      if(storyAlreadyScheduled(story.key))continue;
 
-      if(
-        pendingKeys.has(story.key) ||
-        completedKeys.has(story.key) ||
-        queued.has(story.key)
-      )continue;
-
-      queued.set(story.key,story);
+      const queue=slide.classList.contains("active")
+        ? foregroundQueue
+        : prefetchQueue;
+      enqueueStory(queue,story);
     }
 
-    void flushQueue();
+    void flushForegroundQueue();
+    void flushPrefetchQueue();
   }
 
   function scheduleScan(){
