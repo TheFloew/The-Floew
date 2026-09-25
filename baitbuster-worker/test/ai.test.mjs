@@ -10,7 +10,7 @@ test("8B gate skips 70B only for clearly non-clickbait headlines at the confiden
       async run(model,input){
         calls.push({model,input});
         if(model!==AI_GATE_MODEL_DEFAULT)throw new Error("70B should not run");
-        return {response:"0|clear|0.90"};
+        return {response:"0|clear|0.95"};
       }
     }
   };
@@ -24,7 +24,7 @@ test("8B gate skips 70B only for clearly non-clickbait headlines at the confiden
     category:"Gündem"
   }],env);
 
-  assert.equal(GATE_CONFIDENCE_THRESHOLD,.90);
+  assert.equal(GATE_CONFIDENCE_THRESHOLD,.95);
   assert.equal(rows.length,1);
   assert.equal(rows[0].clickbait,false);
   assert.equal(rows[0].reasonCode,"clear_headline_8b_gate");
@@ -38,7 +38,7 @@ test("8B gate escalates uncertain clear headlines to the 70B classifier",async()
     AI:{
       async run(model,input){
         calls.push(model);
-        if(model===AI_GATE_MODEL_DEFAULT)return {response:"0|clear|0.89"};
+        if(model===AI_GATE_MODEL_DEFAULT)return {response:"0|clear|0.94"};
         const payload=JSON.parse(input.messages[1].content);
         return {response:{results:[{
           key:payload.stories[0].key,
@@ -240,6 +240,14 @@ test("8B gate evaluates the full incoming batch in one compact request",async()=
   assert.equal(rows.length,9);
   assert.equal(calls.length,1);
   assert.equal(JSON.parse(calls[0].input.messages[1].content).stories.length,9);
+});
+
+test("8B gate prompt treats open-ended incomplete headlines as review",async()=>{
+  const source=await readFile(new URL("../src/ai.js",import.meta.url),"utf8");
+  assert.match(source,/open-ended or incomplete/i);
+  assert.match(source,/reader must open the article/i);
+  assert.match(source,/unresolved who, what, why, where, when, or how much/i);
+  assert.match(source,/do not let the description rescue/i);
 });
 
 test("classification policy treats unanswered question-form headlines as information gaps",async()=>{
