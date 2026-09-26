@@ -8214,7 +8214,7 @@ function nextStoryIndexForPreload(){
   return index;
 }
 
-function scheduleNextStoryPreload(delay=70){
+function scheduleNextStoryPreload(delay=40){
   clearTimeout(nextStoryPreloadTimer);
 
   nextStoryPreloadTimer=setTimeout(()=>{
@@ -8226,75 +8226,50 @@ function scheduleNextStoryPreload(delay=70){
     const story=state.stories[index];
     const fromKey=storyIdentity(state.stories[state.index]);
     const targetKey=storyIdentity(story);
-
-    /* Video URL/player çözümü ile ağ ısınmasını arka planda başlat. */
-    preloadStoryAssets(story);
+    const inactiveSlide=slides[1-state.active];
 
     /*
-      Görsel decode olunca pasif slaytı da önceden doldur. Geçiş anında aynı
-      hedef hâlâ sıradaysa fill/decode beklemeden doğrudan animasyona girer.
+      v31.81 — "Preload" artık yalnız resmi indirmek anlamına gelmiyor.
+      BaitBuster + Flöra + son görsel URL'si + akıllı odak + video çözümü,
+      hepsi standby slide görünmeden önce tamamlanır.
     */
-    preloadImage(story.image).then(()=>{
+    void prepareStorySlide(
+      inactiveSlide,
+      story,
+      {preloadMedia:true,markPreloaded:true}
+    ).then(ready=>{
+      if(!ready)return;
+
       if(
         adActive ||
         state.busy ||
+        slides[1-state.active]!==inactiveSlide ||
         storyIdentity(state.stories[state.index])!==fromKey ||
         storyIdentity(state.stories[index])!==targetKey
-      ) return;
+      ){
+        if(inactiveSlide.dataset.storyKey===mediaKey(story)){
+          inactiveSlide.removeAttribute("data-preloaded-story-key");
+        }
+        return;
+      }
 
-      const inactiveSlide=slides[1-state.active];
-      fill(inactiveSlide,story,{prepareMedia:false});
       inactiveSlide.className="slide";
 
       /*
-        Sıradaki haber ekrana gelmeden önce video da pasif slaytta gerçekten
-        yüklenip sessiz şekilde oynatılmaya başlar. Geçişte aynı medya instance'ı
-        korunur; ikinci kez player oluşturulmaz.
+        Bir sonraki seçimi de yalnız veri katmanında erkenden ısıt.
+        İkinci standby slide olmadığı için DOM'a dokunmuyoruz.
       */
-      if(videoEnabled){
-        prepareSlideMedia(inactiveSlide,story,{preload:true}).catch(()=>{});
-      }
-
-      const image=inactiveSlide.querySelector(".slide-image");
-
-      const cleanupReady=()=>{
-        image?.removeEventListener("load",markReady);
-        image?.removeEventListener("error",markReady);
-      };
-
-      const markReady=async()=>{
-        /* setStoryImage ilk thumbnail yüklenince daha iyi article-proxy'ye
-           geçebilir. O anda img.complete tekrar false olur; son URL gerçekten
-           hazır olana kadar bu listener yaşamaya devam eder. */
-        await Promise.resolve();
-        if(image && (!image.complete || !image.naturalWidth))return;
-
-        if(image?.decode){
-          try{await image.decode();}catch(e){}
-        }
-
-        if(
-          adActive ||
-          state.busy ||
-          slides[1-state.active]!==inactiveSlide ||
-          storyIdentity(state.stories[state.index])!==fromKey ||
-          storyIdentity(state.stories[index])!==targetKey
-        ){
-          cleanupReady();
-          return;
-        }
-
-        inactiveSlide.dataset.preloadedStoryKey=targetKey;
-        cleanupReady();
-      };
-
-      image?.addEventListener("load",markReady);
-      image?.addEventListener("error",markReady);
-      markReady();
+      try{
+        const nextAfter=index+1<state.stories.length
+          ? state.stories[index+1]
+          : null;
+        globalThis.BaitBusterBeta?.prefetchStories?.(
+          nextAfter?[nextAfter]:[]
+        );
+      }catch(e){}
     }).catch(()=>{});
   },Math.max(0,delay));
 }
-
 
 function findAdHistoryStopAtBefore(){
   if(adActive || !adHistoryStops.length)return null;
