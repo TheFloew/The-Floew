@@ -1916,25 +1916,10 @@ function setSlideFloraScore(el,story){
   );
 
   /*
-    v31.79.7 — Flöra skorlarını bütün site için 5 dakikada bir 5000'lik
-    toplu sorguyla çekmek yerine yalnız gerçekten ekrana gelen haber için
-    iste. /stats/flora-story story_key indeksini kullanır ve istemci cache'i
-    aynı haberi tekrar istemeyi engeller. Görsel davranış değişmez; skor
-    hazır olduğunda mevcut buton sessizce güncellenir.
+    v31.81 — Görünür haber artık arka plandaki Flöra cevabı geldiğinde
+    değişmez. Skor isteği tam hazırlık aşamasında, haber ekrana girmeden önce
+    yapılır. Bu fonksiyon yalnız eldeki snapshot'ı render eder.
   */
-  if(
-    key &&
-    !story?.customRss &&
-    !hasScore &&
-    !floraStoryRequestCache.has(key) &&
-    Number(floraStoryMissingUntil.get(key)||0)<=Date.now()
-  ){
-    loadFloraStoryStats(story)
-      .then(stats=>{
-        if(stats)refreshVisibleFloraScores();
-      })
-      .catch(()=>{});
-  }
 }
 
 function refreshVisibleFloraScores(){
@@ -2042,7 +2027,10 @@ async function loadInlineFloraScores(force=false){
       }
 
       floraScoresLoadedAt=Date.now();
-      refreshVisibleFloraScores();
+      /*
+        Toplu skor yenilemesi yalnız cache'i tazeler. Görünür slide sabittir;
+        yeni değer bir sonraki hazırlanan haberde kullanılır.
+      */
     }
   }catch(error){
     console.warn(
@@ -5566,19 +5554,24 @@ async function lockSmartFocalPointForTransition(img,story){
 }
 
 function applySmartFocalPoint(img,story){
-  if(!img)return;
+  if(!img)return Promise.resolve(null);
 
   const focalKey=
     `${mediaKey(story)}|${String(story?.image||"").trim()}`;
 
-  if(img.dataset.focalLockedKey===focalKey)return;
+  if(img.dataset.focalLockedKey===focalKey){
+    return Promise.resolve(
+      smartFocalResolvedCache.has(focalKey)
+        ? smartFocalResolvedCache.get(focalKey)
+        : null
+    );
+  }
 
   /*
-    Görünür/ilk slide için de sonucu sonsuza kadar beklemeyiz.
-    En geç 520 ms'de merkez kilitlenir; geç gelen analiz sonucu ekrandaki
-    görseli sonradan kaydırmaz.
+    Odak çözümünü promise olarak saklıyoruz. Tam hazırlık kapısı bu promise'i
+    beklediği için haber görünür olduktan sonra object-position değişmez.
   */
-  void lockSmartFocalPoint(
+  return lockSmartFocalPoint(
     img,
     story,
     SMART_FOCAL_LOCK_TIMEOUT_MS
@@ -5608,6 +5601,7 @@ function setStoryImage(img,story){
   img.style.objectPosition="50% 50%";
   img.dataset.focalKey="";
   img.dataset.focalLockedKey="";
+  img.__floewFocalPromise=null;
   img.dataset.imageResolveKey=imageResolveKey;
 
   if(!direct){
@@ -5639,7 +5633,8 @@ function setStoryImage(img,story){
     }
 
     img.style.visibility="visible";
-    applySmartFocalPoint(img,focalStory);
+    img.__floewFocalPromise=
+      applySmartFocalPoint(img,focalStory);
   };
 
   img.onerror=()=>{
