@@ -5983,7 +5983,7 @@ function clearBaitBusterPresentationFallback(el,story){
   }
 }
 
-async function prepareStorySlide(
+async function prepareStorySlideInternal(
   el,
   story,
   {
@@ -6105,6 +6105,43 @@ async function prepareStorySlide(
   }
 
   return true;
+}
+
+function prepareStorySlide(el,story,options={}){
+  if(!el||!story)return Promise.resolve(false);
+
+  const identity=storyIdentity(story);
+  const mediaIdentity=mediaKey(story);
+  const prepKey=`${identity}|${mediaIdentity}`;
+
+  if(
+    el.dataset.preloadedStoryKey===identity &&
+    el.dataset.storyKey===mediaIdentity
+  ){
+    return Promise.resolve(true);
+  }
+
+  if(
+    el.__floewPreparationKey===prepKey &&
+    el.__floewPreparationPromise
+  ){
+    return el.__floewPreparationPromise;
+  }
+
+  const promise=prepareStorySlideInternal(
+    el,
+    story,
+    options
+  ).finally(()=>{
+    if(el.__floewPreparationPromise===promise){
+      el.__floewPreparationPromise=null;
+      el.__floewPreparationKey="";
+    }
+  });
+
+  el.__floewPreparationKey=prepKey;
+  el.__floewPreparationPromise=promise;
+  return promise;
 }
 
 function slidePreloadedForStory(el,story){
