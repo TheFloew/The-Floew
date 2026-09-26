@@ -5958,15 +5958,43 @@ async function waitForSlideImageStable(el,story,timeoutMs=9000){
   }
 
   /*
-    Süre dolarsa görünür olduktan sonra yeni bir URL'ye sıçramasın. O ana
-    kadar ulaşılan en son geçerli görsel snapshot'ı korunur.
+    Süre dolarsa geç gelen Sputnik/article çözümü görünür haberi artık
+    değiştiremez. Geçerli bir kare yoksa son çare olarak mevcut RSS görselinin
+    Worker proxy'sini yükleyip onu snapshot olarak dondur.
   */
+  image.dataset.imageResolveKey=
+    `frozen-${Date.now().toString(36)}`;
+
   if(image.complete&&image.naturalWidth>0){
     image.onload=null;
     image.onerror=null;
     return true;
   }
 
+  const fallback=
+    storyImageProxyUrl(story) ||
+    String(story?.image||"").trim();
+
+  if(fallback){
+    image.onload=null;
+    image.onerror=null;
+    image.dataset.imageStage="stable-fallback";
+    image.src=fallback;
+
+    const fallbackDeadline=performance.now()+2800;
+
+    while(performance.now()<fallbackDeadline){
+      if(image.complete&&image.naturalWidth>0){
+        if(image.decode){
+          try{await image.decode()}catch(e){}
+        }
+        return true;
+      }
+      await waitForImageSignal(image,90);
+    }
+  }
+
+  image.style.visibility="hidden";
   return false;
 }
 
@@ -6049,11 +6077,11 @@ async function prepareStorySlideInternal(
     videoEnabled &&
     preloadMedia
   )
-    ? settleWithin(
-        prepareSlideMedia(el,story,{preload:true}),
-        8000,
-        null
-      )
+    ? prepareSlideMedia(
+        el,
+        story,
+        {preload:true}
+      ).catch(()=>null)
     : Promise.resolve(null);
 
   const [
