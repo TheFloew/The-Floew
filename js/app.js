@@ -15040,9 +15040,10 @@ function prepareTouchFeedDragTarget(direction){
   if(
     touchFeedDragActive &&
     touchFeedDragDirection===direction &&
-    touchFeedDragTargetMode
+    touchFeedDragTargetMode &&
+    touchFeedDragTargetIndex>=0
   ){
-    return touchFeedDragTargetIndex>=0;
+    return true;
   }
 
   const target=touchFeedDragTarget(direction);
