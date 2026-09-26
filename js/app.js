@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.80.2";
+window.__floewAppVersion="31.81.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -42,7 +42,7 @@ const FEED_ORDER_KEY="thefloew.feedOrder.v1";
 const RECENT_SEEN_KEY="thefloew.recentSeen.v1";
 const RECENT_SEEN_TTL_MS=6*60*60*1000;
 const RECENT_SEEN_MAX=300;
-const ALGO_TOP_CANDIDATES=6;
+const ALGO_TOP_CANDIDATES=12;
 const ALGO_SESSION_SEED=`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`;
 const KEYWORD_FILTER_KEY="thefloew.keywordFilter.v1";
 const KEYWORD_WATCH_KEY="thefloew.keywordWatch.v1";
@@ -71,11 +71,13 @@ const CUSTOM_RSS_FALLBACK_IMAGE="assets/defaultrss.jpg";
   tekrar etmesini azaltır. Kronolojik mod bu kurala hiçbir zaman girmez.
 */
 const NEAR_DUPLICATE_PREF_KEY="thefloew.nearDuplicateDedup.v1";
-const NEAR_DUPLICATE_WINDOW_MS=8*60*60*1000;
-const NEAR_DUPLICATE_HISTORY_DEPTH=20;
-const NEAR_DUPLICATE_MIN_COMMON_TOKENS=3;
-const NEAR_DUPLICATE_OVERLAP_THRESHOLD=.70;
-const NEAR_DUPLICATE_JACCARD_THRESHOLD=.38;
+const NEAR_DUPLICATE_WINDOW_MS=24*60*60*1000;
+const NEAR_DUPLICATE_HISTORY_DEPTH=24;
+const NEAR_DUPLICATE_MIN_COMMON_TOKENS=2;
+const NEAR_DUPLICATE_OVERLAP_THRESHOLD=.62;
+const NEAR_DUPLICATE_JACCARD_THRESHOLD=.30;
+const NEAR_DUPLICATE_HARD_GAP=6;
+const NEAR_DUPLICATE_SOFT_GAP=12;
 const REFRESH_MS=120000;
 const SWIPE=44;
 const TOUCH_DRAG_START_PX=7;
@@ -1386,6 +1388,16 @@ function exactDuplicateSignature(story){
   return source && title ? `${source}|${title}` : "";
 }
 
+function contentDuplicateSignature(story){
+  if(!story)return "";
+  return normalizeText(story.title||"")
+    .replace(/ı/g,"i")
+    .replace(/(\d)[.,](\d)/g,"$1$2")
+    .replace(/[^a-z0-9]+/g," ")
+    .replace(/\s+/g," ")
+    .trim();
+}
+
 function pruneRecentSeenEntries(entries){
   const now=Date.now();
   return Object.entries(entries||{})
@@ -1410,6 +1422,7 @@ function loadRecentSeenStories(){
 const recentSeenStories=loadRecentSeenStories();
 const sessionSeenStories=new Set();
 const sessionSeenStorySignatures=new Set();
+const sessionSeenContentSignatures=new Set();
 
 function saveRecentSeenStories(){
   try{
@@ -1434,6 +1447,8 @@ function rememberSeenStory(story){
   sessionSeenStories.add(key);
   const signature=exactDuplicateSignature(story);
   if(signature)sessionSeenStorySignatures.add(signature);
+  const contentSignature=contentDuplicateSignature(story);
+  if(contentSignature)sessionSeenContentSignatures.add(contentSignature);
   recentSeenStories.set(key,now);
   saveRecentSeenStories();
 }
