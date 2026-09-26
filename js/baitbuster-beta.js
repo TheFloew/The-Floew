@@ -2,31 +2,20 @@
   "use strict";
 
   const ENDPOINT="https://thefloew-baitbuster.thefloewback.workers.dev/v1/evaluate";
-  const CLIENT_VERSION="15";
-  const PREFETCH_COUNT=2;
-  const SCAN_DEBOUNCE_MS=45;
-  const FETCH_TIMEOUT_MS=20000;
-  const slides=[...document.querySelectorAll("#a,#b")];
+  const CLIENT_VERSION="16";
+  const FETCH_TIMEOUT_MS=12000;
   const UI=globalThis.BaitBusterUI;
   const settingButton=document.getElementById("baitbuster-setting");
-  if(!slides.length||!UI)return;
+  const slides=[...document.querySelectorAll("#a,#b")];
 
-  const pendingKeys=new Set();
-  const completedKeys=new Set();
+  if(!UI)return;
+
+  const entityDecoder=document.createElement("textarea");
   const resultByKey=new Map();
-  const foregroundQueue=new Map();
-  const prefetchQueue=new Map();
+  const requestByKey=new Map();
   const appliedState=new WeakMap();
-  const requestState={
-    foreground:{inFlight:false,controller:null,keys:new Set()},
-    prefetch:{inFlight:false,controller:null,keys:new Set()}
-  };
-  let scanTimer=0;
   let featureEnabled=UI.loadEnabled(localStorage);
-
-  function isPageVisible(){
-    return document.visibilityState==="visible";
-  }
+  let lastError="";
 
   function detectClientType(){
     const ua=String(navigator.userAgent||"");
@@ -40,18 +29,10 @@
 
   const CLIENT_TYPE=detectClientType();
 
-  const entityDecoder=document.createElement("textarea");
-
   function decodeHtmlEntities(value){
     const raw=String(value||"");
     if(!raw.includes("&"))return raw;
 
-    /*
-      BaitBuster çıktısı bazen kaynak metindeki HTML entity'lerini aynen
-      taşıyabiliyor (&ouml;, &uuml; vb.). textContent bunları yeniden
-      çözmediği için kullanıcı kodu görüyordu. '<' ve '>' önce escape
-      edilerek yalnız entity decoding yapılır; HTML çalıştırılmaz.
-    */
     entityDecoder.innerHTML=raw
       .replace(/</g,"&lt;")
       .replace(/>/g,"&gt;");
@@ -60,7 +41,9 @@
   }
 
   function clean(value){
-    return decodeHtmlEntities(value).replace(/\s+/g," ").trim();
+    return decodeHtmlEntities(value)
+      .replace(/\s+/g," ")
+      .trim();
   }
 
   function httpUrl(value){
@@ -68,179 +51,38 @@
       const url=new URL(String(value||""),location.href);
       if(url.protocol!=="https:"&&url.protocol!=="http:")return "";
       return url.href;
-    }catch{return "";}
-  }
-
-  function markerFor(slide){
-    return slide.querySelector(".baitbuster-rewrite-mark");
-  }
-
-  function clearRewritePresentation(slide){
-    const heading=slide.querySelector("h1");
-    if(heading){
-      delete heading.dataset.baitbusterOriginalTitle;
-      delete heading.dataset.baitbusterApplied;
-    }
-    markerFor(slide)?.remove();
-    appliedState.delete(slide);
-  }
-
-  function resetIfSlideReused(slide){
-    const state=appliedState.get(slide);
-    if(!state)return;
-    const heading=slide.querySelector("h1");
-    const rawHref=slide.querySelector(".source-link")?.getAttribute("href")||"";
-    const currentUrl=httpUrl(rawHref);
-    const currentHeading=clean(heading?.textContent);
-    const expectedHeading=clean(UI.headlineForMode(state,state.mode));
-
-    if(currentUrl!==state.url||currentHeading!==expectedHeading){
-      clearRewritePresentation(slide);
+    }catch{
+      return "";
     }
   }
 
-  function storyFromStateItem(item){
+  function normalizeStory(item){
     if(!item||typeof item!=="object")return null;
+
     const title=clean(item.title);
     const url=httpUrl(item.link||item.url);
     if(!title||!url)return null;
+
     const description=clean(item.description||item.summary);
     const source=clean(item.source);
     const category=clean(item.flowCategory||item.category);
     const key=`${url}|${title}`.slice(0,900);
-    return {key,url,title,description,source,category};
-  }
-
-  function storyAlreadyScheduled(key){
-    return Boolean(
-      pendingKeys.has(key) ||
-      completedKeys.has(key) ||
-      foregroundQueue.has(key) ||
-      prefetchQueue.has(key)
-    );
-  }
-
-  function enqueueStory(queue,story){
-    if(!story||storyAlreadyScheduled(story.key))return false;
-    queue.set(story.key,story);
-    return true;
-  }
-
-  function queueStateWindow(){
-    try{
-      if(
-        typeof state==="undefined" ||
-        !state ||
-        !Array.isArray(state.stories) ||
-        !state.stories.length
-      )return false;
-
-      const start=Math.max(0,Number(state.index)||0);
-      const current=storyFromStateItem(state.stories[start]);
-      const prefetched=[];
-      const end=Math.min(
-        state.stories.length,
-        start+1+PREFETCH_COUNT
-      );
-
-      for(let i=start+1;i<end;i++){
-        const story=storyFromStateItem(state.stories[i]);
-        if(story)prefetched.push(story);
-      }
-
-      const desiredForegroundKey=current?.key||"";
-      const desiredPrefetchKeys=new Set(
-        prefetched.map(story=>story.key)
-      );
-
-      for(const key of foregroundQueue.keys()){
-        if(key!==desiredForegroundKey)foregroundQueue.delete(key);
-      }
-      for(const key of prefetchQueue.keys()){
-        if(!desiredPrefetchKeys.has(key))prefetchQueue.delete(key);
-      }
-
-      if(current){
-        /*
-          Görünür haber değiştiyse eski foreground isteğini bekletme.
-          Aynı şekilde yeni görünür haber bir prefetch batch'inin içindeyse
-          o batch'i iptal edip haberi tekli foreground isteğine yükselt.
-          Böylece hızlı kaydırmada eski AI çağrıları yeni manşeti 20 sn'ye
-          kadar bloke etmez.
-        */
-        const foregroundLane=requestState.foreground;
-        if(
-          foregroundLane.inFlight &&
-          !foregroundLane.keys.has(current.key)
-        ){
-          for(const key of foregroundLane.keys)pendingKeys.delete(key);
-          foregroundLane.controller?.abort();
-        }
-
-        const prefetchLane=requestState.prefetch;
-        if(
-          prefetchLane.inFlight &&
-          prefetchLane.keys.has(current.key)
-        ){
-          pendingKeys.delete(current.key);
-          prefetchLane.controller?.abort();
-        }
-
-        prefetchQueue.delete(current.key);
-
-        if(
-          !completedKeys.has(current.key) &&
-          !foregroundQueue.has(current.key) &&
-          !(
-            requestState.foreground.inFlight &&
-            requestState.foreground.keys.has(current.key)
-          )
-        ){
-          pendingKeys.delete(current.key);
-          foregroundQueue.set(current.key,current);
-        }
-      }
-
-      for(const story of prefetched){
-        if(foregroundQueue.has(story.key))continue;
-        enqueueStory(prefetchQueue,story);
-      }
-      return true;
-    }catch{
-      return false;
-    }
-  }
-
-  function readSlideStory(slide){
-    const heading=slide.querySelector("h1");
-    if(!heading)return null;
-
-    const title=clean(
-      heading.dataset.baitbusterOriginalTitle||heading.textContent
-    );
-    const rawHref=slide.querySelector(".source-link")?.getAttribute("href")||"";
-    if(!rawHref||rawHref==="#")return null;
-    const url=httpUrl(rawHref);
-    if(!title||!url)return null;
-
-    const description=clean(slide.querySelector(".description")?.textContent);
-    const source=clean(slide.querySelector(".source")?.textContent);
-    const category=clean(slide.querySelector(".category")?.textContent);
-    const key=`${url}|${title}`.slice(0,900);
 
     return {key,url,title,description,source,category};
+  }
+
+  function markerFor(slide){
+    return slide?.querySelector?.(".baitbuster-rewrite-mark")||null;
   }
 
   function updateMarkerLabel(marker,mode){
+    if(!marker)return;
+
     const title=UI.markerTitleForMode(mode);
     const pressed=mode==="original"?"true":"false";
 
-    if(marker.hasAttribute("title")){
-      marker.removeAttribute("title");
-    }
-    if(marker.dataset.tooltip!==title){
-      marker.dataset.tooltip=title;
-    }
+    if(marker.hasAttribute("title"))marker.removeAttribute("title");
+    if(marker.dataset.tooltip!==title)marker.dataset.tooltip=title;
     if(marker.getAttribute("aria-label")!==title){
       marker.setAttribute("aria-label",title);
     }
@@ -249,40 +91,82 @@
     }
   }
 
-  function renderAppliedState(slide,state){
-    const heading=slide.querySelector("h1");
-    if(!heading)return;
+  function clearSlide(slide,{restore=true}={}){
+    if(!slide)return;
 
-    heading.dataset.baitbusterOriginalTitle=state.originalTitle;
-    heading.dataset.baitbusterApplied="1";
-    heading.textContent=UI.headlineForMode(state,state.mode);
+    const current=appliedState.get(slide);
+    const heading=slide.querySelector("h1");
+
+    if(restore&&current&&heading){
+      heading.textContent=current.originalTitle;
+    }
+
+    if(heading){
+      delete heading.dataset.baitbusterOriginalTitle;
+      delete heading.dataset.baitbusterApplied;
+    }
 
     markerFor(slide)?.remove();
+    appliedState.delete(slide);
+  }
+
+  function renderResult(slide,story,result){
+    if(!slide||!story)return false;
+
+    clearSlide(slide,{restore:false});
+
+    const heading=slide.querySelector("h1");
+    if(!heading)return false;
+
+    if(
+      !featureEnabled ||
+      result?.rewriteStatus!=="rewritten" ||
+      !clean(result.flowTitle)
+    ){
+      heading.textContent=story.title;
+      return false;
+    }
+
+    const flowTitle=clean(result.flowTitle);
+    const stateForSlide={
+      key:story.key,
+      url:story.url,
+      originalTitle:story.title,
+      flowTitle,
+      mode:"ai"
+    };
+
+    appliedState.set(slide,stateForSlide);
+    heading.dataset.baitbusterOriginalTitle=story.title;
+    heading.dataset.baitbusterApplied="1";
+    heading.textContent=flowTitle;
+
     const marker=document.createElement("button");
     marker.type="button";
     marker.className="baitbuster-rewrite-mark";
     marker.textContent=UI.markerText();
-    updateMarkerLabel(marker,state.mode);
+    updateMarkerLabel(marker,stateForSlide.mode);
 
-    const stopGesture=event=>{
-      event.stopPropagation();
-    };
-    const beginPress=event=>{
-      event.stopPropagation();
+    const stop=event=>event.stopPropagation();
+
+    marker.addEventListener("pointerdown",event=>{
+      stop(event);
       marker.classList.add("is-pressing");
-      try{marker.setPointerCapture?.(event.pointerId);}catch{}
-    };
-    const endPress=event=>{
+      try{marker.setPointerCapture?.(event.pointerId)}catch{}
+    });
+
+    marker.addEventListener("pointercancel",event=>{
+      stop(event);
       marker.classList.remove("is-pressing");
-      try{
-        if(marker.hasPointerCapture?.(event.pointerId)){
-          marker.releasePointerCapture?.(event.pointerId);
-        }
-      }catch{}
-    };
-    const toggleHeadline=event=>{
-      endPress(event);
+    });
+
+    marker.addEventListener("lostpointercapture",()=>{
+      marker.classList.remove("is-pressing");
+    });
+
+    const toggle=event=>{
       UI.stopNavigationEvent(event);
+      marker.classList.remove("is-pressing");
 
       const current=appliedState.get(slide);
       if(!current)return;
@@ -292,86 +176,23 @@
       updateMarkerLabel(marker,current.mode);
     };
 
-    marker.addEventListener("pointerdown",beginPress);
-    marker.addEventListener("pointerup",toggleHeadline);
-    marker.addEventListener("pointercancel",event=>{
-      stopGesture(event);
-      endPress(event);
-    });
-    marker.addEventListener("lostpointercapture",()=>marker.classList.remove("is-pressing"));
-    marker.addEventListener("touchstart",event=>event.stopPropagation(),{passive:true});
-    marker.addEventListener("touchend",event=>event.stopPropagation(),{passive:true});
-    marker.addEventListener("click",event=>{
-      UI.stopNavigationEvent(event);
-    });
+    marker.addEventListener("pointerup",toggle);
+    marker.addEventListener("click",event=>UI.stopNavigationEvent(event));
+    marker.addEventListener("touchstart",stop,{passive:true});
+    marker.addEventListener("touchend",stop,{passive:true});
     marker.addEventListener("keydown",event=>{
       if(event.key!=="Enter"&&event.key!==" ")return;
-      toggleHeadline(event);
+      toggle(event);
     });
 
     heading.insertAdjacentElement("beforebegin",marker);
+    return true;
   }
 
-  function applyResultToSlide(slide,result){
-    if(result?.rewriteStatus!=="rewritten"||!clean(result.flowTitle))return;
-    resetIfSlideReused(slide);
-    const story=readSlideStory(slide);
-    if(!story||story.key!==result.key)return;
-
-    const flowTitle=clean(result.flowTitle);
-    const previous=appliedState.get(slide);
-    const existingMarker=markerFor(slide);
-
-    if(UI.canReusePresentation(previous,story,flowTitle,Boolean(existingMarker))){
-      const heading=slide.querySelector("h1");
-      if(heading){
-        const expectedTitle=UI.headlineForMode(previous,previous.mode);
-        if(clean(heading.textContent)!==clean(expectedTitle)){
-          heading.textContent=expectedTitle;
-        }
-      }
-      updateMarkerLabel(existingMarker,previous.mode);
-      return;
-    }
-
-    const stateForSlide={
-      key:story.key,
-      url:story.url,
-      originalTitle:story.title,
-      flowTitle,
-      mode:previous?.key===story.key
-        ? previous.mode
-        : "ai"
-    };
-
-    appliedState.set(slide,stateForSlide);
-    renderAppliedState(slide,stateForSlide);
-  }
-
-  function applyResult(result){
-    for(const slide of slides)applyResultToSlide(slide,result);
-  }
-
-  async function flushLane(queue,laneName,batchSize){
-    const lane=requestState[laneName];
-    if(
-      !featureEnabled ||
-      !isPageVisible() ||
-      lane.inFlight ||
-      !queue.size
-    )return;
-
-    const batch=[...queue.values()].slice(0,batchSize);
-    for(const story of batch){
-      queue.delete(story.key);
-      pendingKeys.add(story.key);
-    }
-    lane.inFlight=true;
-    lane.keys=new Set(batch.map(story=>story.key));
-
+  async function requestStory(story){
     const controller=new AbortController();
-    lane.controller=controller;
     const timeout=setTimeout(()=>controller.abort(),FETCH_TIMEOUT_MS);
+
     try{
       const response=await fetch(ENDPOINT,{
         method:"POST",
@@ -384,210 +205,163 @@
           "X-BaitBuster-Client":CLIENT_TYPE,
           "X-BaitBuster-Version":CLIENT_VERSION
         },
-        body:JSON.stringify({stories:batch})
+        body:JSON.stringify({stories:[story]})
       });
-      if(!response.ok)throw new Error(`baitbuster_http_${response.status}`);
+
+      if(!response.ok){
+        throw new Error(`baitbuster_http_${response.status}`);
+      }
+
       const payload=await response.json();
-      if(!featureEnabled||!isPageVisible())return;
+
       if(payload?.ok!==true||!Array.isArray(payload.results)){
         throw new Error("baitbuster_invalid_response");
       }
 
-      const returned=new Set();
-      for(const result of payload.results){
-        const key=clean(result?.key);
-        if(!key)continue;
-        returned.add(key);
-        pendingKeys.delete(key);
-        completedKeys.add(key);
-        resultByKey.set(key,result);
-        applyResult(result);
+      const result=payload.results.find(row=>clean(row?.key)===story.key)||
+        payload.results[0]||
+        null;
+
+      if(!result){
+        throw new Error("baitbuster_missing_result");
       }
-      for(const story of batch){
-        if(!returned.has(story.key))pendingKeys.delete(story.key);
+
+      if(result.flowTitle){
+        result.flowTitle=clean(result.flowTitle);
       }
-    }catch{
-      for(const story of batch)pendingKeys.delete(story.key);
+
+      lastError="";
+      resultByKey.set(story.key,result);
+      return result;
+    }catch(error){
+      lastError=String(error?.message||error||"baitbuster_error");
+      console.warn("BaitBuster:",lastError);
+      throw error;
     }finally{
       clearTimeout(timeout);
-      if(lane.controller===controller)lane.controller=null;
-      lane.inFlight=false;
-      lane.keys.clear();
-
-      if(!featureEnabled)return;
-
-      if(laneName==="foreground"){
-        if(foregroundQueue.size){
-          queueMicrotask(flushForegroundQueue);
-        }else{
-          queueMicrotask(flushPrefetchQueue);
-        }
-      }else if(prefetchQueue.size){
-        queueMicrotask(flushPrefetchQueue);
-      }
     }
   }
 
-  function flushForegroundQueue(){
-    return flushLane(foregroundQueue,"foreground",1);
-  }
+  function prepareStory(rawStory){
+    if(!featureEnabled)return Promise.resolve(null);
 
-  function flushPrefetchQueue(){
-    /*
-      Arka plan hazırlığı görünür manşetin önüne geçmez. Foreground işi
-      varsa iki sonraki haberi taramak birkaç milisaniye bekleyebilir.
-    */
-    if(
-      requestState.foreground.inFlight ||
-      foregroundQueue.size
-    ){
-      return Promise.resolve();
+    const story=normalizeStory(rawStory);
+    if(!story)return Promise.resolve(null);
+
+    if(resultByKey.has(story.key)){
+      return Promise.resolve(resultByKey.get(story.key));
     }
 
-    return flushLane(prefetchQueue,"prefetch",PREFETCH_COUNT);
-  }
-
-  function scanSlides(){
-    scanTimer=0;
-    if(!featureEnabled||!isPageVisible())return;
-    const queuedFromState=queueStateWindow();
-
-    for(const slide of slides){
-      resetIfSlideReused(slide);
-      const story=readSlideStory(slide);
-      if(!story)continue;
-
-      const cachedResult=resultByKey.get(story.key);
-      if(cachedResult){
-        applyResultToSlide(slide,cachedResult);
-        continue;
-      }
-
-      if(queuedFromState)continue;
-      if(storyAlreadyScheduled(story.key))continue;
-
-      const queue=slide.classList.contains("active")
-        ? foregroundQueue
-        : prefetchQueue;
-      enqueueStory(queue,story);
+    if(requestByKey.has(story.key)){
+      return requestByKey.get(story.key);
     }
 
-    void flushForegroundQueue().finally(()=>{
-      if(
-        featureEnabled &&
-        !requestState.foreground.inFlight &&
-        !foregroundQueue.size
-      ){
-        void flushPrefetchQueue();
-      }
-    });
+    const promise=requestStory(story)
+      .finally(()=>{
+        requestByKey.delete(story.key);
+      });
+
+    requestByKey.set(story.key,promise);
+    return promise;
   }
 
-  function scheduleScan(){
-    clearTimeout(scanTimer);
-    if(!featureEnabled||!isPageVisible())return;
-    scanTimer=setTimeout(scanSlides,SCAN_DEBOUNCE_MS);
+  function applyToSlide(slide,rawStory,result){
+    const story=normalizeStory(rawStory);
+    if(!story){
+      clearSlide(slide,{restore:false});
+      return false;
+    }
+
+    const resolved=
+      result ||
+      resultByKey.get(story.key) ||
+      null;
+
+    return renderResult(slide,story,resolved);
   }
 
-  function restoreOriginalHeadlines(){
-    for(const slide of slides){
-      const current=appliedState.get(slide);
-      const heading=slide.querySelector("h1");
-      if(current&&heading){
-        heading.textContent=current.originalTitle;
-      }
-      clearRewritePresentation(slide);
+  async function prepareAndApply(slide,rawStory){
+    const story=normalizeStory(rawStory);
+    if(!story){
+      clearSlide(slide,{restore:false});
+      return null;
+    }
+
+    let result=null;
+    try{
+      result=await prepareStory(story);
+    }catch{
+      result=null;
+    }
+
+    applyToSlide(slide,story,result);
+    return result;
+  }
+
+  function prefetchStories(items){
+    if(!featureEnabled||!Array.isArray(items))return;
+
+    for(const item of items.slice(0,2)){
+      void prepareStory(item).catch(()=>{});
     }
   }
 
   function syncSettingButton(){
     if(!settingButton)return;
+
     settingButton.classList.toggle("active",featureEnabled);
-    settingButton.setAttribute("aria-pressed",featureEnabled?"true":"false");
+    settingButton.setAttribute(
+      "aria-pressed",
+      featureEnabled?"true":"false"
+    );
+
     const stateEl=settingButton.querySelector(".media-setting-state");
     if(stateEl)stateEl.textContent=UI.settingLabel(featureEnabled);
   }
 
-  function setFeatureEnabled(enabled){
-    featureEnabled=UI.saveEnabled(localStorage,Boolean(enabled));
+  function setEnabled(value){
+    featureEnabled=UI.saveEnabled(localStorage,Boolean(value));
     syncSettingButton();
 
+    /*
+      Aktif haber sistem tarafından sonradan değiştirilmez. Ayar değişikliği
+      yalnız sonraki hazırlanan haberlere uygulanır. Kapatırken mevcut AI
+      sunumu ise kullanıcı tercihini anında geri almak için orijinale döner.
+    */
     if(!featureEnabled){
-      clearTimeout(scanTimer);
-      scanTimer=0;
-      foregroundQueue.clear();
-      prefetchQueue.clear();
-      pendingKeys.clear();
-      requestState.foreground.controller?.abort();
-      requestState.prefetch.controller?.abort();
-      requestState.foreground.keys.clear();
-      requestState.prefetch.keys.clear();
-      restoreOriginalHeadlines();
-      return;
+      for(const slide of slides)clearSlide(slide,{restore:true});
     }
 
-    scheduleScan();
+    window.dispatchEvent(
+      new CustomEvent("floew:baitbuster-setting-changed",{
+        detail:{enabled:featureEnabled}
+      })
+    );
   }
 
   settingButton?.addEventListener("click",event=>{
     event.preventDefault();
     event.stopPropagation();
-    setFeatureEnabled(!featureEnabled);
+    setEnabled(!featureEnabled);
   });
+
   syncSettingButton();
 
-  document.addEventListener("visibilitychange",()=>{
-    if(!featureEnabled)return;
+  globalThis.BaitBusterBeta={
+    version:CLIENT_VERSION,
+    isEnabled:()=>featureEnabled,
+    prepareStory,
+    prepareAndApply,
+    applyToSlide,
+    prefetchStories,
+    clearSlide,
+    normalizeStory,
+    getResult:rawStory=>{
+      const story=normalizeStory(rawStory);
+      return story?resultByKey.get(story.key)||null:null;
+    },
+    getLastError:()=>lastError
+  };
 
-    if(!isPageVisible()){
-      clearTimeout(scanTimer);
-      scanTimer=0;
-      foregroundQueue.clear();
-      prefetchQueue.clear();
-      pendingKeys.clear();
-      requestState.foreground.controller?.abort();
-      requestState.prefetch.controller?.abort();
-      requestState.foreground.keys.clear();
-      requestState.prefetch.keys.clear();
-      return;
-    }
-
-    scheduleScan();
-  });
-
-  function handleSlideMutations(records){
-    const touched=new Set();
-
-    for(const record of records){
-      const target=record?.target;
-      const element=target?.nodeType===1
-        ? target
-        : target?.parentElement;
-      const slide=element?.closest?.("#a,#b");
-      if(slide&&slides.includes(slide))touched.add(slide);
-    }
-
-    for(const slide of touched){
-      resetIfSlideReused(slide);
-    }
-    scheduleScan();
-  }
-
-  const observer=new MutationObserver(handleSlideMutations);
-  for(const slide of slides){
-    observer.observe(slide,{
-      subtree:true,
-      childList:true,
-      characterData:true,
-      attributes:true,
-      /*
-        BaitBuster'ın kendi tooltip/ARIA/data-* yazımlarını tekrar tarama
-        sebebi yapma. Akış için gerçekten anlamlı olanlar slide active class'ı,
-        story key ve source-link href değişimidir.
-      */
-      attributeFilter:["class","data-story-key","href"]
-    });
-  }
-
-  if(featureEnabled)scheduleScan();
+  window.dispatchEvent(new Event("floew:baitbuster-ready"));
 })();
