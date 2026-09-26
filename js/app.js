@@ -2691,19 +2691,10 @@ async function switchFeedMode(nextMode){
   state.busy=true;
   clearTimeout(state.timer);
 
-  /* Dikey haber geçişindeki hazırlık sırasını yatay akış geçişine de uygula:
-     hedef görsel decode ve odak noktası hazır olmadan animasyonu başlatma. */
-  try{await preloadImage(nextStory.image)}catch(e){}
-  preloadStoryAssets(nextStory);
-  prepareTransitionSlide(nextSlide,nextStory);
-
-  const nextImage=nextSlide.querySelector(".slide-image");
-  if(nextImage?.decode){
-    try{await nextImage.decode()}catch(e){}
-  }
-  if(nextImage){
-    await lockSmartFocalPointForTransition(nextImage,nextStory);
-  }
+  /*
+    Yatay sekme değişiminde de aynı tam hazırlık kapısını kullan.
+  */
+  await prepareTransitionSlide(nextSlide,nextStory);
 
   feedModeStoryKeys[feedMode]=storyIdentity(currentStory);
   feedMode=next;
@@ -2753,6 +2744,7 @@ async function switchFeedMode(nextMode){
     renderOptions();
     timer();
     scheduleAdjacentFeedPreload(120);
+    scheduleNextStoryPreload(0);
   };
 
   nextSlide.addEventListener("animationend",finish,{once:true});
@@ -8547,23 +8539,11 @@ async function transitionFromAdTo(nextIndex,fromHistory,dir=1){
   const nextSlide=slides[1-state.active];
   const story=state.stories[nextIndex];
 
-  if(!slidePreloadedForStory(nextSlide,story)){
-    await preloadImage(story.image);
-  }
-  preloadStoryAssets(story);
-  prepareTransitionSlide(nextSlide,story);
-
-  const nextImage=nextSlide.querySelector(".slide-image");
-  if(nextImage?.decode){
-    try{await nextImage.decode();}catch(e){}
-  }
-
-  if(nextImage){
-    await lockSmartFocalPointForTransition(
-      nextImage,
-      story
-    );
-  }
+  /*
+    Reklam çıkışında da hedef haber görünmeden önce tam hazırlanır.
+    Hazır standby varsa ağ/AI işi tekrar edilmez.
+  */
+  await prepareTransitionSlide(nextSlide,story);
 
   nextSlide.className="slide";
   clearFlowTransitionClasses(adOverlay);
@@ -8668,54 +8648,21 @@ async function transitionTo(nextIndex,fromHistory,dir){
   state.busy=true;
   clearTimeout(state.timer);
 
-  const currentSlide=
-    slides[state.active];
-
-  const nextSlide=
-    slides[1-state.active];
-
-  const story=
-    state.stories[nextIndex];
+  const currentSlide=slides[state.active];
+  const nextSlide=slides[1-state.active];
+  const story=state.stories[nextIndex];
 
   /*
-    Yeni görsel tamamen hazır olmadan animasyonu başlatma.
-    Böylece geçiş sırasında alttaki/eski görsel görünmez.
+    Tek geçiş kapısı: hedef haber BaitBuster, Flöra, son görsel, odak ve
+    medya hazırlığını bitirmeden animasyon sınıfı bile alamaz.
   */
-  if(!slidePreloadedForStory(nextSlide,story)){
-    await preloadImage(story.image);
-  }
-  preloadStoryAssets(story);
-
-  prepareTransitionSlide(nextSlide,story);
-
-  const nextImage=
-    nextSlide.querySelector(".slide-image");
-
-  if(nextImage.decode){
-    try{
-      await nextImage.decode();
-    }catch(e){}
-  }
-
-  if(nextImage){
-    await lockSmartFocalPointForTransition(
-      nextImage,
-      story
-    );
-  }
+  await prepareTransitionSlide(nextSlide,story);
 
   currentSlide.className="slide";
   nextSlide.className="slide";
 
   void nextSlide.offsetWidth;
 
-  /*
-    dir > 0 = sonraki haber:
-      yeni haber aşağıdan yukarı gelir.
-
-    dir < 0 = önceki haber:
-      yeni haber yukarıdan aşağı gelir.
-  */
   const [enterClass,exitClass]=transitionPair(dir);
 
   startPiPTransition(
@@ -8728,32 +8675,25 @@ async function transitionTo(nextIndex,fromHistory,dir){
   currentSlide.classList.add(exitClass);
   activateSlideMedia(nextSlide,story);
 
-  nextSlide.addEventListener(
-    "animationend",
-    ()=>{
-      nextSlide.className="slide active";
-      currentSlide.className="slide";
-      stopSlideMedia(currentSlide);
+  await waitForFlowAnimation(nextSlide);
 
-      state.active=
-        1-state.active;
+  nextSlide.className="slide active";
+  currentSlide.className="slide";
+  stopSlideMedia(currentSlide);
 
-      state.index=
-        nextIndex;
+  state.active=1-state.active;
+  state.index=nextIndex;
+  updateKeywordAlert(story);
 
-      updateKeywordAlert(story);
+  if(dir>0){
+    newsShownSinceAd++;
+    maybeScheduleUpcomingAdPreload();
+  }
 
-      if(dir>0){
-        newsShownSinceAd++;
-        maybeScheduleUpcomingAdPreload();
-      }
+  state.busy=false;
 
-      state.busy=false;
-
-      timerAfterLikelyMediaWarmup(nextSlide,story);
-    },
-    {once:true}
-  );
+  timer();
+  scheduleNextStoryPreload(0);
 }
 
 
@@ -9443,15 +9383,25 @@ async function performNewsLoad(){
       state.historyPos=0;
       adHistoryStops=[];
       historicalAdContext=null;
-      preloadImage(list[0].image).catch(()=>{});
-      fill(slides[0],list[0],{prepareMedia:false});
+
+      /*
+        İlk haber de loading perdesinin arkasında tam hazırlanır. Kullanıcı
+        sayfayı ilk gördüğünde başlık/görsel/skor sonradan değişmez.
+      */
+      await prepareStorySlide(
+        slides[0],
+        list[0],
+        {preloadMedia:true,markPreloaded:true}
+      );
+
       slides[0].className="slide active";
       activateSlideMedia(slides[0],list[0]);
       updateKeywordAlert(list[0]);
       newsShownSinceAd=1;
       clearStatus();
-      void finishInitialLoadingAfterVisual(slides[0]);
-      timerAfterLikelyMediaWarmup(slides[0],list[0]);
+      finishInitialLoading();
+      timer();
+      scheduleNextStoryPreload(0);
 
       if(usedInitialCacheSnapshot || usedInitialNetworkFastPass){
         const refreshLive=()=>setTimeout(()=>load(),260);
