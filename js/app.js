@@ -9494,6 +9494,25 @@ async function performNewsLoad(){
       if(signature)nextSignatures.add(signature);
     }
 
+    /*
+      Periyodik haber yenilemesi görünür haberi asla değiştirmez. Aktif haber
+      yeni RSS snapshot'ından düşmüş olsa bile oturum bitene/geçiş yapılana
+      kadar history-only snapshot olarak korunur.
+    */
+    if(currentStory){
+      const currentKey=storyIdentity(currentStory);
+      const currentSignature=exactDuplicateSignature(currentStory);
+
+      if(
+        !(currentKey && nextKeys.has(currentKey)) &&
+        !(currentSignature && nextSignatures.has(currentSignature))
+      ){
+        nextStories.push({...currentStory,_historyOnly:true});
+        if(currentKey)nextKeys.add(currentKey);
+        if(currentSignature)nextSignatures.add(currentSignature);
+      }
+    }
+
     state.stories=nextStories;
     plannedForwardStory=null;
 
@@ -9620,9 +9639,13 @@ async function performNewsLoad(){
     }
 
     if(currentChanged){
-      fill(slides[state.active],state.stories[state.index]);
-      slides[state.active].className="slide active";
-      activateSlideMedia(slides[state.active],state.stories[state.index]);
+      /*
+        Normalde yukarıdaki snapshot koruması nedeniyle buraya girilmez.
+        Olağan dışı bir durumda görünür slide'ı sessizce yeniden yazmak
+        yerine mevcut görüntüyü koru; yeni state bir sonraki gerçek geçişte
+        hazırlanarak ekrana gelir.
+      */
+      console.warn("Flöw refresh preserved visible slide despite remap fallback.");
     }
 
     updateKeywordAlert(state.stories[state.index]);
