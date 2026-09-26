@@ -5843,6 +5843,278 @@ function activateSlideMedia(el,story){
   prepareSlideMedia(el,story);
 }
 
+let baitbusterClientWaitPromise=null;
+
+function waitForBaitBusterClient(timeoutMs=1800){
+  if(globalThis.BaitBusterBeta){
+    return Promise.resolve(globalThis.BaitBusterBeta);
+  }
+
+  if(baitbusterClientWaitPromise)return baitbusterClientWaitPromise;
+
+  baitbusterClientWaitPromise=new Promise(resolve=>{
+    let settled=false;
+
+    const finish=()=>{
+      if(settled)return;
+      settled=true;
+      clearTimeout(timeout);
+      window.removeEventListener("floew:baitbuster-ready",onReady);
+      resolve(globalThis.BaitBusterBeta||null);
+    };
+
+    const onReady=()=>finish();
+    const timeout=setTimeout(finish,Math.max(0,timeoutMs));
+
+    window.addEventListener(
+      "floew:baitbuster-ready",
+      onReady,
+      {once:true}
+    );
+  }).finally(()=>{
+    baitbusterClientWaitPromise=null;
+  });
+
+  return baitbusterClientWaitPromise;
+}
+
+function settleWithin(promise,timeoutMs,fallback=null){
+  return Promise.race([
+    Promise.resolve(promise).catch(()=>fallback),
+    new Promise(resolve=>
+      setTimeout(()=>resolve(fallback),Math.max(0,timeoutMs))
+    )
+  ]);
+}
+
+function waitForImageSignal(image,waitMs=90){
+  return new Promise(resolve=>{
+    let done=false;
+
+    const finish=()=>{
+      if(done)return;
+      done=true;
+      clearTimeout(timer);
+      image?.removeEventListener?.("load",finish);
+      image?.removeEventListener?.("error",finish);
+      resolve();
+    };
+
+    const timer=setTimeout(finish,waitMs);
+    image?.addEventListener?.("load",finish,{once:true});
+    image?.addEventListener?.("error",finish,{once:true});
+  });
+}
+
+async function waitForSlideImageStable(el,story,timeoutMs=9000){
+  const image=el?.querySelector?.(".slide-image");
+  if(!image)return true;
+
+  if(!String(story?.image||"").trim()){
+    return true;
+  }
+
+  const deadline=performance.now()+Math.max(500,timeoutMs);
+
+  while(performance.now()<deadline){
+    await Promise.resolve();
+
+    const stage=String(image.dataset.imageStage||"");
+
+    if(stage==="failed")return false;
+
+    if(
+      stage!=="sputnik-resolving" &&
+      image.complete &&
+      image.naturalWidth>0
+    ){
+      const srcBefore=image.currentSrc||image.src||"";
+      const stageBefore=stage;
+
+      if(image.decode){
+        try{await image.decode()}catch(e){}
+      }
+
+      const focalPromise=image.__floewFocalPromise;
+      if(focalPromise){
+        await settleWithin(
+          focalPromise,
+          SMART_FOCAL_LOCK_TIMEOUT_MS+180,
+          null
+        );
+      }
+
+      await new Promise(resolve=>
+        requestAnimationFrame(()=>resolve())
+      );
+
+      const srcAfter=image.currentSrc||image.src||"";
+      const stageAfter=String(image.dataset.imageStage||"");
+
+      if(
+        image.complete &&
+        image.naturalWidth>0 &&
+        srcAfter===srcBefore &&
+        stageAfter===stageBefore &&
+        stageAfter!=="sputnik-resolving"
+      ){
+        return true;
+      }
+    }
+
+    await waitForImageSignal(image,80);
+  }
+
+  /*
+    Süre dolarsa görünür olduktan sonra yeni bir URL'ye sıçramasın. O ana
+    kadar ulaşılan en son geçerli görsel snapshot'ı korunur.
+  */
+  if(image.complete&&image.naturalWidth>0){
+    image.onload=null;
+    image.onerror=null;
+    return true;
+  }
+
+  return false;
+}
+
+function clearBaitBusterPresentationFallback(el,story){
+  if(!el)return;
+
+  el.querySelector(".baitbuster-rewrite-mark")?.remove();
+
+  const heading=el.querySelector("h1");
+  if(heading){
+    heading.textContent=story?.title||"";
+    delete heading.dataset.baitbusterOriginalTitle;
+    delete heading.dataset.baitbusterApplied;
+  }
+}
+
+async function prepareStorySlide(
+  el,
+  story,
+  {
+    preloadMedia=true,
+    markPreloaded=true
+  }={}
+){
+  if(!el||!story)return false;
+
+  const identity=storyIdentity(story);
+  const mediaIdentity=mediaKey(story);
+
+  if(
+    markPreloaded &&
+    el.dataset.preloadedStoryKey===identity &&
+    el.dataset.storyKey===mediaIdentity
+  ){
+    return true;
+  }
+
+  /*
+    Önce bütün işlemleri görünmeyen slide üzerinde başlat. Bundan sonra
+    BaitBuster, Flöra, görsel/odak ve video hazırlığı paralel yürür.
+  */
+  fill(el,story,{prepareMedia:false});
+  el.className="slide";
+
+  const baitbusterTask=(async()=>{
+    const api=await waitForBaitBusterClient();
+
+    if(!api?.isEnabled?.()){
+      return {api,result:null};
+    }
+
+    const result=await settleWithin(
+      api.prepareStory(story),
+      12500,
+      null
+    );
+
+    return {api,result};
+  })();
+
+  const floraTask=(
+    story?.customRss ||
+    floraScoreMap.has(identity) ||
+    Number(floraStoryMissingUntil.get(identity)||0)>Date.now()
+  )
+    ? Promise.resolve(null)
+    : settleWithin(
+        loadFloraStoryStats(story),
+        5000,
+        null
+      );
+
+  const imageTask=waitForSlideImageStable(
+    el,
+    story,
+    9000
+  );
+
+  const mediaTask=(
+    videoEnabled &&
+    preloadMedia
+  )
+    ? settleWithin(
+        prepareSlideMedia(el,story,{preload:true}),
+        8000,
+        null
+      )
+    : Promise.resolve(null);
+
+  const [
+    baitbusterPrepared
+  ]=await Promise.all([
+    baitbusterTask,
+    floraTask,
+    imageTask,
+    mediaTask
+  ]);
+
+  /*
+    Bu sırada aynı standby slide başka bir hedef için yeniden kullanılmışsa
+    eski asenkron hazırlık kesinlikle yeni habere dokunmasın.
+  */
+  if(el.dataset.storyKey!==mediaIdentity){
+    return false;
+  }
+
+  setSlideFloraScore(el,story);
+
+  if(baitbusterPrepared?.api){
+    baitbusterPrepared.api.applyToSlide(
+      el,
+      story,
+      baitbusterPrepared.result
+    );
+  }else{
+    clearBaitBusterPresentationFallback(el,story);
+  }
+
+  /*
+    Son DOM yazımlarını da görünür olmadan bitir. Bundan sonra kullanıcı
+    kendisi β düğmesine basmadıkça başlık/görsel/skor sistem tarafından
+    değişmez.
+  */
+  await new Promise(resolve=>
+    requestAnimationFrame(()=>
+      requestAnimationFrame(resolve)
+    )
+  );
+
+  if(el.dataset.storyKey!==mediaIdentity){
+    return false;
+  }
+
+  if(markPreloaded){
+    el.dataset.preloadedStoryKey=identity;
+  }
+
+  return true;
+}
+
 function slidePreloadedForStory(el,story){
   return Boolean(
     el &&
@@ -5852,11 +6124,15 @@ function slidePreloadedForStory(el,story){
   );
 }
 
-function prepareTransitionSlide(el,story){
+async function prepareTransitionSlide(el,story){
   if(!slidePreloadedForStory(el,story)){
-    fill(el,story,{prepareMedia:false});
+    await prepareStorySlide(
+      el,
+      story,
+      {preloadMedia:true,markPreloaded:true}
+    );
   }
-  el?.removeAttribute("data-preloaded-story-key");
+  return slidePreloadedForStory(el,story);
 }
 
 
