@@ -14470,15 +14470,22 @@ function prepareTouchAdDragTarget(direction){
       ? slides[state.active]
       : slides[1-state.active];
 
-  if(target.index!==state.index){
-    preloadStoryAssets(story);
-    preloadImage(story.image).catch(()=>{});
-    prepareTransitionSlide(targetSlide,story);
+  if(
+    target.index!==state.index &&
+    !slidePreloadedForStory(targetSlide,story)
+  ){
+    void prepareStorySlide(
+      targetSlide,
+      story,
+      {preloadMedia:true,markPreloaded:true}
+    ).catch(()=>{});
 
-    const image=targetSlide.querySelector(".slide-image");
-    if(image){
-      lockSmartFocalPoint(image,story,180).catch(()=>{});
-    }
+    /*
+      Parmağın altına yarım hazırlanmış haber sokma. Hazırlık sonraki pointer
+      hareketine yetişirse normal sürükleme başlar; yetişmezse mevcut haber
+      hafif direnç gösterir.
+    */
+    return false;
   }
 
   touchAdDragActive=true;
@@ -14652,7 +14659,7 @@ async function finalizeCommittedAdDragToStory(nextIndex,dir=1){
 
   if(nextIndex!==state.index){
     if(!slidePreloadedForStory(targetSlide,story)){
-      prepareTransitionSlide(targetSlide,story);
+      await prepareTransitionSlide(targetSlide,story);
     }
     targetSlide.className="slide active";
     previousSlide.className="slide";
@@ -14763,13 +14770,18 @@ function prepareTouchDragTarget(direction){
   clearTimeout(state.timer);
   state.timer=null;
 
-  preloadStoryAssets(story);
-  preloadImage(story.image).catch(()=>{});
-  prepareTransitionSlide(standby,story);
+  if(!slidePreloadedForStory(standby,story)){
+    void prepareStorySlide(
+      standby,
+      story,
+      {preloadMedia:true,markPreloaded:true}
+    ).catch(()=>{});
 
-  const image=standby.querySelector(".slide-image");
-  if(image){
-    lockSmartFocalPoint(image,story,180).catch(()=>{});
+    state.touchDragTargetIndex=-1;
+    state.touchDragFromHistory=false;
+    standby.className="slide touch-dragging";
+    slides[state.active].classList.add("touch-dragging");
+    return false;
   }
 
   standby.className="slide touch-dragging";
@@ -15053,13 +15065,18 @@ function prepareTouchFeedDragTarget(direction){
   touchFeedDragTargetIndex=target.index;
 
   const story=target.list[target.index];
-  preloadStoryAssets(story);
-  preloadImage(story.image).catch(()=>{});
-  prepareTransitionSlide(standby,story);
 
-  const image=standby.querySelector(".slide-image");
-  if(image){
-    lockSmartFocalPoint(image,story,180).catch(()=>{});
+  if(!slidePreloadedForStory(standby,story)){
+    void prepareStorySlide(
+      standby,
+      story,
+      {preloadMedia:true,markPreloaded:true}
+    ).catch(()=>{});
+
+    touchFeedDragTargetIndex=-1;
+    standby.className="slide touch-dragging";
+    slides[state.active].classList.add("touch-dragging");
+    return false;
   }
 
   standby.className="slide touch-dragging";
