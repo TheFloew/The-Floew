@@ -5988,6 +5988,8 @@ async function waitForSlideImageStable(el,story,timeoutMs=9000){
         if(image.decode){
           try{await image.decode()}catch(e){}
         }
+        image.style.visibility="visible";
+        image.style.objectPosition="50% 50%";
         return true;
       }
       await waitForImageSignal(image,90);
@@ -8654,6 +8656,7 @@ async function transitionFromAdTo(nextIndex,fromHistory,dir=1){
   state.busy=false;
 
   timer();
+  scheduleNextStoryPreload(0);
 }
 
 async function transitionAdBackToCurrent(dir=-1){
@@ -14737,6 +14740,7 @@ async function finalizeCommittedAdDragToStory(nextIndex,dir=1){
   resetTouchAdDragState();
   state.busy=false;
   timer();
+  scheduleNextStoryPreload(0);
   return true;
 }
 
