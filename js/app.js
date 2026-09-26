@@ -7502,16 +7502,25 @@ function nearDuplicateTokens(story){
 function areNearDuplicateStories(a,b){
   if(!a || !b)return false;
 
-  const sourceA=sourceKey(a.source);
-  const sourceB=sourceKey(b.source);
+  const contentA=contentDuplicateSignature(a);
+  const contentB=contentDuplicateSignature(b);
 
-  /* Özellik yalnız farklı kaynakların aynı olayı tekrar etmesini hedefler. */
-  if(!sourceA || !sourceB || sourceA===sourceB)return false;
+  /*
+    Kaynaktan bağımsız aynı normalize başlık doğrudan aynı haber kabul edilir.
+    Aynı yayıncının URL varyasyonları da bu yolla birkaç haber sonra tekrar
+    seçilemez.
+  */
+  if(contentA && contentA===contentB)return true;
 
   const timeA=storyPublishedMs(a);
   const timeB=storyPublishedMs(b);
-  if(!timeA || !timeB)return false;
-  if(Math.abs(timeA-timeB)>NEAR_DUPLICATE_WINDOW_MS)return false;
+  if(
+    timeA &&
+    timeB &&
+    Math.abs(timeA-timeB)>NEAR_DUPLICATE_WINDOW_MS
+  ){
+    return false;
+  }
 
   const tokensA=nearDuplicateTokens(a);
   const tokensB=nearDuplicateTokens(b);
@@ -7532,18 +7541,77 @@ function areNearDuplicateStories(a,b){
   const union=tokensA.length+tokensB.length-common;
   const overlap=smaller ? common/smaller : 0;
   const jaccard=union ? common/union : 0;
+  const sameSource=sourceKey(a.source)===sourceKey(b.source);
 
   /*
-    Dört veya daha fazla ortak anlamlı kelime varsa farklı haber sitelerinin
-    başlığa eklediği kısa editoryal parçalar yüzünden Jaccard'ı biraz daha
-    toleranslı tut. Üç ortak kelimede ise daha sıkı eşik korunur.
+    Kısa başlıklarda iki ayırt edici ortak kelime bile aynı olay için güçlü
+    sinyaldir. Aynı kaynakta eşikleri ayrıca biraz düşürüyoruz; yayıncıların
+    aynı haberi başlığı hafif oynatarak yeniden servis etmesi sık görülüyor.
   */
   if(common>=4){
-    return overlap>=.60 && jaccard>=.32;
+    return overlap>=.54 && jaccard>=.26;
+  }
+
+  if(common===3){
+    return overlap>=.60 && jaccard>=.30;
+  }
+
+  if(common===2){
+    if(smaller<=4){
+      return overlap>=.72 && jaccard>=.42;
+    }
+
+    if(sameSource){
+      return overlap>=.60 && jaccard>=.34;
+    }
   }
 
   return overlap>=NEAR_DUPLICATE_OVERLAP_THRESHOLD &&
     jaccard>=NEAR_DUPLICATE_JACCARD_THRESHOLD;
+}
+
+function nearDuplicateSpacingPenalty(story,recentStories=[]){
+  if(!story||!recentStories.length)return 0;
+
+  const storyKey=storyIdentity(story);
+  const contentSignature=contentDuplicateSignature(story);
+  let penalty=0;
+
+  for(let i=0;i<recentStories.length;i++){
+    const previous=recentStories[i];
+    if(!previous)continue;
+
+    const distance=i+1;
+    const exact=
+      storyKey &&
+      storyKey===storyIdentity(previous);
+
+    const sameContent=
+      contentSignature &&
+      contentSignature===contentDuplicateSignature(previous);
+
+    if(exact||sameContent){
+      return 10000;
+    }
+
+    if(!areNearDuplicateStories(story,previous))continue;
+
+    if(distance<=NEAR_DUPLICATE_HARD_GAP){
+      penalty=Math.max(
+        penalty,
+        1800-(distance-1)*180
+      );
+    }else if(distance<=NEAR_DUPLICATE_SOFT_GAP){
+      penalty=Math.max(
+        penalty,
+        520-(distance-NEAR_DUPLICATE_HARD_GAP-1)*55
+      );
+    }else{
+      penalty=Math.max(penalty,90);
+    }
+  }
+
+  return penalty;
 }
 
 function recentStoriesForNearDuplicateCheck(){
@@ -7620,37 +7688,49 @@ function chooseForwardCandidate(){
   const unseen=candidates.filter(item=>{
     const key=storyIdentity(item.story);
     const signature=exactDuplicateSignature(item.story);
+    const contentSignature=contentDuplicateSignature(item.story);
+
     return !sessionSeenStories.has(key) &&
-      (!signature || !sessionSeenStorySignatures.has(signature));
+      (!signature || !sessionSeenStorySignatures.has(signature)) &&
+      (
+        !contentSignature ||
+        !sessionSeenContentSignatures.has(contentSignature)
+      );
   });
   if(unseen.length)candidates=unseen;
 
-  /* Ardından mümkünse aynı kaynak arka arkaya gelmesin. */
-  const differentSource=candidates.filter(item=>
-    sourceKey(item.story?.source)!==currentSource
-  );
-  if(differentSource.length)candidates=differentSource;
-
   /*
-    Yalnız algoritmik mod: son 12 haberde gösterilen farklı kaynaklı ve
-    çok benzer başlıklı haberleri aday havuzundan çıkar. Eğer bütün havuz
-    eleniyorsa akışın kilitlenmemesi için mevcut havuzu koru.
+    Benzer haberleri tamamen silmek yerine aralarına gerçek mesafe koy.
+    Böylece aynı olay farklı kaynaklarda takip edilmeye devam edebilir ama
+    arka arkaya ya da bir iki haber sonra yeniden görünmez.
   */
-  if(nearDuplicateDedupActive()){
-    const recentStories=recentStoriesForNearDuplicateCheck();
-    const distinctCandidates=candidates.filter(item=>
-      !recentStories.some(previous=>
-        areNearDuplicateStories(item.story,previous)
-      )
-    );
+  const recentStories=nearDuplicateDedupActive()
+    ? recentStoriesForNearDuplicateCheck()
+    : [];
 
-    if(distinctCandidates.length){
-      candidates=distinctCandidates;
-    }
-  }
+  candidates=candidates.map(item=>{
+    const spacingPenalty=nearDuplicateDedupActive()
+      ? nearDuplicateSpacingPenalty(item.story,recentStories)
+      : 0;
+
+    const sameSourcePenalty=
+      sourceKey(item.story?.source)===currentSource
+        ? 34
+        : 0;
+
+    return {
+      ...item,
+      diversityPenalty:spacingPenalty+sameSourcePenalty
+    };
+  });
 
   candidates.sort((a,b)=>
-    algorithmicStoryScore(b.story)-algorithmicStoryScore(a.story)
+    (
+      algorithmicStoryScore(b.story)-b.diversityPenalty
+    )-
+    (
+      algorithmicStoryScore(a.story)-a.diversityPenalty
+    )
   );
 
   const top=candidates.slice(0,ALGO_TOP_CANDIDATES);
