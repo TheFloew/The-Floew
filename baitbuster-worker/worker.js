@@ -484,7 +484,7 @@ export function extractSputnikArticleImage(html,articleUrl){
     Structured data bazen URL'yi attribute yerine JSON string olarak taşır.
     Sputnik CDN + /img/ deseni yeterince dar olduğu için bunları da al.
   */
-  const rawUrlRe=/https?:\\?\/\\?\/cdn\.img\.anlatilaninotesi\.com\.tr\\?\/img\\?\/[A-Za-z0-9_:%./?=&-]+/gi;
+  const rawUrlRe=/https?:\\?\/\\?\/cdn\.img\.anlatilaninotesi\.com\.tr\\?\/img\\?\/[^"' <>{}\\s]+/gi;
   let rawMatch;
   while((rawMatch=rawUrlRe.exec(source))){
     add(rawMatch[0],"structured article image");
