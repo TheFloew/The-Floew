@@ -5650,7 +5650,6 @@ async function waitForSlideImageStable(el,story,timeoutMs=9000){
     if(stage==="failed")return false;
 
     if(
-      stage!=="sputnik-resolving" &&
       image.complete &&
       image.naturalWidth>0
     ){
@@ -5681,8 +5680,7 @@ async function waitForSlideImageStable(el,story,timeoutMs=9000){
         image.complete &&
         image.naturalWidth>0 &&
         srcAfter===srcBefore &&
-        stageAfter===stageBefore &&
-        stageAfter!=="sputnik-resolving"
+        stageAfter===stageBefore
       ){
         return true;
       }
@@ -5692,9 +5690,9 @@ async function waitForSlideImageStable(el,story,timeoutMs=9000){
   }
 
   /*
-    Süre dolarsa geç gelen Sputnik/article çözümü görünür haberi artık
-    değiştiremez. Geçerli bir kare yoksa son çare olarak mevcut RSS görselinin
-    Worker proxy'sini yükleyip onu snapshot olarak dondur.
+    Süre dolarsa geç gelen görsel çözümü görünür haberi artık değiştiremez.
+    Geçerli bir kare yoksa son çare olarak mevcut RSS görselinin Worker
+    proxy'sini yükleyip onu snapshot olarak dondur.
   */
   image.dataset.imageResolveKey=
     `frozen-${Date.now().toString(36)}`;
