@@ -4,10 +4,7 @@ import {
   originalResult,
   rewrittenResult
 } from "./core.js";
-import {
-  fetchArticleText,
-  fetchSputnikArticleImage
-} from "./article.js";
+import {fetchArticleText} from "./article.js";
 import {
   classifyStories,
   rewriteStory,
@@ -15,7 +12,7 @@ import {
 } from "./ai.js";
 
 const SERVICE="thefloew-baitbuster";
-const VERSION="1.6.5";
+const VERSION="1.6.4";
 const ALLOWED_ORIGIN="https://xn--flw-tna.tr";
 const MAX_STORIES=12;
 const CACHE_TTL_SECONDS=30*24*60*60;
@@ -268,43 +265,6 @@ async function evaluateStories(rawStories,env,ctx){
   return results;
 }
 
-function isSputnikTurkeyArticleUrl(value){
-  try{
-    const host=new URL(String(value||"")).hostname.toLowerCase();
-    return (
-      host==="anlatilaninotesi.com.tr" ||
-      host.endsWith(".anlatilaninotesi.com.tr")
-    );
-  }catch{
-    return false;
-  }
-}
-
-async function handleArticleImageRequest(request,origin){
-  let body;
-  try{body=await request.json();}
-  catch{return json({ok:false,error:"invalid_json"},400,origin);}
-
-  const articleUrl=String(body?.url||"").trim();
-  if(!isSputnikTurkeyArticleUrl(articleUrl)){
-    return json({ok:false,error:"unsupported_source"},400,origin);
-  }
-
-  try{
-    const imageUrl=await fetchSputnikArticleImage(articleUrl);
-    return json({
-      ok:true,
-      imageUrl:String(imageUrl||"")
-    },200,origin);
-  }catch(error){
-    console.warn("Sputnik article image:",error);
-    return json({
-      ok:false,
-      error:"article_image_error"
-    },502,origin);
-  }
-}
-
 export async function handleRequest(request,env,ctx){
   const url=new URL(request.url);
   const origin=request.headers.get("Origin")||"";
@@ -316,16 +276,6 @@ export async function handleRequest(request,env,ctx){
 
   if(request.method==="GET"&&url.pathname==="/health"){
     return json({ok:true,service:SERVICE,version:VERSION},200,origin);
-  }
-
-  if(url.pathname==="/v1/article-image"){
-    if(request.method!=="POST"){
-      return json({ok:false,error:"method_not_allowed"},405,origin);
-    }
-    if(origin!==ALLOWED_ORIGIN){
-      return json({ok:false,error:"origin_not_allowed"},403,origin);
-    }
-    return handleArticleImageRequest(request,origin);
   }
 
   if(url.pathname!=="/v1/evaluate"){
