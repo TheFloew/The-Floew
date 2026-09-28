@@ -1,5 +1,8 @@
 # BaitBuster β Tasarımı
 
+> **Arşiv notu — 28.09.2026:** Bu belge ilk beta mimarisini tarihsel olarak kaydeder. BaitBuster artık ana Flöw akışında üretimde çalışıyor ve `/baitbusterbeta/` sayfası depodan kaldırıldı. Güncel çalışma biçimi `js/baitbuster-beta.js`, `js/app.js` ve `baitbuster-worker/` kodudur.
+
+
 Tarih: 2026-09-17
 Durum: Tasarım onayı alındı, uygulama öncesi inceleme
 
