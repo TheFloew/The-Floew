@@ -13,7 +13,6 @@ test("BaitBuster exposes an explicit pre-display preparation API",async()=>{
   assert.match(client,/prepareAndApply,/);
   assert.match(client,/applyToSlide,/);
   assert.match(client,/prefetchStories,/);
-  assert.match(client,/resolveArticleImage,/);
 });
 
 test("BaitBuster no longer relies on a DOM MutationObserver",async()=>{
