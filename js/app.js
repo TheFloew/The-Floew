@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.81.1";
+window.__floewAppVersion="31.81.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -4752,9 +4752,6 @@ const ARTICLE_FIRST_IMAGE_SOURCES=new Set([
   "aydinlik"
 ]);
 
-const SPUTNIK_INLINE_IMAGE_SOURCES=new Set([
-  "sputnik türkiye"
-]);
 
 function storyPrefersArticleImage(story){
   return ARTICLE_FIRST_IMAGE_SOURCES.has(
@@ -4850,83 +4847,6 @@ function storyExternalImageProxyUrl(story){
   return proxy.href;
 }
 
-
-const sputnikInlineImageCache=new Map();
-
-function storyIsSputnik(story){
-  /*
-    Bu özel temiz-görsel yolu yalnız Türkçe Sputnik için geçerli.
-    Yabancı sekmedeki Sputnik farklı yayın altyapısı kullandığı için
-    burada bilerek kapsam dışında bırakılıyor.
-  */
-  if(
-    SPUTNIK_INLINE_IMAGE_SOURCES.has(
-      sourceKey(story?.source)
-    )
-  ){
-    return true;
-  }
-
-  try{
-    const host=new URL(String(story?.link||"")).hostname.toLowerCase();
-    return (
-      host==="anlatilaninotesi.com.tr" ||
-      host.endsWith(".anlatilaninotesi.com.tr")
-    );
-  }catch(e){
-    return false;
-  }
-}
-
-function exactImageProxyUrl(imageUrl,articleUrl=""){
-  const safe=String(imageUrl||"").trim();
-  if(!/^https?:\/\//i.test(safe))return "";
-
-  try{
-    const proxy=new URL(IMAGE_PROXY_API);
-    proxy.searchParams.set("url",safe);
-
-    const ref=String(articleUrl||"").trim();
-    if(/^https?:\/\//i.test(ref)){
-      proxy.searchParams.set("ref",ref);
-    }
-
-    return proxy.href;
-  }catch(e){
-    return safe;
-  }
-}
-
-function resolveSputnikInlineImage(story){
-  if(!storyIsSputnik(story))return Promise.resolve("");
-
-  const articleUrl=String(story?.link||"").trim();
-  if(!/^https?:\/\//i.test(articleUrl))return Promise.resolve("");
-
-  if(sputnikInlineImageCache.has(articleUrl)){
-    return sputnikInlineImageCache.get(articleUrl);
-  }
-
-  /*
-    /source endpoint'i iframe navigasyonunda çalışsa da sayfa içinden fetch ile
-    okunması CORS'a bağlıdır. Bu yüzden Sputnik HTML'ini tarayıcıya çektirmiyoruz.
-    Makaleyi zaten sunucu tarafında güvenli biçimde okuyabilen BaitBuster Worker
-    temiz hero fotoğrafının URL'sini döndürüyor.
-  */
-  const task=(async()=>{
-    const api=await waitForBaitBusterClient(2200);
-    if(!api?.resolveArticleImage)return "";
-
-    try{
-      return await api.resolveArticleImage(articleUrl);
-    }catch(e){
-      return "";
-    }
-  })();
-
-  sputnikInlineImageCache.set(articleUrl,task);
-  return task;
-}
 
 const smartFocalCache=new Map();
 const smartFocalResolvedCache=new Map();
@@ -5444,9 +5364,7 @@ function setStoryImage(img,story){
   );
   const externalProxy=storyExternalImageProxyUrl(story);
   const articleFirst=storyPrefersArticleImage(story) && articleProxy;
-  const sputnikInline=storyIsSputnik(story);
   const imageResolveKey=mediaKey(story);
-  let focalStory=story;
 
   img.onerror=null;
   img.onload=null;
@@ -5489,22 +5407,11 @@ function setStoryImage(img,story){
 
     img.style.visibility="visible";
     img.__floewFocalPromise=
-      applySmartFocalPoint(img,focalStory);
+      applySmartFocalPoint(img,story);
   };
 
   img.onerror=()=>{
     const stage=img.dataset.imageStage;
-
-    if(
-      stage==="sputnik-inline-proxy" &&
-      articleProxy &&
-      articleProxy!==img.src
-    ){
-      img.dataset.imageStage="article-proxy";
-      focalStory=story;
-      img.src=articleProxy;
-      return;
-    }
 
     if(
       stage==="direct" &&
@@ -5539,42 +5446,6 @@ function setStoryImage(img,story){
     img.dataset.imageStage="failed";
     img.style.visibility="hidden";
   };
-
-  if(sputnikInline){
-    /*
-      Sputnik'in OG/Twitter görseli sosyal paylaşım kartı olduğu için
-      başlığı ve büyük SPUTNIK logosunu görselin içine basıyor. Kaynak
-      görüntüleyicide zaten erişebildiğimiz makale HTML'inden figure/article
-      içindeki gerçek fotoğrafı bulup mevcut /image proxy'sinden geçiriyoruz.
-      Çözülene kadar sosyal kartı flaşlatmamak için eski görsel gizli kalır.
-    */
-    img.dataset.imageStage="sputnik-resolving";
-    img.style.visibility="hidden";
-    img.removeAttribute("src");
-
-    void resolveSputnikInlineImage(story).then(imageUrl=>{
-      if(img.dataset.imageResolveKey!==imageResolveKey)return;
-
-      if(imageUrl){
-        focalStory={...story,image:imageUrl};
-        img.dataset.imageStage="sputnik-inline-proxy";
-        img.src=
-          exactImageProxyUrl(
-            imageUrl,
-            String(story?.link||"")
-          ) || imageUrl;
-        return;
-      }
-
-      focalStory=story;
-      img.dataset.imageStage=articleProxy
-        ? "article-proxy"
-        : "direct";
-      img.src=articleProxy||direct;
-    });
-
-    return;
-  }
 
   img.dataset.imageStage=articleFirst
     ? "article-proxy"
