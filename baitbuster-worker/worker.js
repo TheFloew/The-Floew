@@ -343,7 +343,7 @@ async function readBodyLimited(response,maxBytes=MAX_HTML_BYTES){
 function decodeUrlAttribute(value){
   return decodeHtmlEntities(String(value||""))
     .replace(/\\u0026/gi,"&")
-    .replace(/\\//g,"/")
+    .replaceAll("\\/","/")
     .trim();
 }
 
