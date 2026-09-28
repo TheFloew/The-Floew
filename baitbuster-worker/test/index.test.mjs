@@ -8,7 +8,7 @@ const ORIGIN="https://xn--flw-tna.tr";
 test("health is public and reports service version",async()=>{
   const res=await handleRequest(new Request("https://worker.test/health"),{},{});
   assert.equal(res.status,200);
-  assert.deepEqual(await res.json(),{ok:true,service:"thefloew-baitbuster",version:"1.6.4"});
+  assert.deepEqual(await res.json(),{ok:true,service:"thefloew-baitbuster",version:"1.6.5"});
 });
 
 test("preflight allows only Flöw production origin",async()=>{
@@ -106,4 +106,42 @@ test("high-confidence 8B gate result is returned and cached without a 70B call",
   assert.equal(body.results[0].rewriteStatus,"not_clickbait");
   assert.equal(body.results[0].modelVersion,"@cf/meta/llama-3.1-8b-instruct-fp8");
   assert.equal(writes.length,1);
+});
+
+
+test("article-image route is limited to Turkish Sputnik",async()=>{
+  const res=await handleRequest(new Request("https://worker.test/v1/article-image",{
+    method:"POST",
+    headers:{Origin:ORIGIN,"Content-Type":"application/json"},
+    body:JSON.stringify({url:"https://example.com/news"})
+  }),{},{});
+
+  assert.equal(res.status,400);
+  assert.equal((await res.json()).error,"unsupported_source");
+});
+
+test("article-image route returns the clean Sputnik hero URL without AI bindings",async()=>{
+  const clean="https://cdn.img.anlatilaninotesi.com.tr/img/07ea/09/19/1109053747_0:160:3072:1888_1920x0_80_0_0_a70aba764b501c8ac4c1b74cd6001bf2.jpg.webp";
+  const html=`<article><figure class="article-media photo"><img src="${clean}" width="1920" height="1080"></figure></article>`;
+  const realFetch=globalThis.fetch;
+
+  globalThis.fetch=async()=>new Response(html,{
+    status:200,
+    headers:{"Content-Type":"text/html; charset=utf-8"}
+  });
+
+  try{
+    const res=await handleRequest(new Request("https://worker.test/v1/article-image",{
+      method:"POST",
+      headers:{Origin:ORIGIN,"Content-Type":"application/json"},
+      body:JSON.stringify({
+        url:"https://anlatilaninotesi.com.tr/20260925/test-1109055337.html"
+      })
+    }),{},{});
+
+    assert.equal(res.status,200);
+    assert.deepEqual(await res.json(),{ok:true,imageUrl:clean});
+  }finally{
+    globalThis.fetch=realFetch;
+  }
 });
