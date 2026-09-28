@@ -35,7 +35,7 @@ curl -i https://thefloew-baitbuster.thefloewback.workers.dev/health
 Expected body:
 
 ```json
-{"ok":true,"service":"thefloew-baitbuster","version":"1.6.5"}
+{"ok":true,"service":"thefloew-baitbuster","version":"1.6.4"}
 ```
 
 CORS preflight:
@@ -58,21 +58,3 @@ Expected: HTTP `204` and `Access-Control-Allow-Origin: https://xn--flw-tna.tr`.
 ```
 
 Maximum batch size: 12 stories. The Worker checks KV first, classifies uncached headlines with Workers AI, fetches full article text only for suspicious stories, and falls back to the original headline if AI or article extraction fails.
-
-### Turkish Sputnik article image
-
-`POST /v1/article-image` is a narrow production helper for `Sputnik Türkiye` articles on `anlatilaninotesi.com.tr`. It fetches the article HTML server-side and returns the clean large Sputnik CDN hero image URL so Flöw does not have to use the publisher's headline/logo social card.
-
-Request:
-
-```json
-{"url":"https://anlatilaninotesi.com.tr/..."}
-```
-
-Response:
-
-```json
-{"ok":true,"imageUrl":"https://cdn.img.anlatilaninotesi.com.tr/img/..."}
-```
-
-This route does not use Workers AI or KV, but it still requires the exact Flöw production Origin header. Foreign-feed `Sputnik` is intentionally not routed through this helper.
