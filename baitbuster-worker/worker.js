@@ -1,5 +1,5 @@
 /*
-  The Flöw — BaitBuster β Worker
+  The Flöw — BaitBuster Worker
   Cloudflare Workers AI + KV single-file build.
   Generated from baitbuster-worker/src/*.
 */
@@ -340,7 +340,163 @@ async function readBodyLimited(response,maxBytes=MAX_HTML_BYTES){
   }
 }
 
-export async function fetchArticleText(value,fetchImpl=fetch){
+function decodeUrlAttribute(value){
+  return decodeHtmlEntities(String(value||""))
+    .replace(/\\u0026/gi,"&")
+    .replace(/\\//g,"/")
+    .trim();
+}
+
+function absoluteHttpUrl(value,baseUrl){
+  const raw=decodeUrlAttribute(value);
+  if(!raw)return "";
+  try{
+    const url=new URL(raw,baseUrl);
+    return url.protocol==="https:"||url.protocol==="http:"
+      ? url.href
+      : "";
+  }catch{
+    return "";
+  }
+}
+
+function sputnikImageDimensionsFromUrl(url){
+  const match=String(url||"").match(
+    /_(\d+):(\d+):(\d+):(\d+)_((?:\d+|0))x((?:\d+|0))_/i
+  );
+  if(!match)return null;
+  return {
+    cropWidth:Math.max(0,Number(match[3])-Number(match[1])),
+    cropHeight:Math.max(0,Number(match[4])-Number(match[2])),
+    outWidth:Number(match[5])||0,
+    outHeight:Number(match[6])||0
+  };
+}
+
+function sputnikImageScore(url,context="",order=0){
+  let parsed;
+  try{parsed=new URL(url);}catch{return -Infinity;}
+
+  const host=parsed.hostname.toLowerCase();
+  if(host!=="cdn.img.anlatilaninotesi.com.tr")return -Infinity;
+  if(!/\/img\//i.test(parsed.pathname))return -Infinity;
+
+  const haystack=`${url} ${context}`.toLowerCase();
+
+  if(
+    /(?:logo|sprite|avatar|author|profile|icon|emoji|placeholder|pixel|banner|promo|advert|reklam)/i
+      .test(haystack)
+  ){
+    return -Infinity;
+  }
+
+  const dims=sputnikImageDimensionsFromUrl(url);
+  let score=700-Math.min(240,order*4);
+
+  if(/_1920x0_/i.test(url))score+=360;
+  else if(/_(?:1600|1440|1280)x0_/i.test(url))score+=260;
+  else if(/_(?:960|1024)x0_/i.test(url))score+=150;
+
+  if(dims){
+    if(dims.cropWidth>=1200)score+=120;
+    else if(dims.cropWidth>=800)score+=70;
+    else if(dims.cropWidth>0&&dims.cropWidth<480)score-=500;
+
+    if(dims.cropHeight>=600)score+=90;
+    else if(dims.cropHeight>0&&dims.cropHeight<260)score-=400;
+
+    const ratio=dims.cropHeight
+      ? dims.cropWidth/dims.cropHeight
+      : 0;
+    if(ratio>=1.15&&ratio<=2.2)score+=80;
+  }
+
+  if(/(?:article|media|figure|photo|photoview|announce|image)/i.test(context)){
+    score+=110;
+  }
+
+  if(/(?:share|social|twitter|facebook|telegram)/i.test(context)){
+    score-=420;
+  }
+
+  return score;
+}
+
+export function extractSputnikArticleImage(html,articleUrl){
+  const source=String(html||"");
+  const base=String(articleUrl||"");
+  if(!source||!base)return "";
+
+  const candidates=new Map();
+  let order=0;
+
+  const add=(raw,context="")=>{
+    const url=absoluteHttpUrl(raw,base);
+    if(!url)return;
+
+    const score=sputnikImageScore(url,context,order++);
+    if(!Number.isFinite(score))return;
+
+    const previous=candidates.get(url);
+    if(!previous||score>previous.score){
+      candidates.set(url,{url,score});
+    }
+  };
+
+  /*
+    Sputnik'ın makale sayfasında temiz hero görseli çoğu zaman JSON-LD /
+    preload metadata içinde, bazen de doğrudan img/source attribute'larında
+    bulunuyor. DOM hiyerarşisine güvenmek yerine bütün güvenli Sputnik CDN
+    adaylarını topluyoruz.
+  */
+  const tagRe=/<(?:img|source|meta|link)\b[^>]*>/gi;
+  let tagMatch;
+  while((tagMatch=tagRe.exec(source))){
+    const tag=tagMatch[0];
+    const context=tag.slice(0,700);
+
+    for(const attr of [
+      "src","data-src","data-lazy-src","data-original","data-url",
+      "content","href"
+    ]){
+      const attrRe=new RegExp(
+        `\\b${attr}\\s*=\\s*["']([^"']+)["']`,
+        "i"
+      );
+      const match=tag.match(attrRe);
+      if(match)add(match[1],context);
+    }
+
+    for(const attr of ["srcset","data-srcset"]){
+      const attrRe=new RegExp(
+        `\\b${attr}\\s*=\\s*["']([^"']+)["']`,
+        "i"
+      );
+      const match=tag.match(attrRe);
+      if(!match)continue;
+      for(const part of match[1].split(",")){
+        add(part.trim().split(/\s+/)[0]||"",context);
+      }
+    }
+  }
+
+  /*
+    Structured data bazen URL'yi attribute yerine JSON string olarak taşır.
+    Sputnik CDN + /img/ deseni yeterince dar olduğu için bunları da al.
+  */
+  const rawUrlRe=/https?:\\?\/\\?\/cdn\.img\.anlatilaninotesi\.com\.tr\\?\/img\\?\/[A-Za-z0-9_:%./?=&-]+/gi;
+  let rawMatch;
+  while((rawMatch=rawUrlRe.exec(source))){
+    add(rawMatch[0],"structured article image");
+  }
+
+  return [...candidates.values()]
+    .sort((a,b)=>b.score-a.score)
+    .find(item=>item.score>=650)
+    ?.url || "";
+}
+
+export async function fetchArticleHtml(value,fetchImpl=fetch){
   let current=String(value||"");
   if(!isSafeArticleUrl(current))throw new Error("unsafe_article_url");
 
@@ -372,21 +528,34 @@ export async function fetchArticleText(value,fetchImpl=fetch){
       if(type&&!type.includes("text/html")&&!type.includes("application/xhtml+xml")){
         throw new Error("article_not_html");
       }
+
       const declared=Number(response.headers.get("content-length"));
       if(Number.isFinite(declared)&&declared>MAX_HTML_BYTES){
         throw new Error("article_too_large");
       }
 
       const html=await readBodyLimited(response);
-      const text=extractArticleText(html);
-      if(text.length<120)throw new Error("article_text_too_short");
-      return text;
+      return {html,url:current};
     }
+
     throw new Error("too_many_redirects");
   }finally{
     clearTimeout(timeout);
   }
 }
+
+export async function fetchArticleText(value,fetchImpl=fetch){
+  const document=await fetchArticleHtml(value,fetchImpl);
+  const text=extractArticleText(document.html);
+  if(text.length<120)throw new Error("article_text_too_short");
+  return text;
+}
+
+export async function fetchSputnikArticleImage(value,fetchImpl=fetch){
+  const document=await fetchArticleHtml(value,fetchImpl);
+  return extractSputnikArticleImage(document.html,document.url);
+}
+
 
 const DEFAULT_MODEL="@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const DEFAULT_GATE_MODEL="@cf/meta/llama-3.1-8b-instruct-fp8";
@@ -788,7 +957,7 @@ export const AI_MODEL_DEFAULT=DEFAULT_MODEL;
 export const AI_GATE_MODEL_DEFAULT=DEFAULT_GATE_MODEL;
 
 const SERVICE="thefloew-baitbuster";
-const VERSION="1.6.4";
+const VERSION="1.6.5";
 const ALLOWED_ORIGIN="https://xn--flw-tna.tr";
 const MAX_STORIES=12;
 const CACHE_TTL_SECONDS=30*24*60*60;
@@ -1041,6 +1210,43 @@ async function evaluateStories(rawStories,env,ctx){
   return results;
 }
 
+function isSputnikTurkeyArticleUrl(value){
+  try{
+    const host=new URL(String(value||"")).hostname.toLowerCase();
+    return (
+      host==="anlatilaninotesi.com.tr" ||
+      host.endsWith(".anlatilaninotesi.com.tr")
+    );
+  }catch{
+    return false;
+  }
+}
+
+async function handleArticleImageRequest(request,origin){
+  let body;
+  try{body=await request.json();}
+  catch{return json({ok:false,error:"invalid_json"},400,origin);}
+
+  const articleUrl=String(body?.url||"").trim();
+  if(!isSputnikTurkeyArticleUrl(articleUrl)){
+    return json({ok:false,error:"unsupported_source"},400,origin);
+  }
+
+  try{
+    const imageUrl=await fetchSputnikArticleImage(articleUrl);
+    return json({
+      ok:true,
+      imageUrl:String(imageUrl||"")
+    },200,origin);
+  }catch(error){
+    console.warn("Sputnik article image:",error);
+    return json({
+      ok:false,
+      error:"article_image_error"
+    },502,origin);
+  }
+}
+
 export async function handleRequest(request,env,ctx){
   const url=new URL(request.url);
   const origin=request.headers.get("Origin")||"";
@@ -1052,6 +1258,16 @@ export async function handleRequest(request,env,ctx){
 
   if(request.method==="GET"&&url.pathname==="/health"){
     return json({ok:true,service:SERVICE,version:VERSION},200,origin);
+  }
+
+  if(url.pathname==="/v1/article-image"){
+    if(request.method!=="POST"){
+      return json({ok:false,error:"method_not_allowed"},405,origin);
+    }
+    if(origin!==ALLOWED_ORIGIN){
+      return json({ok:false,error:"origin_not_allowed"},403,origin);
+    }
+    return handleArticleImageRequest(request,origin);
   }
 
   if(url.pathname!=="/v1/evaluate"){
