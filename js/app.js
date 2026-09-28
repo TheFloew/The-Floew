@@ -4897,8 +4897,6 @@ function exactImageProxyUrl(imageUrl,articleUrl=""){
   }
 }
 
-const sputnikInlineImageCache=new Map();
-
 function resolveSputnikInlineImage(story){
   if(!storyIsSputnik(story))return Promise.resolve("");
 
