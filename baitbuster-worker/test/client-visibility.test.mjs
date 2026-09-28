@@ -2,81 +2,44 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFile} from "node:fs/promises";
 
-const clientUrl=new URL("../../js/baitbuster-beta.js",import.meta.url);
-
-async function clientSource(){
-  return readFile(clientUrl,"utf8");
+async function source(path){
+  return readFile(new URL(`../../${path}`,import.meta.url),"utf8");
 }
 
-test("BaitBuster gives the current story its own fast lane and prefetches only the next two",async()=>{
-  const client=await clientSource();
-  assert.match(client,/const PREFETCH_COUNT=2;/);
-  assert.match(client,/const foregroundQueue=new Map\(\);/);
-  assert.match(client,/const prefetchQueue=new Map\(\);/);
-  assert.match(client,/function queueStateWindow\(\)/);
-  assert.match(client,/flushForegroundQueue\(\)/);
-  assert.match(client,/flushPrefetchQueue\(\)/);
+test("BaitBuster exposes an explicit pre-display preparation API",async()=>{
+  const client=await source("js/baitbuster-beta.js");
+  assert.match(client,/globalThis\.BaitBusterBeta=/);
+  assert.match(client,/prepareStory,/);
+  assert.match(client,/prepareAndApply,/);
+  assert.match(client,/applyToSlide,/);
+  assert.match(client,/prefetchStories,/);
+  assert.match(client,/resolveArticleImage,/);
 });
 
-test("state window drops queued stories that are no longer current or next-two",async()=>{
-  const client=await clientSource();
-  assert.match(
-    client,
-    /function queueStateWindow\(\)[\s\S]*?desiredForegroundKey[\s\S]*?foregroundQueue\.delete\(key\)[\s\S]*?desiredPrefetchKeys[\s\S]*?prefetchQueue\.delete\(key\)/
-  );
+test("BaitBuster no longer relies on a DOM MutationObserver",async()=>{
+  const client=await source("js/baitbuster-beta.js");
+  assert.doesNotMatch(client,/new MutationObserver/);
 });
 
-test("state-backed priority window cannot be expanded by rendered slide fallbacks",async()=>{
-  const client=await clientSource();
-  assert.match(client,/const queuedFromState=queueStateWindow\(\);/);
+test("Flöw fully prepares a story before the main transition starts",async()=>{
+  const app=await source("js/app.js");
+  assert.match(app,/async function prepareStorySlideInternal/);
   assert.match(
-    client,
-    /const cachedResult=resultByKey\.get\(story\.key\);[\s\S]*?if\(queuedFromState\)continue;/
+    app,
+    /async function transitionTo\([\s\S]*?await prepareTransitionSlide\(nextSlide,story\)[\s\S]*?nextSlide\.classList\.add\(enterClass\)/
   );
 });
 
-test("slide reuse clears stale BaitBuster presentation before debounce",async()=>{
-  const client=await clientSource();
+test("the initial story is prepared behind the loading screen",async()=>{
+  const app=await source("js/app.js");
   assert.match(
-    client,
-    /function handleSlideMutations\(records\)[\s\S]*?resetIfSlideReused\(slide\)[\s\S]*?scheduleScan\(\)/
-  );
-  assert.match(client,/new MutationObserver\(handleSlideMutations\)/);
-});
-
-test("BaitBuster refuses to scan or post while the page is hidden",async()=>{
-  const client=await clientSource();
-  assert.match(
-    client,
-    /function isPageVisible\(\)\s*\{[\s\S]*?document\.visibilityState==="visible"/
-  );
-  assert.match(
-    client,
-    /async function flushLane\([^)]*\)\s*\{[\s\S]*?!isPageVisible\(\)/
-  );
-  assert.match(
-    client,
-    /function scanSlides\(\)\s*\{[\s\S]*?!isPageVisible\(\)/
-  );
-  assert.match(
-    client,
-    /function scheduleScan\(\)\s*\{[\s\S]*?!isPageVisible\(\)/
+    app,
+    /if\(!state\.stories\.length\)[\s\S]*?await prepareStorySlide\([\s\S]*?slides\[0\][\s\S]*?finishInitialLoading\(\)/
   );
 });
 
-test("BaitBuster aborts hidden-page work and resumes when visible",async()=>{
-  const client=await clientSource();
-  assert.match(
-    client,
-    /document\.addEventListener\("visibilitychange"[\s\S]*?foregroundQueue\.clear\(\)[\s\S]*?prefetchQueue\.clear\(\)[\s\S]*?requestState\.foreground\.controller\?\.abort\(\)[\s\S]*?requestState\.prefetch\.controller\?\.abort\(\)[\s\S]*?scheduleScan\(\)/
-  );
-});
-
-test("production and beta pages cache-bust the visibility-aware client",async()=>{
-  const [production,beta]=await Promise.all([
-    readFile(new URL("../../index.html",import.meta.url),"utf8"),
-    readFile(new URL("../../baitbusterbeta/index.html",import.meta.url),"utf8")
-  ]);
-  assert.match(production,/js\/baitbuster-beta\.js\?v=13/);
-  assert.match(beta,/js\/baitbuster-beta\.js\?v=13/);
+test("the obsolete baitbusterbeta page is not part of production loading",async()=>{
+  const production=await source("index.html");
+  assert.doesNotMatch(production,/baitbusterbeta\//);
+  assert.match(production,/js\/baitbuster-beta\.js\?v=[a-f0-9]{12}/);
 });
