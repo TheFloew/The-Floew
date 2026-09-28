@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.81.0";
+window.__floewAppVersion="31.81.1";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -4753,8 +4753,7 @@ const ARTICLE_FIRST_IMAGE_SOURCES=new Set([
 ]);
 
 const SPUTNIK_INLINE_IMAGE_SOURCES=new Set([
-  "sputnik türkiye",
-  "sputnik"
+  "sputnik türkiye"
 ]);
 
 function storyPrefersArticleImage(story){
@@ -4855,6 +4854,11 @@ function storyExternalImageProxyUrl(story){
 const sputnikInlineImageCache=new Map();
 
 function storyIsSputnik(story){
+  /*
+    Bu özel temiz-görsel yolu yalnız Türkçe Sputnik için geçerli.
+    Yabancı sekmedeki Sputnik farklı yayın altyapısı kullandığı için
+    burada bilerek kapsam dışında bırakılıyor.
+  */
   if(
     SPUTNIK_INLINE_IMAGE_SOURCES.has(
       sourceKey(story?.source)
@@ -4867,9 +4871,7 @@ function storyIsSputnik(story){
     const host=new URL(String(story?.link||"")).hostname.toLowerCase();
     return (
       host==="anlatilaninotesi.com.tr" ||
-      host.endsWith(".anlatilaninotesi.com.tr") ||
-      host==="sputniknews.com" ||
-      host.endsWith(".sputniknews.com")
+      host.endsWith(".anlatilaninotesi.com.tr")
     );
   }catch(e){
     return false;
@@ -4895,130 +4897,7 @@ function exactImageProxyUrl(imageUrl,articleUrl=""){
   }
 }
 
-function srcsetUrls(value=""){
-  return String(value||"")
-    .split(",")
-    .map(part=>part.trim().split(/\s+/)[0]||"")
-    .filter(Boolean);
-}
-
-function extractSputnikInlineImage(html="",articleUrl=""){
-  if(!html || !articleUrl || !globalThis.DOMParser)return "";
-
-  let doc;
-  try{
-    doc=new DOMParser().parseFromString(String(html),"text/html");
-  }catch(e){
-    return "";
-  }
-
-  const h1=doc.querySelector("h1");
-  const byUrl=new Map();
-
-  const add=(raw,node,srcsetRank=0)=>{
-    const value=String(raw||"").trim();
-    if(!value)return;
-
-    let url="";
-    try{
-      url=new URL(value,articleUrl).href;
-    }catch(e){
-      return;
-    }
-
-    if(!/^https?:\/\//i.test(url))return;
-
-    let host="";
-    try{host=new URL(url).hostname.toLowerCase()}catch(e){}
-
-    const context=[
-      url,
-      node?.getAttribute?.("alt")||"",
-      node?.getAttribute?.("class")||"",
-      node?.parentElement?.getAttribute?.("class")||""
-    ].join(" ").toLowerCase();
-
-    if(
-      /(?:logo|avatar|author|icon|sprite|emoji|placeholder|tracking|pixel)/i
-        .test(context)
-    ){
-      return;
-    }
-
-    let score=0;
-
-    if(
-      host==="cdn.img.anlatilaninotesi.com.tr" ||
-      host.endsWith(".anlatilaninotesi.com.tr")
-    ){
-      score+=520;
-    }
-
-    if(/\/img\//i.test(url))score+=100;
-    if(/[_/-](?:1920|1600|1440|1280|1200)x/i.test(url))score+=180;
-    if(/[_/-](?:960|1024)x/i.test(url))score+=100;
-    score+=Math.min(90,srcsetRank*18);
-
-    const figure=node?.closest?.("figure");
-    const article=node?.closest?.("article");
-    const main=node?.closest?.("main");
-    if(figure)score+=260;
-    if(article)score+=220;
-    else if(main)score+=90;
-
-    if(h1 && node){
-      try{
-        if(h1.compareDocumentPosition(node)&4)score+=120;
-      }catch(e){}
-    }
-
-    const width=Number(node?.getAttribute?.("width"))||0;
-    const height=Number(node?.getAttribute?.("height"))||0;
-
-    if(width>=900)score+=100;
-    else if(width>=600)score+=60;
-    else if(width>0 && width<320)score-=260;
-
-    if(height>0 && height<180)score-=180;
-
-    if(/(?:banner|promo|advert|reklam|social|share)/i.test(context)){
-      score-=260;
-    }
-
-    const previous=byUrl.get(url);
-    if(!previous || score>previous.score){
-      byUrl.set(url,{url,score});
-    }
-  };
-
-  const nodes=[
-    ...doc.querySelectorAll(
-      "article img, article source, main figure img, main figure source, main img, main source"
-    )
-  ];
-
-  for(const node of nodes){
-    for(const attr of [
-      "src",
-      "data-src",
-      "data-lazy-src",
-      "data-original",
-      "data-url"
-    ]){
-      add(node.getAttribute?.(attr),node,0);
-    }
-
-    for(const attr of ["srcset","data-srcset"]){
-      const urls=srcsetUrls(node.getAttribute?.(attr));
-      urls.forEach((url,index)=>add(url,node,index+1));
-    }
-  }
-
-  return [...byUrl.values()]
-    .sort((a,b)=>b.score-a.score)
-    .find(candidate=>candidate.score>=300)
-    ?.url || "";
-}
+const sputnikInlineImageCache=new Map();
 
 function resolveSputnikInlineImage(story){
   if(!storyIsSputnik(story))return Promise.resolve("");
@@ -5030,40 +4909,26 @@ function resolveSputnikInlineImage(story){
     return sputnikInlineImageCache.get(articleUrl);
   }
 
+  /*
+    /source endpoint'i iframe navigasyonunda çalışsa da sayfa içinden fetch ile
+    okunması CORS'a bağlıdır. Bu yüzden Sputnik HTML'ini tarayıcıya çektirmiyoruz.
+    Makaleyi zaten sunucu tarafında güvenli biçimde okuyabilen BaitBuster Worker
+    temiz hero fotoğrafının URL'sini döndürüyor.
+  */
   const task=(async()=>{
-    const controller=new AbortController();
-    const timeout=setTimeout(()=>controller.abort(),8000);
+    const api=await waitForBaitBusterClient(2200);
+    if(!api?.resolveArticleImage)return "";
 
     try{
-      const sourceUrl=new URL(SOURCE_VIEW_API);
-      sourceUrl.searchParams.set("url",articleUrl);
-
-      const response=await fetch(sourceUrl.href,{
-        method:"GET",
-        mode:"cors",
-        credentials:"omit",
-        cache:"force-cache",
-        signal:controller.signal,
-        headers:{
-          "Accept":"text/html,application/xhtml+xml"
-        }
-      });
-
-      if(!response.ok)return "";
-
-      const html=await response.text();
-      return extractSputnikInlineImage(html,articleUrl);
+      return await api.resolveArticleImage(articleUrl);
     }catch(e){
       return "";
-    }finally{
-      clearTimeout(timeout);
     }
   })();
 
   sputnikInlineImageCache.set(articleUrl,task);
   return task;
 }
-
 
 const smartFocalCache=new Map();
 const smartFocalResolvedCache=new Map();
