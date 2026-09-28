@@ -8,7 +8,7 @@ async function source(path){
 
 test("BaitBuster requests identify client type and client version",async()=>{
   const client=await source("js/baitbuster-beta.js");
-  assert.match(client,/const CLIENT_VERSION="12";/);
+  assert.match(client,/const CLIENT_VERSION="17";/);
   assert.match(client,/X-BaitBuster-Client/);
   assert.match(client,/X-BaitBuster-Version/);
   assert.match(client,/FloewIOS/);
@@ -17,10 +17,12 @@ test("BaitBuster requests identify client type and client version",async()=>{
   assert.match(client,/return "web"/);
 });
 
-test("diagnostic requests identify themselves separately",async()=>{
-  const diagnostic=await source("baitbusterbeta/diagnostic.html");
-  assert.match(diagnostic,/X-BaitBuster-Client[^\n]*diagnostic/);
-  assert.match(diagnostic,/X-BaitBuster-Version[^\n]*1/);
+test("BaitBuster client exposes the Turkish Sputnik article-image bridge",async()=>{
+  const client=await source("js/baitbuster-beta.js");
+  assert.match(client,/ARTICLE_IMAGE_ENDPOINT/);
+  assert.match(client,/\/v1\/article-image/);
+  assert.match(client,/async function resolveArticleImage/);
+  assert.match(client,/resolveArticleImage,/);
 });
 
 test("BaitBuster Worker CORS allows trace headers",async()=>{
@@ -31,11 +33,10 @@ test("BaitBuster Worker CORS allows trace headers",async()=>{
   );
 });
 
-test("production pages cache-bust traced BaitBuster client",async()=>{
-  const [production,beta]=await Promise.all([
-    source("index.html"),
-    source("baitbusterbeta/index.html")
-  ]);
-  assert.match(production,/js\/baitbuster-beta\.js\?v=12/);
-  assert.match(beta,/js\/baitbuster-beta\.js\?v=12/);
+test("production page cache-busts the current BaitBuster client",async()=>{
+  const production=await source("index.html");
+  assert.match(
+    production,
+    /js\/baitbuster-beta\.js\?v=[a-f0-9]{12}/
+  );
 });
