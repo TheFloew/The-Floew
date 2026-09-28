@@ -1,10 +1,8 @@
 (()=>{
   "use strict";
 
-  const WORKER_BASE="https://thefloew-baitbuster.thefloewback.workers.dev";
-  const ENDPOINT=`${WORKER_BASE}/v1/evaluate`;
-  const ARTICLE_IMAGE_ENDPOINT=`${WORKER_BASE}/v1/article-image`;
-  const CLIENT_VERSION="17";
+  const ENDPOINT="https://thefloew-baitbuster.thefloewback.workers.dev/v1/evaluate";
+  const CLIENT_VERSION="16";
   const FETCH_TIMEOUT_MS=12000;
   const UI=globalThis.BaitBusterUI;
   const settingButton=document.getElementById("baitbuster-setting");
@@ -15,7 +13,6 @@
   const entityDecoder=document.createElement("textarea");
   const resultByKey=new Map();
   const requestByKey=new Map();
-  const articleImageByUrl=new Map();
   const appliedState=new WeakMap();
   let featureEnabled=UI.loadEnabled(localStorage);
   let lastError="";
@@ -301,50 +298,6 @@
     return result;
   }
 
-  async function resolveArticleImage(value){
-    const articleUrl=httpUrl(value);
-    if(!articleUrl)return "";
-
-    if(articleImageByUrl.has(articleUrl)){
-      return articleImageByUrl.get(articleUrl);
-    }
-
-    const promise=(async()=>{
-      const controller=new AbortController();
-      const timeout=setTimeout(()=>controller.abort(),10000);
-
-      try{
-        const response=await fetch(ARTICLE_IMAGE_ENDPOINT,{
-          method:"POST",
-          mode:"cors",
-          credentials:"omit",
-          cache:"no-store",
-          signal:controller.signal,
-          headers:{
-            "Content-Type":"application/json",
-            "X-BaitBuster-Client":CLIENT_TYPE,
-            "X-BaitBuster-Version":CLIENT_VERSION
-          },
-          body:JSON.stringify({url:articleUrl})
-        });
-
-        if(!response.ok)return "";
-
-        const payload=await response.json();
-        if(payload?.ok!==true)return "";
-
-        return httpUrl(payload.imageUrl);
-      }catch{
-        return "";
-      }finally{
-        clearTimeout(timeout);
-      }
-    })();
-
-    articleImageByUrl.set(articleUrl,promise);
-    return promise;
-  }
-
   function prefetchStories(items){
     if(!featureEnabled||!Array.isArray(items))return;
 
@@ -401,7 +354,6 @@
     prepareAndApply,
     applyToSlide,
     prefetchStories,
-    resolveArticleImage,
     clearSlide,
     normalizeStory,
     getResult:rawStory=>{
