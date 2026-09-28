@@ -1,5 +1,8 @@
 # BaitBuster β Implementation Plan
 
+> **Arşiv notu — 28.09.2026:** Bu belge ilk beta mimarisini tarihsel olarak kaydeder. BaitBuster artık ana Flöw akışında üretimde çalışıyor ve `/baitbusterbeta/` sayfası depodan kaldırıldı. Güncel çalışma biçimi `js/baitbuster-beta.js`, `js/app.js` ve `baitbuster-worker/` kodudur.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build the BaitBuster β pipeline so every surfaced Flöw story can be semantically classified for clickbait, suspicious stories can be verified against article text and rewritten, and the beta UI can show the rewritten headline without blocking the normal news flow.
