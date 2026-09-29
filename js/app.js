@@ -51,6 +51,8 @@ const VIDEO_AUDIO_DEFAULT_KEY="thefloew.videoAudioDefault.v1";
 const FX_RATES_VISIBLE_KEY="thefloew.fxRatesVisible.v1";
 const STOCK_TICKER_VISIBLE_KEY="thefloew.stockTickerVisible.v1";
 const STOCK_TICKER_SCALE_KEY="thefloew.stockTickerScale.v1";
+const NEWS_CONTENT_SCALE_KEY="thefloew.newsContentScale.v1";
+const INFO_BLOCK_SCALE_KEY="thefloew.infoBlockScale.v1";
 const MARKET_DATA_CACHE_KEY="thefloew.marketDataCache.v1";
 const MARKET_REFRESH_MS=60*1000;
 const MARKET_CACHE_MAX_AGE_MS=6*60*60*1000;
@@ -59,6 +61,9 @@ const GOLD_REFRESH_MS=5*60*1000;
 const TROY_OUNCE_GRAMS=31.1034768;
 const STOCK_TICKER_SCALE_MIN=.8;
 const STOCK_TICKER_SCALE_STEP=.1;
+const ACCESSIBILITY_SCALE_MIN=.8;
+const ACCESSIBILITY_SCALE_MAX=1.5;
+const ACCESSIBILITY_SCALE_STEP=.1;
 const COOKIE_NOTICE_KEY="thefloew.cookieNotice.v1";
 const CUSTOM_RSS_STORAGE_KEY="thefloew.customRss.v1";
 const CUSTOM_RSS_LEGACY_COOKIE_KEY="thefloew.customRss.v1";
@@ -9787,6 +9792,155 @@ function applyStockTickerScale({reconfigure=true}={}){
   }
 }
 
+
+function loadAccessibilityScale(key){
+  try{
+    const saved=Number(localStorage.getItem(key));
+    if(Number.isFinite(saved)){
+      return Math.min(
+        ACCESSIBILITY_SCALE_MAX,
+        Math.max(ACCESSIBILITY_SCALE_MIN,saved)
+      );
+    }
+  }catch(e){}
+  return 1;
+}
+
+let newsContentScale=loadAccessibilityScale(NEWS_CONTENT_SCALE_KEY);
+let infoBlockScale=loadAccessibilityScale(INFO_BLOCK_SCALE_KEY);
+
+function clampAccessibilityScale(value){
+  const numeric=Number(value);
+  const next=Number.isFinite(numeric)?numeric:1;
+  const stepped=Math.round(next*10)/10;
+
+  return Math.min(
+    ACCESSIBILITY_SCALE_MAX,
+    Math.max(ACCESSIBILITY_SCALE_MIN,stepped)
+  );
+}
+
+function saveAccessibilityScale(key,value){
+  try{
+    localStorage.setItem(key,String(value));
+  }catch(e){}
+}
+
+function renderAccessibilityScaleControl(prefix,value){
+  const minus=document.getElementById(`${prefix}-minus`);
+  const plus=document.getElementById(`${prefix}-plus`);
+  const output=document.getElementById(`${prefix}-value`);
+  const scale=clampAccessibilityScale(value);
+
+  if(output)output.textContent=`%${Math.round(scale*100)}`;
+  if(minus)minus.disabled=scale<=ACCESSIBILITY_SCALE_MIN+.001;
+  if(plus)plus.disabled=scale>=ACCESSIBILITY_SCALE_MAX-.001;
+}
+
+function renderAccessibilityScaleControls(){
+  renderAccessibilityScaleControl("news-content-size",newsContentScale);
+  renderAccessibilityScaleControl("info-block-size",infoBlockScale);
+}
+
+function headlineBaseMetrics(headline){
+  /*
+    Kullanıcı ölçeğinden bağımsız gerçek CSS yerleşimini ölçebilmek için
+    daha önce JS ile verilmiş telafi genişliğini kısa süreliğine kaldır.
+    transform layout ölçüsünü değiştirmediğinden mevcut görsel ölçek burada
+    ölçümü bozmaz.
+  */
+  headline.style.removeProperty("width");
+  headline.style.removeProperty("left");
+
+  const computed=getComputedStyle(headline);
+  return {
+    width:parseFloat(computed.width)||0,
+    left:parseFloat(computed.left)||0
+  };
+}
+
+function applyAccessibilityScales(){
+  newsContentScale=clampAccessibilityScale(newsContentScale);
+  infoBlockScale=clampAccessibilityScale(infoBlockScale);
+
+  document.body.style.setProperty(
+    "--floew-news-content-scale",
+    String(newsContentScale)
+  );
+  document.body.style.setProperty(
+    "--floew-info-block-scale",
+    String(infoBlockScale)
+  );
+
+  const compact=window.matchMedia("(max-width:700px)").matches;
+  const clock=document.getElementById("clock");
+  const clockLayoutWidth=clock
+    ? (parseFloat(getComputedStyle(clock).width)||0)
+    : 0;
+
+  document.querySelectorAll(".headline").forEach(headline=>{
+    const base=headlineBaseMetrics(headline);
+
+    /*
+      Mobilde bilgi bloğu büyütülürse yalnızca onun büyüttüğü kadar ek alanı
+      solda ayır. %100 görünüm böylece mevcut yerleşimle birebir aynı kalır.
+    */
+    const infoReserve=
+      compact && infoBlockScale>1
+        ? clockLayoutWidth*(infoBlockScale-1)
+        : 0;
+
+    const visualWidth=Math.max(
+      compact ? 150 : 260,
+      base.width-infoReserve
+    );
+
+    const needsCompensation=
+      Math.abs(newsContentScale-1)>.001 ||
+      infoReserve>.5;
+
+    if(!needsCompensation){
+      headline.style.removeProperty("width");
+      headline.style.removeProperty("left");
+      return;
+    }
+
+    /*
+      Transform başlığın sağ-alt köşesini sabit tutar. Layout genişliğini
+      ölçeğin tersine ayarlayarak ekranda kapladığı yatay alanı koruyoruz;
+      böylece büyüyen metin ekran dışına taşmıyor.
+    */
+    headline.style.setProperty(
+      "width",
+      `${(visualWidth/newsContentScale).toFixed(2)}px`,
+      "important"
+    );
+    headline.style.setProperty("left","auto","important");
+  });
+
+  renderAccessibilityScaleControls();
+}
+
+function setNewsContentScale(value){
+  newsContentScale=clampAccessibilityScale(value);
+  saveAccessibilityScale(NEWS_CONTENT_SCALE_KEY,newsContentScale);
+  applyAccessibilityScales();
+}
+
+function setInfoBlockScale(value){
+  infoBlockScale=clampAccessibilityScale(value);
+  saveAccessibilityScale(INFO_BLOCK_SCALE_KEY,infoBlockScale);
+  applyAccessibilityScales();
+}
+
+let accessibilityResizeFrame=0;
+window.addEventListener("resize",()=>{
+  cancelAnimationFrame(accessibilityResizeFrame);
+  accessibilityResizeFrame=requestAnimationFrame(()=>{
+    applyAccessibilityScales();
+  });
+},{passive:true});
+
 function renderMarketPreferences(){
   renderMarketPreferenceButton("fx-rates-setting",fxRatesVisible);
   renderMarketPreferenceButton("stock-ticker-setting",stockTickerVisible);
@@ -11699,7 +11853,9 @@ function preferenceTransferKeys(){
     VIDEO_AUDIO_DEFAULT_KEY,
     FX_RATES_VISIBLE_KEY,
     STOCK_TICKER_VISIBLE_KEY,
-    STOCK_TICKER_SCALE_KEY
+    STOCK_TICKER_SCALE_KEY,
+    NEWS_CONTENT_SCALE_KEY,
+    INFO_BLOCK_SCALE_KEY
   ];
 }
 
@@ -11790,6 +11946,7 @@ async function importPreferencesFile(file){
 }
 
 function bindEnhancementUi(){
+  applyAccessibilityScales();
   renderCustomRssList();
   renderNearDuplicateSetting();
   renderVideoAudioDefaultSetting();
@@ -11834,6 +11991,26 @@ function bindEnhancementUi(){
   document.getElementById("stock-ticker-size-plus")?.addEventListener("click",e=>{
     e.stopPropagation();
     setStockTickerScale(stockTickerScale+STOCK_TICKER_SCALE_STEP);
+  });
+
+  document.getElementById("news-content-size-minus")?.addEventListener("click",e=>{
+    e.stopPropagation();
+    setNewsContentScale(newsContentScale-ACCESSIBILITY_SCALE_STEP);
+  });
+
+  document.getElementById("news-content-size-plus")?.addEventListener("click",e=>{
+    e.stopPropagation();
+    setNewsContentScale(newsContentScale+ACCESSIBILITY_SCALE_STEP);
+  });
+
+  document.getElementById("info-block-size-minus")?.addEventListener("click",e=>{
+    e.stopPropagation();
+    setInfoBlockScale(infoBlockScale-ACCESSIBILITY_SCALE_STEP);
+  });
+
+  document.getElementById("info-block-size-plus")?.addEventListener("click",e=>{
+    e.stopPropagation();
+    setInfoBlockScale(infoBlockScale+ACCESSIBILITY_SCALE_STEP);
   });
 
   document.getElementById("preferences-export")?.addEventListener("click",e=>{
