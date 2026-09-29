@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
 <link rel="manifest" href="site.webmanifest">
 
-<link rel="stylesheet" href="css/styles.css?v=035f06500260">
+<link rel="stylesheet" href="css/styles.css?v=857de4f1d002">
 
 <style id="boot-black-style">
   html,body{background:#000}
@@ -443,15 +443,43 @@
           <div class="market-data-note">Piyasa verileri gecikmeli olabilir.</div>
         </div>
 
-        <div class="ticker-size-setting">
-          <div class="setting-copy">
-            <strong>Borsa bandı boyutu</strong>
-            <small>Alt ve üst piyasa bantlarının yüksekliği</small>
+        <div class="appearance-size-section" aria-label="Boyut ayarları">
+          <div class="motion-label appearance-size-title">Boyut</div>
+
+          <div class="ticker-size-setting appearance-size-row">
+            <div class="setting-copy">
+              <strong>Haber bölümü</strong>
+              <small>Manşet, açıklama, kaynak bilgisi ve haber düğmeleri</small>
+            </div>
+            <div class="duration-control ticker-size-control" role="group" aria-label="Haber bölümü boyutu">
+              <button id="news-content-size-minus" type="button" aria-label="Haber bölümünü küçült">−︎</button>
+              <span id="news-content-size-value">%100</span>
+              <button id="news-content-size-plus" type="button" aria-label="Haber bölümünü büyüt">+</button>
+            </div>
           </div>
-          <div class="duration-control ticker-size-control" role="group" aria-label="Borsa bandı boyutu">
-            <button id="stock-ticker-size-minus" type="button" aria-label="Borsa bandını küçült">−︎</button>
-            <span id="stock-ticker-size-value">%100</span>
-            <button id="stock-ticker-size-plus" type="button" aria-label="Borsa bandını büyüt">+</button>
+
+          <div class="ticker-size-setting appearance-size-row">
+            <div class="setting-copy">
+              <strong>Bilgi alanı</strong>
+              <small>Döviz kurları, saat, tarih ve hava durumu</small>
+            </div>
+            <div class="duration-control ticker-size-control" role="group" aria-label="Bilgi alanı boyutu">
+              <button id="info-block-size-minus" type="button" aria-label="Bilgi alanını küçült">−︎</button>
+              <span id="info-block-size-value">%100</span>
+              <button id="info-block-size-plus" type="button" aria-label="Bilgi alanını büyüt">+</button>
+            </div>
+          </div>
+
+          <div class="ticker-size-setting appearance-size-row">
+            <div class="setting-copy">
+              <strong>Borsa bandı</strong>
+              <small>Alt ve üst piyasa bantlarının yüksekliği</small>
+            </div>
+            <div class="duration-control ticker-size-control" role="group" aria-label="Borsa bandı boyutu">
+              <button id="stock-ticker-size-minus" type="button" aria-label="Borsa bandını küçült">−︎</button>
+              <span id="stock-ticker-size-value">%100</span>
+              <button id="stock-ticker-size-plus" type="button" aria-label="Borsa bandını büyüt">+</button>
+            </div>
           </div>
         </div>
       </div>
@@ -654,7 +682,7 @@
 </script>
 
 <script src="js/config.js?h=beda7fe1ea23"></script>
-<script src="js/app.js?v=84a4fcbb62fd" onerror="
+<script src="js/app.js?v=7cef3c278ad7" onerror="
   var loader=document.getElementById('loading-screen');
   if(loader)loader.remove();
   var status=document.getElementById('status');
