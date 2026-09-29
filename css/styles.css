@@ -6086,3 +6086,77 @@ html,body{
     height:23px !important;
   }
 }
+
+
+/* =====================================================================
+   V31.79.0 — accessibility size controls
+   Haber alanı ile sol-alt bilgi alanı bağımsız ölçeklenir.
+   Logo, sağ-üst araçlar ve borsa bandı bu ölçeklerden etkilenmez.
+   ===================================================================== */
+
+body{
+  --floew-news-content-scale:1;
+  --floew-info-block-scale:1;
+}
+
+.headline{
+  transform:scale(var(--floew-news-content-scale,1));
+  transform-origin:right bottom;
+}
+
+#clock{
+  transform:scale(var(--floew-info-block-scale,1));
+  transform-origin:left bottom;
+}
+
+/* Görünüm > Boyut */
+#motion-panel .appearance-size-section{
+  width:100%;
+  box-sizing:border-box;
+  margin-top:24px;
+  padding-top:12px;
+  border-top:1px solid rgba(255,255,255,.10);
+}
+
+#motion-panel .appearance-size-title{
+  margin:0 !important;
+  padding:0 !important;
+  font-size:12px !important;
+  line-height:1.35 !important;
+  font-weight:700 !important;
+}
+
+#motion-panel .appearance-size-section .appearance-size-row{
+  margin-top:0 !important;
+  padding:12px 0 0 !important;
+  border-top:1px solid rgba(255,255,255,.08) !important;
+}
+
+#motion-panel .appearance-size-section .appearance-size-title + .appearance-size-row{
+  padding-top:10px !important;
+  border-top:0 !important;
+}
+
+#motion-panel .appearance-size-section .appearance-size-row + .appearance-size-row{
+  margin-top:12px !important;
+}
+
+#motion-panel .appearance-size-section .setting-copy{
+  min-width:0;
+}
+
+#news-content-size-value,
+#info-block-size-value,
+#stock-ticker-size-value{
+  min-width:48px;
+  text-align:center;
+  font-size:12px;
+  font-weight:700;
+  font-variant-numeric:tabular-nums;
+}
+
+@media(max-width:700px){
+  #motion-panel .appearance-size-section .appearance-size-row{
+    align-items:flex-start;
+  }
+}
