@@ -29,6 +29,27 @@ test("Flöw fully prepares a story before the main transition starts",async()=>{
   );
 });
 
+test("BaitBuster preparation has a bounded pre-display budget",async()=>{
+  const app=await source("js/app.js");
+  assert.match(app,/const BAITBUSTER_PRE_DISPLAY_BUDGET_MS=2200;/);
+  assert.match(
+    app,
+    /api\.prepareStory\(story\),\s*BAITBUSTER_PRE_DISPLAY_BUDGET_MS,\s*null/
+  );
+  assert.doesNotMatch(
+    app,
+    /api\.prepareStory\(story\),\s*12500/
+  );
+});
+
+test("a strong touch swipe is preserved while the target is still preparing",async()=>{
+  const app=await source("js/app.js");
+  assert.match(
+    app,
+    /const shouldDeferToNormalNavigation=[\s\S]*?state\.touchDragTargetIndex<0[\s\S]*?await move\(direction,\{origin:"touch_drag"\}\)/
+  );
+});
+
 test("the initial story is prepared behind the loading screen",async()=>{
   const app=await source("js/app.js");
   assert.match(
