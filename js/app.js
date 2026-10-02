@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.81.0";
+window.__floewAppVersion="31.81.1";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -5575,6 +5575,7 @@ function activateSlideMedia(el,story){
 }
 
 let baitbusterClientWaitPromise=null;
+const BAITBUSTER_PRE_DISPLAY_BUDGET_MS=2200;
 
 function waitForBaitBusterClient(timeoutMs=1800){
   if(globalThis.BaitBusterBeta){
@@ -5787,7 +5788,7 @@ async function prepareStorySlideInternal(
 
     const result=await settleWithin(
       api.prepareStory(story),
-      12500,
+      BAITBUSTER_PRE_DISPLAY_BUDGET_MS,
       null
     );
 
@@ -8010,7 +8011,7 @@ function nextStoryIndexForPreload(){
   return index;
 }
 
-function scheduleNextStoryPreload(delay=40){
+function scheduleNextStoryPreload(delay=0){
   clearTimeout(nextStoryPreloadTimer);
 
   nextStoryPreloadTimer=setTimeout(()=>{
@@ -14931,17 +14932,21 @@ async function finishTouchStoryDrag(){
     const shouldDeferToNormalNavigation=
       strongGesture &&
       (
+        state.touchDragTargetIndex<0 ||
         (direction>0 && (isAtSkippedAdBefore() || adBreakDue())) ||
         (direction<0 && isAtSkippedAdAfter())
       );
 
     if(shouldDeferToNormalNavigation){
-      /* Reklam/history durağı için önce 220 ms geri-sekme animasyonu oynatmak
-         ilk swipe'ın yutulduğu hissini veriyordu. Görsel state'i anında temizle
-         ve aynı gesture'ın gerçek hedefini hemen başlat. */
+      /*
+        Hedef haber arka planda hâlâ hazırlanıyorsa güçlü swipe'ı iptal etme.
+        Aynı gesture'ın niyetini normal move() yoluna devret; move(),
+        prepareStorySlide üzerindeki mevcut promise'i paylaşır ve haber hazır
+        olur olmaz tek swipe ile geçişi tamamlar.
+      */
       clearTouchDragVisuals();
       resetTouchDragState();
-      move(direction,{origin:"touch_drag"});
+      await move(direction,{origin:"touch_drag"});
     }else{
       await cancelTouchStoryDrag();
     }
