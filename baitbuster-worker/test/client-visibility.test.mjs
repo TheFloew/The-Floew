@@ -20,12 +20,16 @@ test("BaitBuster no longer relies on a DOM MutationObserver",async()=>{
   assert.doesNotMatch(client,/new MutationObserver/);
 });
 
-test("Flöw fully prepares a story before the main transition starts",async()=>{
+test("main story navigation never waits for full BaitBuster preparation",async()=>{
   const app=await source("js/app.js");
-  assert.match(app,/async function prepareStorySlideInternal/);
+  assert.match(app,/function prepareTransitionSlideImmediate/);
   assert.match(
     app,
-    /async function transitionTo\([\s\S]*?await prepareTransitionSlide\(nextSlide,story\)[\s\S]*?nextSlide\.classList\.add\(enterClass\)/
+    /async function transitionTo\([\s\S]*?prepareTransitionSlideImmediate\(nextSlide,story\)[\s\S]*?nextSlide\.classList\.add\(enterClass\)/
+  );
+  assert.doesNotMatch(
+    app,
+    /async function transitionTo\([\s\S]{0,2500}?await prepareTransitionSlide\(nextSlide,story\)/
   );
 });
 
@@ -42,11 +46,25 @@ test("BaitBuster preparation has a bounded pre-display budget",async()=>{
   );
 });
 
-test("a strong touch swipe is preserved while the target is still preparing",async()=>{
+test("touch navigation builds an immediate target instead of bouncing the first swipe",async()=>{
   const app=await source("js/app.js");
   assert.match(
     app,
-    /const shouldDeferToNormalNavigation=[\s\S]*?state\.touchDragTargetIndex<0[\s\S]*?await move\(direction,\{origin:"touch_drag"\}\)/
+    /function prepareTouchDragTarget\([\s\S]*?if\(!slidePreloadedForStory\(standby,story\)\)\{\s*prepareTransitionSlideImmediate\(standby,story\);\s*\}/
+  );
+  assert.match(
+    app,
+    /function prepareTouchFeedDragTarget\([\s\S]*?prepareTransitionSlideImmediate\(standby,story\)/
+  );
+});
+
+test("late background preparation is invalidated before it can rewrite a visible snapshot",async()=>{
+  const app=await source("js/app.js");
+  assert.match(app,/function invalidateSlidePreparation/);
+  assert.match(app,/__floewPreparationSerial/);
+  assert.match(
+    app,
+    /preparationSerial[\s\S]*?el\.__floewPreparationSerial!==preparationSerial/
   );
 });
 
