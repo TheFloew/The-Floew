@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.81.1";
+window.__floewAppVersion="31.81.2";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -2697,9 +2697,10 @@ async function switchFeedMode(nextMode){
   clearTimeout(state.timer);
 
   /*
-    Yatay sekme değişiminde de aynı tam hazırlık kapısını kullan.
+    Sekme geçişi kullanıcı girdisini bekletmez. Hazır standby kullanılır;
+    hazır değilse o anki cache'ten anlık snapshot oluşturulur.
   */
-  await prepareTransitionSlide(nextSlide,nextStory);
+  prepareTransitionSlideImmediate(nextSlide,nextStory);
 
   feedModeStoryKeys[feedMode]=storyIdentity(currentStory);
   feedMode=next;
@@ -5638,7 +5639,12 @@ function waitForImageSignal(image,waitMs=90){
   });
 }
 
-async function waitForSlideImageStable(el,story,timeoutMs=9000){
+async function waitForSlideImageStable(
+  el,
+  story,
+  timeoutMs=9000,
+  preparationSerial=0
+){
   const image=el?.querySelector?.(".slide-image");
   if(!image)return true;
 
@@ -5649,6 +5655,13 @@ async function waitForSlideImageStable(el,story,timeoutMs=9000){
   const deadline=performance.now()+Math.max(500,timeoutMs);
 
   while(performance.now()<deadline){
+    if(
+      preparationSerial &&
+      el.__floewPreparationSerial!==preparationSerial
+    ){
+      return false;
+    }
+
     await Promise.resolve();
 
     const stage=String(image.dataset.imageStage||"");
@@ -5693,6 +5706,13 @@ async function waitForSlideImageStable(el,story,timeoutMs=9000){
     }
 
     await waitForImageSignal(image,80);
+  }
+
+  if(
+    preparationSerial &&
+    el.__floewPreparationSerial!==preparationSerial
+  ){
+    return false;
   }
 
   /*
@@ -5756,7 +5776,8 @@ async function prepareStorySlideInternal(
   story,
   {
     preloadMedia=true,
-    markPreloaded=true
+    markPreloaded=true,
+    preparationSerial=0
   }={}
 ){
   if(!el||!story)return false;
@@ -5810,7 +5831,8 @@ async function prepareStorySlideInternal(
   const imageTask=waitForSlideImageStable(
     el,
     story,
-    9000
+    9000,
+    preparationSerial
   );
 
   const mediaTask=(
@@ -5837,7 +5859,13 @@ async function prepareStorySlideInternal(
     Bu sırada aynı standby slide başka bir hedef için yeniden kullanılmışsa
     eski asenkron hazırlık kesinlikle yeni habere dokunmasın.
   */
-  if(el.dataset.storyKey!==mediaIdentity){
+  if(
+    el.dataset.storyKey!==mediaIdentity ||
+    (
+      preparationSerial &&
+      el.__floewPreparationSerial!==preparationSerial
+    )
+  ){
     return false;
   }
 
@@ -5864,7 +5892,13 @@ async function prepareStorySlideInternal(
     )
   );
 
-  if(el.dataset.storyKey!==mediaIdentity){
+  if(
+    el.dataset.storyKey!==mediaIdentity ||
+    (
+      preparationSerial &&
+      el.__floewPreparationSerial!==preparationSerial
+    )
+  ){
     return false;
   }
 
@@ -5896,10 +5930,18 @@ function prepareStorySlide(el,story,options={}){
     return el.__floewPreparationPromise;
   }
 
+  const preparationSerial=
+    (Number(el.__floewPreparationSerial)||0)+1;
+
+  el.__floewPreparationSerial=preparationSerial;
+
   const promise=prepareStorySlideInternal(
     el,
     story,
-    options
+    {
+      ...options,
+      preparationSerial
+    }
   ).finally(()=>{
     if(el.__floewPreparationPromise===promise){
       el.__floewPreparationPromise=null;
@@ -5930,6 +5972,110 @@ async function prepareTransitionSlide(el,story){
     );
   }
   return slidePreloadedForStory(el,story);
+}
+
+function invalidateSlidePreparation(el){
+  if(!el)return;
+
+  el.__floewPreparationSerial=
+    (Number(el.__floewPreparationSerial)||0)+1;
+  el.__floewPreparationKey="";
+  el.__floewPreparationPromise=null;
+}
+
+function freezeImmediateStoryImage(el,story){
+  const image=el?.querySelector?.(".slide-image");
+  if(!image)return;
+
+  let fallbackUsed=false;
+  const fallback=storyImageProxyUrl(story);
+
+  const lockLoadedFrame=()=>{
+    image.onload=null;
+    image.onerror=null;
+    image.style.visibility="visible";
+    lockSmartFocalPointImmediate(image,story);
+  };
+
+  image.onload=lockLoadedFrame;
+  image.onerror=()=>{
+    if(
+      !fallbackUsed &&
+      fallback &&
+      fallback!==image.src
+    ){
+      fallbackUsed=true;
+      image.src=fallback;
+      return;
+    }
+
+    image.onload=null;
+    image.onerror=null;
+    image.style.visibility="hidden";
+  };
+
+  if(image.complete){
+    if(image.naturalWidth>0){
+      lockLoadedFrame();
+    }else{
+      image.onerror?.();
+    }
+  }
+}
+
+function prepareTransitionSlideImmediate(el,story){
+  if(!el||!story)return false;
+  if(slidePreloadedForStory(el,story))return true;
+
+  /*
+    Kullanıcı navigasyonu ağ/AI/Flöra beklemez. Standby slaytta o ana kadar
+    hazır olan verilerden tek bir snapshot oluşturulur ve görünür olduktan
+    sonra BaitBuster/Flöra tarafından değiştirilmez.
+  */
+  invalidateSlidePreparation(el);
+  fill(el,story,{prepareMedia:false});
+  el.className="slide";
+
+  const api=globalThis.BaitBusterBeta;
+
+  if(api?.isEnabled?.()){
+    api.applyToSlide(
+      el,
+      story,
+      api.getResult?.(story)||null
+    );
+  }else{
+    clearBaitBusterPresentationFallback(el,story);
+  }
+
+  setSlideFloraScore(el,story);
+  freezeImmediateStoryImage(el,story);
+  el.dataset.preloadedStoryKey=storyIdentity(story);
+
+  /*
+    Eksik hazırlıkları yalnız cache için arka planda sürdür. Bu promise'ler
+    görünür slayta yazmaz; aynı haber daha sonra tekrar ziyaret edilirse hazır
+    sonuçtan yararlanılır.
+  */
+  preloadStoryAssets(story);
+
+  try{
+    if(api?.isEnabled?.()){
+      void api.prepareStory(story).catch(()=>{});
+    }
+  }catch(e){}
+
+  const identity=storyIdentity(story);
+  if(
+    !story?.customRss &&
+    identity &&
+    !floraScoreMap.has(identity) &&
+    Number(floraStoryMissingUntil.get(identity)||0)<=Date.now()
+  ){
+    void loadFloraStoryStats(story).catch(()=>{});
+  }
+
+  return true;
 }
 
 
@@ -8345,10 +8491,9 @@ async function transitionFromAdTo(nextIndex,fromHistory,dir=1){
   const story=state.stories[nextIndex];
 
   /*
-    Reklam çıkışında da hedef haber görünmeden önce tam hazırlanır.
-    Hazır standby varsa ağ/AI işi tekrar edilmez.
+    Reklam çıkışında da kullanıcı hareketi hazırlık kuyruğuna bağlanmaz.
   */
-  await prepareTransitionSlide(nextSlide,story);
+  prepareTransitionSlideImmediate(nextSlide,story);
 
   nextSlide.className="slide";
   clearFlowTransitionClasses(adOverlay);
@@ -8459,10 +8604,10 @@ async function transitionTo(nextIndex,fromHistory,dir){
   const story=state.stories[nextIndex];
 
   /*
-    Tek geçiş kapısı: hedef haber BaitBuster, Flöra, son görsel, odak ve
-    medya hazırlığını bitirmeden animasyon sınıfı bile alamaz.
+    Kullanıcı hareketi geldiği anda animasyon başlar. Tam hazırlık yetişmişse
+    standby kullanılır; yetişmemişse cache'teki verilerle snapshot alınır.
   */
-  await prepareTransitionSlide(nextSlide,story);
+  prepareTransitionSlideImmediate(nextSlide,story);
 
   currentSlide.className="slide";
   nextSlide.className="slide";
@@ -14438,18 +14583,7 @@ function prepareTouchAdDragTarget(direction){
     target.index!==state.index &&
     !slidePreloadedForStory(targetSlide,story)
   ){
-    void prepareStorySlide(
-      targetSlide,
-      story,
-      {preloadMedia:true,markPreloaded:true}
-    ).catch(()=>{});
-
-    /*
-      Parmağın altına yarım hazırlanmış haber sokma. Hazırlık sonraki pointer
-      hareketine yetişirse normal sürükleme başlar; yetişmezse mevcut haber
-      hafif direnç gösterir.
-    */
-    return false;
+    prepareTransitionSlideImmediate(targetSlide,story);
   }
 
   touchAdDragActive=true;
@@ -14623,7 +14757,7 @@ async function finalizeCommittedAdDragToStory(nextIndex,dir=1){
 
   if(nextIndex!==state.index){
     if(!slidePreloadedForStory(targetSlide,story)){
-      await prepareTransitionSlide(targetSlide,story);
+      prepareTransitionSlideImmediate(targetSlide,story);
     }
     targetSlide.className="slide active";
     previousSlide.className="slide";
@@ -14736,17 +14870,7 @@ function prepareTouchDragTarget(direction){
   state.timer=null;
 
   if(!slidePreloadedForStory(standby,story)){
-    void prepareStorySlide(
-      standby,
-      story,
-      {preloadMedia:true,markPreloaded:true}
-    ).catch(()=>{});
-
-    state.touchDragTargetIndex=-1;
-    state.touchDragFromHistory=false;
-    standby.className="slide touch-dragging";
-    slides[state.active].classList.add("touch-dragging");
-    return false;
+    prepareTransitionSlideImmediate(standby,story);
   }
 
   standby.className="slide touch-dragging";
@@ -15037,16 +15161,7 @@ function prepareTouchFeedDragTarget(direction){
   const story=target.list[target.index];
 
   if(!slidePreloadedForStory(standby,story)){
-    void prepareStorySlide(
-      standby,
-      story,
-      {preloadMedia:true,markPreloaded:true}
-    ).catch(()=>{});
-
-    touchFeedDragTargetIndex=-1;
-    standby.className="slide touch-dragging";
-    slides[state.active].classList.add("touch-dragging");
-    return false;
+    prepareTransitionSlideImmediate(standby,story);
   }
 
   standby.className="slide touch-dragging";
