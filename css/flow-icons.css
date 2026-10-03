@@ -1,0 +1,160 @@
+/* Flöw Icons v1.0 — unified monochrome + COLR/CPAL color icon font */
+@font-face{
+  font-family:"Flöw Icons";
+  src:url("../assets/fonts/flow-icons.woff2?v=1") format("woff2");
+  font-style:normal;
+  font-weight:400;
+  font-display:block;
+}
+.fi{
+  display:inline-block;
+  font-family:"Flöw Icons" !important;
+  font-style:normal;
+  font-weight:400;
+  font-variant:normal;
+  font-synthesis:none;
+  line-height:1;
+  text-rendering:auto;
+  speak:none;
+}
+.fi::before{display:block;}
+.fi-menu::before{content:"\e001";}
+.fi-fullscreen::before{content:"\e002";}
+.fi-pip::before{content:"\e003";}
+.fi-clock::before{content:"\e004";}
+.fi-filter::before{content:"\e005";}
+.fi-target::before{content:"\e006";}
+.fi-info::before{content:"\e007";}
+.fi-settings::before{content:"\e008";}
+.fi-close::before{content:"\e009";}
+.fi-external::before{content:"\e00a";}
+.fi-arrow-up::before{content:"\e00b";}
+.fi-arrow-down::before{content:"\e00c";}
+.fi-minus::before{content:"\e00d";}
+.fi-plus::before{content:"\e00e";}
+.fi-play::before{content:"\e00f";}
+.fi-pause::before{content:"\e010";}
+.fi-share::before{content:"\e011";}
+.fi-feedback::before{content:"\e012";}
+.fi-source::before{content:"\e013";}
+.fi-check::before{content:"\e014";}
+.fi-sun::before{content:"\e015";}
+.fi-moon::before{content:"\e016";}
+.fi-partly-cloudy::before{content:"\e017";}
+.fi-cloud::before{content:"\e018";}
+.fi-fog::before{content:"\e019";}
+.fi-rain::before{content:"\e01a";}
+.fi-snow::before{content:"\e01b";}
+.fi-lightning::before{content:"\e01c";}
+.fi-weather-unknown::before{content:"\e01d";}
+.fi-chevron-up::before{content:"\e01e";}
+.fi-chevron-down::before{content:"\e01f";}
+.fi-arrow-right::before{content:"\e020";}
+.fi-volume-on::before{content:"\e021";}
+.fi-volume-off::before{content:"\e022";}
+.fi-flag-us::before{content:"\e023";}
+.fi-flag-eu::before{content:"\e024";}
+.fi-flag-gb::before{content:"\e025";}
+.fi-gold::before{content:"\e026";}
+.fi-newspaper::before{content:"\e027";}
+.fi-image::before{content:"\e028";}
+.fi-scroll::before{content:"\e029";}
+.fi-tap::before{content:"\e02a";}
+.fi-link::before{content:"\e02b";}
+.fi-back::before{content:"\e02c";}
+.fi-warning::before{content:"\e02d";}
+.fi-tag::before{content:"\e02e";}
+.fi-bulb::before{content:"\e02f";}
+.fi-bug::before{content:"\e030";}
+
+/* Component normalization: one optical grid, no OS emoji/symbol fallback. */
+.fi,
+button.fi,
+a.fi,
+span.fi{
+  font-family:"Flöw Icons" !important;
+  font-variant:normal !important;
+  font-variant-emoji:normal !important;
+  font-synthesis:none !important;
+  letter-spacing:0 !important;
+  text-transform:none !important;
+}
+
+/* Top-right controls */
+#fullscreen-button.fi{font-size:27px !important;line-height:1 !important;padding:0 !important;}
+#control-menu-button.fi{font-size:25px !important;line-height:1 !important;padding:0 !important;}
+#control-menu-panel .control-menu-item.fi{font-size:21px !important;line-height:1 !important;padding:0 !important;}
+
+/* Modal / utility controls */
+#source-viewer-external.fi{font-size:19px !important;line-height:1 !important;padding:0 !important;}
+#source-viewer-close.fi,
+#menu-close.fi,
+#stats-close.fi,
+#about-doc-viewer-close.fi,
+.status-close.fi,
+.flora-story-popover-close.fi,
+.custom-rss-remove.fi,
+.keyword-tool-clear.fi{
+  font-size:17px !important;
+  line-height:1 !important;
+  padding:0 !important;
+}
+
+/* Settings controls */
+.direction-option .fi{width:28px;font-size:18px !important;line-heigight:1 !important;vertical-align:-2px;}
+.duration-control button.fi,
+.custom-rss-add-row button.fi,
+.accessibility-size-control button.fi,
+.ticker-size-control button.fi{
+  font-size:15px !important;
+  line-height:1 !important;
+}
+.option-check.fi{font-size:9px !important;line-height:1 !important;}
+
+/* Headline actions */
+.headline-actions > .share-link.fi,
+.headline-actions > .feedback-inline-link.fi,
+.headline-actions > .source-link.fi,
+.headline-actions > #video-audio-toggle.fi{
+  font-size:20px !important;
+  line-height:1 !important;
+}
+@media(max-width:700px), (pointer:coarse){
+  .headline-actions > .share-link.fi,
+  .headline-actions > .feedback-inline-link.fi,
+  .headline-actions > .source-link.fi,
+  .headline-actions > #video-audio-toggle.fi{
+    font-size:21px !important;
+  }
+}
+
+/* Weather and market */
+#weather-icon.fi{font-size:17px !important;line-height:1 !important;}
+.fx-flag.fi,
+.fx-gold-icon.fi{
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:flex-start !important;
+  width:18px !important;
+  height:18px !important;
+  font-size:18px !important;
+  line-height:1 !important;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.4));
+}
+.market-ticker-change .fi{font-size:.82em !important;margin-right:.2em;vertical-align:.02em;}
+
+/* FAQ */
+.faq-accordion-chevron.fi{font-size:15px !important;line-height:1 !important;}
+.faq-accordion-item.open .faq-accordion-chevron.fi{transform:none !important;}
+
+/* Feedback */
+.floew-feedback-icon.fi{font-size:15px !important;line-heigight:1 !important;font-weight:400 !important;}
+.floew-feedback-back .fi{font-size:10px !important;margin-right:5px;vertical-align:-1px;}
+.floew-feedback-success-mark.fi{font-size:23px !important;line-heigight:1 !important;}
+
+/* Flöra / admin small inline navigation icons */
+.back-link .fi,.story-link .fi{font-size:.9em !important;vertical-align:-.05em;}
+
+/* Old PNG audio/gold assets are no longer needed when the icon font is active. */
+#video-audio-toggle .video-audio-icon,
+.fx-gold-icon img{display:none !important;}
