@@ -81,3 +81,26 @@ test("the obsolete baitbusterbeta page is not part of production loading",async(
   assert.doesNotMatch(production,/baitbusterbeta\//);
   assert.match(production,/js\/baitbuster-beta\.js\?v=[a-f0-9]{12}/);
 });
+
+
+test("prepared standby rechecks a BaitBuster result from cache before transition",async()=>{
+  const app=await source("js/app.js");
+  assert.match(
+    app,
+    /if\(slidePreloadedForStory\(el,story\)\)\{[\s\S]*?cachedApi\.getResult\?\.\(story\)[\s\S]*?return true;/
+  );
+});
+
+test("instant image snapshot keeps the full image fallback ladder",async()=>{
+  const app=await source("js/app.js");
+  const block=app.match(/function freezeImmediateStoryImage\(el,story\)\{[\s\S]*?\n\}/)?.[0]||"";
+  assert.match(block,/article-proxy/);
+  assert.match(block,/direct-fallback/);
+  assert.match(block,/external-proxy/);
+  assert.match(block,/storyExternalImageProxyUrl/);
+});
+
+test("BaitBuster warms three upcoming stories instead of only two",async()=>{
+  const client=await source("js/baitbuster-beta.js");
+  assert.match(client,/items\.slice\(0,3\)/);
+});
