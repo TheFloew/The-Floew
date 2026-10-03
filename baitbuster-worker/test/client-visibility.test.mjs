@@ -113,3 +113,19 @@ test("BaitBuster warming starts before full standby slide preparation",async()=>
   assert.ok(schedule.indexOf("prefetchStories?.(warm)")>=0);
   assert.ok(schedule.indexOf("prefetchStories?.(warm)")<schedule.indexOf("prepareStorySlide("));
 });
+
+
+test("BaitBuster prefetch sends upcoming stories in one batch request",async()=>{
+  const client=await source("js/baitbuster-beta.js");
+  assert.match(client,/body:JSON\.stringify\(\{stories:list\}\)/);
+  assert.match(client,/const batchPromise=requestStories\(pending\)/);
+  assert.match(client,/items\.slice\(0,5\)/);
+});
+
+test("transient AI failures are not cached as final session results",async()=>{
+  const client=await source("js/baitbuster-beta.js");
+  assert.match(client,/rewriteStatus==="ai_error"/);
+  assert.match(client,/retryAfterByKey\.set/);
+  assert.match(client,/resultByKey\.delete\(story\.key\)/);
+  assert.match(client,/TRANSIENT_RETRY_MS=60\*1000/);
+});
