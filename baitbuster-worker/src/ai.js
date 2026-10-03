@@ -6,7 +6,7 @@ import {
 const DEFAULT_MODEL="@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const DEFAULT_GATE_MODEL="@cf/meta/llama-3.1-8b-instruct-fp8";
 const AI_TIMEOUT_MS=18000;
-export const GATE_CONFIDENCE_THRESHOLD=.99;
+export const GATE_CONFIDENCE_THRESHOLD=.95;
 
 const GATE_PROMPT=`Act as a conservative first-pass filter for Turkish news headlines. Your only job is to decide which headlines are so clearly informative and non-clickbait that a larger model can safely skip reviewing them.
 
