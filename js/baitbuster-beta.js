@@ -363,5 +363,42 @@
     getLastError:()=>lastError
   };
 
+  if(new URLSearchParams(location.search).get("bbdiag")==="1"){
+    const pre=document.createElement("pre");
+    pre.id="bb-diagnostic";
+    pre.style.cssText="position:fixed;inset:12px;z-index:2147483647;overflow:auto;background:#000;color:#0f0;padding:16px;white-space:pre-wrap;font:14px/1.45 monospace";
+    pre.textContent="running…";
+    document.body.appendChild(pre);
+
+    const diagnosticStory=normalizeStory({
+      link:"https://example.com/haber",
+      title:"Beklenen açıklama geldi",
+      description:"Merkez Bankası politika faizini yüzde 40'a düşürdüğünü açıkladı.",
+      source:"Tanılama",
+      flowCategory:"Gündem"
+    });
+
+    const started=performance.now();
+    requestStory(diagnosticStory)
+      .then(result=>{
+        pre.textContent=JSON.stringify({
+          elapsedMs:Math.round(performance.now()-started),
+          enabled:featureEnabled,
+          clientVersion:CLIENT_VERSION,
+          lastError,
+          result
+        },null,2);
+      })
+      .catch(error=>{
+        pre.textContent=JSON.stringify({
+          elapsedMs:Math.round(performance.now()-started),
+          enabled:featureEnabled,
+          clientVersion:CLIENT_VERSION,
+          lastError,
+          error:String(error?.message||error)
+        },null,2);
+      });
+  }
+
   window.dispatchEvent(new Event("floew:baitbuster-ready"));
 })();
