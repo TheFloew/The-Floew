@@ -100,7 +100,16 @@ test("instant image snapshot keeps the full image fallback ladder",async()=>{
   assert.match(block,/storyExternalImageProxyUrl/);
 });
 
-test("BaitBuster warms three upcoming stories instead of only two",async()=>{
+test("BaitBuster warms five upcoming stories for cold-cache AI work",async()=>{
   const client=await source("js/baitbuster-beta.js");
-  assert.match(client,/items\.slice\(0,3\)/);
+  assert.match(client,/items\.slice\(0,5\)/);
+  assert.match(client,/const FETCH_TIMEOUT_MS=45000;/);
+});
+
+
+test("BaitBuster warming starts before full standby slide preparation",async()=>{
+  const app=await source("js/app.js");
+  const schedule=app.match(/function scheduleNextStoryPreload\(delay=0\)\{[\s\S]*?\n\}/)?.[0]||"";
+  assert.ok(schedule.indexOf("prefetchStories?.(warm)")>=0);
+  assert.ok(schedule.indexOf("prefetchStories?.(warm)")<schedule.indexOf("prepareStorySlide("));
 });
