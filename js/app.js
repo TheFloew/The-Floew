@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.81.3";
+window.__floewAppVersion="31.81.4";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -8255,6 +8255,23 @@ function scheduleNextStoryPreload(delay=0){
       BaitBuster + Flöra + son görsel URL'si + akıllı odak + video çözümü,
       hepsi standby slide görünmeden önce tamamlanır.
     */
+
+    /*
+      BaitBuster veri ısıtmasını görsel/video hazırlığının bitmesini bekletme.
+      Worker soğuk cache'te daha uzun sürebilir; hedef haber ve sonraki dört
+      haber için AI işi mümkün olduğunca erken başlasın. Bu hiçbir zaman
+      kullanıcı navigasyonunu bloklamaz.
+    */
+    try{
+      const warm=[story];
+      for(let offset=1;offset<=4;offset++){
+        const nextIndex=index+offset;
+        if(nextIndex>=state.stories.length)break;
+        warm.push(state.stories[nextIndex]);
+      }
+      globalThis.BaitBusterBeta?.prefetchStories?.(warm);
+    }catch(e){}
+
     void prepareStorySlide(
       inactiveSlide,
       story,
@@ -8278,18 +8295,9 @@ function scheduleNextStoryPreload(delay=0){
       inactiveSlide.className="slide";
 
       /*
-        Bir sonraki seçimi de yalnız veri katmanında erkenden ısıt.
-        İkinci standby slide olmadığı için DOM'a dokunmuyoruz.
+        BaitBuster veri ısıtması bu hazırlığın başında zaten tetiklendi.
+        Burada yalnız standby slide'ın hazır durumunu koruyoruz.
       */
-      try{
-        const upcoming=[];
-        for(let offset=1;offset<=3;offset++){
-          const nextIndex=index+offset;
-          if(nextIndex>=state.stories.length)break;
-          upcoming.push(state.stories[nextIndex]);
-        }
-        globalThis.BaitBusterBeta?.prefetchStories?.(upcoming);
-      }catch(e){}
     }).catch(()=>{});
   },Math.max(0,delay));
 }
