@@ -10,7 +10,7 @@ test("8B gate skips 70B only for clearly non-clickbait headlines at the confiden
       async run(model,input){
         calls.push({model,input});
         if(model!==AI_GATE_MODEL_DEFAULT)throw new Error("70B should not run");
-        return {response:"0|clear|0.95"};
+        return {response:"0|clear|0.99"};
       }
     }
   };
@@ -24,7 +24,7 @@ test("8B gate skips 70B only for clearly non-clickbait headlines at the confiden
     category:"Gündem"
   }],env);
 
-  assert.equal(GATE_CONFIDENCE_THRESHOLD,.95);
+  assert.equal(GATE_CONFIDENCE_THRESHOLD,.99);
   assert.equal(rows.length,1);
   assert.equal(rows[0].clickbait,false);
   assert.equal(rows[0].reasonCode,"clear_headline_8b_gate");
@@ -38,7 +38,7 @@ test("8B gate escalates uncertain clear headlines to the 70B classifier",async()
     AI:{
       async run(model,input){
         calls.push(model);
-        if(model===AI_GATE_MODEL_DEFAULT)return {response:"0|clear|0.94"};
+        if(model===AI_GATE_MODEL_DEFAULT)return {response:"0|clear|0.98"};
         const payload=JSON.parse(input.messages[1].content);
         return {response:{results:[{
           key:payload.stories[0].key,
@@ -221,7 +221,7 @@ test("8B gate evaluates the full incoming batch in one compact request",async()=
         assert.equal(model,AI_GATE_MODEL_DEFAULT);
         const payload=JSON.parse(input.messages[1].content);
         return {
-          response:payload.stories.map(story=>`${story.key}|clear|0.95`).join("\n")
+          response:payload.stories.map(story=>`${story.key}|clear|0.99`).join("\n")
         };
       }
     }
@@ -281,7 +281,7 @@ test("8B gate uses compact ids instead of long story keys in its payload",async(
         assert.equal(model,AI_GATE_MODEL_DEFAULT);
         const payload=JSON.parse(input.messages[1].content);
         sentKey=payload.stories[0].key;
-        return {response:"0|clear|0.95"};
+        return {response:"0|clear|0.99"};
       }
     }
   };
