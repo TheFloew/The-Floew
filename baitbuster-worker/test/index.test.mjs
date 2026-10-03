@@ -8,7 +8,7 @@ const ORIGIN="https://xn--flw-tna.tr";
 test("health is public and reports service version",async()=>{
   const res=await handleRequest(new Request("https://worker.test/health"),{},{});
   assert.equal(res.status,200);
-  assert.deepEqual(await res.json(),{ok:true,service:"thefloew-baitbuster",version:"1.6.4"});
+  assert.deepEqual(await res.json(),{ok:true,service:"thefloew-baitbuster",version:"1.6.6"});
 });
 
 test("preflight allows only Flöw production origin",async()=>{
@@ -47,7 +47,7 @@ test("evaluate reports incomplete deployment",async()=>{
 
 test("cached story returns without a Workers AI call",async()=>{
   const story=normalizeStory({key:"a",url:"https://example.com/a",title:"Normal başlık"});
-  const cacheKey=`v6:${await storyCacheKey(story)}`;
+  const cacheKey=`v7:${await storyCacheKey(story)}`;
   const cached=originalResult(story,"not_clickbait",{classificationConfidence:.9,modelVersion:"test"});
   const env={
     AI:{run:async()=>{throw new Error("AI should not be called for cache hit");}},
@@ -79,7 +79,7 @@ test("high-confidence 8B gate result is returned and cached without a 70B call",
     AI:{
       async run(model,input){
         calls.push(model);
-        return {response:"0|clear|0.95"};
+        return {response:"0|clear|0.99"};
       }
     },
     BAITBUSTER_CACHE:{
