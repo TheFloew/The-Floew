@@ -2,7 +2,7 @@
   "use strict";
 
   const ENDPOINT="https://thefloew-baitbuster.thefloewback.workers.dev/v1/evaluate";
-  const CLIENT_VERSION="16";
+  const CLIENT_VERSION="17";
   const FETCH_TIMEOUT_MS=12000;
   const UI=globalThis.BaitBusterUI;
   const settingButton=document.getElementById("baitbuster-setting");
@@ -301,7 +301,7 @@
   function prefetchStories(items){
     if(!featureEnabled||!Array.isArray(items))return;
 
-    for(const item of items.slice(0,2)){
+    for(const item of items.slice(0,3)){
       void prepareStory(item).catch(()=>{});
     }
   }
