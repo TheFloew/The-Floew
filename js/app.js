@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.81.2";
+window.__floewAppVersion="31.81.3";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -5987,8 +5987,13 @@ function freezeImmediateStoryImage(el,story){
   const image=el?.querySelector?.(".slide-image");
   if(!image)return;
 
-  let fallbackUsed=false;
-  const fallback=storyImageProxyUrl(story);
+  const direct=String(story?.image||"").trim();
+  const proxied=storyImageProxyUrl(story);
+  const articleProxy=storyImageProxyUrl(
+    story,
+    {preferArticle:true}
+  );
+  const externalProxy=storyExternalImageProxyUrl(story);
 
   const lockLoadedFrame=()=>{
     image.onload=null;
@@ -5997,26 +6002,80 @@ function freezeImmediateStoryImage(el,story){
     lockSmartFocalPointImmediate(image,story);
   };
 
-  image.onload=lockLoadedFrame;
-  image.onerror=()=>{
+  const tryNextFallback=()=>{
+    const stage=String(image.dataset.imageStage||"");
+
     if(
-      !fallbackUsed &&
-      fallback &&
-      fallback!==image.src
+      stage==="direct" &&
+      proxied &&
+      proxied!==image.src
     ){
-      fallbackUsed=true;
-      image.src=fallback;
+      image.dataset.imageStage="proxy";
+      image.src=proxied;
+      return true;
+    }
+
+    if(
+      stage==="article-proxy" &&
+      direct &&
+      direct!==image.src
+    ){
+      image.dataset.imageStage="direct-fallback";
+      image.src=direct;
+      return true;
+    }
+
+    if(
+      (stage==="proxy" || stage==="direct-fallback") &&
+      externalProxy &&
+      externalProxy!==image.src
+    ){
+      image.dataset.imageStage="external-proxy";
+      image.src=externalProxy;
+      return true;
+    }
+
+    return false;
+  };
+
+  image.onload=()=>{
+    const stage=String(image.dataset.imageStage||"");
+
+    /*
+      Anlık geçiş de normal setStoryImage() ile aynı kaliteli-görsel
+      yükseltmesini kullanır. Küçük RSS thumbnail'i geldiyse haber sayfasının
+      OG/JSON-LD görselini dene; bu başarısız olursa aşağıdaki hata zinciri
+      tekrar doğrudan/proxy seçeneklerine döner.
+    */
+    if(
+      stage==="direct" &&
+      articleProxy &&
+      /^https?:\/\//i.test(direct) &&
+      (
+        (image.naturalWidth>0 && image.naturalWidth<700) ||
+        (image.naturalHeight>0 && image.naturalHeight<400)
+      )
+    ){
+      image.dataset.imageStage="article-proxy";
+      image.src=articleProxy;
       return;
     }
 
+    lockLoadedFrame();
+  };
+
+  image.onerror=()=>{
+    if(tryNextFallback())return;
+
     image.onload=null;
     image.onerror=null;
+    image.dataset.imageStage="failed";
     image.style.visibility="hidden";
   };
 
   if(image.complete){
     if(image.naturalWidth>0){
-      lockLoadedFrame();
+      image.onload?.();
     }else{
       image.onerror?.();
     }
@@ -6025,7 +6084,27 @@ function freezeImmediateStoryImage(el,story){
 
 function prepareTransitionSlideImmediate(el,story){
   if(!el||!story)return false;
-  if(slidePreloadedForStory(el,story))return true;
+
+  /*
+    Standby daha önce tam hazırlanmış olsa bile BaitBuster isteği 2,2 saniyelik
+    hazırlık bütçesinden sonra tamamlanmış olabilir. Geçiş başlamadan hemen
+    önce yalnız cache'e bakarak sonucu yeniden uygula; ağ/AI bekleme.
+  */
+  if(slidePreloadedForStory(el,story)){
+    const cachedApi=globalThis.BaitBusterBeta;
+
+    if(cachedApi?.isEnabled?.()){
+      cachedApi.applyToSlide(
+        el,
+        story,
+        cachedApi.getResult?.(story)||null
+      );
+    }else{
+      clearBaitBusterPresentationFallback(el,story);
+    }
+
+    return true;
+  }
 
   /*
     Kullanıcı navigasyonu ağ/AI/Flöra beklemez. Standby slaytta o ana kadar
@@ -8203,12 +8282,13 @@ function scheduleNextStoryPreload(delay=0){
         İkinci standby slide olmadığı için DOM'a dokunmuyoruz.
       */
       try{
-        const nextAfter=index+1<state.stories.length
-          ? state.stories[index+1]
-          : null;
-        globalThis.BaitBusterBeta?.prefetchStories?.(
-          nextAfter?[nextAfter]:[]
-        );
+        const upcoming=[];
+        for(let offset=1;offset<=3;offset++){
+          const nextIndex=index+offset;
+          if(nextIndex>=state.stories.length)break;
+          upcoming.push(state.stories[nextIndex]);
+        }
+        globalThis.BaitBusterBeta?.prefetchStories?.(upcoming);
       }catch(e){}
     }).catch(()=>{});
   },Math.max(0,delay));
