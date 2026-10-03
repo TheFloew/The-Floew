@@ -10,7 +10,7 @@ test("8B gate skips 70B only for clearly non-clickbait headlines at the confiden
       async run(model,input){
         calls.push({model,input});
         if(model!==AI_GATE_MODEL_DEFAULT)throw new Error("70B should not run");
-        return {response:"0|clear|0.99"};
+        return {response:"0|clear|0.95"};
       }
     }
   };
@@ -24,7 +24,7 @@ test("8B gate skips 70B only for clearly non-clickbait headlines at the confiden
     category:"Gündem"
   }],env);
 
-  assert.equal(GATE_CONFIDENCE_THRESHOLD,.99);
+  assert.equal(GATE_CONFIDENCE_THRESHOLD,.95);
   assert.equal(rows.length,1);
   assert.equal(rows[0].clickbait,false);
   assert.equal(rows[0].reasonCode,"clear_headline_8b_gate");
@@ -38,7 +38,7 @@ test("8B gate escalates uncertain clear headlines to the 70B classifier",async()
     AI:{
       async run(model,input){
         calls.push(model);
-        if(model===AI_GATE_MODEL_DEFAULT)return {response:"0|clear|0.98"};
+        if(model===AI_GATE_MODEL_DEFAULT)return {response:"0|clear|0.94"};
         const payload=JSON.parse(input.messages[1].content);
         return {response:{results:[{
           key:payload.stories[0].key,
