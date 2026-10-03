@@ -2,7 +2,7 @@
   "use strict";
 
   const ENDPOINT="https://thefloew-baitbuster.thefloewback.workers.dev/v1/evaluate";
-  const CLIENT_VERSION="18";
+  const CLIENT_VERSION="19";
   const FETCH_TIMEOUT_MS=45000;
   const UI=globalThis.BaitBusterUI;
   const settingButton=document.getElementById("baitbuster-setting");
@@ -13,6 +13,8 @@
   const entityDecoder=document.createElement("textarea");
   const resultByKey=new Map();
   const requestByKey=new Map();
+  const retryAfterByKey=new Map();
+  const TRANSIENT_RETRY_MS=60*1000;
   const appliedState=new WeakMap();
   let featureEnabled=UI.loadEnabled(localStorage);
   let lastError="";
@@ -189,7 +191,35 @@
     return true;
   }
 
-  async function requestStory(story){
+  function transientResult(result){
+    return (
+      result?.rewriteStatus==="ai_error" ||
+      result?.rewriteStatus==="article_error"
+    );
+  }
+
+  function storeResult(story,result){
+    if(!story||!result)return;
+
+    if(transientResult(result)){
+      resultByKey.delete(story.key);
+      retryAfterByKey.set(
+        story.key,
+        Date.now()+TRANSIENT_RETRY_MS
+      );
+      return;
+    }
+
+    retryAfterByKey.delete(story.key);
+    resultByKey.set(story.key,result);
+  }
+
+  async function requestStories(stories){
+    const list=Array.isArray(stories)
+      ? stories.filter(Boolean)
+      : [];
+    if(!list.length)return new Map();
+
     const controller=new AbortController();
     const timeout=setTimeout(()=>controller.abort(),FETCH_TIMEOUT_MS);
 
@@ -205,7 +235,7 @@
           "X-BaitBuster-Client":CLIENT_TYPE,
           "X-BaitBuster-Version":CLIENT_VERSION
         },
-        body:JSON.stringify({stories:[story]})
+        body:JSON.stringify({stories:list})
       });
 
       if(!response.ok){
@@ -218,21 +248,29 @@
         throw new Error("baitbuster_invalid_response");
       }
 
-      const result=payload.results.find(row=>clean(row?.key)===story.key)||
-        payload.results[0]||
-        null;
+      const byKey=new Map();
 
-      if(!result){
+      for(const story of list){
+        const result=payload.results.find(
+          row=>clean(row?.key)===story.key
+        )||null;
+
+        if(!result)continue;
+
+        if(result.flowTitle){
+          result.flowTitle=clean(result.flowTitle);
+        }
+
+        byKey.set(story.key,result);
+        storeResult(story,result);
+      }
+
+      if(byKey.size!==list.length){
         throw new Error("baitbuster_missing_result");
       }
 
-      if(result.flowTitle){
-        result.flowTitle=clean(result.flowTitle);
-      }
-
       lastError="";
-      resultByKey.set(story.key,result);
-      return result;
+      return byKey;
     }catch(error){
       lastError=String(error?.message||error||"baitbuster_error");
       console.warn("BaitBuster:",lastError);
@@ -240,6 +278,11 @@
     }finally{
       clearTimeout(timeout);
     }
+  }
+
+  async function requestStory(story){
+    const results=await requestStories([story]);
+    return results.get(story.key)||null;
   }
 
   function prepareStory(rawStory){
@@ -250,6 +293,14 @@
 
     if(resultByKey.has(story.key)){
       return Promise.resolve(resultByKey.get(story.key));
+    }
+
+    const retryAfter=Number(retryAfterByKey.get(story.key)||0);
+    if(retryAfter>Date.now()){
+      return Promise.resolve(null);
+    }
+    if(retryAfter){
+      retryAfterByKey.delete(story.key);
     }
 
     if(requestByKey.has(story.key)){
@@ -301,8 +352,49 @@
   function prefetchStories(items){
     if(!featureEnabled||!Array.isArray(items))return;
 
+    const unique=new Map();
+
     for(const item of items.slice(0,5)){
-      void prepareStory(item).catch(()=>{});
+      const story=normalizeStory(item);
+      if(!story||unique.has(story.key))continue;
+      unique.set(story.key,story);
+    }
+
+    const pending=[];
+
+    for(const story of unique.values()){
+      if(resultByKey.has(story.key))continue;
+
+      const retryAfter=Number(retryAfterByKey.get(story.key)||0);
+      if(retryAfter>Date.now())continue;
+      if(retryAfter)retryAfterByKey.delete(story.key);
+
+      if(requestByKey.has(story.key))continue;
+      pending.push(story);
+    }
+
+    if(!pending.length)return;
+
+    /*
+      Worker zaten 12 habere kadar batch kabul ediyor. Sonraki haberleri tek
+      tek göndermek 8B/70B prompt maliyetini gereksiz yere çoğaltıyordu.
+      Tek batch gate + sınıflandırma çağrılarıyla aynı işi daha az neuronla
+      yapar; rewrite gereken haberler Worker içinde yine ayrı işlenir.
+    */
+    const batchPromise=requestStories(pending);
+
+    for(const story of pending){
+      let promise=null;
+      promise=batchPromise
+        .then(results=>results.get(story.key)||null)
+        .finally(()=>{
+          if(requestByKey.get(story.key)===promise){
+            requestByKey.delete(story.key);
+          }
+        });
+
+      requestByKey.set(story.key,promise);
+      void promise.catch(()=>{});
     }
   }
 
@@ -362,43 +454,6 @@
     },
     getLastError:()=>lastError
   };
-
-  if(new URLSearchParams(location.search).get("bbdiag")==="1"){
-    const pre=document.createElement("pre");
-    pre.id="bb-diagnostic";
-    pre.style.cssText="position:fixed;inset:12px;z-index:2147483647;overflow:auto;background:#000;color:#0f0;padding:16px;white-space:pre-wrap;font:14px/1.45 monospace";
-    pre.textContent="running…";
-    document.body.appendChild(pre);
-
-    const diagnosticStory=normalizeStory({
-      link:"https://example.com/haber",
-      title:"Beklenen açıklama geldi",
-      description:"Merkez Bankası politika faizini yüzde 40'a düşürdüğünü açıkladı.",
-      source:"Tanılama",
-      flowCategory:"Gündem"
-    });
-
-    const started=performance.now();
-    requestStory(diagnosticStory)
-      .then(result=>{
-        pre.textContent=JSON.stringify({
-          elapsedMs:Math.round(performance.now()-started),
-          enabled:featureEnabled,
-          clientVersion:CLIENT_VERSION,
-          lastError,
-          result
-        },null,2);
-      })
-      .catch(error=>{
-        pre.textContent=JSON.stringify({
-          elapsedMs:Math.round(performance.now()-started),
-          enabled:featureEnabled,
-          clientVersion:CLIENT_VERSION,
-          lastError,
-          error:String(error?.message||error)
-        },null,2);
-      });
-  }
 
   window.dispatchEvent(new Event("floew:baitbuster-ready"));
 })();
