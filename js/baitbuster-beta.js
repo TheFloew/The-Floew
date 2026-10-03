@@ -2,8 +2,8 @@
   "use strict";
 
   const ENDPOINT="https://thefloew-baitbuster.thefloewback.workers.dev/v1/evaluate";
-  const CLIENT_VERSION="17";
-  const FETCH_TIMEOUT_MS=12000;
+  const CLIENT_VERSION="18";
+  const FETCH_TIMEOUT_MS=45000;
   const UI=globalThis.BaitBusterUI;
   const settingButton=document.getElementById("baitbuster-setting");
   const slides=[...document.querySelectorAll("#a,#b")];
@@ -301,7 +301,7 @@
   function prefetchStories(items){
     if(!featureEnabled||!Array.isArray(items))return;
 
-    for(const item of items.slice(0,3)){
+    for(const item of items.slice(0,5)){
       void prepareStory(item).catch(()=>{});
     }
   }
