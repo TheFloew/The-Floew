@@ -169,14 +169,14 @@
   }
 
   const topicOptions=[
-    {v:"story",l:"Haber",i:"newspaper",next:"story_issue"},
-    {v:"image",l:"Görseller",i:"image",next:"image_issue"},
-    {v:"scroll",l:"Kaydırma",i:"scroll",next:"scroll_issue"},
-    {v:"usability",l:"Kullanım",i:"tap",next:"usability_area"},
-    {v:"sources",l:"Kaynaklar",i:"link",next:"source_kind"},
-    {v:"categories",l:"Kategoriler",i:"tag",next:"category_issue"},
-    {v:"bug",l:"Bir şey bozuk",i:"bug",next:"bug_issue"},
-    {v:"suggestion",l:"Önerim var",i:"bulb",next:"suggestion_area"}
+    {v:"story",l:"Haber",i:"▤︎",next:"story_issue"},
+    {v:"image",l:"Görseller",i:"▧︎",next:"image_issue"},
+    {v:"scroll",l:"Kaydırma",i:"↕︎",next:"scroll_issue"},
+    {v:"usability",l:"Kullanım",i:"◌︎",next:"usability_area"},
+    {v:"sources",l:"Kaynaklar",i:"⌁︎",next:"source_kind"},
+    {v:"categories",l:"Kategoriler",i:"#",next:"category_issue"},
+    {v:"bug",l:"Bir şey bozuk",i:"!",next:"bug_issue"},
+    {v:"suggestion",l:"Önerim var",i:"+",next:"suggestion_area"}
   ];
 
   const frequencyOptions=[
@@ -519,7 +519,7 @@
       <div class="floew-feedback">
         <div class="floew-feedback-step">
           <div class="floew-feedback-head">
-            <button class="floew-feedback-back" type="button" ${stateLocal.history.length?"":"hidden"}><span class="fi fi-back" aria-hidden="true"></span>Geri</button>
+            <button class="floew-feedback-back" type="button" ${stateLocal.history.length?"":"hidden"}>←︎ Geri</button>
             ${progressHtml()}
           </div>
           <div class="floew-feedback-copy">
@@ -529,7 +529,7 @@
           <div class="floew-feedback-options">
             ${options.map(option=>`
               <button class="floew-feedback-option" type="button" data-feedback-value="${escapeHtml(option.v)}">
-                ${option.i?`<span class="floew-feedback-icon fi fi-${escapeHtml(option.i)}" aria-hidden="true"></span>`:""}
+                ${option.i?`<span class="floew-feedback-icon" aria-hidden="true">${escapeHtml(option.i)}</span>`:""}
                 <span>${escapeHtml(option.l)}</span>
               </button>
             `).join("")}
@@ -559,7 +559,7 @@
       <div class="floew-feedback">
         <div class="floew-feedback-step">
           <div class="floew-feedback-head">
-            <button class="floew-feedback-back" type="button"><span class="fi fi-back" aria-hidden="true"></span>Geri</button>
+            <button class="floew-feedback-back" type="button">←︎ Geri</button>
             ${progressHtml()}
           </div>
           <div class="floew-feedback-copy">
@@ -613,7 +613,7 @@
       <div class="floew-feedback">
         <div class="floew-feedback-success">
           <div>
-            <div class="floew-feedback-success-mark fi fi-check" aria-hidden="true"></div>
+            <div class="floew-feedback-success-mark" aria-hidden="true">✓︎</div>
             <h3>Aldık.</h3>
             <p>Geri bildirimin için teşekkürler.</p>
             <button class="floew-feedback-again" type="button">Başka bir şey gönder</button>

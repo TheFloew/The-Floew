@@ -1,7 +1,7 @@
 /*
   Flöw — Haber paylaşımı v3.1.0
   ------------------------------------------------------------
-  - share Haberi paylaş düğmesi: Flöra ile Kaynağa Git arasına eklenir.
+  - ⤴︎ Haberi paylaş düğmesi: Flöra ile Kaynağa Git arasına eklenir.
   - Paylaşım URL'si ayrı Flöw Share Worker üzerinden üretilir.
   - Mobilde Web Share API; masaüstünde clipboard fallback kullanılır.
 */
@@ -505,6 +505,9 @@
   ){
     if(!button)return;
 
+    const oldText=
+      button.textContent;
+
     const oldLabel=
       button.getAttribute(
         "aria-label"
@@ -514,20 +517,14 @@
       button.title ||
       SHARE_LABEL;
 
-    const iconClasses=[
-      "fi-share",
-      "fi-check",
-      "fi-warning"
-    ];
-
-    button.classList.add("fi");
-    button.classList.remove(...iconClasses);
-    button.classList.add(ok?"fi-check":"fi-warning");
     button.classList.add(
       ok
         ? "share-done"
         : "share-error"
     );
+
+    button.textContent=
+      ok ? "✓︎" : "!";
 
     button.setAttribute(
       "aria-label",
@@ -549,11 +546,11 @@
       setTimeout(()=>{
         button.classList.remove(
           "share-done",
-          "share-error",
-          "fi-check",
-          "fi-warning"
+          "share-error"
         );
-        button.classList.add("fi-share");
+
+        button.textContent=
+          oldText || "⤴︎";
 
         button.setAttribute(
           "aria-label",

@@ -1614,7 +1614,7 @@ function ensureFloraPopover(){
         <span class="flora-story-popover-mark" aria-hidden="true">𝒇</span>
         <span>Flöra</span>
       </div>
-      <button class="flora-story-popover-close fi fi-close" type="button" aria-label="Flöra kutusunu kapat"></button>
+      <button class="flora-story-popover-close" type="button" aria-label="Flöra kutusunu kapat">×</button>
     </div>
     <div class="flora-story-popover-score">—</div>
     <div class="flora-story-popover-status">İstatistikler hazırlanıyor...</div>
@@ -2770,10 +2770,7 @@ function setOptionVisualState(el,on){
   if(!el)return;
   el.classList.toggle("on",Boolean(on));
   const check=el.querySelector(".option-check");
-  if(check){
-    check.classList.toggle("fi-check",Boolean(on));
-    check.classList.add("fi");
-  }
+  if(check)check.textContent=on?"✓︎":"";
 }
 
 function scheduleFilterApply(saveKind="normal"){
@@ -2826,7 +2823,7 @@ function renderOptions(){
     const el=document.createElement("div");
     el.className="option"+(on?" on":"");
     el.dataset.key=key;
-    el.innerHTML=`<span class="option-name">${source}</span><span class="option-check fi${on?" fi-check":""}"></span>`;
+    el.innerHTML=`<span class="option-name">${source}</span><span class="option-check">${on?"✓︎":""}</span>`;
     el.addEventListener("click",()=>toggleSource(key,el));
     sourceFragment.appendChild(el);
   }
@@ -2835,7 +2832,7 @@ function renderOptions(){
     const el=document.createElement("div");
     el.className="option on foreign-category-option";
     el.dataset.key=FOREIGN_CATEGORY;
-    el.innerHTML=`<span class="option-name">${FOREIGN_CATEGORY}</span><span class="option-check fi fi-check"></span>`;
+    el.innerHTML=`<span class="option-name">${FOREIGN_CATEGORY}</span><span class="option-check">✓︎</span>`;
     categoryFragment.appendChild(el);
   }else{
     for(const category of CATEGORIES){
@@ -2843,7 +2840,7 @@ function renderOptions(){
       const el=document.createElement("div");
       el.className="option"+(on?" on":"");
       el.dataset.key=category;
-      el.innerHTML=`<span class="option-name">${category}</span><span class="option-check fi${on?" fi-check":""}"></span>`;
+      el.innerHTML=`<span class="option-name">${category}</span><span class="option-check">${on?"✓︎":""}</span>`;
       el.addEventListener("click",()=>toggleCategory(category,el));
       categoryFragment.appendChild(el);
     }
@@ -3201,9 +3198,10 @@ function status(msg){
   text.textContent=msg;
 
   const close=document.createElement("button");
-  close.className="status-close fi fi-close";
+  close.className="status-close";
   close.type="button";
   close.setAttribute("aria-label","Uyarıyı kapat");
+  close.textContent="×";
   close.addEventListener("pointerdown",ev=>ev.stopPropagation());
   close.addEventListener("pointerup",ev=>ev.stopPropagation());
   close.addEventListener("click",ev=>{
@@ -3805,8 +3803,6 @@ function syncActiveVideoAudioUi(){
   const shouldSoundOn=Boolean(videoAudioEnabled);
   if(button.classList.contains("sound-on")!==shouldSoundOn){
     button.classList.toggle("sound-on",shouldSoundOn);
-    button.classList.toggle("fi-volume-on",shouldSoundOn);
-    button.classList.toggle("fi-volume-off",!shouldSoundOn);
   }
 
   setAttrIfChanged("aria-pressed",shouldSoundOn?"true":"false");
@@ -9739,8 +9735,8 @@ function formatMarketPercent(value){
   if(!Number.isFinite(number))return "";
 
   const direction=
-    number>0 ? '<span class="fi fi-chevron-up" aria-hidden="true"></span> ' :
-    number<0 ? '<span class="fi fi-chevron-down" aria-hidden="true"></span> ' :
+    number>0 ? "▲︎ " :
+    number<0 ? "▼︎ " :
     "";
 
   const prefix=number>0?"+":"";
@@ -9770,7 +9766,9 @@ function ensureGoldFxRow(){
   row.dataset.direction="flat";
   row.setAttribute("title","Gram altın · TL");
   row.innerHTML=
-    '<span class="fx-gold-icon fi fi-gold" aria-hidden="true"></span>'+
+    '<span class="fx-gold-icon" aria-hidden="true">'+
+      '<img src="assets/gold.png" alt="" draggable="false">'+
+    '</span>'+
     '<strong>XAU</strong>'+
     '<span class="fx-value">—</span>';
 
@@ -10588,8 +10586,7 @@ let cursorHideTimer = null;
 function setFullscreenIcon(){
   const btn=document.getElementById("fullscreen-button");
   const active=!!document.fullscreenElement;
-  btn.classList.add("fi","fi-fullscreen");
-  btn.textContent="";
+  btn.textContent="⤢︎";
   btn.title=active?"Tam ekrandan çık":"Tam ekran";
   btn.setAttribute("aria-label",btn.title);
 }
@@ -11909,10 +11906,11 @@ function renderCustomRssList(){
 
     const remove=document.createElement("button");
     remove.type="button";
-    remove.className="custom-rss-remove fi fi-close";
+    remove.className="custom-rss-remove";
     remove.dataset.customRssRemove=String(index);
     remove.setAttribute("aria-label","RSS kaynağını kaldır");
     remove.title="RSS kaynağını kaldır";
+    remove.textContent="×";
 
     row.append(text,remove);
     list.appendChild(row);
@@ -12537,15 +12535,20 @@ let weatherInitialized=false;
 
 function weatherSymbol(code,isDay=true){
   const c=Number(code);
-  if(c===0)return isDay?"fi-sun":"fi-moon";
-  if(c===1||c===2)return isDay?"fi-partly-cloudy":"fi-cloud";
-  if(c===3)return "fi-cloud";
-  if(c===45||c===48)return "fi-fog";
-  if([51,53,55,56,57].includes(c))return "fi-rain";
-  if([61,63,65,66,67,80,81,82].includes(c))return "fi-rain";
-  if([71,73,75,77,85,86].includes(c))return "fi-snow";
-  if([95,96,99].includes(c))return "fi-lightning";
-  return "fi-weather-unknown";
+
+  /*
+    U+FE0E (text presentation selector) keeps weather symbols monochrome/text
+    on mobile platforms which would otherwise substitute colored emoji.
+  */
+  if(c===0)return isDay?"☀︎":"☾︎";
+  if(c===1||c===2)return isDay?"◐︎":"☁︎";
+  if(c===3)return "☁︎";
+  if(c===45||c===48)return "≋";
+  if([51,53,55,56,57].includes(c))return "☂︎";
+  if([61,63,65,66,67,80,81,82].includes(c))return "☂︎";
+  if([71,73,75,77,85,86].includes(c))return "❄︎";
+  if([95,96,99].includes(c))return "⚡︎";
+  return "◌︎";
 }
 
 function weatherCityAbbreviation(value){
@@ -12734,12 +12737,10 @@ async function fetchCurrentWeather(){
       const city=document.getElementById("weather-city-label");
 
       if(icon){
-        const weatherClass=weatherSymbol(
+        icon.textContent=weatherSymbol(
           current.weather_code,
           Number(current.is_day)!==0
         );
-        icon.className=`fi ${weatherClass}`;
-        icon.textContent="";
       }
 
       if(temp){
@@ -13029,10 +13030,7 @@ function setFaqAccordionOpen(item,open){
   panel.setAttribute("aria-hidden",next?"false":"true");
 
   const chevron=item.querySelector(".faq-accordion-chevron");
-  if(chevron){
-    chevron.classList.toggle("fi-chevron-up",next);
-    chevron.classList.toggle("fi-chevron-down",!next);
-  }
+  if(chevron)chevron.textContent=next?"▲":"▼";
 
   if(next){
     panel.style.maxHeight=`${Math.max(1,panel.scrollHeight)}px`;
@@ -13080,8 +13078,9 @@ function renderFaqAccordion(target,text){
     question.textContent=current.question;
 
     const chevron=document.createElement("span");
-    chevron.className="faq-accordion-chevron fi fi-chevron-down";
+    chevron.className="faq-accordion-chevron";
     chevron.setAttribute("aria-hidden","true");
+    chevron.textContent="▼︎";
 
     button.append(question,chevron);
 
@@ -15790,6 +15789,72 @@ window.addEventListener(
   refreshAdsLayoutIfNeeded,
   {passive:true}
 );
+
+const FLOEW_TEXT_PRESENTATION_SYMBOLS=new Set([
+  "☰","⤢","⧉","⏲","⌖","ⓘ","⚙","↑","↓","−","▶","⏸",
+  "↗","→","▲","▼","⤴","⚑","⎋","☀","☾","◐","☁","☂","❄","⚡","◌"
+]);
+
+function forceTextPresentationSymbols(root=document){
+  const scope=root?.querySelectorAll ? root : document;
+  const nodes=[
+    ...(scope===document ? [] : [scope]),
+    ...scope.querySelectorAll(
+      'button,a,[role="button"],#weather-icon,.faq-accordion-chevron,.flora-story-popover-mark'
+    )
+  ];
+
+  for(const el of nodes){
+    if(!(el instanceof Element) || el.closest?.(".fx-flag"))continue;
+
+    const walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);
+    const texts=[];
+    while(walker.nextNode())texts.push(walker.currentNode);
+
+    let hasSymbol=false;
+    for(const textNode of texts){
+      const chars=Array.from(textNode.nodeValue||"");
+      let changed=false;
+      const next=[];
+
+      for(let i=0;i<chars.length;i++){
+        const char=chars[i];
+        next.push(char);
+        if(
+          FLOEW_TEXT_PRESENTATION_SYMBOLS.has(char) &&
+          chars[i+1]!=="︎"
+        ){
+          next.push("︎");
+          changed=true;
+          hasSymbol=true;
+        }else if(FLOEW_TEXT_PRESENTATION_SYMBOLS.has(char)){
+          hasSymbol=true;
+        }
+      }
+
+      if(changed)textNode.nodeValue=next.join("");
+    }
+
+    if(hasSymbol && el.childElementCount===0){
+      el.classList.add("floew-text-symbol");
+    }
+  }
+}
+
+forceTextPresentationSymbols();
+
+if(window.MutationObserver){
+  let symbolRefreshQueued=false;
+  const symbolObserver=new MutationObserver(()=>{
+    if(symbolRefreshQueued)return;
+    symbolRefreshQueued=true;
+    queueMicrotask(()=>{
+      symbolRefreshQueued=false;
+      forceTextPresentationSymbols();
+    });
+  });
+  symbolObserver.observe(document.body,{subtree:true,childList:true,characterData:true});
+}
 
 updateClock();
 setInterval(updateClock,1000);
