@@ -1,4 +1,4 @@
-/* Flöw Icons v6 — rounded, heavier unified icon family */
+/* Flöw Icons v7 — rounded, heavier unified icon family */
 @font-face{
   font-family:"Flöw Icons";
   src:url("../assets/fonts/flow-icons.woff2?v=5") format("woff2");
@@ -223,4 +223,81 @@
     width:22px !important;
     height:18px !important;
   }
+}
+
+/* V7: final optical balance for headline actions. */
+.headline-actions > .flora-inline{
+  align-items:center !important;
+}
+.headline-actions > .flora-inline .flora-inline-mark{
+  font-size:20px !important;
+  line-height:1 !important;
+  transform:none !important;
+}
+.headline-actions > .share-link.fi::before{
+  font-size:34px !important;
+  transform:none !important;
+}
+.headline-actions > #video-audio-toggle.fi::before{
+  font-size:40px !important;
+  transform:none !important;
+}
+@media(max-width:700px), (pointer:coarse){
+  .headline-actions > .flora-inline .flora-inline-mark{font-size:21px !important}
+  .headline-actions > .share-link.fi::before{font-size:35px !important}
+  .headline-actions > #video-audio-toggle.fi::before{font-size:41px !important}
+}
+
+/* V7: one shared optical box for USD / EUR / GBP / XAU. */
+#clock #fx-rates .fx-rate,
+#clock #fx-rates .fx-rate-gold{
+  align-items:center !important;
+}
+.fx-flag.fi,
+.fx-gold-icon{
+  width:24px !important;
+  height:20px !important;
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  align-self:center !important;
+  transform:none !important;
+}
+.fx-flag.fi::before{
+  display:block !important;
+  margin:auto !important;
+  transform:none !important;
+}
+.fx-flag.fi-flag-us::before,
+.fx-flag.fi-flag-gb::before{
+  font-size:31px !important;
+  line-height:1 !important;
+}
+.fx-flag.fi-flag-eu::before{
+  width:24px !important;
+  height:16px !important;
+  background-size:24px 16px !important;
+  background-position:center !important;
+}
+.fx-gold-icon{
+  background-size:24px auto !important;
+  background-position:center !important;
+}
+
+@media(max-width:700px){
+  .fx-flag.fi,
+  .fx-gold-icon{
+    width:20px !important;
+    height:18px !important;
+  }
+  .fx-flag.fi-flag-us::before,
+  .fx-flag.fi-flag-gb::before{
+    font-size:27px !important;
+  }
+  .fx-flag.fi-flag-eu::before{
+    width:20px !important;
+    height:13.333px !important;
+    background-size:20px 13.333px !important;
+  }
+  .fx-gold-icon{background-size:20px auto !important}
 }
