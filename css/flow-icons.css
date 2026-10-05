@@ -1,7 +1,7 @@
-/* Flöw Icons v3 — rounded, heavier unified icon family */
+/* Flöw Icons v4 — rounded, heavier unified icon family */
 @font-face{
   font-family:"Flöw Icons";
-  src:url("../assets/fonts/flow-icons.woff2?v=3") format("woff2");
+  src:url("../assets/fonts/flow-icons.woff2?v=4") format("woff2");
   font-style:normal;
   font-weight:400;
   font-display:block;
@@ -71,16 +71,37 @@
 .fi-bulb::before{content:"\e02f"}
 .fi-bug::before{content:"\e030"}
 
-#fullscreen-button.fi::before{font-size:36px !important}
-#control-menu-button.fi::before{font-size:32px !important}
-#control-menu-panel #pip-button.fi::before{font-size:30px !important}
-#control-menu-panel #time-range-button.fi::before{font-size:29px !important}
-#control-menu-panel #keyword-filter-button.fi::before{font-size:29px !important}
-#control-menu-panel #keyword-watch-button.fi::before{font-size:28px !important}
-#control-menu-panel #info-button.fi::before{font-size:30px !important}
-#control-menu-panel #menu-button.fi::before{font-size:30px !important}
+/* V4 optical sizing / alignment */
+.fi::before{
+  width:1em;
+  height:1em;
+  text-align:center;
+}
 
-#source-viewer-external.fi::before{font-size:24px !important}
+/* Top-right controls: one optical grid for the whole stack. */
+#fullscreen-button.fi,
+#control-menu-button.fi,
+#control-menu-panel .control-menu-item.fi{
+  display:grid !important;
+  place-items:center !important;
+}
+#control-menu-panel .control-menu-item.fi{
+  width:42px !important;
+  height:42px !important;
+}
+#control-menu-panel .control-menu-item.fi::before{
+  width:34px !important;
+  height:34px !important;
+  display:grid !important;
+  place-items:center !important;
+  font-size:33px !important;
+  transform:none !important;
+}
+#fullscreen-button.fi::before{font-size:40px !important}
+#control-menu-button.fi::before{font-size:36px !important}
+
+/* Modal / utility controls */
+#source-viewer-external.fi::before{font-size:27px !important}
 #source-viewer-close.fi::before,
 #menu-close.fi::before,
 #stats-close.fi::before,
@@ -88,60 +109,100 @@
 .status-close.fi::before,
 .flora-story-popover-close.fi::before,
 .custom-rss-remove.fi::before,
-.keyword-tool-clear.fi::before{font-size:26px !important}
+.keyword-tool-clear.fi::before{font-size:29px !important}
 
-.direction-option .fi::before{font-size:22px !important}
+/* Preferences */
+.direction-option .fi::before{font-size:25px !important}
 .duration-control .fi-minus::before,
-.duration-control .fi-plus::before{font-size:19px !important}
+.duration-control .fi-plus::before{font-size:22px !important}
 .duration-control .fi-play::before,
-.duration-control .fi-pause::before{font-size:21px !important}
-.option-check.fi::before{font-size:22px !important}
-.faq-accordion-chevron.fi::before{font-size:18px !important}
+.duration-control .fi-pause::before{font-size:25px !important}
+.option-check.fi::before{
+  font-size:24px !important;
+  transform:translateY(-.5px);
+}
+.faq-accordion-chevron.fi::before{font-size:20px !important}
 
-.headline-actions{gap:5px !important}
+/* Headline actions */
+.headline-actions{gap:8px !important}
 .headline-actions > .share-link.fi::before,
 .headline-actions > .feedback-inline-link.fi::before,
-.headline-actions > .source-link.fi::before{font-size:25px !important}
-#video-audio-toggle.fi::before{font-size:29px !important}
+.headline-actions > .source-link.fi::before{
+  font-size:30px !important;
+  transform:translateY(-.5px);
+}
+.headline-actions > #video-audio-toggle.fi{
+  display:inline-grid !important;
+  place-items:center !important;
+  align-self:center !important;
+}
+.headline-actions > #video-audio-toggle.fi::before{
+  font-size:34px !important;
+  transform:none !important;
+}
 @media(max-width:700px), (pointer:coarse){
-  .headline-actions{gap:6px !important}
+  .headline-actions{gap:9px !important}
   .headline-actions > .share-link.fi::before,
   .headline-actions > .feedback-inline-link.fi::before,
-  .headline-actions > .source-link.fi::before{font-size:26px !important}
-  #video-audio-toggle.fi::before{font-size:30px !important}
+  .headline-actions > .source-link.fi::before{font-size:31px !important}
+  .headline-actions > #video-audio-toggle.fi::before{font-size:35px !important}
 }
 
-#weather-icon.fi::before{font-size:22px !important}
-#clock #fx-rates .fx-rate{
-  grid-template-columns:24px 29px minmax(48px,auto) !important;
-  column-gap:5px !important;
-}
+/* Weather and FX */
+#weather-icon.fi::before{font-size:25px !important}
+#clock #fx-rates .fx-rate,
 #clock #fx-rates .fx-rate-gold{
-  grid-template-columns:24px minmax(48px,auto) !important;
+  grid-template-columns:26px 31px minmax(68px,auto) !important;
+  column-gap:6px !important;
+  align-items:center !important;
+  white-space:nowrap !important;
+}
+#clock #fx-rates .fx-rate > *,
+#clock #fx-rates .fx-rate-gold > *,
+#clock #fx-rates .fx-value{
+  white-space:nowrap !important;
 }
 .fx-flag.fi,
 .fx-gold-icon.fi{
-  width:24px !important;
-  height:20px !important;
+  width:26px !important;
+  height:22px !important;
   display:inline-flex !important;
   align-items:center !important;
   justify-content:center !important;
-  overflow:visible;
+  overflow:visible !important;
 }
-.fx-flag.fi::before{font-size:30px !important}
-.fx-gold-icon.fi::before{font-size:31px !important}
+.fx-flag.fi::before{font-size:35px !important}
+.fx-gold-icon.fi::before{font-size:38px !important}
+.fx-rate-gold .fx-value{text-align:right !important}
 
+@media(max-width:700px){
+  #clock #fx-rates .fx-rate,
+  #clock #fx-rates .fx-rate-gold{
+    grid-template-columns:21px 27px minmax(58px,auto) !important;
+    column-gap:4px !important;
+  }
+  .fx-flag.fi,
+  .fx-gold-icon.fi{
+    width:21px !important;
+    height:18px !important;
+  }
+  .fx-flag.fi::before{font-size:29px !important}
+  .fx-gold-icon.fi::before{font-size:31px !important}
+}
+
+/* Ticker direction indicators */
 .market-ticker-change .fi::before{
-  font-size:14px !important;
-  vertical-align:-.02em;
-  margin-right:.16em;
+  font-size:20px !important;
+  vertical-align:-.03em;
+  margin-right:.18em;
 }
 
-.floew-feedback-icon.fi::before{font-size:21px !important}
-.floew-feedback-back .fi::before{font-size:14px !important;margin-right:5px}
-.floew-feedback-success-mark.fi::before{font-size:30px !important}
+/* Feedback / secondary pages */
+.floew-feedback-icon.fi::before{font-size:23px !important}
+.floew-feedback-back .fi::before{font-size:15px !important;margin-right:5px}
+.floew-feedback-success-mark.fi::before{font-size:32px !important}
 .back-link .fi::before,
-.story-link .fi::before{font-size:1.18em !important}
+.story-link .fi::before{font-size:1.22em !important}
 
 #video-audio-toggle .video-audio-icon,
 .fx-gold-icon img{display:none !important}
