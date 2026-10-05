@@ -1,0 +1,122 @@
+/* Flöw Icons v2 — unified monochrome + COLR/CPAL color icon font */
+@font-face{
+  font-family:"Flöw Icons";
+  src:url("../assets/fonts/flow-icons.woff2?v=2") format("woff2");
+  font-style:normal;
+  font-weight:400;
+  font-display:block;
+}
+
+/* Keep the icon font on the pseudo-element itself. This isolates PUA glyphs
+   from legacy Arial/Comfortaa !important rules on the host controls. */
+.fi::before{
+  display:inline-block;
+  font-family:"Flöw Icons" !important;
+  font-style:normal !important;
+  font-weight:400 !important;
+  font-variant:normal !important;
+  font-synthesis:none !important;
+  line-height:1 !important;
+  letter-spacing:0 !important;
+  text-transform:none !important;
+  text-rendering:auto;
+  vertical-align:middle;
+  speak:none;
+}
+
+.fi-menu::before{content:"\e001"}
+.fi-fullscreen::before{content:"\e002"}
+.fi-pip::before{content:"\e003"}
+.fi-clock::before{content:"\e004"}
+.fi-filter::before{content:"\e005"}
+.fi-target::before{content:"\e006"}
+.fi-info::before{content:"\e007"}
+.fi-settings::before{content:"\e008"}
+.fi-close::before{content:"\e009"}
+.fi-external::before{content:"\e00a"}
+.fi-arrow-up::before{content:"\e00b"}
+.fi-arrow-down::before{content:"\e00c"}
+.fi-minus::before{content:"\e00d"}
+.fi-plus::before{content:"\e00e"}
+.fi-play::before{content:"\e00f"}
+.fi-pause::before{content:"\e010"}
+.fi-share::before{content:"\e011"}
+.fi-feedback::before{content:"\e012"}
+.fi-source::before{content:"\e013"}
+.fi-check::before{content:"\e014"}
+.fi-sun::before{content:"\e015"}
+.fi-moon::before{content:"\e016"}
+.fi-partly-cloudy::before{content:"\e017"}
+.fi-cloud::before{content:"\e018"}
+.fi-fog::before{content:"\e019"}
+.fi-rain::before{content:"\e01a"}
+.fi-snow::before{content:"\e01b"}
+.fi-lightning::before{content:"\e01c"}
+.fi-weather-unknown::before{content:"\e01d"}
+.fi-chevron-up::before{content:"\e01e"}
+.fi-chevron-down::before{content:"\e01f"}
+.fi-arrow-right::before{content:"\e020"}
+.fi-volume-on::before{content:"\e021"}
+.fi-volume-off::before{content:"\e022"}
+.fi-flag-us::before{content:"\e023"}
+.fi-flag-eu::before{content:"\e024"}
+.fi-flag-gb::before{content:"\e025"}
+.fi-gold::before{content:"\e026"}
+.fi-newspaper::before{content:"\e027"}
+.fi-image::before{content:"\e028"}
+.fi-scroll::before{content:"\e029"}
+.fi-tap::before{content:"\e02a"}
+.fi-link::before{content:"\e02b"}
+.fi-back::before{content:"\e02c"}
+.fi-warning::before{content:"\e02d"}
+.fi-tag::before{content:"\e02e"}
+.fi-bulb::before{content:"\e02f"}
+.fi-bug::before{content:"\e030"}
+
+/* Optical sizing without changing any button/hit-area dimensions. */
+#fullscreen-button.fi::before{font-size:42px !important}
+#control-menu-button.fi::before{font-size:38px !important}
+#control-menu-panel #pip-button.fi::before{font-size:36px !important}
+#control-menu-panel #time-range-button.fi::before{font-size:36px !important}
+#control-menu-panel #keyword-filter-button.fi::before{font-size:36px !important}
+#control-menu-panel #keyword-watch-button.fi::before{font-size:31px !important}
+#control-menu-panel #info-button.fi::before{font-size:36px !important}
+#control-menu-panel #menu-button.fi::before{font-size:31px !important}
+
+#source-viewer-external.fi::before{font-size:28px !important}
+#source-viewer-close.fi::before,
+#menu-close.fi::before,
+#stats-close.fi::before,
+#about-doc-viewer-close.fi::before,
+.status-close.fi::before,
+.flora-story-popover-close.fi::before,
+.custom-rss-remove.fi::before,
+.keyword-tool-clear.fi::before{font-size:34px !important}
+
+.direction-option .fi::before{font-size:28px !important}
+.duration-control .fi-minus::before,
+.duration-control .fi-plus::before{font-size:24px !important}
+.duration-control .fi-play::before,
+.duration-control .fi-pause::before{font-size:28px !important}
+
+.headline-actions > .share-link.fi::before,
+.headline-actions > .feedback-inline-link.fi::before,
+.headline-actions > .source-link.fi::before{font-size:30px !important}
+#video-audio-toggle.fi::before{font-size:42px !important}
+
+#weather-icon.fi::before{font-size:24px !important}
+.fx-flag.fi::before{font-size:28px !important}
+.fx-gold-icon.fi::before{font-size:36px !important}
+.option-check.fi::before{font-size:16px !important}
+.faq-accordion-chevron.fi::before{font-size:22px !important}
+.market-ticker-change .fi::before{font-size:16px !important;vertical-align:-1px}
+
+.floew-feedback-icon.fi::before{font-size:22px !important}
+.floew-feedback-back .fi::before{font-size:14px !important;margin-right:5px}
+.floew-feedback-success-mark.fi::before{font-size:34px !important}
+.back-link .fi::before,
+.story-link .fi::before{font-size:1.25em !important}
+
+/* Legacy image assets are no longer used when font icons are active. */
+#video-audio-toggle .video-audio-icon,
+.fx-gold-icon img{display:none !important}
