@@ -1,4 +1,4 @@
-/* Flöw Icons v9 — rounded, heavier unified icon family */
+/* Flöw Icons v10 — clean single-source rules */
 @font-face{
   font-family:"Flöw Icons";
   src:url("../assets/fonts/flow-icons.woff2?v=5") format("woff2");
@@ -22,6 +22,7 @@
   speak:none;
 }
 
+/* Glyph map */
 .fi-menu::before{content:"\e001"}
 .fi-fullscreen::before{content:"\e002"}
 .fi-pip::before{content:"\e003"}
@@ -71,15 +72,17 @@
 .fi-bulb::before{content:"\e02f"}
 .fi-bug::before{content:"\e030"}
 
-#fullscreen-button.fi::before{font-size:38px !important}
-#control-menu-button.fi::before{font-size:34px !important}
-#control-menu-panel #pip-button.fi::before{font-size:31px !important}
-#control-menu-panel #time-range-button.fi::before{font-size:31px !important}
-#control-menu-panel #keyword-filter-button.fi::before{font-size:31px !important}
-#control-menu-panel #keyword-watch-button.fi::before{font-size:30px !important}
-#control-menu-panel #info-button.fi::before{font-size:31px !important}
-#control-menu-panel #menu-button.fi::before{font-size:31px !important}
+/* Top-right controls: preserve the stable host geometry. */
+#fullscreen-button.fi::before{font-size:38px !important;transform:none !important}
+#control-menu-button.fi::before{font-size:34px !important;transform:none !important}
+#control-menu-panel #pip-button.fi::before{font-size:31px !important;transform:none !important}
+#control-menu-panel #time-range-button.fi::before{font-size:31px !important;transform:none !important}
+#control-menu-panel #keyword-filter-button.fi::before{font-size:31px !important;transform:none !important}
+#control-menu-panel #keyword-watch-button.fi::before{font-size:30px !important;transform:none !important}
+#control-menu-panel #info-button.fi::before{font-size:31px !important;transform:none !important}
+#control-menu-panel #menu-button.fi::before{font-size:31px !important;transform:none !important}
 
+/* Modal / utility controls */
 #source-viewer-external.fi::before{font-size:24px !important}
 #source-viewer-close.fi::before,
 #menu-close.fi::before,
@@ -88,8 +91,11 @@
 .status-close.fi::before,
 .flora-story-popover-close.fi::before,
 .custom-rss-remove.fi::before,
-.keyword-tool-clear.fi::before{font-size:26px !important}
+.keyword-tool-clear.fi::before{
+  font-size:26px !important;
+}
 
+/* Preferences */
 .direction-option .fi::before{font-size:22px !important}
 .duration-control .fi-minus::before,
 .duration-control .fi-plus::before{font-size:19px !important}
@@ -98,24 +104,51 @@
 .option-check.fi::before{font-size:22px !important}
 .faq-accordion-chevron.fi::before{font-size:18px !important}
 
-.headline-actions{gap:8px !important}
-.headline-actions > .share-link.fi::before,
+/* Headline actions */
+.headline-actions{
+  gap:12px !important;
+}
+.headline-actions > .flora-inline{
+  align-items:center !important;
+  transform:translateY(-2px) !important;
+}
+.headline-actions > .flora-inline .flora-inline-mark{
+  font-size:20px !important;
+  line-height:1 !important;
+}
+.headline-actions > .share-link.fi::before{
+  content:"" !important;
+  width:1em !important;
+  height:1em !important;
+  font-size:34px !important;
+  background:currentColor !important;
+  -webkit-mask:url("../assets/icon-share.svg?v=2") center/contain no-repeat !important;
+  mask:url("../assets/icon-share.svg?v=2") center/contain no-repeat !important;
+  transform:none !important;
+}
 .headline-actions > .feedback-inline-link.fi::before,
-.headline-actions > .source-link.fi::before{font-size:28px !important}
-#video-audio-toggle.fi::before{font-size:32px !important}
-@media(max-width:700px), (pointer:coarse){
-  .headline-actions{gap:8px !important}
-  .headline-actions > .share-link.fi::before,
-  .headline-actions > .feedback-inline-link.fi::before,
-  .headline-actions > .source-link.fi::before{font-size:29px !important}
-  #video-audio-toggle.fi::before{font-size:33px !important}
+.headline-actions > .source-link.fi::before{
+  font-size:28px !important;
+  transform:none !important;
+}
+.headline-actions > #video-audio-toggle.fi::before{
+  font-size:40px !important;
+  transform:scale(1.22) !important;
+  transform-origin:center !important;
 }
 
-#weather-icon.fi::before{font-size:24px !important}
+/* Weather */
+#weather-icon.fi::before{
+  font-size:24px !important;
+}
+
+/* FX block: one shared cell geometry for all currency icons. */
 #clock #fx-rates .fx-rate,
 #clock #fx-rates .fx-rate-gold{
   grid-template-columns:24px 29px minmax(64px,auto) !important;
   column-gap:5px !important;
+  align-items:center !important;
+  min-height:20px !important;
   white-space:nowrap !important;
 }
 #clock #fx-rates .fx-rate > *,
@@ -123,251 +156,22 @@
 #clock #fx-rates .fx-value{
   white-space:nowrap !important;
 }
-.fx-flag.fi,
-.fx-gold-icon.fi{
-  width:24px !important;
-  height:20px !important;
-  display:inline-flex !important;
-  align-items:center !important;
-  justify-content:center !important;
-  overflow:visible;
-}
-.fx-flag.fi::before{font-size:33px !important}
-.fx-gold-icon.fi::before{font-size:34px !important}
 
-.market-ticker-change .fi::before{
-  font-size:18px !important;
-  vertical-align:-.02em;
-  margin-right:.16em;
-}
-
-.floew-feedback-icon.fi::before{font-size:21px !important}
-.floew-feedback-back .fi::before{font-size:14px !important;margin-right:5px}
-.floew-feedback-success-mark.fi::before{font-size:30px !important}
-.back-link .fi::before,
-.story-link .fi::before{font-size:1.18em !important}
-
-#video-audio-toggle .video-audio-icon,
-.fx-gold-icon img{display:none !important}
-
-/* V5: preserve v3 menu geometry; center only the glyph artwork. */
-#control-menu-panel .control-menu-item.fi::before,
-#fullscreen-button.fi::before,
-#control-menu-button.fi::before,
-.headline-actions .fi::before{
-  transform:none !important;
-}
-@media(max-width:700px){
-  #clock #fx-rates .fx-rate,
-  #clock #fx-rates .fx-rate-gold{
-    grid-template-columns:20px 24px minmax(56px,auto) !important;
-    column-gap:4px !important;
-  }
-  .fx-flag.fi::before{font-size:28px !important}
-  .fx-gold-icon.fi::before{font-size:29px !important}
-}
-
-/* V6: optical balance for Share / Flöra / video-audio. */
-.headline-actions > .share-link.fi::before{
-  font-size:31px !important;
-  transform:none !important;
-}
-.headline-actions > .flora-inline .flora-inline-mark{
-  font-size:23px !important;
-  line-height:.9 !important;
-  transform:translateY(-.5px);
-}
-.headline-actions > #video-audio-toggle.fi::before{
-  font-size:34px !important;
-  transform:none !important;
-}
-@media(max-width:700px), (pointer:coarse){
-  .headline-actions > .share-link.fi::before{font-size:32px !important}
-  .headline-actions > .flora-inline .flora-inline-mark{font-size:24px !important}
-  .headline-actions > #video-audio-toggle.fi::before{font-size:35px !important}
-}
-
-/* Normal European Union flag: official 2:3 field, twelve centered stars. */
-.fx-flag.fi-flag-eu::before{
-  content:"" !important;
-  width:24px !important;
-  height:16px !important;
-  background-image:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2MCA0MCI+CjxyZWN0IHdpZHRoPSI2MCIgaGVpZ2h0PSI0MCIgcng9IjEuNSIgZmlsbD0iIzAwMzM5OSIvPgo8ZGVmcz48cGF0aCBpZD0icyIgZD0iTSAwLjAwMCwtMi43MDAgTCAwLjY0NywtMC44OTAgTCAyLjU2OCwtMC44MzQgTCAxLjA0NiwwLjM0MCBMIDEuNTg3LDIuMTg0IEwgMC4wMDAsMS4xMDAgTCAtMS41ODcsMi4xODQgTCAtMS4wNDYsMC4zNDAgTCAtMi41NjgsLTAuODM0IEwgLTAuNjQ3LC0wLjg5MCBaIiBmaWxsPSIjRkZDQzAwIi8+PC9kZWZzPgo8dXNlIGhyZWY9IiNzIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgzMC4wMDAgNi42NjcpIi8+PHVzZSBocmVmPSIjcyIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMzYuNjY2IDguNDUzKSIvPjx1c2UgaHJlZj0iI3MiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDQxLjU0NyAxMy4zMzQpIi8+PHVzZSBocmVmPSIjcyIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoNDMuMzMzIDIwLjAwMCkiLz48dXNlIGhyZWY9IiNzIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSg0MS41NDcgMjYuNjY2KSIvPjx1c2UgaHJlZj0iI3MiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDM2LjY2NiAzMS41NDcpIi8+PHVzZSBocmVmPSIjcyIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMzAuMDAwIDMzLjMzMykiLz48dXNlIGhyZWY9IiNzIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgyMy4zMzQgMzEuNTQ3KSIvPjx1c2UgaHJlZj0iI3MiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDE4LjQ1MyAyNi42NjYpIi8+PHVzZSBocmVmPSIjcyIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMTYuNjY3IDIwLjAwMCkiLz48dXNlIGhyZWY9IiNzIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgxOC40NTMgMTMuMzMzKSIvPjx1c2UgaHJlZj0iI3MiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDIzLjMzMyA4LjQ1MykiLz4KPC9zdmc+") !important;
-  background-repeat:no-repeat !important;
-  background-position:center !important;
-  background-size:contain !important;
-  border-radius:1px;
-  filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));
-}
-
-/* Gold uses the exact supplied artwork; keep the rest of the icon system in the font. */
-.fx-gold-icon.fi-gold::before{
-  content:"" !important;
-  display:none !important;
-}
-.fx-gold-icon{
-  width:27px !important;
-  height:21px !important;
-  background-image:url("../assets/gold-reference.png?v=1") !important;
-  background-repeat:no-repeat !important;
-  background-position:center !important;
-  background-size:contain !important;
-  filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));
-}
-@media(max-width:700px){
-  .fx-flag.fi-flag-eu::before{
-    width:20px !important;
-    height:13.333px !important;
-  }
-  .fx-gold-icon{
-    width:22px !important;
-    height:18px !important;
-  }
-}
-
-/* V7: final optical balance for headline actions. */
-.headline-actions > .flora-inline{
-  align-items:center !important;
-}
-.headline-actions > .flora-inline .flora-inline-mark{
-  font-size:20px !important;
-  line-height:1 !important;
-  transform:none !important;
-}
-.headline-actions > .share-link.fi::before{
-  font-size:34px !important;
-  transform:none !important;
-}
-.headline-actions > #video-audio-toggle.fi::before{
-  font-size:40px !important;
-  transform:none !important;
-}
-@media(max-width:700px), (pointer:coarse){
-  .headline-actions > .flora-inline .flora-inline-mark{font-size:21px !important}
-  .headline-actions > .share-link.fi::before{font-size:35px !important}
-  .headline-actions > #video-audio-toggle.fi::before{font-size:41px !important}
-}
-
-/* V7: one shared optical box for USD / EUR / GBP / XAU. */
-#clock #fx-rates .fx-rate,
-#clock #fx-rates .fx-rate-gold{
-  align-items:center !important;
-}
-.fx-flag.fi,
-.fx-gold-icon{
-  width:24px !important;
-  height:20px !important;
-  display:inline-flex !important;
-  align-items:center !important;
-  justify-content:center !important;
-  align-self:center !important;
-  transform:none !important;
-}
-.fx-flag.fi::before{
-  display:block !important;
-  margin:auto !important;
-  transform:none !important;
-}
-.fx-flag.fi-flag-us::before,
-.fx-flag.fi-flag-gb::before{
-  font-size:31px !important;
-  line-height:1 !important;
-}
-.fx-flag.fi-flag-eu::before{
-  width:24px !important;
-  height:16px !important;
-  background-size:24px 16px !important;
-  background-position:center !important;
-}
-.fx-gold-icon{
-  background-size:24px auto !important;
-  background-position:center !important;
-}
-
-@media(max-width:700px){
-  .fx-flag.fi,
-  .fx-gold-icon{
-    width:20px !important;
-    height:18px !important;
-  }
-  .fx-flag.fi-flag-us::before,
-  .fx-flag.fi-flag-gb::before{
-    font-size:27px !important;
-  }
-  .fx-flag.fi-flag-eu::before{
-    width:20px !important;
-    height:13.333px !important;
-    background-size:20px 13.333px !important;
-  }
-  .fx-gold-icon{background-size:20px auto !important}
-}
-
-/* V8: flags all use the same SVG box, eliminating font baseline differences. */
-.fx-flag.fi::before{
-  content:"" !important;
-  width:24px !important;
-  height:16px !important;
-  display:block !important;
-  margin:0 !important;
-  background-repeat:no-repeat !important;
-  background-position:center !important;
-  background-size:24px 16px !important;
-  border-radius:1px;
-  filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));
-  transform:none !important;
-}
-.fx-flag.fi-flag-us::before{background-image:url("../assets/flag-us.svg?v=1") !important}
-.fx-flag.fi-flag-eu::before{background-image:url("../assets/flag-eu.svg?v=1") !important}
-.fx-flag.fi-flag-gb::before{background-image:url("../assets/flag-gb.svg?v=1") !important}
-.fx-flag.fi{
-  width:24px !important;
-  height:20px !important;
-  display:inline-flex !important;
-  align-items:center !important;
-  justify-content:center !important;
-  line-height:1 !important;
-}
-#clock #fx-rates .fx-rate{
-  align-items:center !important;
-}
-
-/* V8 share: larger air gap between the upward arrow and the tray. */
-.fi-share::before{
-  content:"" !important;
-  width:1em !important;
-  height:1em !important;
-  background:currentColor !important;
-  -webkit-mask:url("../assets/icon-share.svg?v=1") center/contain no-repeat !important;
-  mask:url("../assets/icon-share.svg?v=1") center/contain no-repeat !important;
-}
-
-@media(max-width:700px){
-  .fx-flag.fi::before{
-    width:20px !important;
-    height:13.333px !important;
-    background-size:20px 13.333px !important;
-  }
-  .fx-flag.fi{
-    width:20px !important;
-    height:18px !important;
-  }
-}
-
-/* V9: remove the last line-box variable from flags. */
+/* Flags are SVG backgrounds on the host, not font glyphs. */
 .fx-flag.fi::before{
   display:none !important;
 }
 .fx-flag.fi{
   width:24px !important;
-  height:16px !important;
+  height:20px !important;
   min-width:24px !important;
-  min-height:16px !important;
+  min-height:20px !important;
   max-width:24px !important;
-  max-height:16px !important;
+  max-height:20px !important;
   margin:0 !important;
   padding:0 !important;
-  align-self:center !important;
   justify-self:center !important;
+  align-self:center !important;
   line-height:0 !important;
   background-repeat:no-repeat !important;
   background-position:center center !important;
@@ -379,21 +183,46 @@
 .fx-flag.fi-flag-eu{background-image:url("../assets/flag-eu.svg?v=1") !important}
 .fx-flag.fi-flag-gb{background-image:url("../assets/flag-gb.svg?v=1") !important}
 
-/* V9: more breathing room and optical vertical correction. */
-.headline-actions{
-  gap:12px !important;
+/* Gold shares the exact same 24x20 icon cell. */
+.fx-gold-icon.fi-gold::before{
+  display:none !important;
+  content:"" !important;
 }
-.headline-actions > .flora-inline{
-  transform:translateY(-2px) !important;
+.fx-gold-icon{
+  width:24px !important;
+  height:20px !important;
+  min-width:24px !important;
+  min-height:20px !important;
+  max-width:24px !important;
+  max-height:20px !important;
+  margin:0 !important;
+  padding:0 !important;
+  justify-self:center !important;
+  align-self:center !important;
+  background-image:url("../assets/gold-reference.png?v=1") !important;
+  background-repeat:no-repeat !important;
+  background-position:center center !important;
+  background-size:24px auto !important;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));
 }
-.headline-actions > #video-audio-toggle.fi::before{
-  transform:scale(1.22) !important;
-  transform-origin:center !important;
+.fx-gold-icon img{display:none !important}
+
+/* Market ticker */
+.market-ticker-change .fi::before{
+  font-size:18px !important;
+  vertical-align:-.02em;
+  margin-right:.16em;
 }
-.fi-share::before{
-  -webkit-mask-image:url("../assets/icon-share.svg?v=2") !important;
-  mask-image:url("../assets/icon-share.svg?v=2") !important;
-}
+
+/* Feedback / secondary pages */
+.floew-feedback-icon.fi::before{font-size:21px !important}
+.floew-feedback-back .fi::before{font-size:14px !important;margin-right:5px}
+.floew-feedback-success-mark.fi::before{font-size:30px !important}
+.back-link .fi::before,
+.story-link .fi::before{font-size:1.18em !important}
+
+/* Legacy image asset */
+#video-audio-toggle .video-audio-icon{display:none !important}
 
 @media(max-width:700px), (pointer:coarse){
   .headline-actions{
@@ -402,13 +231,40 @@
   .headline-actions > .flora-inline{
     transform:translateY(-2px) !important;
   }
-  .fx-flag.fi{
+  .headline-actions > .flora-inline .flora-inline-mark{
+    font-size:21px !important;
+  }
+  .headline-actions > .share-link.fi::before{
+    font-size:35px !important;
+  }
+  .headline-actions > .feedback-inline-link.fi::before,
+  .headline-actions > .source-link.fi::before{
+    font-size:29px !important;
+  }
+  .headline-actions > #video-audio-toggle.fi::before{
+    font-size:41px !important;
+    transform:scale(1.22) !important;
+  }
+
+  #clock #fx-rates .fx-rate,
+  #clock #fx-rates .fx-rate-gold{
+    grid-template-columns:20px 24px minmax(56px,auto) !important;
+    column-gap:4px !important;
+    min-height:18px !important;
+  }
+  .fx-flag.fi,
+  .fx-gold-icon{
     width:20px !important;
-    height:13.333px !important;
+    height:18px !important;
     min-width:20px !important;
-    min-height:13.333px !important;
+    min-height:18px !important;
     max-width:20px !important;
-    max-height:13.333px !important;
+    max-height:18px !important;
+  }
+  .fx-flag.fi{
     background-size:20px 13.333px !important;
+  }
+  .fx-gold-icon{
+    background-size:20px auto !important;
   }
 }
