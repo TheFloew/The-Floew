@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 40">
+<rect width="60" height="40" fill="#003399"/>
+<defs><path id="s" d="M0-2.55L.6-.83 2.43-.79.96.31 1.5 2.08 0 1.02-1.5 2.08-.96.31-2.43-.79-.6-.83Z" fill="#ffcc00"/></defs>
+<use href="#s" transform="translate(30.000 6.700)"/><use href="#s" transform="translate(36.650 8.482)"/><use href="#s" transform="translate(41.518 13.350)"/><use href="#s" transform="translate(43.300 20.000)"/><use href="#s" transform="translate(41.518 26.650)"/><use href="#s" transform="translate(36.650 31.518)"/><use href="#s" transform="translate(30.000 33.300)"/><use href="#s" transform="translate(23.350 31.518)"/><use href="#s" transform="translate(18.482 26.650)"/><use href="#s" transform="translate(16.700 20.000)"/><use href="#s" transform="translate(18.482 13.350)"/><use href="#s" transform="translate(23.350 8.482)"/>
+</svg>

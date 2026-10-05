@@ -1,4 +1,4 @@
-/* Flöw Icons v7 — rounded, heavier unified icon family */
+/* Flöw Icons v8 — rounded, heavier unified icon family */
 @font-face{
   font-family:"Flöw Icons";
   src:url("../assets/fonts/flow-icons.woff2?v=5") format("woff2");
@@ -300,4 +300,55 @@
     background-size:20px 13.333px !important;
   }
   .fx-gold-icon{background-size:20px auto !important}
+}
+
+/* V8: flags all use the same SVG box, eliminating font baseline differences. */
+.fx-flag.fi::before{
+  content:"" !important;
+  width:24px !important;
+  height:16px !important;
+  display:block !important;
+  margin:0 !important;
+  background-repeat:no-repeat !important;
+  background-position:center !important;
+  background-size:24px 16px !important;
+  border-radius:1px;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));
+  transform:none !important;
+}
+.fx-flag.fi-flag-us::before{background-image:url("../assets/flag-us.svg?v=1") !important}
+.fx-flag.fi-flag-eu::before{background-image:url("../assets/flag-eu.svg?v=1") !important}
+.fx-flag.fi-flag-gb::before{background-image:url("../assets/flag-gb.svg?v=1") !important}
+.fx-flag.fi{
+  width:24px !important;
+  height:20px !important;
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  line-height:1 !important;
+}
+#clock #fx-rates .fx-rate{
+  align-items:center !important;
+}
+
+/* V8 share: larger air gap between the upward arrow and the tray. */
+.fi-share::before{
+  content:"" !important;
+  width:1em !important;
+  height:1em !important;
+  background:currentColor !important;
+  -webkit-mask:url("../assets/icon-share.svg?v=1") center/contain no-repeat !important;
+  mask:url("../assets/icon-share.svg?v=1") center/contain no-repeat !important;
+}
+
+@media(max-width:700px){
+  .fx-flag.fi::before{
+    width:20px !important;
+    height:13.333px !important;
+    background-size:20px 13.333px !important;
+  }
+  .fx-flag.fi{
+    width:20px !important;
+    height:18px !important;
+  }
 }
