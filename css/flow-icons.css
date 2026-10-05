@@ -1,4 +1,4 @@
-/* Flöw Icons v5 — rounded, heavier unified icon family */
+/* Flöw Icons v6 — rounded, heavier unified icon family */
 @font-face{
   font-family:"Flöw Icons";
   src:url("../assets/fonts/flow-icons.woff2?v=5") format("woff2");
@@ -165,4 +165,62 @@
   }
   .fx-flag.fi::before{font-size:28px !important}
   .fx-gold-icon.fi::before{font-size:29px !important}
+}
+
+/* V6: optical balance for Share / Flöra / video-audio. */
+.headline-actions > .share-link.fi::before{
+  font-size:31px !important;
+  transform:none !important;
+}
+.headline-actions > .flora-inline .flora-inline-mark{
+  font-size:23px !important;
+  line-height:.9 !important;
+  transform:translateY(-.5px);
+}
+.headline-actions > #video-audio-toggle.fi::before{
+  font-size:34px !important;
+  transform:none !important;
+}
+@media(max-width:700px), (pointer:coarse){
+  .headline-actions > .share-link.fi::before{font-size:32px !important}
+  .headline-actions > .flora-inline .flora-inline-mark{font-size:24px !important}
+  .headline-actions > #video-audio-toggle.fi::before{font-size:35px !important}
+}
+
+/* Normal European Union flag: official 2:3 field, twelve centered stars. */
+.fx-flag.fi-flag-eu::before{
+  content:"" !important;
+  width:24px !important;
+  height:16px !important;
+  background-image:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2MCA0MCI+CjxyZWN0IHdpZHRoPSI2MCIgaGVpZ2h0PSI0MCIgcng9IjEuNSIgZmlsbD0iIzAwMzM5OSIvPgo8ZGVmcz48cGF0aCBpZD0icyIgZD0iTSAwLjAwMCwtMi43MDAgTCAwLjY0NywtMC44OTAgTCAyLjU2OCwtMC44MzQgTCAxLjA0NiwwLjM0MCBMIDEuNTg3LDIuMTg0IEwgMC4wMDAsMS4xMDAgTCAtMS41ODcsMi4xODQgTCAtMS4wNDYsMC4zNDAgTCAtMi41NjgsLTAuODM0IEwgLTAuNjQ3LC0wLjg5MCBaIiBmaWxsPSIjRkZDQzAwIi8+PC9kZWZzPgo8dXNlIGhyZWY9IiNzIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgzMC4wMDAgNi42NjcpIi8+PHVzZSBocmVmPSIjcyIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMzYuNjY2IDguNDUzKSIvPjx1c2UgaHJlZj0iI3MiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDQxLjU0NyAxMy4zMzQpIi8+PHVzZSBocmVmPSIjcyIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoNDMuMzMzIDIwLjAwMCkiLz48dXNlIGhyZWY9IiNzIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSg0MS41NDcgMjYuNjY2KSIvPjx1c2UgaHJlZj0iI3MiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDM2LjY2NiAzMS41NDcpIi8+PHVzZSBocmVmPSIjcyIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMzAuMDAwIDMzLjMzMykiLz48dXNlIGhyZWY9IiNzIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgyMy4zMzQgMzEuNTQ3KSIvPjx1c2UgaHJlZj0iI3MiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDE4LjQ1MyAyNi42NjYpIi8+PHVzZSBocmVmPSIjcyIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMTYuNjY3IDIwLjAwMCkiLz48dXNlIGhyZWY9IiNzIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgxOC40NTMgMTMuMzMzKSIvPjx1c2UgaHJlZj0iI3MiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDIzLjMzMyA4LjQ1MykiLz4KPC9zdmc+") !important;
+  background-repeat:no-repeat !important;
+  background-position:center !important;
+  background-size:contain !important;
+  border-radius:1px;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));
+}
+
+/* Gold uses the exact supplied artwork; keep the rest of the icon system in the font. */
+.fx-gold-icon.fi-gold::before{
+  content:"" !important;
+  display:none !important;
+}
+.fx-gold-icon{
+  width:27px !important;
+  height:21px !important;
+  background-image:url("../assets/gold-reference.png?v=1") !important;
+  background-repeat:no-repeat !important;
+  background-position:center !important;
+  background-size:contain !important;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));
+}
+@media(max-width:700px){
+  .fx-flag.fi-flag-eu::before{
+    width:20px !important;
+    height:13.333px !important;
+  }
+  .fx-gold-icon{
+    width:22px !important;
+    height:18px !important;
+  }
 }
