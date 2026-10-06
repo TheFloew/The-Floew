@@ -6305,3 +6305,76 @@ body{
     max-block-size:30px !important;
   }
 }
+
+
+/* =====================================================================
+   V31.87 — source viewer controls use the global icon-button language
+   ===================================================================== */
+#source-viewer-actions{
+  gap:10px !important;
+}
+
+#source-viewer-external,
+#source-viewer-close{
+  flex:0 0 32px !important;
+  inline-size:32px !important;
+  block-size:32px !important;
+  min-inline-size:32px !important;
+  min-block-size:32px !important;
+  max-inline-size:32px !important;
+  max-block-size:32px !important;
+  display:grid !important;
+  place-items:center !important;
+  margin:0 !important;
+  padding:0 !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  color:#fff !important;
+  line-height:1 !important;
+  opacity:.72 !important;
+  transform:none !important;
+  transition:opacity .18s ease !important;
+}
+
+#source-viewer-external:hover,
+#source-viewer-external:focus-visible,
+#source-viewer-close:hover,
+#source-viewer-close:focus-visible{
+  background:transparent !important;
+  color:#fff !important;
+  opacity:1 !important;
+  transform:none !important;
+  text-shadow:none !important;
+}
+
+#source-viewer-external:active,
+#source-viewer-close:active{
+  background:transparent !important;
+  opacity:.58 !important;
+  transform:none !important;
+}
+
+#source-viewer-external:focus-visible,
+#source-viewer-close:focus-visible{
+  outline:1px solid rgba(255,255,255,.58) !important;
+  outline-offset:2px !important;
+  border-radius:4px !important;
+}
+
+@media(max-width:700px){
+  #source-viewer-actions{
+    gap:10px !important;
+  }
+  #source-viewer-external,
+  #source-viewer-close{
+    inline-size:36px !important;
+    block-size:36px !important;
+    min-inline-size:36px !important;
+    min-block-size:36px !important;
+    max-inline-size:36px !important;
+    max-block-size:36px !important;
+    flex-basis:36px !important;
+    line-height:1 !important;
+  }
+}
