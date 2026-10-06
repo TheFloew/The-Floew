@@ -6160,3 +6160,147 @@ body{
     align-items:flex-start;
   }
 }
+
+
+/* =====================================================================
+   V31.85 — menu control geometry + unified switches
+   ===================================================================== */
+
+/* Numeric / playback steppers: stable square geometry, no circular chrome. */
+.duration-control{
+  display:flex !important;
+  align-items:center !important;
+  gap:8px !important;
+}
+.duration-control button{
+  inline-size:30px !important;
+  block-size:30px !important;
+  min-inline-size:30px !important;
+  min-block-size:30px !important;
+  max-inline-size:30px !important;
+  max-block-size:30px !important;
+  display:grid !important;
+  place-items:center !important;
+  margin:0 !important;
+  padding:0 !important;
+  border:1px solid transparent !important;
+  border-radius:8px !important;
+  background:rgba(255,255,255,.035) !important;
+  color:#fff !important;
+  line-height:1 !important;
+  transform:none !important;
+  transition:
+    background-color .16s ease,
+    border-color .16s ease,
+    opacity .16s ease !important;
+}
+.duration-control button::before{
+  display:block !important;
+  margin:0 !important;
+  line-height:1 !important;
+  transform:none !important;
+}
+.duration-control button:hover:not(:disabled){
+  background:rgba(255,255,255,.085) !important;
+  border-color:rgba(255,255,255,.10) !important;
+  transform:none !important;
+}
+.duration-control button:active:not(:disabled){
+  background:rgba(255,255,255,.13) !important;
+  transform:none !important;
+}
+.duration-control button:focus-visible{
+  outline:1px solid rgba(255,255,255,.58) !important;
+  outline-offset:2px !important;
+}
+.duration-control button:disabled{
+  opacity:.24 !important;
+  background:transparent !important;
+  border-color:transparent !important;
+}
+.duration-control .duration-auto-button.active{
+  background:rgba(255,255,255,.13) !important;
+  border-color:rgba(255,255,255,.16) !important;
+}
+.duration-control #duration-value,
+.ticker-size-control > span{
+  align-self:center !important;
+  line-height:30px !important;
+}
+
+/* Every Açık / Kapalı preference uses the same switch component.
+   aria-pressed remains the behavior/accessibility source of truth. */
+.media-setting{
+  align-items:center !important;
+}
+.media-setting-state{
+  position:relative !important;
+  flex:0 0 34px !important;
+  inline-size:34px !important;
+  min-inline-size:34px !important;
+  max-inline-size:34px !important;
+  block-size:18px !important;
+  min-block-size:18px !important;
+  max-block-size:18px !important;
+  overflow:hidden !important;
+  margin:0 !important;
+  padding:0 !important;
+  border:1px solid rgba(255,255,255,.20) !important;
+  border-radius:999px !important;
+  background:rgba(255,255,255,.08) !important;
+  color:transparent !important;
+  font-size:0 !important;
+  line-height:0 !important;
+  text-align:left !important;
+  opacity:1 !important;
+  transition:
+    background-color .16s ease,
+    border-color .16s ease !important;
+}
+.media-setting-state::after{
+  content:"";
+  position:absolute;
+  top:2px;
+  left:2px;
+  inline-size:12px;
+  block-size:12px;
+  border-radius:50%;
+  background:rgba(255,255,255,.62);
+  box-shadow:0 1px 3px rgba(0,0,0,.32);
+  transform:translateX(0);
+  transition:
+    transform .18s cubic-bezier(.22,.61,.36,1),
+    background-color .16s ease;
+}
+.media-setting[aria-pressed="true"] .media-setting-state,
+.media-setting.active .media-setting-state{
+  background:rgba(255,255,255,.88) !important;
+  border-color:rgba(255,255,255,.92) !important;
+}
+.media-setting[aria-pressed="true"] .media-setting-state::after,
+.media-setting.active .media-setting-state::after{
+  transform:translateX(16px);
+  background:#151515;
+}
+.media-setting:hover .media-setting-state{
+  border-color:rgba(255,255,255,.36) !important;
+}
+.media-setting[aria-pressed="true"]:hover .media-setting-state,
+.media-setting.active:hover .media-setting-state{
+  background:#fff !important;
+  border-color:#fff !important;
+}
+
+@media(max-width:700px){
+  .duration-control{
+    gap:7px !important;
+  }
+  .duration-control button{
+    inline-size:30px !important;
+    block-size:30px !important;
+    min-inline-size:30px !important;
+    min-block-size:30px !important;
+    max-inline-size:30px !important;
+    max-block-size:30px !important;
+  }
+}
