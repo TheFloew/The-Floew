@@ -1,4 +1,4 @@
-/* Flöw Icons v10.2 — clean single-source rules */
+/* Flöw Icons v10.3 — clean single-source rules */
 @font-face{
   font-family:"Flöw Icons";
   src:url("../assets/fonts/flow-icons.woff2?v=5") format("woff2");
@@ -74,7 +74,7 @@
 
 /* Top-right controls: preserve the stable host geometry. */
 #fullscreen-button.fi::before{font-size:38px !important;transform:none !important}
-#control-menu-button.fi::before{font-size:34px !important;transform:none !important}
+#control-menu-button.fi::before{font-size:30px !important;transform:none !important}
 #control-menu-panel #pip-button.fi::before{font-size:31px !important;transform:none !important}
 #control-menu-panel #time-range-button.fi::before{font-size:31px !important;transform:none !important}
 #control-menu-panel #keyword-filter-button.fi::before{font-size:31px !important;transform:none !important}
@@ -106,14 +106,14 @@
 
 /* Headline actions */
 .headline-actions{
-  gap:12px !important;
+  gap:15px !important;
 }
 .headline-actions > .flora-inline{
   align-items:center !important;
   transform:translateY(-2px) !important;
 }
 .headline-actions > .flora-inline .flora-inline-mark{
-  font-size:20px !important;
+  font-size:18px !important;
   line-height:1 !important;
 }
 .headline-actions > .share-link.fi::before{
@@ -127,22 +127,22 @@
   transform:none !important;
 }
 .headline-actions > .feedback-inline-link.fi::before{
-  font-size:28px !important;
+  font-size:25px !important;
   transform:none !important;
 }
 .headline-actions > .source-link.fi::before{
   content:"" !important;
   width:1em !important;
   height:1em !important;
-  font-size:29px !important;
+  font-size:30px !important;
   background:currentColor !important;
   -webkit-mask:url("../assets/icon-source-rounded.svg?v=1") center/contain no-repeat !important;
   mask:url("../assets/icon-source-rounded.svg?v=1") center/contain no-repeat !important;
   transform:none !important;
 }
 .headline-actions > #video-audio-toggle.fi::before{
-  font-size:40px !important;
-  transform:scale(1.22) !important;
+  font-size:37px !important;
+  transform:scale(1.12) !important;
   transform-origin:center !important;
 }
 
@@ -235,26 +235,26 @@
 
 @media(max-width:700px), (pointer:coarse){
   .headline-actions{
-    gap:12px !important;
+    gap:15px !important;
   }
   .headline-actions > .flora-inline{
     transform:translateY(-2px) !important;
   }
   .headline-actions > .flora-inline .flora-inline-mark{
-    font-size:21px !important;
+    font-size:19px !important;
   }
   .headline-actions > .share-link.fi::before{
-    font-size:35px !important;
+    font-size:31px !important;
   }
   .headline-actions > .feedback-inline-link.fi::before{
-    font-size:29px !important;
+    font-size:26px !important;
   }
   .headline-actions > .source-link.fi::before{
-    font-size:30px !important;
+    font-size:31px !important;
   }
   .headline-actions > #video-audio-toggle.fi::before{
-    font-size:41px !important;
-    transform:scale(1.22) !important;
+    font-size:38px !important;
+    transform:scale(1.12) !important;
   }
 
   #clock #fx-rates .fx-rate,
