@@ -1,4 +1,4 @@
-/* Flöw Icons v10.7 — clean single-source rules */
+/* Flöw Icons v10.8 — clean single-source rules */
 @font-face{
   font-family:"Flöw Icons";
   src:url("../assets/fonts/flow-icons.woff2?v=5") format("woff2");
@@ -411,7 +411,7 @@
   transform:none !important;
 }
 #source-viewer-close.fi::before{
-  font-size:20px !important;
+  font-size:24px !important;
   transform:none !important;
 }
 @media(max-width:700px){
@@ -420,6 +420,6 @@
     height:23px !important;
   }
   #source-viewer-close.fi::before{
-    font-size:21px !important;
+    font-size:25px !important;
   }
 }
