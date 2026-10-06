@@ -6163,10 +6163,11 @@ body{
 
 
 /* =====================================================================
-   V31.85 — menu control geometry + unified switches
+   V31.86 — icon-only menu controls + unified switches
    ===================================================================== */
 
-/* Numeric / playback steppers: stable square geometry, no circular chrome. */
+/* Numeric / playback controls: icons only.
+   The 30x30 hit area stays invisible; hover matches the main action buttons. */
 .duration-control{
   display:flex !important;
   align-items:center !important;
@@ -6183,16 +6184,14 @@ body{
   place-items:center !important;
   margin:0 !important;
   padding:0 !important;
-  border:1px solid transparent !important;
-  border-radius:8px !important;
-  background:rgba(255,255,255,.035) !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
   color:#fff !important;
   line-height:1 !important;
+  opacity:.72 !important;
   transform:none !important;
-  transition:
-    background-color .16s ease,
-    border-color .16s ease,
-    opacity .16s ease !important;
+  transition:opacity .18s ease !important;
 }
 .duration-control button::before{
   display:block !important;
@@ -6201,26 +6200,28 @@ body{
   transform:none !important;
 }
 .duration-control button:hover:not(:disabled){
-  background:rgba(255,255,255,.085) !important;
-  border-color:rgba(255,255,255,.10) !important;
+  background:transparent !important;
+  opacity:1 !important;
   transform:none !important;
 }
 .duration-control button:active:not(:disabled){
-  background:rgba(255,255,255,.13) !important;
+  background:transparent !important;
+  opacity:.58 !important;
   transform:none !important;
 }
 .duration-control button:focus-visible{
   outline:1px solid rgba(255,255,255,.58) !important;
   outline-offset:2px !important;
+  border-radius:4px !important;
 }
 .duration-control button:disabled{
   opacity:.24 !important;
   background:transparent !important;
-  border-color:transparent !important;
 }
 .duration-control .duration-auto-button.active{
-  background:rgba(255,255,255,.13) !important;
-  border-color:rgba(255,255,255,.16) !important;
+  background:transparent !important;
+  border:0 !important;
+  opacity:1 !important;
 }
 .duration-control #duration-value,
 .ticker-size-control > span{
