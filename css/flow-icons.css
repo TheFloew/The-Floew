@@ -1,4 +1,4 @@
-/* Flöw Icons v10.4 — clean single-source rules */
+/* Flöw Icons v10.5 — clean single-source rules */
 @font-face{
   font-family:"Flöw Icons";
   src:url("../assets/fonts/flow-icons.woff2?v=5") format("woff2");
@@ -106,7 +106,7 @@
 
 /* Headline actions */
 .headline-actions{
-  gap:15px !important;
+  gap:10px !important;
   align-items:center !important;
 }
 .headline-actions > #video-audio-toggle{
@@ -132,38 +132,75 @@
   order:4 !important;
   align-self:center !important;
 }
+.headline-actions > #video-audio-toggle,
+.headline-actions > .share-link,
+.headline-actions > .feedback-inline-link,
+.headline-actions > .source-link{
+  inline-size:30px !important;
+  min-inline-size:30px !important;
+  max-inline-size:30px !important;
+  block-size:36px !important;
+  min-block-size:36px !important;
+  max-block-size:36px !important;
+  margin:0 !important;
+  padding:0 !important;
+  display:inline-grid !important;
+  place-items:center !important;
+  align-self:center !important;
+}
+.headline-actions > .flora-inline{
+  inline-size:34px !important;
+  min-inline-size:34px !important;
+  max-inline-size:34px !important;
+  margin:0 !important;
+  padding:0 !important;
+  justify-content:center !important;
+}
 .headline-actions > .flora-inline .flora-inline-mark{
   font-size:18px !important;
   line-height:1 !important;
 }
 .headline-actions > .share-link.fi::before{
   content:"" !important;
-  width:1em !important;
-  height:1em !important;
-  font-size:30px !important;
+  width:22px !important;
+  height:22px !important;
+  font-size:0 !important;
   background:currentColor !important;
   -webkit-mask:url("../assets/icon-share.svg?v=3") center/contain no-repeat !important;
   mask:url("../assets/icon-share.svg?v=3") center/contain no-repeat !important;
   transform:none !important;
 }
 .headline-actions > .feedback-inline-link.fi::before{
-  font-size:25px !important;
+  font-size:23px !important;
   transform:none !important;
 }
 .headline-actions > .source-link.fi::before{
   content:"" !important;
-  width:1em !important;
-  height:1em !important;
-  font-size:30px !important;
+  width:22px !important;
+  height:22px !important;
+  font-size:0 !important;
   background:currentColor !important;
   -webkit-mask:url("../assets/icon-source-rounded.svg?v=1") center/contain no-repeat !important;
   mask:url("../assets/icon-source-rounded.svg?v=1") center/contain no-repeat !important;
   transform:none !important;
 }
 .headline-actions > #video-audio-toggle.fi::before{
-  font-size:34px !important;
+  content:"" !important;
+  width:22px !important;
+  height:22px !important;
+  font-size:0 !important;
+  background:currentColor !important;
+  -webkit-mask:center/contain no-repeat !important;
+  mask:center/contain no-repeat !important;
   transform:none !important;
-  transform-origin:center !important;
+}
+.headline-actions > #video-audio-toggle.fi-volume-off::before{
+  -webkit-mask-image:url("../assets/icon-volume-off.svg?v=1") !important;
+  mask-image:url("../assets/icon-volume-off.svg?v=1") !important;
+}
+.headline-actions > #video-audio-toggle.fi-volume-on::before{
+  -webkit-mask-image:url("../assets/icon-volume-on.svg?v=1") !important;
+  mask-image:url("../assets/icon-volume-on.svg?v=1") !important;
 }
 
 /* Weather */
@@ -255,7 +292,7 @@
 
 @media(max-width:700px), (pointer:coarse){
   .headline-actions{
-    gap:15px !important;
+    gap:10px !important;
   }
   .headline-actions > .flora-inline{
     transform:translateY(-2px) !important;
@@ -264,17 +301,36 @@
     font-size:19px !important;
   }
   .headline-actions > .share-link.fi::before{
-    font-size:31px !important;
+    width:23px !important;
+    height:23px !important;
   }
   .headline-actions > .feedback-inline-link.fi::before{
-    font-size:26px !important;
+    font-size:24px !important;
   }
   .headline-actions > .source-link.fi::before{
-    font-size:31px !important;
+    width:23px !important;
+    height:23px !important;
   }
   .headline-actions > #video-audio-toggle.fi::before{
-    font-size:35px !important;
+    width:23px !important;
+    height:23px !important;
     transform:none !important;
+  }
+  .headline-actions > #video-audio-toggle,
+  .headline-actions > .share-link,
+  .headline-actions > .feedback-inline-link,
+  .headline-actions > .source-link{
+    inline-size:32px !important;
+    min-inline-size:32px !important;
+    max-inline-size:32px !important;
+    block-size:38px !important;
+    min-block-size:38px !important;
+    max-block-size:38px !important;
+  }
+  .headline-actions > .flora-inline{
+    inline-size:36px !important;
+    min-inline-size:36px !important;
+    max-inline-size:36px !important;
   }
 
   #clock #fx-rates .fx-rate,
