@@ -1,4 +1,4 @@
-/* Flöw Icons v10.10 — clean single-source rules */
+/* Flöw Icons v10.11 — clean single-source rules */
 @font-face{
   font-family:"Flöw Icons";
   src:url("../assets/fonts/flow-icons.woff2?v=5") format("woff2");
@@ -281,7 +281,7 @@
 }
 
 /* Feedback / secondary pages */
-.floew-feedback-icon.fi::before{font-size:21px !important}
+.floew-feedback-icon.fi::before{font-size:24px !important;line-height:1 !important;transform:none !important}
 .floew-feedback-back .fi::before{font-size:14px !important;margin-right:5px}
 .floew-feedback-success-mark.fi::before{font-size:30px !important}
 .back-link .fi::before,

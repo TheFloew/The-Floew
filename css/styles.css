@@ -3942,7 +3942,7 @@ body.foreign-mode #time-range-button{
 .floew-feedback-option{display:flex;align-items:center;gap:10px;min-height:48px;padding:12px 14px;border:1px solid rgba(255,255,255,.10);border-radius:11px;background:rgba(255,255,255,.025);color:rgba(255,255,255,.82);cursor:pointer;text-align:left;font:600 10px/1.35 "Comfortaa",sans-serif;transition:border-color .16s ease,background .16s ease,color .16s ease,transform .16s ease}
 .floew-feedback-option:hover,.floew-feedback-option:focus-visible{border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.065);color:#fff;outline:none}
 .floew-feedback-option:active{transform:scale(.985)}
-.floew-feedback-icon{display:grid;place-items:center;flex:0 0 24px;width:24px;height:24px;border-radius:8px;background:rgba(255,255,255,.055);color:rgba(255,255,255,.72);font:700 14px/1 Arial,sans-serif}
+.floew-feedback-icon{display:grid;place-items:center;flex:0 0 28px;width:28px;height:28px;border-radius:0;background:transparent;color:rgba(255,255,255,.82);font:700 14px/1 Arial,sans-serif}
 .floew-feedback-summary{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:0 auto 16px}
 .floew-feedback-chip{padding:6px 8px;border-radius:999px;background:rgba(255,255,255,.06);color:rgba(255,255,255,.58);font:600 8px/1.2 "Comfortaa",sans-serif}
 .floew-feedback-field{display:block;margin:14px 0 0}
