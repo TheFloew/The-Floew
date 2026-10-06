@@ -1,4 +1,4 @@
-/* Flöw Icons v10 — clean single-source rules */
+/* Flöw Icons v10.2 — clean single-source rules */
 @font-face{
   font-family:"Flöw Icons";
   src:url("../assets/fonts/flow-icons.woff2?v=5") format("woff2");
@@ -122,13 +122,22 @@
   height:1em !important;
   font-size:34px !important;
   background:currentColor !important;
-  -webkit-mask:url("../assets/icon-share.svg?v=2") center/contain no-repeat !important;
-  mask:url("../assets/icon-share.svg?v=2") center/contain no-repeat !important;
+  -webkit-mask:url("../assets/icon-share.svg?v=3") center/contain no-repeat !important;
+  mask:url("../assets/icon-share.svg?v=3") center/contain no-repeat !important;
   transform:none !important;
 }
-.headline-actions > .feedback-inline-link.fi::before,
-.headline-actions > .source-link.fi::before{
+.headline-actions > .feedback-inline-link.fi::before{
   font-size:28px !important;
+  transform:none !important;
+}
+.headline-actions > .source-link.fi::before{
+  content:"" !important;
+  width:1em !important;
+  height:1em !important;
+  font-size:29px !important;
+  background:currentColor !important;
+  -webkit-mask:url("../assets/icon-source-rounded.svg?v=1") center/contain no-repeat !important;
+  mask:url("../assets/icon-source-rounded.svg?v=1") center/contain no-repeat !important;
   transform:none !important;
 }
 .headline-actions > #video-audio-toggle.fi::before{
@@ -237,9 +246,11 @@
   .headline-actions > .share-link.fi::before{
     font-size:35px !important;
   }
-  .headline-actions > .feedback-inline-link.fi::before,
-  .headline-actions > .source-link.fi::before{
+  .headline-actions > .feedback-inline-link.fi::before{
     font-size:29px !important;
+  }
+  .headline-actions > .source-link.fi::before{
+    font-size:30px !important;
   }
   .headline-actions > #video-audio-toggle.fi::before{
     font-size:41px !important;
