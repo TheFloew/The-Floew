@@ -1,4 +1,4 @@
-/* Flöw Icons v10.5 — clean single-source rules */
+/* Flöw Icons v10.6 — clean single-source rules */
 @font-face{
   font-family:"Flöw Icons";
   src:url("../assets/fonts/flow-icons.woff2?v=5") format("woff2");
@@ -354,4 +354,46 @@
   .fx-gold-icon{
     background-size:20px auto !important;
   }
+}
+
+
+/* V10.6: top-right controls use the same stationary hover language
+   as headline actions. No scale/translate movement on hover or active. */
+#fullscreen-button.fi,
+#control-menu-button.fi,
+#control-menu-panel .control-menu-item.fi{
+  transform:none !important;
+  transition:
+    opacity .18s ease,
+    color .18s ease,
+    background-color .18s ease !important;
+}
+
+#fullscreen-button.fi.is-visible,
+#control-menu-button.fi.is-visible,
+#control-menu-button.fi.open,
+#control-menu-panel.open[aria-hidden="false"] .control-menu-item.fi{
+  opacity:.82 !important;
+}
+
+#fullscreen-button.fi:hover,
+#control-menu-button.fi:hover,
+#control-menu-panel .control-menu-item.fi:hover{
+  transform:none !important;
+  opacity:1 !important;
+  background:transparent !important;
+}
+
+#fullscreen-button.fi:active,
+#control-menu-button.fi:active,
+#control-menu-panel .control-menu-item.fi:active{
+  transform:none !important;
+  opacity:.72 !important;
+}
+
+#fullscreen-button.fi:focus-visible,
+#control-menu-button.fi:focus-visible,
+#control-menu-panel .control-menu-item.fi:focus-visible{
+  transform:none !important;
+  opacity:1 !important;
 }
