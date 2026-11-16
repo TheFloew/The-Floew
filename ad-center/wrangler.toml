@@ -12,9 +12,6 @@ binding = "DB"
 database_name = "floew-ad-center"
 database_id = "a3b61630-c5ff-4162-be4a-d3c7d2e3565c"
 
-[[r2_buckets]]
-binding = "MEDIA"
-bucket_name = "floew-ad-media"
 
 [observability]
 enabled = true
