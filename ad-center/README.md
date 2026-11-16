@@ -100,4 +100,4 @@ RSS her istekte güncel D1 kayıtlarından oluşturulur ve reklam değişiklikle
 4. Aktif kutusunu kapat; reklamın yönetici akışında pasif kaldığını ve RSS'ten çıktığını doğrula.
 5. Gelecek tarihli reklam ekle; Planlandı görünmesini ve başlangıç tarihinden önce RSS'te bulunmamasını doğrula.
 6. Bitiş tarihi geçmiş reklamı aç; checkbox'ın otomatik kapandığını ve RSS'te bulunmadığını doğrula.
-7. RSS XML'ini doğrula; enclosure ve media:content alanlarının medya URL'si, türü ve boyutunu içerdiğini kontrol et.
+7. RSS XML'ini doğrula; enclosure ve media:content alanlarının medya URL'si, türü ve boyutunu içerdiğini kontrol et. 
