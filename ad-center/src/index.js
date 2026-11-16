@@ -44,10 +44,10 @@ export default {
       if (path === "/api/categories" && method === "GET") {
         return json({ categories: CATEGORIES });
       }
-      if (path === "/api/ads" && method === "GET") {
+      if (path === "/api/flowery" && method === "GET") {
         return await listAds(request, env);
       }
-      if (path === "/api/ads" && method === "POST") {
+      if (path === "/api/flowery" && method === "POST") {
         assertSameOrigin(request);
         if (!(await isAdmin(request, env))) return json({ error: "Oturum gerekli." }, 401);
         return await createAd(request, env);
@@ -74,8 +74,8 @@ export default {
         return await rssFeed(url, env);
       }
 
-      if (path.startsWith("/media/") && (method === "GET" || method === "HEAD")) {
-        return await serveMedia(request, env, path.slice("/media/".length));
+      if (path.startsWith("/m/") && (method === "GET" || method === "HEAD")) {
+        return await serveMedia(request, env, path.slice("/m/".length));
       }
 
       return env.ASSETS.fetch(request);
@@ -299,7 +299,7 @@ function mediaObject(ad, orientation) {
     mediaType: ad[prefix + "type"],
     mediaContentType: ad[prefix + "content_type"],
     mediaSize: Number(ad[prefix + "size"]),
-    mediaUrl: "/media/" + encodeURIComponent(key)
+    mediaUrl: "/m/" + encodeURIComponent(key)
   };
 }
 
