@@ -89,11 +89,11 @@
 
   function mediaMarkup(media, label, title) {
     if (!media) return "";
-    const url = "/media/" + encodeURIComponent(media.mediaKey);
+    const url = "/m/" + encodeURIComponent(media.mediaKey);
     const element = media.mediaType === "video"
       ? '<video controls playsinline preload="metadata" src="' + escapeHTML(url) + '"></video>'
       : '<img loading="lazy" src="' + escapeHTML(url) + '" alt="' + escapeHTML(title) + '">';
-    return '<div class="media-preview"><div class="media-preview-label">' + label + '</div><div class="card-media">' + element + '</div></div>';
+    return '<div class="asset-view"><div class="asset-label">' + label + '</div><div class="asset-frame">' + element + '</div></div>';
   }
 
   function render() {
@@ -130,7 +130,7 @@
             '</div>' +
           '</div>'
         : "";
-      return '<article class="ad-card ' + cardClass + '" id="' + escapeHTML(ad.id) + '">' +
+      return '<article class="story-card ' + cardClass + '" id="' + escapeHTML(ad.id) + '">' +
         adminTools + previews +
         '<div class="card-body">' +
           '<div class="card-meta"><span class="category">' + escapeHTML(categoryLabel(ad.category)) + '</span><span>' + dateLabel(ad.start_date) + '</span></div>' +
@@ -142,7 +142,7 @@
   }
 
   async function loadAds() {
-    const data = await api("/api/ads");
+    const data = await api("/api/flowery");
     state.ads = data.ads || [];
     state.admin = Boolean(data.admin);
     state.today = data.today || new Date().toISOString().slice(0, 10);
@@ -266,12 +266,12 @@
 
       const payload = { title, category, startDate, endDate, horizontal, vertical };
       if (existing) {
-        await api("/api/ads/" + encodeURIComponent(existing.id), {
+        await api("/api/flowery/" + encodeURIComponent(existing.id), {
           method: "PATCH",
           body: JSON.stringify(payload)
         });
       } else {
-        await api("/api/ads", { method: "POST", body: JSON.stringify(payload) });
+        await api("/api/flowery", { method: "POST", body: JSON.stringify(payload) });
       }
 
       hideModal(editorModal);
@@ -337,7 +337,7 @@
     } else if (control.dataset.action === "delete") {
       if (!confirm('"' + ad.title + '" reklamını silmek istiyor musun?')) return;
       try {
-        await api("/api/ads/" + encodeURIComponent(id), { method: "DELETE" });
+        await api("/api/flowery/" + encodeURIComponent(id), { method: "DELETE" });
         await loadAds();
         toast("Reklam silindi.");
       } catch (error) {
@@ -346,7 +346,7 @@
     } else if (control.dataset.action === "toggle") {
       control.disabled = true;
       try {
-        await api("/api/ads/" + encodeURIComponent(id), {
+        await api("/api/flowery/" + encodeURIComponent(id), {
           method: "PATCH",
           body: JSON.stringify({ active: control.checked })
         });
