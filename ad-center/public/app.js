@@ -306,7 +306,7 @@
     if (control.dataset.action === "edit") {
       openEditor(ad);
     } else if (control.dataset.action === "delete") {
-      if (!confirm('"' + ad.title + '" reklamını ve medya dosyasını silmek istiyor musun?')) return;
+      if (!confirm('"' + ad.title + '" reklamını silmek istiyor musun?')) return;
       try {
         await api("/api/ads/" + encodeURIComponent(id), { method: "DELETE" });
         await loadAds();
