@@ -270,7 +270,7 @@ async function listAds(request, env) {
   const today = await expireEndedAds(env);
   const admin = await isAdmin(request, env);
   const result = await env.DB.prepare(
-    "SELECT id, title, category, media_key, media_name, media_type, media_content_type, media_size, start_date, end_date, is_enabled, created_at, updated_at FROM ads ORDER BY start_date DESC, created_at DESC"
+    "SELECT * FROM ads ORDER BY start_date DESC, created_at DESC"
   ).all();
 
   let ads = result.results || [];
@@ -281,11 +281,26 @@ async function listAds(request, env) {
       ...ad,
       active: Number(ad.is_enabled) === 1,
       live: isLive(ad, today),
-      mediaUrl: "/media/" + encodeURIComponent(ad.media_key)
+      horizontalMedia: mediaObject(ad, "horizontal"),
+      verticalMedia: mediaObject(ad, "vertical")
     })),
     admin,
     today
   });
+}
+
+function mediaObject(ad, orientation) {
+  const prefix = orientation + "_media_";
+  const key = ad[prefix + "key"];
+  if (!key) return null;
+  return {
+    mediaKey: key,
+    mediaName: ad[prefix + "name"],
+    mediaType: ad[prefix + "type"],
+    mediaContentType: ad[prefix + "content_type"],
+    mediaSize: Number(ad[prefix + "size"]),
+    mediaUrl: "/media/" + encodeURIComponent(key)
+  };
 }
 
 async function uploadMedia(request, env) {
@@ -357,19 +372,15 @@ async function createAd(request, env) {
   const data = validateAd(body);
   if (data.error) return json({ error: data.error }, 400);
   const id = crypto.randomUUID();
+  const primary = data.horizontal || data.vertical;
   await env.DB.prepare(
-    "INSERT INTO ads (id, title, category, media_key, media_name, media_type, media_content_type, media_size, start_date, end_date, is_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)"
+    "INSERT INTO ads (id, title, category, media_key, media_name, media_type, media_content_type, media_size, horizontal_media_key, horizontal_media_name, horizontal_media_type, horizontal_media_content_type, horizontal_media_size, vertical_media_key, vertical_media_name, vertical_media_type, vertical_media_content_type, vertical_media_size, start_date, end_date, is_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)"
   ).bind(
-    id,
-    data.title,
-    data.category,
-    data.mediaKey,
-    data.mediaName,
-    data.mediaType,
-    data.mediaContentType,
-    data.mediaSize,
-    data.startDate,
-    data.endDate
+    id, data.title, data.category,
+    primary.mediaKey, primary.mediaName, primary.mediaType, primary.mediaContentType, primary.mediaSize,
+    data.horizontal?.mediaKey || null, data.horizontal?.mediaName || null, data.horizontal?.mediaType || null, data.horizontal?.mediaContentType || null, data.horizontal?.mediaSize || null,
+    data.vertical?.mediaKey || null, data.vertical?.mediaName || null, data.vertical?.mediaType || null, data.vertical?.mediaContentType || null, data.vertical?.mediaSize || null,
+    data.startDate, data.endDate
   ).run();
 
   return json({ ok: true, id }, 201);
@@ -386,39 +397,48 @@ async function updateAd(request, env, id) {
   const current = await env.DB.prepare("SELECT * FROM ads WHERE id = ?").bind(id).first();
   if (!current) return json({ error: "Reklam bulunamadı." }, 404);
 
+  const currentHorizontal = mediaObject(current, "horizontal");
+  const currentVertical = mediaObject(current, "vertical");
   const next = {
     title: body.title === undefined ? current.title : String(body.title).trim(),
     category: body.category === undefined ? current.category : String(body.category),
     startDate: body.startDate === undefined ? current.start_date : String(body.startDate),
     endDate: body.endDate === undefined ? current.end_date : String(body.endDate),
-    mediaKey: body.mediaKey === undefined ? current.media_key : String(body.mediaKey),
-    mediaName: body.mediaName === undefined ? current.media_name : String(body.mediaName),
-    mediaType: body.mediaType === undefined ? current.media_type : String(body.mediaType),
-    mediaContentType: body.mediaContentType === undefined ? current.media_content_type : String(body.mediaContentType),
-    mediaSize: body.mediaSize === undefined ? Number(current.media_size) : Number(body.mediaSize),
+    horizontal: body.horizontal === undefined ? currentHorizontal : body.horizontal,
+    vertical: body.vertical === undefined ? currentVertical : body.vertical,
     active: body.active === undefined ? Number(current.is_enabled) === 1 : body.active === true
   };
 
   const validation = validateAd(next);
   if (validation.error) return json({ error: validation.error }, 400);
+  const primary = validation.horizontal || validation.vertical;
 
   await env.DB.prepare(
-    "UPDATE ads SET title = ?, category = ?, media_key = ?, media_name = ?, media_type = ?, media_content_type = ?, media_size = ?, start_date = ?, end_date = ?, is_enabled = ?, updated_at = datetime('now') WHERE id = ?"
+    "UPDATE ads SET title = ?, category = ?, media_key = ?, media_name = ?, media_type = ?, media_content_type = ?, media_size = ?, horizontal_media_key = ?, horizontal_media_name = ?, horizontal_media_type = ?, horizontal_media_content_type = ?, horizontal_media_size = ?, vertical_media_key = ?, vertical_media_name = ?, vertical_media_type = ?, vertical_media_content_type = ?, vertical_media_size = ?, start_date = ?, end_date = ?, is_enabled = ?, updated_at = datetime('now') WHERE id = ?"
   ).bind(
-    next.title,
-    next.category,
-    next.mediaKey,
-    next.mediaName,
-    next.mediaType,
-    next.mediaContentType,
-    next.mediaSize,
-    next.startDate,
-    next.endDate,
-    next.active ? 1 : 0,
-    id
+    validation.title, validation.category,
+    primary.mediaKey, primary.mediaName, primary.mediaType, primary.mediaContentType, primary.mediaSize,
+    validation.horizontal?.mediaKey || null, validation.horizontal?.mediaName || null, validation.horizontal?.mediaType || null, validation.horizontal?.mediaContentType || null, validation.horizontal?.mediaSize || null,
+    validation.vertical?.mediaKey || null, validation.vertical?.mediaName || null, validation.vertical?.mediaType || null, validation.vertical?.mediaContentType || null, validation.vertical?.mediaSize || null,
+    validation.startDate, validation.endDate, next.active ? 1 : 0, id
   ).run();
 
   return json({ ok: true });
+}
+
+function validateMedia(media, label) {
+  if (!media || typeof media !== "object") return null;
+  const mediaKey = String(media.mediaKey || "");
+  const mediaName = String(media.mediaName || "reklam");
+  const mediaType = String(media.mediaType || "");
+  const mediaContentType = String(media.mediaContentType || "");
+  const mediaSize = Number(media.mediaSize || 0);
+  if (!mediaKey || !/^[a-zA-Z0-9._-]+$/.test(mediaKey)) return { error: label + " medya dosyası geçersiz." };
+  if (mediaType !== "image" && mediaType !== "video") return { error: label + " medya türü geçersiz." };
+  if (!ALLOWED_TYPES.has(mediaContentType)) return { error: label + " medya formatı desteklenmiyor." };
+  if ((mediaType === "image") !== mediaContentType.startsWith("image/")) return { error: label + " medya türü ve dosya formatı uyuşmuyor." };
+  if (!Number.isFinite(mediaSize) || mediaSize < 1 || mediaSize > MAX_UPLOAD_BYTES) return { error: label + " medya dosyası 10 MB sınırını aşamaz." };
+  return { mediaKey, mediaName, mediaType, mediaContentType, mediaSize };
 }
 
 function validateAd(body) {
@@ -426,36 +446,17 @@ function validateAd(body) {
   const category = String(body.category || "");
   const startDate = String(body.startDate || "");
   const endDate = String(body.endDate || "");
-  const mediaKey = String(body.mediaKey || "");
-  const mediaName = String(body.mediaName || "reklam");
-  const mediaType = String(body.mediaType || "");
-  const mediaContentType = String(body.mediaContentType || "");
-  const mediaSize = Number(body.mediaSize || 0);
+  const horizontal = body.horizontal ? validateMedia(body.horizontal, "Yatay") : null;
+  const vertical = body.vertical ? validateMedia(body.vertical, "Dikey") : null;
 
   if (!title || title.length > 160) return { error: "Reklam başlığı 1-160 karakter olmalı." };
   if (!CATEGORIES.some((item) => item.code === category)) return { error: "Geçerli bir kategori seçin." };
-  if (!validDate(startDate) || !validDate(endDate) || startDate > endDate) {
-    return { error: "Başlangıç ve bitiş tarihlerini kontrol edin." };
-  }
-  if (!mediaKey || !/^[a-zA-Z0-9._-]+$/.test(mediaKey)) return { error: "Medya dosyası seçilmedi." };
-  if (mediaType !== "image" && mediaType !== "video") return { error: "Medya türü geçersiz." };
-  if (!ALLOWED_TYPES.has(mediaContentType)) return { error: "Medya formatı desteklenmiyor." };
-  if ((mediaType === "image") !== mediaContentType.startsWith("image/")) return { error: "Medya türü ve dosya formatı uyuşmuyor." };
-  if (!Number.isFinite(mediaSize) || mediaSize < 1 || mediaSize > MAX_UPLOAD_BYTES) {
-    return { error: "Medya dosyası 10 MB sınırını aşamaz." };
-  }
+  if (!validDate(startDate) || !validDate(endDate) || startDate > endDate) return { error: "Başlangıç ve bitiş tarihlerini kontrol edin." };
+  if (horizontal?.error) return { error: horizontal.error };
+  if (vertical?.error) return { error: vertical.error };
+  if (!horizontal && !vertical) return { error: "En az bir yatay veya dikey medya dosyası eklemelisiniz." };
 
-  return {
-    title,
-    category,
-    startDate,
-    endDate,
-    mediaKey,
-    mediaName,
-    mediaType,
-    mediaContentType,
-    mediaSize
-  };
+  return { title, category, startDate, endDate, horizontal, vertical };
 }
 
 async function deleteAd(env, id) {
@@ -469,18 +470,34 @@ async function deleteAd(env, id) {
 async function rssFeed(url, env) {
   const today = await expireEndedAds(env);
   const result = await env.DB.prepare(
-    "SELECT id, title, category, media_key, media_type, media_content_type, media_size, start_date FROM ads WHERE is_enabled = 1 AND start_date <= ? AND end_date >= ? ORDER BY start_date DESC, created_at DESC"
+    "SELECT * FROM ads WHERE is_enabled = 1 AND start_date <= ? AND end_date >= ? ORDER BY start_date DESC, created_at DESC"
   ).bind(today, today).all();
 
   const origin = url.origin;
   const items = (result.results || []).map((ad) => {
-    const mediaUrl = origin + "/media/" + encodeURIComponent(ad.media_key);
     const itemUrl = origin + "/#" + encodeURIComponent(ad.id);
     const pubDate = new Date(ad.start_date + "T00:00:00+03:00").toUTCString();
-    const medium = ad.media_type === "video" ? "video" : "image";
-    const html = ad.media_type === "video"
-      ? '<video controls playsinline src="' + mediaUrl + '"></video>'
-      : '<img src="' + mediaUrl + '" alt="' + escapeHtml(ad.title) + '" />';
+    const horizontal = mediaObject(ad, "horizontal");
+    const vertical = mediaObject(ad, "vertical");
+    const allMedia = [
+      horizontal ? { ...horizontal, orientation: "landscape" } : null,
+      vertical ? { ...vertical, orientation: "portrait" } : null
+    ].filter(Boolean);
+
+    const mediaXml = allMedia.map((media) => {
+      const medium = media.mediaType === "video" ? "video" : "image";
+      return '<media:content url="' + xmlEscape(origin + media.mediaUrl) + '" medium="' + medium +
+        '" type="' + xmlEscape(media.mediaContentType) + '" fileSize="' + media.mediaSize +
+        '" flöw:orientation="' + media.orientation + '" />';
+    }).join("");
+    const first = allMedia[0];
+    const firstUrl = origin + first.mediaUrl;
+    const html = allMedia.map((media) => {
+      const mediaUrl = origin + media.mediaUrl;
+      return media.mediaType === "video"
+        ? '<div data-orientation="' + media.orientation + '"><video controls playsinline src="' + mediaUrl + '"></video></div>'
+        : '<div data-orientation="' + media.orientation + '"><img src="' + mediaUrl + '" alt="' + escapeHtml(ad.title) + '" /></div>';
+    }).join("");
     const encoded = html.replace(/\]\]>/g, "]]]]><![CDATA[>");
     return [
       "<item>",
@@ -490,15 +507,15 @@ async function rssFeed(url, env) {
       "<pubDate>" + pubDate + "</pubDate>",
       "<category>" + xmlEscape(ad.category) + "</category>",
       "<description>" + xmlEscape(ad.title) + "</description>",
-      "<enclosure url=\"" + xmlEscape(mediaUrl) + "\" length=\"" + Number(ad.media_size) + "\" type=\"" + xmlEscape(ad.media_content_type) + "\" />",
-      "<media:content url=\"" + xmlEscape(mediaUrl) + "\" medium=\"" + medium + "\" type=\"" + xmlEscape(ad.media_content_type) + "\" fileSize=\"" + Number(ad.media_size) + "\" />",
+      "<enclosure url=\"" + xmlEscape(firstUrl) + "\" length=\"" + first.mediaSize + "\" type=\"" + xmlEscape(first.mediaContentType) + "\" />",
+      "<media:group>" + mediaXml + "</media:group>",
       "<content:encoded><![CDATA[" + encoded + "]]></content:encoded>",
       "</item>"
     ].join("");
   }).join("");
 
   const xml = '<?xml version="1.0" encoding="UTF-8"?>' +
-    '<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:media="http://search.yahoo.com/mrss/">' +
+    '<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:media="http://search.yahoo.com/mrss/" xmlns:flöw="https://flöw.tr/xmlns/ad-center/1.0">' +
     "<channel>" +
     "<title>Flöw Reklam Merkezi</title>" +
     "<link>" + xmlEscape(origin) + "</link>" +
