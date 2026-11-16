@@ -73,6 +73,11 @@
     });
   }
 
+  function categoryLabel(code) {
+    const category = state.categories.find((item) => item.code === code);
+    return category ? category.label : code;
+  }
+
   function statusFor(ad) {
     if (ad.end_date < state.today) return { label: "Süresi doldu", className: "expired" };
     if (!ad.active) return { label: "Pasif", className: "off" };
@@ -118,7 +123,7 @@
         adminTools +
         '<div class="card-media">' + media + '</div>' +
         '<div class="card-body">' +
-          '<div class="card-meta"><span class="category">' + escapeHTML(ad.category) + '</span><span>' + dateLabel(ad.start_date) + '</span></div>' +
+          '<div class="card-meta"><span class="category">' + escapeHTML(categoryLabel(ad.category)) + '</span><span>' + dateLabel(ad.start_date) + '</span></div>' +
           '<h2>' + escapeHTML(ad.title) + '</h2>' +
           (state.admin ? '<p class="card-dates">' + dateLabel(ad.start_date) + ' – ' + dateLabel(ad.end_date) + '</p>' : '') +
         '</div>' +
@@ -143,7 +148,7 @@
       state.admin = Boolean(session.authenticated);
       state.categories = categories.categories || [];
       $("#ad-category").innerHTML = '<option value="">Kategori seç</option>' +
-        state.categories.map((category) => '<option value="' + escapeHTML(category) + '">' + escapeHTML(category) + '</option>').join("");
+        state.categories.map((category) => '<option value="' + escapeHTML(category.code) + '">' + escapeHTML(category.code + ": " + category.label) + '</option>').join("");
       await loadAds();
     } catch (error) {
       feed.innerHTML = '<div class="empty-state"><h2>Bağlantı kurulamadı</h2><p>' + escapeHTML(error.message) + '</p></div>';
