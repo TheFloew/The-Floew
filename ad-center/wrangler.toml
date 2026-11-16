@@ -10,7 +10,7 @@ binding = "ASSETS"
 [[d1_databases]]
 binding = "DB"
 database_name = "floew-ad-center"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "a3b61630-c5ff-4162-be4a-d3c7d2e3565c"
 
 [[r2_buckets]]
 binding = "MEDIA"
