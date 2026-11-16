@@ -32,6 +32,15 @@ export default {
       if (path === "/api/session" && method === "GET") {
         return json({ authenticated: await isAdmin(request, env) });
       }
+      if (path === "/api/health" && method === "GET") {
+        const check = await env.DB.prepare("SELECT 1 AS ok").first();
+        return json({
+          ok: Number(check && check.ok) === 1,
+          database: Number(check && check.ok) === 1,
+          storage: Boolean(env.MEDIA),
+          categories: CATEGORIES.length
+        });
+      }
       if (path === "/api/categories" && method === "GET") {
         return json({ categories: CATEGORIES });
       }
