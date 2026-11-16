@@ -48,7 +48,7 @@ export default {
         return await uploadMedia(request, env);
       }
 
-      const adMatch = path.match(/^\\/api\\/ads\\/([a-f0-9-]+)$/i);
+      const adMatch = path.match(/^\/api\/ads\/([a-f0-9-]+)$/i);
       if (adMatch && method === "PATCH") {
         assertSameOrigin(request);
         if (!(await isAdmin(request, env))) return json({ error: "Oturum gerekli." }, 401);
@@ -70,6 +70,7 @@ export default {
 
       return env.ASSETS.fetch(request);
     } catch (error) {
+      if (error instanceof Response) return error;
       console.error("Ad Center request failed:", error);
       return json({ error: "İşlem tamamlanamadı. Lütfen tekrar deneyin." }, 500);
     }
@@ -166,7 +167,7 @@ async function hmac(value, secret) {
 function base64UrlEncode(bytes) {
   let binary = "";
   for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/g, "");
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
 function base64UrlDecode(value) {
@@ -212,7 +213,7 @@ function todayInIstanbul() {
 
 function validDate(value) {
   return typeof value === "string" &&
-    /^\\d{4}-\\d{2}-\\d{2}$/.test(value) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(value) &&
     !Number.isNaN(Date.parse(value + "T00:00:00Z"));
 }
 
@@ -272,7 +273,7 @@ async function uploadMedia(request, env) {
     originalName = "reklam";
   }
   const safeName = originalName
-    .split(/[\\\\/]/).pop()
+    .split(/[\\/]/).pop()
     .replace(/[^a-zA-Z0-9._-]/g, "_")
     .slice(-100) || "reklam";
   const key = crypto.randomUUID() + "-" + safeName;
@@ -441,17 +442,17 @@ async function rssFeed(url, env) {
     const html = ad.media_type === "video"
       ? '<video controls playsinline src="' + mediaUrl + '"></video>'
       : '<img src="' + mediaUrl + '" alt="' + escapeHtml(ad.title) + '" />';
-    const encoded = html.replace(/\\]\\]>/g, "]]]]><![CDATA[>");
+    const encoded = html.replace(/\]\]>/g, "]]]]><![CDATA[>");
     return [
       "<item>",
       "<title>" + xmlEscape(ad.title) + "</title>",
       "<link>" + xmlEscape(itemUrl) + "</link>",
-      "<guid isPermaLink=\\"false\\">" + xmlEscape(ad.id) + "</guid>",
+      "<guid isPermaLink=\"false\">" + xmlEscape(ad.id) + "</guid>",
       "<pubDate>" + pubDate + "</pubDate>",
       "<category>" + xmlEscape(ad.category) + "</category>",
       "<description>" + xmlEscape(ad.title) + "</description>",
-      "<enclosure url=\\"" + xmlEscape(mediaUrl) + "\\" length=\\"" + Number(ad.media_size) + "\\" type=\\"" + xmlEscape(ad.media_content_type) + "\\" />",
-      "<media:content url=\\"" + xmlEscape(mediaUrl) + "\\" medium=\\"" + medium + "\\" type=\\"" + xmlEscape(ad.media_content_type) + "\\" fileSize=\\"" + Number(ad.media_size) + "\\" />",
+      "<enclosure url=\"" + xmlEscape(mediaUrl) + "\" length=\"" + Number(ad.media_size) + "\" type=\"" + xmlEscape(ad.media_content_type) + "\" />",
+      "<media:content url=\"" + xmlEscape(mediaUrl) + "\" medium=\"" + medium + "\" type=\"" + xmlEscape(ad.media_content_type) + "\" fileSize=\"" + Number(ad.media_size) + "\" />",
       "<content:encoded><![CDATA[" + encoded + "]]></content:encoded>",
       "</item>"
     ].join("");
@@ -496,7 +497,7 @@ function escapeHtml(value) {
 }
 
 function parseByteRange(value, size) {
-  const match = /^bytes=(\\d*)-(\\d*)$/.exec(value || "");
+  const match = /^bytes=(\d*)-(\d*)$/.exec(value || "");
   if (!match || (!match[1] && !match[2])) return null;
 
   let start;
