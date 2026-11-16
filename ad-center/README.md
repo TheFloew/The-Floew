@@ -18,6 +18,7 @@ Bu klasöre gir:
 
 ~~~bash
 cd ad-center
+npx wrangler login
 npx wrangler d1 create floew-ad-center
 npx wrangler r2 bucket create floew-ad-media
 ~~~
