@@ -58,7 +58,7 @@ export default {
         return await uploadMedia(request, env);
       }
 
-      const adMatch = path.match(/^\/api\/ads\/([a-f0-9-]+)$/i);
+      const adMatch = path.match(/^\/api\/flowery\/([a-f0-9-]+)$/i);
       if (adMatch && method === "PATCH") {
         assertSameOrigin(request);
         if (!(await isAdmin(request, env))) return json({ error: "Oturum gerekli." }, 401);
