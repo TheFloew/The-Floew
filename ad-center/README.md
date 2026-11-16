@@ -6,7 +6,7 @@ Flöw ana sayfasından ve mevcut reklam manifestlerinden bağımsız bir reklam 
 
 - Cloudflare Worker: yönetim API'si, oturum, medya sunumu ve RSS
 - Cloudflare D1: reklam kayıtları ve yayın tarihleri
-- Cloudflare R2: görsel/video dosyaları
+- GitHub public repository (`ad-center-media` dalı): görsel/video dosyaları
 - Worker Assets: herkese açık blog görünümü ve yönetim arayüzü
 - RSS: /feed.xml
 
@@ -20,10 +20,9 @@ Bu klasöre gir:
 cd ad-center
 npx wrangler login
 npx wrangler d1 create floew-ad-center
-npx wrangler r2 bucket create floew-ad-media
 ~~~
 
-D1 komutunun döndürdüğü database_id değerini wrangler.toml içindeki REPLACE_WITH_D1_DATABASE_ID alanına yaz.
+D1 komutunun döndürdüğü database_id değeri wrangler.toml dosyasına yazılmış olmalıdır. Medya yüklemek için GitHub'da yalnızca bu depoya Contents: Read and write izni olan fine-grained bir token oluştur ve Worker'a GITHUB_TOKEN secret olarak ekle.
 
 ## 2. Veritabanını hazırla
 
@@ -55,10 +54,12 @@ Yerel sağlık kontrolü: http://localhost:8787/api/health
 ~~~bash
 npx wrangler secret put ADMIN_PASSWORD
 npx wrangler secret put SESSION_SECRET
+npx wrangler secret put GITHUB_TOKEN
 ~~~
 
 - ADMIN_PASSWORD: yönetim ekranına girişte kullanılacak güçlü parola.
 - SESSION_SECRET: imzalı oturum çerezleri için rastgele ve uzun gizli anahtar. Örnek üretim komutu: openssl rand -base64 48.
+- GITHUB_TOKEN: yalnızca `TheFloew/The-Floew` deposuna Contents yazma izni olan fine-grained token. Token sadece Worker secret olarak saklanır.
 
 Bu değerler repoya veya tarayıcı koduna yazılmaz. Yönetici girişi beş başarısız denemeden sonra IP'nin kendisi saklanmadan 15 dakika sınırlandırılır.
 
@@ -83,7 +84,7 @@ Başlangıç kategorisi src/config.js içinde CATEGORIES dizisinde geçici olara
 - Yönetici checkbox'ı istediği zaman kapatarak reklamı anında yayından kaldırabilir.
 - RSS yalnızca aktif ve tarih aralığında olan reklamları döndürür.
 - Tarihler Europe/Istanbul saat dilimine göre değerlendirilir.
-- Görsel/video dosyaları R2'de tutulur; tek dosya sınırı 100 MB'tır. JPG, PNG, WebP, GIF, AVIF, MP4, WebM ve MOV desteklenir.
+- Görsel/video dosyaları herkese açık GitHub deposunun `ad-center-media` dalındaki `media/` klasöründe tutulur. Deneme aşamasında tek dosya sınırı 10 MB'tır. JPG, PNG, WebP, GIF, AVIF, MP4, WebM ve MOV desteklenir. Silinen reklamların medya dosyaları şimdilik depoda kalır.
 
 ## RSS adresi
 
