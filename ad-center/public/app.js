@@ -16,7 +16,8 @@
   const loginModal = $("#login-modal");
   const editorModal = $("#editor-modal");
   const editorForm = $("#editor-form");
-  const fileInput = $("#ad-file");
+  const horizontalFileInput = $("#ad-horizontal-file");
+  const verticalFileInput = $("#ad-vertical-file");
 
   function escapeHTML(value) {
     return String(value == null ? "" : value)
@@ -86,6 +87,15 @@
     return { label: "Beklemede", className: "" };
   }
 
+  function mediaMarkup(media, label, title) {
+    if (!media) return "";
+    const url = "/media/" + encodeURIComponent(media.mediaKey);
+    const element = media.mediaType === "video"
+      ? '<video controls playsinline preload="metadata" src="' + escapeHTML(url) + '"></video>'
+      : '<img loading="lazy" src="' + escapeHTML(url) + '" alt="' + escapeHTML(title) + '">';
+    return '<div class="media-preview"><div class="media-preview-label">' + label + '</div><div class="card-media">' + element + '</div></div>';
+  }
+
   function render() {
     const ads = state.ads;
     $("#admin-note").classList.toggle("hidden", !state.admin);
@@ -105,10 +115,11 @@
     feed.innerHTML = ads.map((ad) => {
       const status = statusFor(ad);
       const cardClass = !ad.active ? "is-inactive" : (status.className === "scheduled" ? "is-scheduled" : "");
-      const mediaUrl = "/media/" + encodeURIComponent(ad.media_key);
-      const media = ad.media_type === "video"
-        ? '<video controls playsinline preload="metadata" src="' + escapeHTML(mediaUrl) + '"></video>'
-        : '<img loading="lazy" src="' + escapeHTML(mediaUrl) + '" alt="' + escapeHTML(ad.title) + '">';
+      const horizontal = ad.horizontalMedia || null;
+      const vertical = ad.verticalMedia || null;
+      const previews = state.admin
+        ? mediaMarkup(horizontal, "Yatay sürüm", ad.title) + mediaMarkup(vertical, "Dikey sürüm", ad.title)
+        : mediaMarkup(horizontal || vertical, "", ad.title);
       const adminTools = state.admin
         ? '<div class="card-admin">' +
             '<label class="active-control"><input type="checkbox" data-action="toggle" data-id="' + escapeHTML(ad.id) + '"' + (ad.active ? " checked" : "") + '> Aktif</label>' +
@@ -120,8 +131,7 @@
           '</div>'
         : "";
       return '<article class="ad-card ' + cardClass + '" id="' + escapeHTML(ad.id) + '">' +
-        adminTools +
-        '<div class="card-media">' + media + '</div>' +
+        adminTools + previews +
         '<div class="card-body">' +
           '<div class="card-meta"><span class="category">' + escapeHTML(categoryLabel(ad.category)) + '</span><span>' + dateLabel(ad.start_date) + '</span></div>' +
           '<h2>' + escapeHTML(ad.title) + '</h2>' +
@@ -168,14 +178,39 @@
     later.setDate(later.getDate() + 30);
     $("#ad-start").value = ad ? ad.start_date : today;
     $("#ad-end").value = ad ? ad.end_date : later.toISOString().slice(0, 10);
-    fileInput.required = !ad;
-    $("#file-hint").textContent = ad
-      ? "Yeni dosya seçmezsen mevcut medya korunur. Dosya sınırı 10 MB."
-      : "JPG, PNG, WebP, GIF, AVIF, MP4 veya WebM · En fazla 10 MB";
-    $("#current-media").textContent = ad ? "Mevcut dosya: " + ad.media_name : "";
-    $("#current-media").classList.toggle("hidden", !ad);
+    const horizontal = ad?.horizontalMedia;
+    const vertical = ad?.verticalMedia;
+    $("#horizontal-file-hint").textContent = horizontal
+      ? "Mevcut: " + horizontal.mediaName + " · Yeni dosya seçersen değiştirilir."
+      : "Yatay ekranlar için · En fazla 10 MB";
+    $("#vertical-file-hint").textContent = vertical
+      ? "Mevcut: " + vertical.mediaName + " · Yeni dosya seçersen değiştirilir."
+      : "Dikey ekranlar için · En fazla 10 MB";
+    $("#current-media").textContent = ad
+      ? "Yatay: " + (horizontal?.mediaName || "Yüklenmedi") + " · Dikey: " + (vertical?.mediaName || "Yüklenmedi")
+      : "En az bir yön için medya yüklemelisin. İki sürümü de yükleyebilirsin.";
+    $("#current-media").classList.remove("hidden");
     $("#editor-error").classList.add("hidden");
     showModal(editorModal);
+  }
+
+  async function uploadSlot(file) {
+    if (!file) return null;
+    const uploaded = await api("/api/upload", {
+      method: "POST",
+      headers: {
+        "Content-Type": file.type,
+        "X-File-Name": encodeURIComponent(file.name)
+      },
+      body: file
+    });
+    return {
+      mediaKey: uploaded.mediaKey,
+      mediaName: uploaded.mediaName,
+      mediaType: uploaded.mediaType,
+      mediaContentType: uploaded.mediaContentType,
+      mediaSize: uploaded.mediaSize
+    };
   }
 
   async function saveAd(event) {
@@ -186,68 +221,57 @@
     const category = $("#ad-category").value;
     const startDate = $("#ad-start").value;
     const endDate = $("#ad-end").value;
-    const file = fileInput.files[0];
+    const horizontalFile = horizontalFileInput.files[0];
+    const verticalFile = verticalFileInput.files[0];
     const existing = state.editing;
 
     if (!title || !category || !startDate || !endDate || startDate > endDate) {
       return showEditorError("Başlık, kategori ve yayın tarihlerini kontrol et.");
     }
-    if (!file && !existing) return showEditorError("Bir görsel veya video seçmelisin.");
-    if (file && file.size > 10 * 1024 * 1024) return showEditorError("Dosya 10 MB sınırını aşıyor.");
-    if (file && !["image/jpeg","image/png","image/webp","image/gif","image/avif","video/mp4","video/webm","video/quicktime"].includes(file.type)) {
-      return showEditorError("Bu dosya formatı desteklenmiyor.");
+    if (!horizontalFile && !verticalFile && !existing) {
+      return showEditorError("En az bir yatay veya dikey medya dosyası eklemelisin.");
+    }
+    for (const file of [horizontalFile, verticalFile]) {
+      if (!file) continue;
+      if (file.size > 10 * 1024 * 1024) return showEditorError("Dosyalardan biri 10 MB sınırını aşıyor.");
+      if (!["image/jpeg","image/png","image/webp","image/gif","image/avif","video/mp4","video/webm","video/quicktime"].includes(file.type)) {
+        return showEditorError("Dosyalardan birinin formatı desteklenmiyor.");
+      }
     }
 
     state.busy = true;
     const saveButton = $("#save-ad");
     saveButton.disabled = true;
-    saveButton.textContent = file ? "Dosya yükleniyor…" : "Kaydediliyor…";
+    saveButton.textContent = "Medya yükleniyor…";
 
     try {
-      let media = existing ? {
-        mediaKey: existing.media_key,
-        mediaName: existing.media_name,
-        mediaType: existing.media_type,
-        mediaContentType: existing.media_content_type,
-        mediaSize: existing.media_size
-      } : null;
+      const horizontal = horizontalFile
+        ? await uploadSlot(horizontalFile)
+        : (existing?.horizontalMedia ? {
+            mediaKey: existing.horizontalMedia.mediaKey,
+            mediaName: existing.horizontalMedia.mediaName,
+            mediaType: existing.horizontalMedia.mediaType,
+            mediaContentType: existing.horizontalMedia.mediaContentType,
+            mediaSize: existing.horizontalMedia.mediaSize
+          } : null);
+      const vertical = verticalFile
+        ? await uploadSlot(verticalFile)
+        : (existing?.verticalMedia ? {
+            mediaKey: existing.verticalMedia.mediaKey,
+            mediaName: existing.verticalMedia.mediaName,
+            mediaType: existing.verticalMedia.mediaType,
+            mediaContentType: existing.verticalMedia.mediaContentType,
+            mediaSize: existing.verticalMedia.mediaSize
+          } : null);
 
-      if (file) {
-        const uploaded = await api("/api/upload", {
-          method: "POST",
-          headers: {
-            "Content-Type": file.type,
-            "X-File-Name": encodeURIComponent(file.name)
-          },
-          body: file
-        });
-        media = {
-          mediaKey: uploaded.mediaKey,
-          mediaName: uploaded.mediaName,
-          mediaType: uploaded.mediaType,
-          mediaContentType: uploaded.mediaContentType,
-          mediaSize: uploaded.mediaSize
-        };
-      }
-
-      const payload = {
-        title, category, startDate, endDate,
-        mediaKey: media.mediaKey,
-        mediaName: media.mediaName,
-        mediaType: media.mediaType,
-        mediaContentType: media.mediaContentType,
-        mediaSize: media.mediaSize
-      };
+      const payload = { title, category, startDate, endDate, horizontal, vertical };
       if (existing) {
         await api("/api/ads/" + encodeURIComponent(existing.id), {
           method: "PATCH",
           body: JSON.stringify(payload)
         });
       } else {
-        await api("/api/ads", {
-          method: "POST",
-          body: JSON.stringify(payload)
-        });
+        await api("/api/ads", { method: "POST", body: JSON.stringify(payload) });
       }
 
       hideModal(editorModal);
