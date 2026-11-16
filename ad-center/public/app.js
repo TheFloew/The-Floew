@@ -189,7 +189,7 @@
     }
     if (!file && !existing) return showEditorError("Bir görsel veya video seçmelisin.");
     if (file && file.size > 100 * 1024 * 1024) return showEditorError("Dosya 100 MB sınırını aşıyor.");
-    if (file && !["image/jpeg","image/png","image/webp","image/gif","image/avif","video/mp4","video/webm"].includes(file.type)) {
+    if (file && !["image/jpeg","image/png","image/webp","image/gif","image/avif","video/mp4","video/webm","video/quicktime"].includes(file.type)) {
       return showEditorError("Bu dosya formatı desteklenmiyor.");
     }
 
@@ -265,7 +265,7 @@
 
   async function login(event) {
     event.preventDefault();
-    const button = event.submitter;
+    const button = event.submitter || $("#login-form button[type=submit]");
     button.disabled = true;
     $("#login-error").classList.add("hidden");
     try {
