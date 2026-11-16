@@ -84,6 +84,7 @@ Başlangıç kategorisi src/config.js içinde CATEGORIES dizisinde geçici olara
 - Yönetici checkbox'ı istediği zaman kapatarak reklamı anında yayından kaldırabilir.
 - RSS yalnızca aktif ve tarih aralığında olan reklamları döndürür.
 - Tarihler Europe/Istanbul saat dilimine göre değerlendirilir.
+- Yatay ve dikey medya ayrı ayrı yüklenebilir. Yalnızca yüklenmiş yönün ekranlarında gösterilir; diğer yön için yedekleme yapılmaz. RSS her reklam için `media:group` içinde `flöw:orientation=landscape` ve/veya `portrait` bilgili medya öğeleri üretir.
 - Görsel/video dosyaları herkese açık GitHub deposunun `ad-center-media` dalındaki `media/` klasöründe tutulur. Deneme aşamasında tek dosya sınırı 10 MB'tır. JPG, PNG, WebP, GIF, AVIF, MP4, WebM ve MOV desteklenir. Silinen reklamların medya dosyaları şimdilik depoda kalır.
 
 ## RSS adresi
