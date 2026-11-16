@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="theme-color" content="#090909">
+  <title>Flöw · Reklam Merkezi</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="Flöw Reklam Merkezi ana sayfa">
+      <span class="brand-mark">flöw</span>
+      <span class="brand-divider"></span>
+      <span class="brand-subtitle">Reklam Merkezi</span>
+    </a>
+    <div class="header-actions">
+      <a class="rss-link" href="/feed.xml" target="_blank" rel="noopener">RSS <span aria-hidden="true">↗</span></a>
+      <button id="login-open" class="button button-quiet" type="button">Yönetici girişi</button>
+      <button id="add-open" class="button button-add hidden" type="button" aria-label="Yeni reklam ekle">+</button>
+      <button id="logout" class="button button-quiet hidden" type="button">Çıkış</button>
+    </div>
+  </header>
+
+  <main class="page-shell">
+    <section class="intro">
+      <p class="eyebrow">FLÖW / ADVERTISING</p>
+      <h1>Reklam akışı</h1>
+      <p class="intro-copy">Flöw reklamlarının kronolojik yayın alanı.</p>
+    </section>
+
+    <div id="admin-note" class="admin-note hidden">
+      <span class="admin-dot"></span>
+      Yönetici görünümü açık. Pasif ve planlanmış reklamlar da listeleniyor.
+    </div>
+
+    <section id="feed" class="feed" aria-live="polite">
+      <div class="loading"><span class="spinner"></span> Reklamlar yükleniyor…</div>
+    </section>
+    <div id="empty" class="empty-state hidden">
+      <span class="empty-icon">◌</span>
+      <h2>Henüz yayınlanacak reklam yok</h2>
+      <p>Yeni reklamlar eklendiğinde burada kronolojik olarak görünecek.</p>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <span>Flöw Reklam Merkezi</span>
+    <a href="/feed.xml">RSS akışını aç</a>
+  </footer>
+
+  <div id="login-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="login-title">
+    <div class="modal-backdrop" data-close="login"></div>
+    <section class="modal-panel modal-small">
+      <button class="modal-close" type="button" data-close="login" aria-label="Kapat">×</button>
+      <p class="eyebrow">YÖNETİCİ ALANI</p>
+      <h2 id="login-title">Giriş yap</h2>
+      <p class="modal-copy">Reklamları yönetmek için yönetici parolanı gir.</p>
+      <form id="login-form">
+        <label class="field-label" for="login-password">Yönetici parolası</label>
+        <input id="login-password" class="text-input" type="password" autocomplete="current-password" required>
+        <p id="login-error" class="form-error hidden"></p>
+        <button class="button button-primary button-wide" type="submit">Giriş yap</button>
+      </form>
+    </section>
+  </div>
+
+  <div id="editor-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="editor-title">
+    <div class="modal-backdrop" data-close="editor"></div>
+    <section class="modal-panel editor-panel">
+      <button class="modal-close" type="button" data-close="editor" aria-label="Kapat">×</button>
+      <p class="eyebrow">İÇERİK YÖNETİMİ</p>
+      <h2 id="editor-title">Yeni reklam ekle</h2>
+      <form id="editor-form">
+        <input id="editor-id" type="hidden">
+        <div class="form-grid">
+          <div class="field field-full">
+            <label class="field-label" for="ad-title">Reklam adı / başlık</label>
+            <input id="ad-title" class="text-input" type="text" maxlength="160" placeholder="Örn. Yeni sezon şimdi yayında" required>
+          </div>
+          <div class="field">
+            <label class="field-label" for="ad-category">Kategori</label>
+            <select id="ad-category" class="text-input" required>
+              <option value="">Kategori seç</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="field-label" for="ad-file">Görsel veya video</label>
+            <input id="ad-file" class="text-input file-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif,video/mp4,video/webm">
+            <span id="file-hint" class="field-hint">JPG, PNG, WebP, GIF, AVIF, MP4 veya WebM · En fazla 100 MB</span>
+          </div>
+          <div class="field">
+            <label class="field-label" for="ad-start">Yayın başlangıcı</label>
+            <input id="ad-start" class="text-input date-input" type="date" required>
+          </div>
+          <div class="field">
+            <label class="field-label" for="ad-end">Yayın bitişi</label>
+            <input id="ad-end" class="text-input date-input" type="date" required>
+          </div>
+        </div>
+        <div id="current-media" class="current-media hidden"></div>
+        <p id="editor-error" class="form-error hidden"></p>
+        <div class="editor-actions">
+          <button class="button button-quiet" type="button" data-close="editor">Vazgeç</button>
+          <button id="save-ad" class="button button-primary" type="submit">Reklamı kaydet</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <div id="toast" class="toast hidden" role="status"></div>
+  <script src="/app.js" defer></script>
+</body>
+</html>
