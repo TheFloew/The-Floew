@@ -10,7 +10,8 @@ const ALLOWED_TYPES = new Set([
   "image/gif",
   "image/avif",
   "video/mp4",
-  "video/webm"
+  "video/webm",
+  "video/quicktime"
 ]);
 
 export default {
@@ -103,10 +104,35 @@ async function login(request, env) {
     return json({ error: "Geçersiz istek." }, 400);
   }
 
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  const ipHash = await hmac(ip, env.SESSION_SECRET);
+  const now = Date.now();
+  const attempt = await env.DB.prepare(
+    "SELECT failures, window_started, locked_until FROM login_throttle WHERE ip_hash = ?"
+  ).bind(ipHash).first();
+
+  if (attempt && Number(attempt.locked_until) > now) {
+    return json({ error: "Çok fazla başarısız deneme. 15 dakika sonra tekrar deneyin." }, 429);
+  }
+
   const supplied = String(body.password || "");
   if (!constantTimeEqual(supplied, String(env.ADMIN_PASSWORD))) {
-    return json({ error: "Parola hatalı." }, 401);
+    const withinWindow = attempt && now - Number(attempt.window_started) < 15 * 60 * 1000;
+    const failures = withinWindow ? Number(attempt.failures) + 1 : 1;
+    const windowStarted = withinWindow ? Number(attempt.window_started) : now;
+    const lockedUntil = failures >= 5 ? now + 15 * 60 * 1000 : 0;
+    await env.DB.prepare(
+      "INSERT INTO login_throttle (ip_hash, failures, window_started, locked_until) VALUES (?, ?, ?, ?) ON CONFLICT(ip_hash) DO UPDATE SET failures = excluded.failures, window_started = excluded.window_started, locked_until = excluded.locked_until"
+    ).bind(ipHash, failures, windowStarted, lockedUntil).run();
+
+    return json({
+      error: lockedUntil
+        ? "Çok fazla başarısız deneme. 15 dakika sonra tekrar deneyin."
+        : "Parola hatalı."
+    }, lockedUntil ? 429 : 401);
   }
+
+  await env.DB.prepare("DELETE FROM login_throttle WHERE ip_hash = ?").bind(ipHash).run();
 
   const token = await createSession(env.SESSION_SECRET);
   const headers = new Headers();
@@ -212,9 +238,9 @@ function todayInIstanbul() {
 }
 
 function validDate(value) {
-  return typeof value === "string" &&
-    /^\d{4}-\d{2}-\d{2}$/.test(value) &&
-    !Number.isNaN(Date.parse(value + "T00:00:00Z"));
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(value + "T00:00:00Z");
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
 function isLive(ad, today) {
@@ -402,6 +428,7 @@ function validateAd(body) {
   if (!mediaKey || !/^[a-zA-Z0-9._-]+$/.test(mediaKey)) return { error: "Medya dosyası seçilmedi." };
   if (mediaType !== "image" && mediaType !== "video") return { error: "Medya türü geçersiz." };
   if (!ALLOWED_TYPES.has(mediaContentType)) return { error: "Medya formatı desteklenmiyor." };
+  if ((mediaType === "image") !== mediaContentType.startsWith("image/")) return { error: "Medya türü ve dosya formatı uyuşmuyor." };
   if (!Number.isFinite(mediaSize) || mediaSize < 1 || mediaSize > MAX_UPLOAD_BYTES) {
     return { error: "Medya dosyası 100 MB sınırını aşamaz." };
   }
