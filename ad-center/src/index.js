@@ -44,6 +44,18 @@ export default {
       if (path === "/api/categories" && method === "GET") {
         return json({ categories: CATEGORIES });
       }
+      if (path === "/api/flowery" && method === "OPTIONS") {
+        return new Response(null, {
+          status: 204,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "Accept",
+            "Access-Control-Max-Age": "86400",
+            "Vary": "Origin"
+          }
+        });
+      }
       if (path === "/api/flowery" && method === "GET") {
         return await listAds(request, env);
       }
@@ -286,6 +298,12 @@ async function listAds(request, env) {
     })),
     admin,
     today
+  }, 200, {
+    // Public read-only catalog consumed by flöw.tr. No credentials are sent.
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Accept",
+    "Vary": "Origin"
   });
 }
 
