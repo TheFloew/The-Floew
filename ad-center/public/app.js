@@ -165,8 +165,8 @@
     $("#ad-end").value = ad ? ad.end_date : later.toISOString().slice(0, 10);
     fileInput.required = !ad;
     $("#file-hint").textContent = ad
-      ? "Yeni dosya seçmezsen mevcut medya korunur. Dosya sınırı 100 MB."
-      : "JPG, PNG, WebP, GIF, AVIF, MP4 veya WebM · En fazla 100 MB";
+      ? "Yeni dosya seçmezsen mevcut medya korunur. Dosya sınırı 10 MB."
+      : "JPG, PNG, WebP, GIF, AVIF, MP4 veya WebM · En fazla 10 MB";
     $("#current-media").textContent = ad ? "Mevcut dosya: " + ad.media_name : "";
     $("#current-media").classList.toggle("hidden", !ad);
     $("#editor-error").classList.add("hidden");
@@ -188,7 +188,7 @@
       return showEditorError("Başlık, kategori ve yayın tarihlerini kontrol et.");
     }
     if (!file && !existing) return showEditorError("Bir görsel veya video seçmelisin.");
-    if (file && file.size > 100 * 1024 * 1024) return showEditorError("Dosya 100 MB sınırını aşıyor.");
+    if (file && file.size > 10 * 1024 * 1024) return showEditorError("Dosya 10 MB sınırını aşıyor.");
     if (file && !["image/jpeg","image/png","image/webp","image/gif","image/avif","video/mp4","video/webm","video/quicktime"].includes(file.type)) {
       return showEditorError("Bu dosya formatı desteklenmiyor.");
     }
