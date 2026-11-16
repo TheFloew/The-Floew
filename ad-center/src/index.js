@@ -433,7 +433,7 @@ function validateAd(body) {
   const mediaSize = Number(body.mediaSize || 0);
 
   if (!title || title.length > 160) return { error: "Reklam başlığı 1-160 karakter olmalı." };
-  if (!CATEGORIES.includes(category)) return { error: "Geçerli bir kategori seçin." };
+  if (!CATEGORIES.some((item) => item.code === category)) return { error: "Geçerli bir kategori seçin." };
   if (!validDate(startDate) || !validDate(endDate) || startDate > endDate) {
     return { error: "Başlangıç ve bitiş tarihlerini kontrol edin." };
   }
