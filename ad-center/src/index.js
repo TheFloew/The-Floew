@@ -2,7 +2,7 @@ import { CATEGORIES, TIME_ZONE } from "./config.js";
 
 const COOKIE_NAME = "floew_ad_session";
 const SESSION_SECONDS = 12 * 60 * 60;
-const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const ALLOWED_TYPES = new Set([
   "image/jpeg",
   "image/png",
@@ -37,7 +37,7 @@ export default {
         return json({
           ok: Number(check && check.ok) === 1,
           database: Number(check && check.ok) === 1,
-          storage: Boolean(env.MEDIA),
+          storage: Boolean(env.GITHUB_TOKEN),
           categories: CATEGORIES.length
         });
       }
@@ -291,7 +291,7 @@ async function listAds(request, env) {
 async function uploadMedia(request, env) {
   const contentLength = Number(request.headers.get("Content-Length") || 0);
   if (!contentLength || contentLength > MAX_UPLOAD_BYTES) {
-    return json({ error: "Dosya boş veya 100 MB sınırını aşıyor." }, 413);
+    return json({ error: "Dosya boş veya 10 MB sınırını aşıyor." }, 413);
   }
 
   const contentType = String(request.headers.get("Content-Type") || "")
@@ -311,15 +311,30 @@ async function uploadMedia(request, env) {
     .split(/[\\/]/).pop()
     .replace(/[^a-zA-Z0-9._-]/g, "_")
     .slice(-100) || "reklam";
-  const key = crypto.randomUUID() + "-" + safeName;
+  if (!env.GITHUB_TOKEN) return json({ error: "GitHub medya erişimi yapılandırılmamış." }, 503);
 
-  await env.MEDIA.put(key, request.body, {
-    httpMetadata: {
-      contentType,
-      cacheControl: "public, max-age=31536000, immutable"
-    },
-    customMetadata: { originalName }
-  });
+  const key = crypto.randomUUID() + "-" + safeName;
+  const bytes = new Uint8Array(await request.arrayBuffer());
+  if (bytes.byteLength !== contentLength) return json({ error: "Dosya boyutu doğrulanamadı." }, 400);
+
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length)));
+  }
+  const content = btoa(binary);
+  const githubResponse = await fetch(
+    "https://api.github.com/repos/TheFloew/The-Floew/contents/media/" + encodeURIComponent(key),
+    {
+      method: "PUT",
+      headers: githubHeaders(env),
+      body: JSON.stringify({ message: "Add ad media: " + key, content, branch: "ad-center-media" })
+    }
+  );
+  if (!githubResponse.ok) {
+    console.error("GitHub media upload failed:", githubResponse.status, await githubResponse.text());
+    return json({ error: "GitHub dosya yüklemesi başarısız. Dosya boyutunu ve erişim anahtarını kontrol edin." }, 502);
+  }
 
   return json({
     ok: true,
@@ -327,7 +342,7 @@ async function uploadMedia(request, env) {
     mediaName: originalName,
     mediaType: contentType.startsWith("video/") ? "video" : "image",
     mediaContentType: contentType,
-    mediaSize: contentLength
+    mediaSize: bytes.byteLength
   });
 }
 
@@ -341,9 +356,6 @@ async function createAd(request, env) {
 
   const data = validateAd(body);
   if (data.error) return json({ error: data.error }, 400);
-  const media = await env.MEDIA.head(data.mediaKey);
-  if (!media) return json({ error: "Yüklenen medya bulunamadı." }, 400);
-
   const id = crypto.randomUUID();
   await env.DB.prepare(
     "INSERT INTO ads (id, title, category, media_key, media_name, media_type, media_content_type, media_size, start_date, end_date, is_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)"
@@ -390,11 +402,6 @@ async function updateAd(request, env, id) {
   const validation = validateAd(next);
   if (validation.error) return json({ error: validation.error }, 400);
 
-  if (next.mediaKey !== current.media_key) {
-    const media = await env.MEDIA.head(next.mediaKey);
-    if (!media) return json({ error: "Yeni medya dosyası bulunamadı." }, 400);
-  }
-
   await env.DB.prepare(
     "UPDATE ads SET title = ?, category = ?, media_key = ?, media_name = ?, media_type = ?, media_content_type = ?, media_size = ?, start_date = ?, end_date = ?, is_enabled = ?, updated_at = datetime('now') WHERE id = ?"
   ).bind(
@@ -410,10 +417,6 @@ async function updateAd(request, env, id) {
     next.active ? 1 : 0,
     id
   ).run();
-
-  if (next.mediaKey !== current.media_key) {
-    await env.MEDIA.delete(current.media_key);
-  }
 
   return json({ ok: true });
 }
@@ -439,7 +442,7 @@ function validateAd(body) {
   if (!ALLOWED_TYPES.has(mediaContentType)) return { error: "Medya formatı desteklenmiyor." };
   if ((mediaType === "image") !== mediaContentType.startsWith("image/")) return { error: "Medya türü ve dosya formatı uyuşmuyor." };
   if (!Number.isFinite(mediaSize) || mediaSize < 1 || mediaSize > MAX_UPLOAD_BYTES) {
-    return { error: "Medya dosyası 100 MB sınırını aşamaz." };
+    return { error: "Medya dosyası 10 MB sınırını aşamaz." };
   }
 
   return {
@@ -459,7 +462,7 @@ async function deleteAd(env, id) {
   const current = await env.DB.prepare("SELECT media_key FROM ads WHERE id = ?").bind(id).first();
   if (!current) return json({ error: "Reklam bulunamadı." }, 404);
   await env.DB.prepare("DELETE FROM ads WHERE id = ?").bind(id).run();
-  await env.MEDIA.delete(current.media_key);
+  // Media files are retained in GitHub so cached RSS readers do not lose assets.
   return json({ ok: true });
 }
 
@@ -553,41 +556,35 @@ function parseByteRange(value, size) {
   return { start, end: Math.min(end, size - 1) };
 }
 
+function githubHeaders(env) {
+  return {
+    "Accept": "application/vnd.github+json",
+    "Authorization": "Bearer " + env.GITHUB_TOKEN,
+    "X-GitHub-Api-Version": "2022-11-28",
+    "Content-Type": "application/json",
+    "User-Agent": "Floew-Ad-Center"
+  };
+}
+
 async function serveMedia(request, env, key) {
   if (!key || !/^[a-zA-Z0-9._-]+$/.test(key)) return new Response("Not found", { status: 404 });
-
-  const head = await env.MEDIA.head(key);
-  if (!head) return new Response("Not found", { status: 404 });
-
+  const rawUrl = "https://raw.githubusercontent.com/TheFloew/The-Floew/ad-center-media/media/" + encodeURIComponent(key);
+  const requestHeaders = new Headers();
+  const range = request.headers.get("Range");
+  if (range) requestHeaders.set("Range", range);
+  const upstream = await fetch(rawUrl, {
+    method: request.method === "HEAD" ? "HEAD" : "GET",
+    headers: requestHeaders
+  });
+  if (!upstream.ok) return new Response("Not found", { status: upstream.status === 404 ? 404 : 502 });
   const headers = new Headers();
-  head.writeHttpMetadata(headers);
-  headers.set("ETag", head.httpEtag);
-  headers.set("Accept-Ranges", "bytes");
-  headers.set("Cache-Control", "public, max-age=31536000, immutable");
+  headers.set("Content-Type", upstream.headers.get("Content-Type") || "application/octet-stream");
+  headers.set("Cache-Control", "public, max-age=3600");
   headers.set("X-Content-Type-Options", "nosniff");
-
-  if (request.method === "HEAD") {
-    headers.set("Content-Length", String(head.size));
-    return new Response(null, { status: 200, headers });
+  headers.set("Accept-Ranges", "bytes");
+  for (const name of ["Content-Length", "Content-Range", "ETag", "Last-Modified"]) {
+    const value = upstream.headers.get(name);
+    if (value) headers.set(name, value);
   }
-
-  const rangeHeader = request.headers.get("Range");
-  if (rangeHeader) {
-    const range = parseByteRange(rangeHeader, head.size);
-    if (!range) {
-      headers.set("Content-Range", "bytes */" + head.size);
-      return new Response(null, { status: 416, headers });
-    }
-    const length = range.end - range.start + 1;
-    const object = await env.MEDIA.get(key, {
-      range: { offset: range.start, length }
-    });
-    headers.set("Content-Range", "bytes " + range.start + "-" + range.end + "/" + head.size);
-    headers.set("Content-Length", String(length));
-    return new Response(object.body, { status: 206, headers });
-  }
-
-  const object = await env.MEDIA.get(key);
-  headers.set("Content-Length", String(head.size));
-  return new Response(object.body, { status: 200, headers });
+  return new Response(request.method === "HEAD" ? null : upstream.body, { status: upstream.status, headers });
 }
