@@ -66,7 +66,8 @@ const TOUCH_DRAG_MIN_COMMIT_PX=64;
 const TOUCH_DRAG_VELOCITY_PX_MS=.48;
 
 const ADS_MANIFESTS=FLOEW_CONFIG.adsManifest||{hor:"data/ads-hor.json",ver:"data/ads-ver.json"};
-const ADS_CACHE_KEY="thefloew.adsCatalog.v6";
+const ADS_AD_CENTER_API=String(FLOEW_CONFIG.adCenterApi||"https://floew-ad-center.thefloewback.workers.dev/api/flowery").trim();
+const ADS_CACHE_KEY="thefloew.adsCatalog.v7";
 const ADS_TEST_MODE=new URLSearchParams(location.search).get("adtest")==="1";
 const ADS_INTERVAL_NEWS=10;
 const AD_IMAGE_MS=15000;
@@ -4284,6 +4285,8 @@ function normalizeAdEntry(item){
           ? item.creative||parsed.creative
           : parsed.creative
       ),
+      title:String(typeof item==="object" ? item.title||item.ad_title||"" : ""),
+      category:String(typeof item==="object" ? item.category||item.ad_category||"" : ""),
       standardized:Boolean(
         typeof item==="object" &&
         typeof item.standardized==="boolean"
@@ -4332,6 +4335,8 @@ function saveCachedAdsCatalog(list,layout=getAdsLayout()){
           brand:item.brand||"",
           campaign:item.campaign||"",
           creative:item.creative||"",
+          title:item.title||"",
+          category:item.category||"",
           standardized:Boolean(item.standardized)
         }))
       })
@@ -4347,11 +4352,10 @@ async function actuallyLoadAdsCatalog(layout=getAdsLayout()){
   );
 
   try{
-    const manifestPath=ADS_MANIFESTS[layout]||`data/ads-${layout}.json`;
-    const manifestUrl=new URL(manifestPath,document.baseURI);
-    manifestUrl.searchParams.set("_floew",Date.now().toString(36));
+    const apiUrl=new URL(ADS_AD_CENTER_API);
+    apiUrl.searchParams.set("_floew",Date.now().toString(36));
     const response=await fetch(
-      manifestUrl.href,
+      apiUrl.href,
       {
         method:"GET",
         mode:"cors",
@@ -4365,24 +4369,31 @@ async function actuallyLoadAdsCatalog(layout=getAdsLayout()){
     );
 
     if(!response.ok){
-      throw new Error(`Ads HTTP ${response.status}`);
+      throw new Error(`Ad Center HTTP ${response.status}`);
     }
 
     const data=await response.json();
-    const list=Array.isArray(data)
-      ? data
-      : Array.isArray(data?.ads)
-        ? data.ads
-        : [];
-
+    const list=Array.isArray(data?.ads)?data.ads:[];
     const normalized=list
-      .map(item=>normalizeAdEntry({
-        ...(typeof item==="object" ? item : {url:item}),
-        layout:
-          typeof item==="object" && item?.layout
-            ? item.layout
-            : layout
-      }))
+      .map(ad=>{
+        const media=layout==="ver"
+          ? ad.verticalMedia
+          : ad.horizontalMedia;
+        if(!media?.mediaUrl)return null;
+
+        return normalizeAdEntry({
+          url:new URL(media.mediaUrl,ADS_AD_CENTER_API).href,
+          name:media.mediaName||"",
+          type:media.mediaType||"",
+          layout,
+          id:ad.id||"",
+          ad_id:ad.id||"",
+          title:ad.title||"",
+          category:ad.category||"",
+          creative:media.mediaName||"",
+          standardized:true
+        });
+      })
       .filter(Boolean);
 
     /*
@@ -11025,6 +11036,8 @@ function telemetryAdPayload(ad=currentAd){
     campaign:String(ad.campaign||"").slice(0,300),
     creative:String(ad.creative||ad.name||"").slice(0,500),
     filename:String(ad.name||"").slice(0,500),
+    ad_title:String(ad.title||"").slice(0,500),
+    ad_category:String(ad.category||"").slice(0,120),
     type:String(ad.type||"").slice(0,40),
     orientation,
     layout:orientation,

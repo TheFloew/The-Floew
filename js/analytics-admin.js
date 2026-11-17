@@ -328,8 +328,8 @@ function renderAds(data){
       key:"brand",
       label:"Reklam",
       format:(v,row)=>{
-        const title=[row.brand,row.campaign].filter(Boolean).join(" · ");
-        const sub=row.creative||row.filename||"";
+        const title=row.title||[row.brand,row.campaign].filter(Boolean).join(" · ")||row.ad_id;
+        const sub=[row.category,row.creative||row.filename].filter(Boolean).join(" · ");
         return `<strong>${esc(title||row.ad_id)}</strong><div class="cell-sub">${esc(sub)}</div>`;
       },
       html:true
@@ -463,7 +463,7 @@ async function loadAdDetail(adId){
     document.getElementById("ad-detail").classList.remove("hidden");
 
     document.getElementById("ad-detail-title").textContent=
-      [s.ad_id,s.brand,s.campaign].filter(Boolean).join(" · ");
+      [s.title||s.ad_id,s.category].filter(Boolean).join(" · ");
 
     document.getElementById("ad-detail-subtitle").textContent=
       [s.creative,s.filename,data.label].filter(Boolean).join(" · ");
