@@ -305,6 +305,25 @@ function renderBehavior(b){
   ]);
 }
 
+function adDate(value){
+  const raw=String(value||"");
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(raw))return "Bilinmiyor";
+  const date=new Date(`${raw}T12:00:00`);
+  return Number.isNaN(date.getTime())?"Bilinmiyor":date.toLocaleDateString("tr-TR");
+}
+
+function adDurationDays(value){
+  const days=Number(value);
+  if(!Number.isFinite(days)||days<1)return "Bilinmiyor";
+  return `${nf.format(days)} gün`;
+}
+
+function adStatus(row){
+  if(row.ad_status)return row.ad_status;
+  if(row.ad_active===null||row.ad_active===undefined)return "Bilgi yok";
+  return row.ad_active?"Aktif":"Pasif";
+}
+
 function renderAds(data){
   const t=data.totals||{};
 
@@ -329,11 +348,16 @@ function renderAds(data){
       label:"Reklam",
       format:(v,row)=>{
         const title=row.title||[row.brand,row.campaign].filter(Boolean).join(" · ")||row.ad_id;
-        const sub=[row.category,row.creative||row.filename].filter(Boolean).join(" · ");
+        const sub=[row.creative||row.filename].filter(Boolean).join(" · ");
         return `<strong>${esc(title||row.ad_id)}</strong><div class="cell-sub">${esc(sub)}</div>`;
       },
       html:true
     },
+    {key:"category",label:"Kategori",format:v=>v||"Bilinmiyor"},
+    {key:"ad_start_date",label:"Başlangıç",format:adDate},
+    {key:"ad_end_date",label:"Bitiş",format:adDate},
+    {key:"ad_duration_days",label:"Yayın süresi",format:adDurationDays},
+    {key:"ad_active",label:"Durum",format:(v,row)=>adStatus(row)},
     {key:"views",label:"Gösterim",format:v=>nf.format(v||0)},
     {key:"avg_dwell_ms",label:"Ort.",format:duration},
     {key:"skip_rate",label:"Skip",format:pct},
@@ -466,7 +490,14 @@ async function loadAdDetail(adId){
       [s.title||s.ad_id,s.category].filter(Boolean).join(" · ");
 
     document.getElementById("ad-detail-subtitle").textContent=
-      [s.creative,s.filename,data.label].filter(Boolean).join(" · ");
+      [
+        s.category,
+        s.creative||s.filename,
+        s.ad_start_date&&s.ad_end_date?`${adDate(s.ad_start_date)} – ${adDate(s.ad_end_date)}`:"",
+        s.ad_duration_days?adDurationDays(s.ad_duration_days):"",
+        adStatus(s),
+        data.label
+      ].filter(Boolean).join(" · ");
 
     document.getElementById("ad-detail-metrics").innerHTML=[
       metric("Gösterim",nf.format(s.views||0)),
