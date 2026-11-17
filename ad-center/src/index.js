@@ -59,6 +59,9 @@ export default {
       if (path === "/api/flowery" && method === "GET") {
         return await listAds(request, env);
       }
+      if (path === "/api/internal/analytics-ads" && method === "GET") {
+        return await listAdsForAnalytics(request, env);
+      }
       if (path === "/api/flowery" && method === "POST") {
         assertSameOrigin(request);
         if (!(await isAdmin(request, env))) return json({ error: "Oturum gerekli." }, 401);
@@ -304,6 +307,40 @@ async function listAds(request, env) {
     "Access-Control-Allow-Methods": "GET, OPTIONS",
     "Access-Control-Allow-Headers": "Accept",
     "Vary": "Origin"
+  });
+}
+
+async function listAdsForAnalytics(request, env) {
+  const expected = String(env.AD_CENTER_SYNC_SECRET || "");
+  const authorization = String(request.headers.get("Authorization") || "");
+  const supplied = authorization.startsWith("Bearer ")
+    ? authorization.slice(7)
+    : "";
+
+  if (!expected || !constantTimeEqual(supplied, expected)) {
+    return json({ error: "Unauthorized" }, 401);
+  }
+
+  const today = await expireEndedAds(env);
+
+  const result = await env.DB.prepare(
+    "SELECT id, title, category, start_date, end_date, is_enabled, created_at, updated_at FROM ads ORDER BY start_date DESC, created_at DESC"
+  ).all();
+
+  return json({
+    today,
+    ads: (result.results || []).map((ad) => ({
+      id: ad.id,
+      title: ad.title,
+      category: ad.category,
+      start_date: ad.start_date,
+      end_date: ad.end_date,
+      is_enabled: Number(ad.is_enabled),
+      active: Number(ad.is_enabled) === 1,
+      live: isLive(ad, today),
+      created_at: ad.created_at,
+      updated_at: ad.updated_at
+    }))
   });
 }
 
