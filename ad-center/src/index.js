@@ -183,7 +183,22 @@ async function createSession(secret) {
   return payload + "." + await hmac(payload, secret);
 }
 
+async function isFlushAuthorized(request,env){
+  if(!env.FLUSH_AUTH)return false;
+  const cookie=request.headers.get("Cookie")||"";
+  if(!cookie.includes("__Secure-flush_session="))return false;
+  try{
+    const r=await env.FLUSH_AUTH.fetch(new Request("https://flush.internal/api/session?facility=flowery",{
+      method:"GET",headers:{"Cookie":cookie}
+    }));
+    if(!r.ok)return false;
+    const session=await r.json();
+    return session.authenticated===true&&session.permitted===true;
+  }catch{return false;}
+}
+
 async function isAdmin(request, env) {
+  if(await isFlushAuthorized(request,env))return true;
   if (!env.SESSION_SECRET) return false;
   const token = readCookie(request.headers.get("Cookie") || "", COOKIE_NAME);
   if (!token) return false;
