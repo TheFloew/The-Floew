@@ -3,6 +3,32 @@ let token=sessionStorage.getItem("floew.adminToken.v1")||"";
 let range="7d";
 let activeTab="audience";
 let currentAdId="";
+let adSortKey="views";
+let adSortDirection="desc";
+let lastAdsData=null;
+const adSortCollator=new Intl.Collator("tr",{numeric:true,sensitivity:"base"});
+
+function sortAdRows(rows){
+  const key=adSortKey;
+  const getValue=row=>{
+    if(key==="brand")return row.title||[row.brand,row.campaign].filter(Boolean).join(" · ")||row.ad_id||"";
+    if(key==="ad_active")return String(row.ad_status||adStatus(row));
+    return row[key];
+  };
+  const numeric=new Set(["ad_duration_days","views","avg_dwell_ms","skip_rate","completion_rate","return_rate","repeat_rate"]);
+  return [...rows].sort((a,b)=>{
+    const av=getValue(a),bv=getValue(b);
+    const emptyA=av===null||av===undefined||av==="";
+    const emptyB=bv===null||bv===undefined||bv==="";
+    if(emptyA!==emptyB)return emptyA?1:-1;
+    if(emptyA&&emptyB)return 0;
+    const result=numeric.has(key)
+      ? (Number(av)||0)-(Number(bv)||0)
+      : adSortCollator.compare(String(av),String(bv));
+    return adSortDirection==="asc"?result:-result;
+  });
+}
+
 const nf=new Intl.NumberFormat("tr-TR");
 const oneDecimal=new Intl.NumberFormat("tr-TR",{maximumFractionDigits:1,minimumFractionDigits:0});
 
@@ -339,7 +365,8 @@ function renderAds(data){
     metric("Tekrar karşılaşma",`${nf.format(t.repeat_views||0)} · ${pct(t.repeat_rate)}`)
   ].join("");
 
-  const rows=(data.ads||[]);
+  lastAdsData=data;
+  const rows=sortAdRows(data.ads||[]);
 
   document.getElementById("ads-list").innerHTML=table(rows,[
     {key:"ad_id",label:"ID"},
@@ -367,6 +394,29 @@ function renderAds(data){
   ],{
     rowClass:"clickable-row",
     rowAttrs:row=>`data-ad-id="${esc(row.ad_id)}" tabindex="0"`
+  });
+
+  const sortableKeys=["ad_id","brand","category","ad_start_date","ad_end_date","ad_duration_days","ad_active","views","avg_dwell_ms","skip_rate","completion_rate","return_rate","repeat_rate"];
+  document.querySelectorAll("#ads-list thead th").forEach((th,index)=>{
+    const key=sortableKeys[index];
+    if(!key)return;
+    const label=th.textContent;
+    const button=document.createElement("button");
+    button.type="button";
+    button.className="ad-sort-button";
+    button.style.cssText="display:inline-flex;align-items:center;gap:6px;background:none;border:0;color:inherit;font:inherit;font-weight:inherit;cursor:pointer;padding:5px 0;text-align:left;white-space:nowrap";
+    button.textContent=label+" "+(adSortKey===key?(adSortDirection==="asc"?"▲":"▼"):"↕");
+    button.setAttribute("aria-label",label+" sütununa göre sırala");
+    th.replaceChildren(button);
+    th.setAttribute("aria-sort",adSortKey===key?(adSortDirection==="asc"?"ascending":"descending"):"none");
+    button.addEventListener("click",()=>{
+      if(adSortKey===key)adSortDirection=adSortDirection==="asc"?"desc":"asc";
+      else{
+        adSortKey=key;
+        adSortDirection=["ad_id","brand","category","ad_start_date","ad_end_date","ad_active"].includes(key)?"asc":"desc";
+      }
+      if(lastAdsData)renderAds(lastAdsData);
+    });
   });
 
   document.querySelectorAll("#ads-list [data-ad-id]").forEach(row=>{
