@@ -1,4 +1,6 @@
 const BASE=String(window.FLOEW_CONFIG?.analyticsWorkerBase||"https://thefloew-analytics.thefloewback.workers.dev").replace(/\/$/,"");
+const FLUSH_AUTH_BASE="https://auth.xn--flw-tna.tr";
+let useFlushSSO=false;
 let token=sessionStorage.getItem("floew.adminToken.v1")||"";
 let range="7d";
 let activeTab="audience";
@@ -81,23 +83,18 @@ function table(rows,cols,{rowClass="",rowAttrs=null}={}){
 }
 
 async function api(path,options={}){
-  const r=await fetch(`${BASE}${path}`,{
-    ...options,
-    cache:"no-store",
-    headers:{
-      ...(options.headers||{}),
-      "Authorization":`Bearer ${token}`
-    }
+  const headers={...(options.headers||{})};
+  if(!useFlushSSO)headers.Authorization=`Bearer ${token}`;
+  const base=useFlushSSO?FLUSH_AUTH_BASE+"/api/proxy/analytics":BASE;
+  const r=await fetch(`${base}${path}`,{
+    ...options,cache:"no-store",credentials:useFlushSSO?"include":"omit",headers
   });
-
   const type=r.headers.get("content-type")||"";
-
   if(type.includes("application/json")){
     const data=await r.json();
     if(!r.ok)throw new Error(data.error||`HTTP ${r.status}`);
     return data;
   }
-
   if(!r.ok)throw new Error(`HTTP ${r.status}`);
   return r;
 }
@@ -170,14 +167,15 @@ function showTab(name){
   });
 }
 
-async function authenticate(){
+async function authenticate(fromSSO=false){
+  if(!fromSSO)useFlushSSO=false;
   token=document.getElementById("admin-token").value.trim()||token;
   const status=document.getElementById("login-status");
   status.textContent="Kontrol ediliyor...";
 
   try{
     const ping=await api("/admin/ping");
-    sessionStorage.setItem("floew.adminToken.v1",token);
+    if(!useFlushSSO)sessionStorage.setItem("floew.adminToken.v1",token);
     document.getElementById("login-card").classList.add("hidden");
     document.getElementById("dashboard").classList.remove("hidden");
 
@@ -840,7 +838,22 @@ document.querySelectorAll("[data-admin-tab]").forEach(btn=>{
   });
 });
 
-if(token){
-  document.getElementById("admin-token").value=token;
-  authenticate();
-}
+(async()=>{
+  try{
+    const check=await fetch(FLUSH_AUTH_BASE+"/api/session?facility=analytics",{
+      credentials:"include",cache:"no-store",headers:{Accept:"application/json"}
+    });
+    if(check.ok){
+      const session=await check.json();
+      if(session.authenticated&&session.permitted){
+        const ping=await fetch(FLUSH_AUTH_BASE+"/api/proxy/analytics/admin/ping",{
+          credentials:"include",cache:"no-store",headers:{Accept:"application/json"}
+        });
+        if(ping.ok){useFlushSSO=true;await authenticate(true);return;}
+        document.getElementById("login-status").textContent=
+          "Flüsh bağlantısı hazır değil (HTTP "+ping.status+"). Mevcut yönetici girişi kullanılabilir.";
+      }
+    }
+  }catch(e){}
+  if(token){document.getElementById("admin-token").value=token;authenticate();}
+})();
