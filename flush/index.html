@@ -26,7 +26,54 @@
     @media(max-width:960px){.sidebar{width:230px}.brand{padding:32px 23px}.brand img{width:139px}.hero-mark{display:none}.hero{min-height:205px}.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.tool-card:last-child{grid-column:span 2}.environment{display:none}}
     @media(max-width:740px){.sidebar{position:fixed;left:0;top:0;width:265px;transform:translateX(-102%);transition:transform .22s ease;box-shadow:25px 0 65px #0006}.sidebar.open{transform:translateX(0)}.backdrop.show{display:block;position:fixed;inset:0;background:#000b;z-index:10}.mobile-menu{display:inline-flex;margin-right:6px}.topbar{height:64px;padding:0 17px}.crumb small{display:none}.crumb .slash{display:none}.crumb strong{font-size:14px}.separator{display:none}.topright{gap:6px}.outline-link{font-size:0;gap:0;min-width:35px;width:35px;padding:0}.outline-link .icon{width:16px;height:16px}.viewport{padding:15px 13px 22px}.hero{padding:26px 23px;min-height:205px}.hero h1{font-size:31px}.hero p{font-size:12px}.cards{grid-template-columns:1fr}.tool-card:last-child{grid-column:auto}.tool-card{min-height:190px}.section-head{margin-top:25px}.appview{min-height:calc(100dvh - 108px)}.frame-shell{min-height:470px}.frame-descriptor p{max-width:50vw}.frame-descriptor h2{font-size:14px}.frame-hint{font-size:10px}.frame-toolbar .iconbtn{display:none}.bottom-message{align-items:flex-start}}
     @media(prefers-reduced-motion:reduce){*,*:before,*:after{transition-duration:.01ms!important;animation-duration:.01ms!important}}
-  </style>
+  
+.flush-native[hidden],.appview[hidden]{display:none!important}
+.flush-native{width:100%;min-height:72vh;padding:0 0 24px;color:#e7f1f6}
+.flush-native *{box-sizing:border-box}
+.fn-toolbar{display:flex;align-items:flex-end;justify-content:space-between;gap:22px;flex-wrap:wrap;margin-bottom:24px}
+.fn-eyebrow{font-size:10px;letter-spacing:.15em;font-weight:750;color:#6ca6c0;margin-bottom:12px}
+.fn-toolbar h2{font-size:clamp(26px,3.1vw,34px);letter-spacing:-.047em;line-height:1.1;margin:0 0 8px}
+.fn-toolbar p,.fn-muted{font-size:13px;color:#91a8b8;line-height:1.5;margin:0}
+.fn-range{display:flex;background:#111e28;border:1px solid #294354;padding:4px;border-radius:11px;gap:4px}
+.fn-range button,.fn-secondary{color:#a4bccc;background:transparent;border:0;font:600 12px system-ui;padding:9px 13px;border-radius:8px;cursor:pointer}
+.fn-range button.active{background:#24465b;color:#cdebf7}
+.fn-range button:hover,.fn-secondary:hover{background:#254354;color:#fff}
+.fn-content{display:grid;gap:16px}
+.fn-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:11px;margin-bottom:5px}
+.fn-metric,.fn-card{border:1px solid #273d4d;border-radius:14px;background:#101d27}
+.fn-metric{padding:20px 18px;min-width:0}
+.fn-metric span{display:block;font-size:11px;line-height:1.35;color:#8da6b5;margin-bottom:12px}
+.fn-metric strong{display:block;font-size:clamp(19px,2.4vw,27px);line-height:1.16;letter-spacing:-.04em;color:#d5eaf4;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.fn-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:stretch}
+.fn-card{min-width:0;overflow:hidden}
+.fn-card-head{padding:17px 18px;border-bottom:1px solid #223744}
+.fn-card h3{font-size:13px;font-weight:720;margin:0;color:#d3e3ed}
+.fn-empty,.fn-error{padding:24px;color:#8ea7b6;font-size:12px;line-height:1.5}
+.fn-error{border:1px solid #663e46;background:#241d23;border-radius:12px;color:#eea8b0}
+.fn-bars{padding:17px 18px;display:grid;gap:15px}
+.fn-bar-meta{display:flex;gap:12px;justify-content:space-between;align-items:center;font-size:12px;color:#b4c6d0;margin-bottom:7px}
+.fn-bar-meta>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fn-bar-meta b{color:#d5eaf5;flex:0 0 auto;font-variant-numeric:tabular-nums}
+.fn-track{height:6px;border-radius:99px;background:#273746;overflow:hidden}
+.fn-fill{height:100%;background:#2ca2cb;border-radius:99px}
+.fn-table-wrap{overflow:auto;width:100%;max-height:570px}
+.fn-table{border-collapse:collapse;width:100%;white-space:nowrap;text-align:left;font-size:12px}
+.fn-table th{position:sticky;top:0;background:#142633;color:#8eaec2;font-weight:680;font-size:11px;letter-spacing:.005em;padding:12px 14px;z-index:1;border-bottom:1px solid #2b4454}
+.fn-table td{padding:13px 14px;border-top:1px solid #263944;color:#b4c8d5;max-width:280px;overflow:hidden;text-overflow:ellipsis}
+.fn-table tbody tr:hover{background:#172e3b}
+.fn-sort{border:0;background:none;font:inherit;color:inherit;text-align:left;cursor:pointer;padding:3px 0;white-space:nowrap}
+.fn-sort span{color:#55acd1}
+.fn-adsrow{padding:0!important;max-width:none!important}
+.fn-ad-link{display:block;width:100%;padding:11px 14px;background:transparent;border:0;color:inherit;text-align:left;cursor:pointer;font:inherit}
+.fn-ad-link>span{display:grid;grid-template-columns:minmax(175px,1.6fr) repeat(10,minmax(90px,1fr));gap:10px;align-items:center}
+.fn-ad-link:hover{background:#1d3949}
+.fn-adtile{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fn-updated{margin-top:18px;color:#718da0;font-size:11px;text-align:right}
+.fn-secondary{margin:15px;border:1px solid #35566b;background:#193246}
+@media(max-width:1050px){.fn-two{grid-template-columns:1fr}.fn-ad-link>span{width:max-content;grid-template-columns:repeat(11,minmax(110px,1fr))}.fn-adsrow{overflow-x:auto!important}}
+@media(max-width:580px){.fn-toolbar{align-items:flex-start}.fn-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.fn-metric{padding:14px}.fn-metric strong{font-size:20px}}
+
+</style>
 <style id="flush-auth-styles">
  [hidden]{display:none!important}.auth-gate{min-height:100dvh;display:grid;place-items:center;background:radial-gradient(ellipse at 50% 0%,#193244 0%,#090d14 65%);padding:20px}.auth-card{width:min(420px,100%);background:#101923;border:1px solid #314455;border-radius:20px;padding:34px;box-shadow:0 20px 70px #0005}.auth-logo{width:160px;display:block;margin:0 0 34px}.auth-card h1{margin:0 0 8px;font-size:27px;letter-spacing:-.04em}.auth-card p{font-size:12px;color:#91a5b5;line-height:1.7;margin:0 0 22px}.field{display:block;color:#a5bbc9;font-size:12px;font-weight:650;margin:15px 0}.field input,.field select{display:block;width:100%;margin-top:8px;padding:12px 13px;border:1px solid #354b5d;background:#0b1119;color:#edf6fb;border-radius:10px;outline:0;font:inherit}.field input:focus{border-color:#83b4cf}.primary-btn{width:100%;background:#83b4cf;color:#08131c;border:0;border-radius:11px;padding:13px;font-weight:780;cursor:pointer;margin-top:10px}.primary-btn:disabled{opacity:.5;cursor:wait}.error-text{min-height:20px;color:#f39c9c;font-size:12px!important}.account-name{font-size:11px;color:#9db5c5;white-space:nowrap}.logout{background:transparent;border:1px solid #304658;color:#aec4d1;border-radius:9px;padding:9px 11px;font-size:11px}.logout:hover{background:#172b3a}.admin-users{max-width:1100px;margin:0 auto;width:100%}.users-grid{display:grid;grid-template-columns:330px 1fr;gap:18px;align-items:start}.user-box{border:1px solid #2d4150;border-radius:16px;background:#101923;padding:21px}.user-box h2{font-size:18px;margin:0 0 10px}.user-box p{font-size:12px;color:#8ba0b1;line-height:1.6}.permissions{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}.check-row{display:inline-flex;align-items:center;gap:7px;color:#a6bdca;font-size:12px;cursor:pointer}.check-row input{accent-color:#80abc5}.user-item{border:1px solid #2b3c4a;border-radius:12px;margin-bottom:10px;padding:16px;background:#0d151e}.user-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.role-tag{font-size:9px;color:#9abed3;border:1px solid #2c4e61;padding:4px 7px;border-radius:50px;margin-left:8px}.user-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.user-actions button{cursor:pointer}.user-msg,.role-note{font-size:11px;color:#7aafc5}.user-box .field{margin:12px 0}.admin-users .section-head{margin-top:0}@media(max-width:940px){.users-grid{grid-template-columns:1fr}.topright .account-name{display:none}}@media(max-width:550px){.auth-card{padding:24px}.topright .environment{display:none}}
 </style>
@@ -65,10 +112,14 @@
       <div class="group"><div class="group-label">ÇALIŞMA ALANI</div>
         <button type="button" class="navbtn" data-target="overview"><svg class="icon"><use href="#i-grid"/></svg><span class="menu-title">Genel Bakış</span><svg class="icon arrow"><use href="#i-arrow"/></svg></button>
       </div>
-      <div class="group"><div class="group-label">FASİLİTELER</div>
-        <button type="button" class="navbtn" data-target="analytics"><svg class="icon"><use href="#i-chart"/></svg><span class="menu-title">Analytics</span><span class="tiny-dot" aria-hidden="true"></span></button>
-        <button type="button" class="navbtn" data-target="flowery"><svg class="icon"><use href="#i-ad"/></svg><span class="menu-title">Reklam Merkezi</span><span class="tiny-dot" aria-hidden="true"></span></button>
-        <button type="button" class="navbtn" data-target="feedback"><svg class="icon"><use href="#i-feedback"/></svg><span class="menu-title">Feedback</span><span class="tiny-dot" aria-hidden="true"></span></button>
+      <div class="group"><div class="group-label">ANALİTİK</div>
+        <button type="button" class="navbtn" data-target="audience"><svg class="icon"><use href="#i-chart"/></svg><span class="menu-title">Kullanıcılar</span></button>
+        <button type="button" class="navbtn" data-target="behavior"><svg class="icon"><use href="#i-grid"/></svg><span class="menu-title">Davranış</span></button>
+        <button type="button" class="navbtn" data-target="ad_performance"><svg class="icon"><use href="#i-chart"/></svg><span class="menu-title">Reklam Performansı</span></button>
+      </div>
+      <div class="group"><div class="group-label">YÖNETİM</div>
+        <button type="button" class="navbtn" data-target="flowery"><svg class="icon"><use href="#i-ad"/></svg><span class="menu-title">Reklam Merkezi</span></button>
+        <button type="button" class="navbtn" data-target="feedback"><svg class="icon"><use href="#i-feedback"/></svg><span class="menu-title">Feedback</span></button>
       </div>
       <div class="group" id="adminGroup" hidden><div class="group-label">YETKİLENDİRME</div>
         <button type="button" class="navbtn" id="adminNav" data-target="users" hidden><svg class="icon"><use href="#i-grid"/></svg><span class="menu-title">Kullanıcı Yetkileri</span><svg class="icon arrow"><use href="#i-arrow"/></svg></button>
@@ -86,16 +137,18 @@
     </header>
     <div class="viewport" id="viewport">
       <section class="screen overview" id="overview">
-        <div class="hero"><div class="hero-text"><span class="eyebrow">İŞLER TEK YERDE</span><h1>Flöw'ün kontrol merkezi.</h1><p>Analytics, reklam yönetimi ve geri bildirimler, ayrı ayrı çalışan sistemler olarak tek bir çatı altında. İhtiyacın olan her şey bir tık uzağında.</p></div><div class="hero-mark" aria-hidden="true"><div class="orb-line"></div><div class="orb-vert"></div><div class="orb"></div><div class="orb-dot first"></div><div class="orb-dot second"></div><div class="orb-dot third"></div></div></div>
-        <div class="section-head"><div><h2>Fasiliteler</h2><p>İşlemlerine kaldığın yerden devam et.</p></div><span class="section-kicker">3 bağlı araç</span></div>
+        <div class="hero"><div class="hero-text"><span class="eyebrow">İŞLER TEK YERDE</span><h1>Flöw'ün kontrol merkezi.</h1><p>İstatistikler, reklam yönetimi ve geri bildirimler tek bir çalışma alanında. Her modül, yetkili kullanıcıya kendi verilerini gösterir.</p></div><div class="hero-mark" aria-hidden="true"><div class="orb-line"></div><div class="orb-vert"></div><div class="orb"></div><div class="orb-dot first"></div><div class="orb-dot second"></div><div class="orb-dot third"></div></div></div>
+        <div class="section-head"><div><h2>Fasiliteler</h2><p>İşlemlerine kaldığın yerden devam et.</p></div><span class="section-kicker">5 modül</span></div>
         <div class="cards">
-          <button type="button" class="tool-card" data-target="analytics"><div class="card-top"><span class="card-icon"><svg class="icon"><use href="#i-chart"/></svg></span><span class="pill">BAĞLI</span></div><h3>Analytics</h3><p>Ziyaretçiler, kullanıcı davranışları ve reklam performansını incele.</p><div class="card-foot">İstatistik panelini aç <svg class="icon"><use href="#i-arrow"/></svg></div></button>
+          <button type="button" class="tool-card" data-target="audience"><div class="card-top"><span class="card-icon"><svg class="icon"><use href="#i-chart"/></svg></span><span class="pill">ANALİTİK</span></div><h3>Kullanıcılar</h3><p>Oturumlar, cihazlar, coğrafya ve demografi.</p><div class="card-foot">Kullanıcı istatistiklerini aç <svg class="icon"><use href="#i-arrow"/></svg></div></button>
+          <button type="button" class="tool-card" data-target="behavior"><div class="card-top"><span class="card-icon"><svg class="icon"><use href="#i-grid"/></svg></span><span class="pill">ANALİTİK</span></div><h3>Davranış</h3><p>Etkileşimler, olaylar, kaynaklar ve anahtar kelimeler.</p><div class="card-foot">Davranış analizini aç <svg class="icon"><use href="#i-arrow"/></svg></div></button>
+          <button type="button" class="tool-card" data-target="ad_performance"><div class="card-top"><span class="card-icon"><svg class="icon"><use href="#i-chart"/></svg></span><span class="pill">ANALİTİK</span></div><h3>Reklam Performansı</h3><p>Gösterim, izleme, tamamlama ve kampanya raporları.</p><div class="card-foot">Performans verilerini aç <svg class="icon"><use href="#i-arrow"/></svg></div></button>
           <button type="button" class="tool-card" data-target="flowery"><div class="card-top"><span class="card-icon"><svg class="icon"><use href="#i-ad"/></svg></span><span class="pill">BAĞLI</span></div><h3>Reklam Merkezi</h3><p>Reklamları, yayın takvimini ve kampanya içeriklerini yönet.</p><div class="card-foot">Reklam merkezini aç <svg class="icon"><use href="#i-arrow"/></svg></div></button>
           <button type="button" class="tool-card" data-target="feedback"><div class="card-top"><span class="card-icon"><svg class="icon"><use href="#i-feedback"/></svg></span><span class="pill">BAĞLI</span></div><h3>Feedback</h3><p>Geri bildirimleri, kullanıcı notlarını ve bildirim eğilimlerini takip et.</p><div class="card-foot">Geri bildirimleri aç <svg class="icon"><use href="#i-arrow"/></svg></div></button>
         </div>
         <div class="bottom-message"><svg class="icon"><use href="#i-spark"/></svg><div><h4>Flüsh büyümeye hazır.</h4><p>Yeni sistemler eklenirken mevcut araçlara müdahale edilmez. Her modül bağımsız adresinde çalışmaya devam eder.</p></div></div>
       </section>
-      <section class="screen" id="appScreen" hidden>
+      <section class="screen" id="appScreen" hidden><div id="nativeView" class="flush-native" hidden></div>
         <div class="appview"><div class="frame-top"><div class="frame-descriptor"><div class="frame-icon" id="frameIcon"><svg class="icon"><use href="#i-chart"/></svg></div><div><h2 id="frameTitle">Analytics</h2><p id="frameAddress"></p></div></div><div class="frame-toolbar"><button type="button" class="iconbtn" id="frameReload" aria-label="Paneli yenile" title="Yenile"><svg class="icon"><use href="#i-reload"/></svg></button></div></div><div class="frame-shell" id="frameShell"><div class="frame-empty" id="frameEmpty">Panel hazırlanıyor...</div></div><div class="frame-hint">Bu sayfa kendi sistemi üzerinden çalışır. İçerik görünmüyorsa veya giriş açılmıyorsa <a href="#" id="fallbackLink" target="_blank" rel="noopener noreferrer">aracı ayrı sekmede aç</a>.</div></div>
       </section>
       <section class="screen" id="users" hidden><div class="admin-users"><div class="section-head"><div><h2>Kullanıcı Yetkileri</h2><p>Yalnızca superadmin bu bölümü görebilir ve kullanıcıları yönetebilir.</p></div></div><div class="users-grid"><div class="user-box"><h2>Yeni kullanıcı ekle</h2><p>Hesaplar yalnızca seçilen fasilitelere erişebilir. Oluşturulan kullanıcı ilk girişte parolasını değiştirecek.</p><form id="newUserForm"><label class="field">Kullanıcı adı<input id="newUsername" type="text" required minlength="3" maxlength="40" placeholder="ornek.kullanici" spellcheck="false"></label><label class="field">Geçici parola<input id="newPasswordUser" type="password" required minlength="12" autocomplete="new-password"></label>
@@ -110,7 +163,7 @@
   <p class="user-msg" id="recoveryStatus" role="status"></p>
  </form>
 </div></div></section>
-      <section class="screen" id="future" hidden><div class="future-wrap"><div class="future-symbol"><svg class="icon"><use href="#i-plus"/></svg></div><h1>Yeni bir fasiliteye yer var.</h1><p>Flüsh, modüler bir kabuk. Sonradan ekleyeceğimiz araçları soldaki menüye bağlayabilir, mevcut sistemlerin adreslerini ve çalışmalarını değiştirmeden içeri alabiliriz.</p><div class="codehint"><strong>Geliştirme notu</strong><br>Yeni bir araç eklemek için <code>MODULES</code> tanımına modülün kimliğini, başlığını ve adresini eklemek; menüye ona bağlı bir buton yerleştirmek yeterlidir. Araç, kendi giriş ve API düzenini kullanır.</div></div></section>
+      <section class="screen" id="future" hidden><div class="future-wrap"><div class="future-symbol"><svg class="icon"><use href="#i-plus"/></svg></div><h1>Yeni bir fasiliteye yer var.</h1><p>Flüsh, modüler bir kabuk. Sonradan ekleyeceğimiz araçları soldaki menüye bağlayabilir, mevcut sistemlerin adreslerini ve çalışmalarını değiştirmeden içeri alabiliriz.</p><div class="codehint"><strong>Geliştirme notu</strong><br>Yeni araçlar, sunucu tarafı yetkilendirme denetimi ve portalın ortak veri bileşenleriyle eklenir.</div></div></section>
     </div>
   </main>
 </div>
@@ -119,15 +172,18 @@
  'use strict';
  const AUTH = 'https://auth.xn--flw-tna.tr';
  const MODULES = {
-  analytics: {title:'Analytics',url:'https://xn--flw-tna.tr/admin/analytics.html',icon:'i-chart'},
+  audience: {title:'Kullanıcılar',url:'https://xn--flw-tna.tr/admin/analytics.html',icon:'i-chart'},
+  behavior: {title:'Davranış',url:'https://xn--flw-tna.tr/admin/analytics.html',icon:'i-grid'},
+  ad_performance: {title:'Reklam Performansı',url:'https://xn--flw-tna.tr/admin/analytics.html',icon:'i-chart'},
   flowery: {title:'Reklam Merkezi',url:'https://flowery.xn--flw-tna.tr/',icon:'i-ad'},
   feedback: {title:'Feedback',url:'https://xn--flw-tna.tr/admin/feedback-admin.html',icon:'i-feedback'}
  };
+ const NATIVE_MODULES=new Set(['audience','behavior','ad_performance']);
  const $=id=>document.getElementById(id);
  let currentUser=null,active='overview';
  const frames={},screens={overview:$('overview'),app:$('appScreen'),future:$('future'),users:$('users')};
  const sidebar=$('sidebar'),backdrop=$('backdrop'),menuBtn=$('menuBtn');
- const facilityNames={analytics:'Analytics',flowery:'Reklam Merkezi',feedback:'Feedback'};
+ const facilityNames={audience:'Kullanıcılar',behavior:'Davranış',ad_performance:'Reklam Performansı',flowery:'Reklam Merkezi',feedback:'Feedback'};
  const enc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  async function api(path,options={}){
    const res=await fetch(AUTH+path,{credentials:'include',cache:'no-store',...options,headers:{'Accept':'application/json',...(options.body?{'Content-Type':'application/json'}:{}),...(options.headers||{})}});
@@ -162,25 +218,167 @@
    if(!currentUser)return;
    if(!['overview','future','users',...Object.keys(MODULES)].includes(id))id='overview';
    if((MODULES[id]&&!permitted(id))||(id==='users'&&currentUser.role!=='superadmin'))id='overview';
-   active=id;const mod=MODULES[id],isApp=!!mod;
+   active=id;const mod=MODULES[id],isApp=!!mod,isNative=NATIVE_MODULES.has(id);
    $('pageTitle').textContent=mod?.title||(id==='future'?'Yeni Fasiliteler':id==='users'?'Kullanıcı Yetkileri':'Genel Bakış');
    Object.entries(screens).forEach(([name,screen])=>screen.hidden=(name==='app'?!isApp:name!==id));
    $('reloadBtn').hidden=!isApp;$('externalBtn').hidden=!isApp;
    document.querySelectorAll('.navbtn[data-target]').forEach(el=>el.classList.toggle('active',el.dataset.target===id));
-   Object.entries(frames).forEach(([key,frame])=>frame.classList.toggle('on',isApp&&key===id));
+   Object.entries(frames).forEach(([key,frame])=>frame.classList.toggle('on',isApp&&!isNative&&key===id));
+   $('nativeView').hidden=!isNative;
    if(isApp){
-     $('frameTitle').textContent=mod.title;$('frameAddress').textContent=new URL(mod.url).hostname;
-     $('frameIcon').querySelector('use').setAttribute('href','#'+mod.icon);
      $('externalBtn').href=mod.url;$('fallbackLink').href=mod.url;
-     (frames[id]||newFrame(id,mod)).classList.add('on');$('frameEmpty').hidden=true;
-     $('viewport').style.paddingBottom='14px';
-   }else{$('viewport').style.paddingBottom='26px';}
+     if(isNative){
+       $('appScreen').querySelector('.appview').hidden=true;
+       await loadNative(id);
+     }else{
+       $('appScreen').querySelector('.appview').hidden=false;
+       $('frameTitle').textContent=mod.title;$('frameAddress').textContent=new URL(mod.url).hostname;
+       $('frameIcon').querySelector('use').setAttribute('href','#'+mod.icon);
+       (frames[id]||newFrame(id,mod)).classList.add('on');$('frameEmpty').hidden=true;
+     }
+   }
    if(id==='users')await loadUsers();
    closeMenu();document.title=`${$('pageTitle').textContent} | Flüsh`;
  }
+ const nfNative=new Intl.NumberFormat('tr-TR');
+ const nativeMemory={range:'7d',sort:'views',direction:'desc',lastAds:null,load:0};
+ const nEsc=x=>enc(x??'');
+ const nNum=x=>nfNative.format(Number(x)||0);
+ const nPct=x=>'%'+new Intl.NumberFormat('tr-TR',{maximumFractionDigits:1}).format(Number(x)||0);
+ const nDuration=x=>{const n=Math.max(0,Math.round((Number(x)||0)/1000));return n<60?`${n} sn`:n<3600?`${Math.floor(n/60)} dk ${n%60} sn`:`${Math.floor(n/3600)} sa ${Math.floor(n%3600/60)} dk`;};
+ const nDate=x=>{if(!x)return '—';const d=new Date(typeof x==='number'?x:String(x));return isNaN(d.getTime())?'—':d.toLocaleString('tr-TR',{dateStyle:'short',timeStyle:'short'})};
+ const nFormatDate=x=>/^\d{4}-\d{2}-\d{2}$/.test(String(x||''))?String(x).slice(8)+'.'+String(x).slice(5,7)+'.'+String(x).slice(0,4):'—';
+ function nMetrics(rows){return '<div class="fn-metrics">'+rows.map(([label,value])=>`<div class="fn-metric"><span>${nEsc(label)}</span><strong>${nEsc(value)}</strong></div>`).join('')+'</div>';}
+ function nCard(title,body,extra=''){return `<article class="fn-card"><div class="fn-card-head"><h3>${nEsc(title)}</h3>${extra}</div>${body}</article>`;}
+ function nTable(rows,columns,limit=100){
+   if(!Array.isArray(rows)||!rows.length)return '<div class="fn-empty">Bu dönemde veri yok.</div>';
+   return `<div class="fn-table-wrap"><table class="fn-table"><thead><tr>${columns.map(c=>`<th>${nEsc(c.label)}</th>`).join('')}</tr></thead><tbody>${rows.slice(0,limit).map(r=>`<tr>${columns.map(c=>`<td>${nEsc(c.format?c.format(r[c.key],r):r[c.key])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+ }
+ function nBars(rows){
+   if(!Array.isArray(rows)||!rows.length)return '<div class="fn-empty">Henüz veri yok.</div>';
+   const max=Math.max(1,...rows.map(r=>Number(r.count)||0));
+   return `<div class="fn-bars">${rows.slice(0,12).map(r=>`<div class="fn-bar"><div class="fn-bar-meta"><span title="${nEsc(r.label||'Bilinmiyor')}">${nEsc(r.label||'Bilinmiyor')}</span><b>${nNum(r.count)}</b></div><div class="fn-track"><div class="fn-fill" style="width:${Math.min(100,Math.max(1,Number(r.count||0)/max*100))}%"></div></div></div>`).join('')}</div>`;
+ }
+ async function nRequest(path){
+  const r=await fetch(AUTH+'/api/proxy/analytics'+path,{credentials:'include',headers:{Accept:'application/json'},cache:'no-store'});
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(data?.error||'HTTP '+r.status);
+  return data;
+ }
+ function nToolbar(id){
+  const intro={audience:'Ziyaretçiler, oturumlar, demografi ve cihaz dağılımı.',behavior:'Haber akışındaki hareketler, etkileşimler ve arama eğilimleri.',ad_performance:'Kampanyaların gösterim, izlenme ve tamamlanma performansı.'};
+  return `<div class="fn-toolbar"><div><div class="fn-eyebrow">FLÜSH / ANALİTİK</div><h2>${nEsc(MODULES[id].title)}</h2><p>${nEsc(intro[id])}</p></div><div class="fn-range" role="group" aria-label="Zaman aralığı"><button type="button" data-native-range="7d" class="${nativeMemory.range==='7d'?'active':''}">Son 7 gün</button><button type="button" data-native-range="all" class="${nativeMemory.range==='all'?'active':''}">Tüm zamanlar</button></div></div><div class="fn-content" id="nativeContent"><p class="fn-muted">Veriler yükleniyor…</p></div><div class="fn-updated" id="nativeUpdated"></div>`;
+ }
+ function nDemography(data){
+  if(!data?.reportingConfigured)return nCard('Demografi','<div class="fn-empty">GA4 demografi verisi henüz yapılandırılmadı veya alınamadı.</div>');
+  return '<div class="fn-two">'+
+   nCard('Yaş grupları',nTable(data.age,[{key:'label',label:'Yaş'},{key:'users',label:'Kullanıcı',format:nNum},{key:'percent',label:'Pay',format:nPct}]))+
+   nCard('Cinsiyet',nTable(data.gender,[{key:'label',label:'Cinsiyet'},{key:'users',label:'Kullanıcı',format:nNum},{key:'percent',label:'Pay',format:nPct}]))+
+  '</div>'+nCard('Yaş × Saat',nTable(data.ageHour,[{key:'age',label:'Yaş'},{key:'hour',label:'Saat'},{key:'users',label:'Kullanıcı',format:nNum},{key:'views',label:'Açılış',format:nNum}]));
+ }
+ function nRenderAudience(a,d){
+  const t=a.totals||{};
+  return nMetrics([
+    ['Tekil ziyaretçi',nNum(t.visitors)],['Oturum',nNum(t.sessions)],['Yeni ziyaretçi',nNum(t.new_visitors)],['Geri dönen',nNum(t.returning_visitors)],
+    ['Ort. oturum',nDuration(t.avg_duration_ms)],['Haber görüntüleme',nNum(t.story_views)],['Olay',nNum(t.event_count)],['Toplam süre',nDuration(t.total_duration_ms)]
+  ])+`<div class="fn-two">${nCard('Ülkeler',nBars(a.byCountry))}${nCard('Şehirler',nBars(a.byCity))}${nCard('Cihazlar',nBars(a.byDevice))}${nCard('Tarayıcılar',nBars(a.byBrowser))}${nCard('İşletim sistemleri',nBars(a.byOS))}</div>`+
+  nDemography(d)+nCard('Son oturumlar',nTable(a.latest,[
+   {key:'last_seen',label:'Son görülme',format:nDate},{key:'visitor_id',label:'Ziyaretçi'}, {key:'duration_ms',label:'Süre',format:nDuration},{key:'story_views',label:'Haber',format:nNum},{key:'device_type',label:'Cihaz'},{key:'browser',label:'Tarayıcı'},{key:'os',label:'OS'},{key:'country',label:'Ülke'},{key:'city',label:'Şehir'}]));
+ }
+ function nRenderBehavior(b){const t=b.totals||{};
+ return nMetrics([['Davranış olayı',nNum(t.events)],['Oturum',nNum(t.sessions)],['Ziyaretçi',nNum(t.visitors)]])+
+ `<div class="fn-two">${nCard('Olay türleri',nBars(b.eventTypes))}${nCard('Kaynaklar',nBars(b.sources))}${nCard('Kategoriler',nBars(b.categories))}</div>`+
+ nCard('Anahtar kelimeler',nTable(b.keywords,[{key:'keyword',label:'Anahtar kelime'},{key:'mode',label:'Mod'},{key:'count',label:'Adet',format:nNum}]))+
+ nCard('Son hareketler',nTable(b.latest,[{key:'occurred_at',label:'Zaman',format:nDate},{key:'event_type',label:'Olay'},{key:'visitor_id',label:'Ziyaretçi'},{key:'source',label:'Kaynak'},{key:'category',label:'Kategori'},{key:'keyword_text',label:'Kelime'},{key:'value_text',label:'Değer'}]));
+ }
+ const nAdKeys=[['brand','Reklam'],['category','Kategori'],['ad_start_date','Başlangıç'],['ad_end_date','Bitiş'],['ad_active','Durum'],['views','Gösterim'],['avg_dwell_ms','Ort. izleme'],['skip_rate','Skip'],['completion_rate','Tamamlanma'],['return_rate','Geri dönüş'],['repeat_rate','Tekrar']];
+ function nSortedAds(ads){return [...ads].sort((a,b)=>{
+   const k=nativeMemory.sort,fmt=r=>k==='brand'?(r.title||r.brand||r.ad_id||''):k==='ad_active'?(r.ad_status||(r.ad_active?'Aktif':'Pasif')):r[k];
+   const v1=fmt(a),v2=fmt(b);
+   const n=['views','avg_dwell_ms','skip_rate','completion_rate','return_rate','repeat_rate'].includes(k);
+   const result=n?(Number(v1)||0)-(Number(v2)||0):String(v1??'').localeCompare(String(v2??''),'tr',{numeric:true,sensitivity:'base'});
+   return nativeMemory.direction==='asc'?result:-result;
+ })}
+ function nAdsTable(ads){
+  const rows=nSortedAds(ads);
+  const heads=nAdKeys.map(([key,label])=>`<th aria-sort="${nativeMemory.sort===key?(nativeMemory.direction==='asc'?'ascending':'descending'):'none'}"><button type="button" class="fn-sort" data-native-sort="${key}">${nEsc(label)} <span>${nativeMemory.sort===key?(nativeMemory.direction==='asc'?'▲':'▼'):'↕'}</span></button></th>`).join('');
+  return nCard('Kampanyalar',rows.length?`<div class="fn-table-wrap"><table class="fn-table"><thead><tr>${heads}</tr></thead><tbody>${rows.map(r=>{
+   const values=[r.title||[r.brand,r.campaign].filter(Boolean).join(' · ')||r.ad_id,r.category||'—',nFormatDate(r.ad_start_date),nFormatDate(r.ad_end_date),r.ad_status||(r.ad_active?'Aktif':'Pasif'),nNum(r.views),nDuration(r.avg_dwell_ms),nPct(r.skip_rate),nPct(r.completion_rate),nPct(r.return_rate),nPct(r.repeat_rate)];
+   return `<tr><td colspan="11" class="fn-adsrow"><button type="button" data-native-ad="${nEsc(r.ad_id)}" class="fn-ad-link"><span>${values.map((v,i)=>`<span class="fn-adtile" data-label="${nEsc(nAdKeys[i][1])}">${nEsc(v)}</span>`).join('')}</span></button></td></tr>`;
+  }).join('')}</tbody></table></div>`:'<div class="fn-empty">Bu aralıkta reklam verisi yok.</div>');
+ }
+ function nRenderAds(data){const t=data.totals||{};
+ return nMetrics([['Reklam',nNum(t.ads)],['Gösterim',nNum(t.views)],['Tekil izleyici',nNum(t.viewers)],['Ort. izleme',nDuration(t.avg_dwell_ms)],['Skip',nPct(t.skip_rate)],['Tamamlama',nPct(t.completion_rate)],['Geri dönüş',nPct(t.return_rate)],['Tekrar',nPct(t.repeat_rate)]])+
+ '<div id="nativeAdsList">'+nAdsTable(data.ads||[])+'</div><div id="nativeAdDetail"></div>';
+ }
+ function nBindAds(){
+  document.querySelectorAll('[data-native-sort]').forEach(b=>b.addEventListener('click',()=>{
+   const key=b.dataset.nativeSort;
+   if(nativeMemory.sort===key)nativeMemory.direction=nativeMemory.direction==='asc'?'desc':'asc';
+   else {nativeMemory.sort=key;nativeMemory.direction=['brand','category','ad_start_date','ad_end_date','ad_active'].includes(key)?'asc':'desc'}
+   $('nativeAdsList').innerHTML=nAdsTable(nativeMemory.lastAds?.ads||[]);nBindAds();
+  }));
+  document.querySelectorAll('[data-native-ad]').forEach(b=>b.addEventListener('click',()=>nAdDetail(b.dataset.nativeAd)));
+ }
+ async function nAdDetail(adId){
+  if(!adId||!permitted('ad_performance')||active!=='ad_performance')return;
+  const el=$('nativeAdDetail');if(!el)return;
+  el.innerHTML='<p class="fn-muted">Reklam ayrıntısı yükleniyor…</p>';
+  try{
+   const d=await nRequest('/admin/ad?range='+encodeURIComponent(nativeMemory.range)+'&id='+encodeURIComponent(adId));
+   if(active!=='ad_performance')return;
+   const s=d.summary||{};
+   el.innerHTML=nCard(s.title||s.ad_id||'Reklam detayı',nMetrics([
+    ['Gösterim',nNum(s.views)],['Tekil izleyici',nNum(s.viewers)],['Ort. izleme',nDuration(s.avg_dwell_ms)],['Skip',nPct(s.skip_rate)],['Tamamlama',nPct(s.completion_rate)],['Geri dönüş',nPct(s.return_rate)]
+   ])+'<div class="fn-two">'+nCard('Yönler',nTable(d.orientation,[{key:'label',label:'Yön'},{key:'views',label:'Gösterim',format:nNum},{key:'percent',label:'Pay',format:nPct}]))+nCard('Cihazlar',nTable(d.devices,[{key:'label',label:'Cihaz'},{key:'views',label:'Gösterim',format:nNum},{key:'percent',label:'Pay',format:nPct}]))+nCard('Saatler',nTable(d.hours,[{key:'label',label:'Saat'},{key:'views',label:'Gösterim',format:nNum}]))+'</div>'+
+    `<button class="fn-secondary" id="nativeAdDownload" type="button">Bu reklamın HTML raporu</button>`);
+   $('nativeAdDownload').addEventListener('click',async()=>{
+    const btn=$('nativeAdDownload');btn.disabled=true;
+    try{
+     const res=await fetch(AUTH+'/api/proxy/analytics/admin/ad-report?range='+encodeURIComponent(nativeMemory.range)+'&id='+encodeURIComponent(adId),{credentials:'include',cache:'no-store'});
+     if(!res.ok)throw new Error('HTTP '+res.status);
+     const blob=await res.blob(),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='floew-reklam-'+adId+'.html';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }catch(e){alert('Rapor indirilemedi: '+e.message)}finally{btn.disabled=false}
+   });
+   el.scrollIntoView({behavior:'smooth',block:'nearest'});
+  }catch(e){el.textContent='Reklam ayrıntısı alınamadı: '+e.message}
+ }
+ async function loadNative(id,force=false){
+  if(!NATIVE_MODULES.has(id)||!currentUser||!permitted(id))return;
+  const seq=++nativeMemory.load;
+  $('nativeView').innerHTML=nToolbar(id);
+  document.querySelectorAll('[data-native-range]').forEach(b=>b.addEventListener('click',()=>{
+   const next=b.dataset.nativeRange;if(next!==nativeMemory.range){nativeMemory.range=next;loadNative(active,true)}
+  }));
+  try{
+   const range=encodeURIComponent(nativeMemory.range);
+   let html;
+   if(id==='audience'){
+    const [aud,dem]=await Promise.all([
+      nRequest('/admin/audience?range='+range),
+      nRequest('/admin/demographics?range='+range).catch(()=>({reportingConfigured:false}))
+    ]);
+    html=nRenderAudience(aud,dem);
+   }else if(id==='behavior'){
+    const behavior=await nRequest('/admin/behavior?range='+range);
+    html=nRenderBehavior(behavior);
+   }else{
+    const ads=await nRequest('/admin/ads?range='+range);
+    nativeMemory.lastAds=ads;html=nRenderAds(ads);
+   }
+   if(seq!==nativeMemory.load||active!==id)return;
+   $('nativeContent').innerHTML=html;
+   $('nativeUpdated').textContent='Güncellendi: '+new Date().toLocaleString('tr-TR');
+   if(id==='ad_performance')nBindAds();
+  }catch(err){
+   if(seq!==nativeMemory.load||active!==id)return;
+   $('nativeContent').innerHTML=`<div class="fn-error" role="alert">Veriler alınamadı: ${nEsc(err.message||err)}. Flüsh Worker v7 yetkileri yüklenmiş mi?</div>`;
+  }
+ }
+
  function navigate(id){if(location.hash!=='#'+id)location.hash=id;else select(id)}
  document.querySelectorAll('[data-target]').forEach(el=>el.addEventListener('click',()=>navigate(el.dataset.target)));
- function refresh(){const f=frames[active];if(f){try{f.contentWindow.location.reload()}catch{f.src=MODULES[active].url}}}
+ function refresh(){if(NATIVE_MODULES.has(active)){loadNative(active,true);return;} const f=frames[active];if(f){try{f.contentWindow.location.reload()}catch{f.src=MODULES[active].url}}}
  $('reloadBtn').addEventListener('click',refresh);$('frameReload').addEventListener('click',refresh);
  window.addEventListener('hashchange',()=>select(decodeURIComponent(location.hash.slice(1))));
  function sessionState(user){currentUser=user;adaptMenu();gate('app');select(decodeURIComponent(location.hash.slice(1))||'overview')}
@@ -212,7 +410,7 @@
  function permBoxes(selected=[],prefix='p'){
    return Object.entries(facilityNames).map(([id,label])=>`<label class="check-row"><input type="checkbox" name="${prefix}-${id}" value="${id}" ${selected.includes(id)?'checked':''}><span>${enc(label)}</span></label>`).join('');
  }
- $('newPermissions').innerHTML=permBoxes(['analytics','flowery','feedback'],'new');
+ $('newPermissions').innerHTML=permBoxes([],'new');
  const checkedPermissions=parent=>[...parent.querySelectorAll('input[type=checkbox][data-facility], input[type=checkbox][name^=new-]:checked')].filter(e=>e.checked).map(e=>e.value);
  $('newUserForm').addEventListener('submit',async e=>{
    e.preventDefault();const status=$('createStatus');status.textContent='';
