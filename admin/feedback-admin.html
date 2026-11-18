@@ -168,7 +168,10 @@ a{color:inherit}
 <script>
 (()=>{
 'use strict';
-const API_BASE=String(window.FLOEW_CONFIG?.analyticsWorkerBase||'https://thefloew-analytics.thefloewback.workers.dev').replace(/\/$/,'');
+let API_BASE=String(window.FLOEW_CONFIG?.analyticsWorkerBase||'https://thefloew-analytics.thefloewback.workers.dev').replace(/\/$/,'');
+const LEGACY_API_BASE=API_BASE;
+const FLUSH_AUTH_BASE="https://auth.xn--flw-tna.tr";
+let useFlushSSO=false;
 const TOKEN_KEY='floew.feedbackAdminToken.session.v1';
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
@@ -277,7 +280,7 @@ async function deleteFeedback(eventId,button){
   if(!confirm('Bu geri bildirim kalıcı olarak silinsin mi?'))return;
   if(button)button.disabled=true;
   try{
-    const r=await fetch(`${API_BASE}/admin/feedback-delete`,{method:'POST',mode:'cors',credentials:'omit',cache:'no-store',headers:{'Authorization':`Bearer ${state.token}`,'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({event_id:eventId})});
+    const r=await fetch(`${API_BASE}/admin/feedback-delete`,{method:'POST',mode:'cors',credentials:useFlushSSO?'include':'omit',cache:'no-store',headers:{...(useFlushSSO?{}:{'Authorization':`Bearer ${state.token}`}), 'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({event_id:eventId})});
     if(r.status===401)throw Object.assign(new Error('unauthorized'),{code:401});
     const data=await r.json().catch(()=>({}));
     if(!r.ok||!data?.ok)throw new Error(data?.error||`HTTP ${r.status}`);
@@ -304,7 +307,7 @@ async function fetchFeedbackPages(){
   for(let page=0;page<50;page++){
     const qs=new URLSearchParams({limit:'250'});
     if(cursor)qs.set('cursor',cursor);
-    const r=await fetch(`${API_BASE}/admin/feedback?${qs}`,{method:'GET',mode:'cors',credentials:'omit',cache:'no-store',headers:{'Authorization':`Bearer ${state.token}`,'Accept':'application/json'}});
+    const r=await fetch(`${API_BASE}/admin/feedback?${qs}`,{method:'GET',mode:'cors',credentials:useFlushSSO?'include':'omit',cache:'no-store',headers:{...(useFlushSSO?{}:{'Authorization':`Bearer ${state.token}`}), 'Accept':'application/json'}});
     if(r.status===401)throw Object.assign(new Error('unauthorized'),{code:401});
     if(!r.ok)throw new Error(`HTTP ${r.status}`);
     const data=await r.json();
@@ -343,15 +346,45 @@ async function fetchData({silent=false}={}){
 }
 function showApp(){$('#login-view').classList.add('hidden');$('#app-view').classList.remove('hidden')}
 function showLogin(message=''){$('#app-view').classList.add('hidden');$('#login-view').classList.remove('hidden');const e=$('#login-error');if(message){e.textContent=message;e.classList.remove('hidden')}else{e.classList.add('hidden');e.textContent=''}setTimeout(()=>$('#token-input').focus(),0)}
-async function login(token){state.token=String(token||'').trim();if(!state.token){showLogin('ADMIN_TOKEN boş olamaz.');return}sessionStorage.setItem(TOKEN_KEY,state.token);await fetchData()}
+async function login(token){useFlushSSO=false;API_BASE=LEGACY_API_BASE;state.token=String(token||'').trim();if(!state.token){showLogin('ADMIN_TOKEN boş olamaz.');return}sessionStorage.setItem(TOKEN_KEY,state.token);await fetchData()}
 $('#login-form').addEventListener('submit',e=>{e.preventDefault();login($('#token-input').value)});
-$('#logout-btn').addEventListener('click',()=>{sessionStorage.removeItem(TOKEN_KEY);state.token='';state.raw=null;state.feedbacks=[];state.filtered=[];state.serverTotal=0;$('#token-input').value='';showLogin()});
+$('#logout-btn').addEventListener('click',async()=>{
+  if(useFlushSSO){
+    try{
+      await fetch(FLUSH_AUTH_BASE+"/api/logout",{
+        method:"POST",credentials:"include",cache:"no-store",
+        headers:{"Content-Type":"application/json"},body:"{}"
+      });
+    }catch(e){}
+    useFlushSSO=false;API_BASE=LEGACY_API_BASE;
+  }
+  sessionStorage.removeItem(TOKEN_KEY);state.token='';state.raw=null;state.feedbacks=[];state.filtered=[];state.serverTotal=0;
+  $('#token-input').value='';showLogin();
+});
 $('#refresh-btn').addEventListener('click',()=>fetchData());
 $('#csv-btn').addEventListener('click',exportCsv);$('#json-btn').addEventListener('click',exportJson);
 ['search','topic-filter','source-filter','device-filter'].forEach(id=>$('#'+id).addEventListener(id==='search'?'input':'change',filterData));
 $$('.range-btn').forEach(btn=>btn.addEventListener('click',()=>{state.range=btn.dataset.range;$$('.range-btn').forEach(x=>x.classList.toggle('active',x===btn));filterData()}));
 $('#modal-close').addEventListener('click',closeDetail);$('#modal').addEventListener('click',e=>{if(e.target===$('#modal'))closeDetail()});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#modal').classList.contains('hidden'))closeDetail()});
-const saved=sessionStorage.getItem(TOKEN_KEY)||'';if(saved){state.token=saved;fetchData()}else{showLogin()}
+(async()=>{
+  try{
+    const response=await fetch(FLUSH_AUTH_BASE+"/api/session?facility=feedback",{
+      credentials:"include",cache:"no-store",headers:{Accept:"application/json"}
+    });
+    if(response.ok){
+      const session=await response.json();
+      if(session.authenticated&&session.permitted){
+        // Flüsh cookie is HttpOnly and is sent automatically; never send legacy
+        // administrator tokens to the Flüsh proxy or store them for SSO.
+        useFlushSSO=true;API_BASE=FLUSH_AUTH_BASE+"/api/proxy/analytics";state.token="flush-sso";
+        $('#logout-btn').textContent="Flüsh oturumunu kapat";
+        await fetchData();return;
+      }
+    }
+  }catch(e){}
+  const saved=sessionStorage.getItem(TOKEN_KEY)||'';
+  if(saved){state.token=saved;fetchData()}else{showLogin()}
+})();
 })();
 </script>
 </body>
