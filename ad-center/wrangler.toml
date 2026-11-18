@@ -15,3 +15,8 @@ database_id = "a3b61630-c5ff-4162-be4a-d3c7d2e3565c"
 
 [observability]
 enabled = true
+
+# Optional Flüsh SSO service binding. Existing Ad Center login stays active.
+[[services]]
+binding = "FLUSH_AUTH"
+service = "floew-flush-auth"
