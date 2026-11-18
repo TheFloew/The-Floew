@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <meta name="theme-color" content="#0b1018">
+  <title>Flüsh | Flöw Yönetim Portalı</title>
+  <link rel="icon" href="assets/flush-icon.svg" type="image/svg+xml">
+  <style>
+    :root { color-scheme:dark; --bg:#090d14;--side:#0c121b;--panel:#101821;--panel2:#141e28;--line:#263341;--line-soft:#1e2935;--text:#e8edf3;--muted:#8796a5;--subtle:#607181;--blue:#80abc5;--blue-strong:#9bbdd2;--blue-dim:#142a3a;--sidebar:264px; }
+    *{box-sizing:border-box} html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;-webkit-font-smoothing:antialiased} button,a{font:inherit} button{cursor:pointer} a{color:inherit}button:focus-visible,a:focus-visible{outline:2px solid var(--blue);outline-offset:3px} .icon{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+    .shell{display:flex;min-height:100dvh;isolation:isolate}.sidebar{position:sticky;top:0;width:var(--sidebar);height:100dvh;flex:none;display:flex;flex-direction:column;background:var(--side);border-right:1px solid var(--line-soft);z-index:20}
+    .brand{display:flex;align-items:flex-start;flex-direction:column;padding:35px 29px 32px;text-decoration:none;gap:11px}.brand img{display:block;width:147px;height:auto}.brand-sub{letter-spacing:.23em;text-transform:uppercase;color:#63788a;font-size:9px;font-weight:800}
+    .navscroll{padding:13px 13px 16px;overflow:auto;flex:1}.group{margin-bottom:30px}.group-label{color:#627284;font-size:10px;letter-spacing:.16em;font-weight:750;padding:0 16px;margin:0 0 12px;text-transform:uppercase}.navbtn{display:flex;gap:13px;align-items:center;width:100%;min-height:45px;padding:10px 14px;border:1px solid transparent;background:transparent;color:#aab6c4;border-radius:11px;text-align:left;font-size:13px;font-weight:560;transition:background .16s,border-color .16s,color .16s}.navbtn+.navbtn{margin-top:5px}.navbtn:hover{background:#16212c;color:#f3f8fa}.navbtn.active{color:var(--blue-strong);background:var(--blue-dim);border-color:#27485e}.navbtn.active .icon{color:#8bb7d1}.navbtn .menu-title{flex:1}.navbtn .arrow{width:13px;height:13px;opacity:.42}.navbtn.active .arrow{opacity:1}.navbtn .tiny-dot{width:5px;height:5px;background:var(--blue);border-radius:50%;opacity:.72}.navbtn[data-target="future"]{color:#8a9baa}
+    .side-bottom{padding:16px 18px 23px;border-top:1px solid var(--line-soft)}.link-website{display:flex;align-items:center;gap:11px;padding:12px 10px;color:#a2b2c2;text-decoration:none;font-size:12px;border-radius:10px}.link-website:hover{background:#16212c}.link-website .icon{width:17px;height:17px}.side-foot{padding:13px 10px 0;color:#526779;font-size:10px;letter-spacing:.025em}
+    .content{flex:1;min-width:0;display:flex;flex-direction:column;min-height:100dvh}.topbar{height:78px;flex:none;border-bottom:1px solid var(--line-soft);display:flex;align-items:center;justify-content:space-between;gap:18px;padding:0 34px;background:rgba(9,13,20,.88)}.crumb{display:flex;align-items:center;gap:11px;min-width:0}.crumb small{font-size:12px;color:#718496;font-weight:580}.crumb .slash{color:#435363}.crumb strong{font-size:13px;font-weight:640;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.topright{display:flex;align-items:center;gap:13px}.environment{font-size:11px;color:#8393a5;display:flex;align-items:center;gap:7px;white-space:nowrap}.environment:before{content:"";height:6px;width:6px;border-radius:50%;background:#77b0aa;box-shadow:0 0 0 4px #203433}.separator{height:21px;width:1px;background:#25313d;margin:0 4px}.iconbtn{display:inline-flex;align-items:center;justify-content:center;border:1px solid #304152;border-radius:10px;width:36px;height:36px;background:#111a24;color:#a9b9c8;transition:.15s}.iconbtn:hover{color:#fff;background:#1a2b38;border-color:#517087}.iconbtn[hidden]{display:none}.iconbtn .icon{width:17px;height:17px}.outline-link{display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;background:#162331;border:1px solid #30465b;color:#c2d9e6;border-radius:10px;padding:9px 13px;font-size:12px;font-weight:670;min-height:36px;white-space:nowrap;transition:.15s}.outline-link:hover{background:#21374a;border-color:#587b90}.outline-link[hidden]{display:none}.outline-link .icon{width:15px;height:15px}
+    .viewport{flex:1;min-height:0;padding:28px 34px 26px;display:flex;flex-direction:column}.screen{flex:1;min-height:0}.screen[hidden]{display:none!important}.overview{max-width:1230px;margin:0 auto;width:100%}.eyebrow{display:flex;align-items:center;gap:10px;color:var(--blue);font-weight:760;font-size:10px;letter-spacing:.2em;text-transform:uppercase}.eyebrow:before{content:"";width:21px;height:1px;background:#699bb8}.hero{min-height:242px;display:flex;position:relative;overflow:hidden;align-items:center;justify-content:space-between;border:1px solid #284052;border-radius:20px;padding:42px 45px;background:radial-gradient(ellipse at 84% 23%,#1d3b4b 0%,transparent 46%),linear-gradient(112deg,#101b27,#0e1823 74%)}.hero-text{position:relative;z-index:1;max-width:590px}.hero h1{font-size:clamp(27px,3.1vw,43px);font-weight:790;letter-spacing:-.05em;line-height:1.13;margin:19px 0 13px}.hero p{max-width:520px;color:#9bafbf;font-size:13px;line-height:1.8;margin:0}.hero-mark{height:160px;width:270px;position:relative;flex:none;margin-right:15px;opacity:.7}.orb{position:absolute;inset:9px 67px 9px 67px;border:1px solid #4c809c;border-radius:50%}.orb:before,.orb:after{content:"";position:absolute;inset:25px;border:1px solid #4c809c;border-radius:50%;opacity:.7}.orb:after{inset:58px;background:#7ca7c1;border:none;opacity:.9;box-shadow:0 0 45px #4a82966a}.orb-line{position:absolute;height:1px;background:#537c93;left:0;right:0;top:80px}.orb-vert{position:absolute;top:0;bottom:0;width:1px;background:#537c93;left:135px}.orb-dot{position:absolute;width:8px;height:8px;border-radius:50%;background:#85b5ce;box-shadow:0 0 0 6px #254353}.orb-dot.first{top:77px;left:0}.orb-dot.second{top:77px;right:0}.orb-dot.third{top:0;left:132px}
+    .section-head{display:flex;align-items:flex-end;justify-content:space-between;margin:31px 1px 16px;gap:18px}.section-head h2{font-size:17px;letter-spacing:-.025em;font-weight:690;margin:0 0 4px}.section-head p{font-size:12px;margin:0;color:var(--muted)}.section-kicker{font-size:11px;color:#7a91a2}
+    .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}.tool-card{display:flex;flex-direction:column;text-align:left;gap:0;min-height:210px;border:1px solid #283746;border-radius:16px;padding:20px;background:#101720;color:inherit;transition:transform .18s,background .18s,border-color .18s;cursor:pointer}.tool-card:hover{background:#14212b;border-color:#4f7289;transform:translateY(-2px)}.card-top{display:flex;align-items:flex-start;justify-content:space-between}.card-icon{display:grid;place-items:center;width:43px;height:43px;border-radius:12px;color:#9ac2d8;background:#1b3544;border:1px solid #2b4b60}.card-icon .icon{width:22px;height:22px}.pill{font-size:9px;color:#8ca9b8;background:#172a34;border:1px solid #274454;padding:5px 8px;border-radius:30px;letter-spacing:.04em;font-weight:700}.tool-card h3{font-size:17px;letter-spacing:-.035em;margin:21px 0 5px}.tool-card p{font-size:12px;line-height:1.55;color:#90a0b0;margin:0;max-width:290px}.card-foot{margin-top:auto;display:flex;align-items:center;justify-content:space-between;color:#8caabe;font-size:11px;padding-top:18px}.card-foot svg{width:17px;height:17px}
+    .bottom-message{margin-top:20px;border:1px dashed #2a3a49;background:#0e151d;padding:18px 21px;border-radius:14px;display:flex;align-items:center;gap:16px}.bottom-message .icon{color:#7398ad;width:22px;height:22px}.bottom-message h4{font-size:12px;margin:0 0 4px}.bottom-message p{font-size:11px;color:#7e8d9d;line-height:1.5;margin:0}.bottom-message a{color:#a7c6d7;text-underline-offset:3px}
+    .appview{display:flex;flex-direction:column;width:100%;height:100%;min-height:calc(100dvh - 131px);gap:12px}.frame-top{display:flex;align-items:center;justify-content:space-between;gap:16px}.frame-descriptor{display:flex;align-items:center;gap:12px;min-width:0}.frame-icon{display:grid;place-items:center;width:39px;height:39px;border-radius:11px;background:#152b38;border:1px solid #29485a;color:#9bc5da}.frame-descriptor h2{font-size:16px;letter-spacing:-.025em;margin:0 0 3px}.frame-descriptor p{font-size:11px;color:#788a9a;margin:0;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:52vw}.frame-toolbar{display:flex;align-items:center;gap:8px}.frame-toolbar .iconbtn{width:34px;height:34px}.frame-hint{color:#7a8f9f;font-size:10.5px;line-height:1.5}.frame-hint a{color:#a6c5d9;text-decoration:none;border-bottom:1px solid #516b79}.frame-shell{position:relative;flex:1;min-height:460px;border:1px solid #2a3b49;border-radius:13px;overflow:hidden;background:#0b0b0b}.panel-frame{position:absolute;width:100%;height:100%;inset:0;border:0;background:#0c1016;display:none}.panel-frame.on{display:block}.frame-empty{display:flex;align-items:center;justify-content:center;color:#748da1;font-size:13px;height:100%}
+    .future-wrap{max-width:750px;margin:15vh auto 0;text-align:center}.future-symbol{display:grid;place-items:center;width:65px;height:65px;background:#142b3a;color:#91bed6;border:1px solid #395c72;border-radius:19px;margin:0 auto 24px}.future-symbol .icon{height:29px;width:29px}.future-wrap h1{font-size:29px;letter-spacing:-.04em;margin:0 0 14px}.future-wrap p{color:#94a5b5;line-height:1.75;font-size:13px;max-width:550px;margin:0 auto 28px}.codehint{text-align:left;border:1px solid #2d4050;background:#111b25;padding:20px 22px;border-radius:14px;color:#a8bacc;font-size:12px;line-height:1.65}.codehint code{color:#b9d7e6}
+    .mobile-menu{display:none}.backdrop{display:none}
+    @media(max-width:1200px){.hero-mark{transform:scale(.8);transform-origin:right center;margin-right:-25px}.cards{grid-template-columns:repeat(3,minmax(0,1fr))}.viewport{padding:26px}.topbar{padding:0 26px}.tool-card{padding:18px}.hero{padding:36px}}
+    @media(max-width:960px){.sidebar{width:230px}.brand{padding:32px 23px}.brand img{width:139px}.hero-mark{display:none}.hero{min-height:205px}.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.tool-card:last-child{grid-column:span 2}.environment{display:none}}
+    @media(max-width:740px){.sidebar{position:fixed;left:0;top:0;width:265px;transform:translateX(-102%);transition:transform .22s ease;box-shadow:25px 0 65px #0006}.sidebar.open{transform:translateX(0)}.backdrop.show{display:block;position:fixed;inset:0;background:#000b;z-index:10}.mobile-menu{display:inline-flex;margin-right:6px}.topbar{height:64px;padding:0 17px}.crumb small{display:none}.crumb .slash{display:none}.crumb strong{font-size:14px}.separator{display:none}.topright{gap:6px}.outline-link{font-size:0;gap:0;min-width:35px;width:35px;padding:0}.outline-link .icon{width:16px;height:16px}.viewport{padding:15px 13px 22px}.hero{padding:26px 23px;min-height:205px}.hero h1{font-size:31px}.hero p{font-size:12px}.cards{grid-template-columns:1fr}.tool-card:last-child{grid-column:auto}.tool-card{min-height:190px}.section-head{margin-top:25px}.appview{min-height:calc(100dvh - 108px)}.frame-shell{min-height:470px}.frame-descriptor p{max-width:50vw}.frame-descriptor h2{font-size:14px}.frame-hint{font-size:10px}.frame-toolbar .iconbtn{display:none}.bottom-message{align-items:flex-start}}
+    @media(prefers-reduced-motion:reduce){*,*:before,*:after{transition-duration:.01ms!important;animation-duration:.01ms!important}}
+  </style>
+<style id="flush-auth-styles">
+ [hidden]{display:none!important}.auth-gate{min-height:100dvh;display:grid;place-items:center;background:radial-gradient(ellipse at 50% 0%,#193244 0%,#090d14 65%);padding:20px}.auth-card{width:min(420px,100%);background:#101923;border:1px solid #314455;border-radius:20px;padding:34px;box-shadow:0 20px 70px #0005}.auth-logo{width:160px;display:block;margin:0 0 34px}.auth-card h1{margin:0 0 8px;font-size:27px;letter-spacing:-.04em}.auth-card p{font-size:12px;color:#91a5b5;line-height:1.7;margin:0 0 22px}.field{display:block;color:#a5bbc9;font-size:12px;font-weight:650;margin:15px 0}.field input{display:block;width:100%;margin-top:8px;padding:12px 13px;border:1px solid #354b5d;background:#0b1119;color:#edf6fb;border-radius:10px;outline:0;font:inherit}.field input:focus{border-color:#83b4cf}.primary-btn{width:100%;background:#83b4cf;color:#08131c;border:0;border-radius:11px;padding:13px;font-weight:780;cursor:pointer;margin-top:10px}.primary-btn:disabled{opacity:.5;cursor:wait}.error-text{min-height:20px;color:#f39c9c;font-size:12px!important}.account-name{font-size:11px;color:#9db5c5;white-space:nowrap}.logout{background:transparent;border:1px solid #304658;color:#aec4d1;border-radius:9px;padding:9px 11px;font-size:11px}.logout:hover{background:#172b3a}.admin-users{max-width:1100px;margin:0 auto;width:100%}.users-grid{display:grid;grid-template-columns:330px 1fr;gap:18px;align-items:start}.user-box{border:1px solid #2d4150;border-radius:16px;background:#101923;padding:21px}.user-box h2{font-size:18px;margin:0 0 10px}.user-box p{font-size:12px;color:#8ba0b1;line-height:1.6}.permissions{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}.check-row{display:inline-flex;align-items:center;gap:7px;color:#a6bdca;font-size:12px;cursor:pointer}.check-row input{accent-color:#80abc5}.user-item{border:1px solid #2b3c4a;border-radius:12px;margin-bottom:10px;padding:16px;background:#0d151e}.user-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.role-tag{font-size:9px;color:#9abed3;border:1px solid #2c4e61;padding:4px 7px;border-radius:50px;margin-left:8px}.user-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.user-actions button{cursor:pointer}.user-msg,.role-note{font-size:11px;color:#7aafc5}.user-box .field{margin:12px 0}.admin-users .section-head{margin-top:0}@media(max-width:940px){.users-grid{grid-template-columns:1fr}.topright .account-name{display:none}}@media(max-width:550px){.auth-card{padding:24px}.topright .environment{display:none}}
+</style>
+</head>
+<body>
+<svg aria-hidden="true" width="0" height="0" style="position:absolute;overflow:hidden"><defs>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 11 9-8 9 8v9a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18M7 15l4-5 4 3 5-7"/><path d="M17 6h3v3"/></symbol>
+  <symbol id="i-ad" viewBox="0 0 24 24"><path d="m3 11 12-5v12L3 14zM3 11v3M15 7l3-2v14l-3-2M6 15l2 5h4l-2-5M21 10v4"/></symbol>
+  <symbol id="i-feedback" viewBox="0 0 24 24"><path d="M20 11.3a8.3 8.3 0 0 1-8.8 8.5 8 8 0 0 1-3.2-1L3 20l1.4-4.9A8.4 8.4 0 1 1 20 11.3Z"/><path d="M8 10h8M8 14h5"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 2 2.2 6.8L21 11l-6.8 2.2L12 20l-2.2-6.8L3 11l6.8-2.2zM19 19l1 3M17.5 20.5l3-1"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M13 5h6v6M19 5l-9 9"/><path d="M19 13v6H5V5h6"/></symbol>
+  <symbol id="i-reload" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.1 6M20 4v7h-7"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c-5 5-5 13 0 18M12 3c5 5 5 13 0 18"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.3"/><rect x="14" y="3" width="7" height="7" rx="1.3"/><rect x="3" y="14" width="7" height="7" rx="1.3"/><rect x="14" y="14" width="7" height="7" rx="1.3"/></symbol>
+</defs></svg>
+<div class="backdrop" id="backdrop"></div>
+<div id="authGate" class="auth-gate" aria-label="Flüsh hesabına giriş">
+  <div class="auth-card">
+    <img class="auth-logo" src="assets/flushlogo.png" alt="Flüsh">
+    <div id="loginPanel"><h1>Yönetim portalı</h1><p>Hesabınla giriş yap. Yetkili olduğun fasiliteler tek oturumla açılacak.</p>
+    <form id="loginForm"><label class="field">Kullanıcı adı<input id="loginUser" type="text" autocomplete="username" required maxlength="40" autocapitalize="none" spellcheck="false"></label><label class="field">Parola<input id="loginPassword" type="password" autocomplete="current-password" required></label><p class="error-text" id="loginError" role="alert"></p><button class="primary-btn" id="loginSubmit" type="submit">Giriş yap</button></form></div>
+    <div id="passwordChange" hidden><h1>Parolanı değiştir</h1><p>Hesabın için ilk girişte yeni parola belirlemen gerekiyor.</p><form id="passwordForm"><label class="field">Mevcut parola<input id="oldPassword" type="password" autocomplete="current-password" required></label><label class="field">Yeni parola (en az 12 karakter)<input id="newPassword" type="password" autocomplete="new-password" minlength="12" required></label><p class="error-text" id="passwordMsg" role="alert"></p><button class="primary-btn" id="passwordSubmit" type="submit">Parolayı güncelle</button></form></div>
+  </div>
+</div>
+<div class="shell" id="shell" hidden>
+  <aside class="sidebar" id="sidebar" aria-label="Flüsh ana menü">
+    <a class="brand" href="#overview" aria-label="Flüsh genel bakış">
+      <img src="assets/flushlogo.png" alt="Flüsh">
+      <span class="brand-sub">FLÖW YÖNETİM SİSTEMİ</span>
+    </a>
+    <nav class="navscroll" aria-label="Modüller">
+      <div class="group"><div class="group-label">ÇALIŞMA ALANI</div>
+        <button type="button" class="navbtn" data-target="overview"><svg class="icon"><use href="#i-grid"/></svg><span class="menu-title">Genel Bakış</span><svg class="icon arrow"><use href="#i-arrow"/></svg></button>
+      </div>
+      <div class="group"><div class="group-label">FASİLİTELER</div>
+        <button type="button" class="navbtn" data-target="analytics"><svg class="icon"><use href="#i-chart"/></svg><span class="menu-title">Analytics</span><span class="tiny-dot" aria-hidden="true"></span></button>
+        <button type="button" class="navbtn" data-target="flowery"><svg class="icon"><use href="#i-ad"/></svg><span class="menu-title">Reklam Merkezi</span><span class="tiny-dot" aria-hidden="true"></span></button>
+        <button type="button" class="navbtn" data-target="feedback"><svg class="icon"><use href="#i-feedback"/></svg><span class="menu-title">Feedback</span><span class="tiny-dot" aria-hidden="true"></span></button>
+      </div>
+      <div class="group" id="adminGroup" hidden><div class="group-label">YETKİLENDİRME</div>
+        <button type="button" class="navbtn" id="adminNav" data-target="users" hidden><svg class="icon"><use href="#i-grid"/></svg><span class="menu-title">Kullanıcı Yetkileri</span><svg class="icon arrow"><use href="#i-arrow"/></svg></button>
+      </div>
+      <div class="group"><div class="group-label">GELECEK</div>
+        <button type="button" class="navbtn" data-target="future"><svg class="icon"><use href="#i-plus"/></svg><span class="menu-title">Yeni Fasiliteler</span><svg class="icon arrow"><use href="#i-arrow"/></svg></button>
+      </div>
+    </nav>
+    <div class="side-bottom"><a class="link-website" href="https://xn--flw-tna.tr/" target="_blank" rel="noopener noreferrer"><svg class="icon"><use href="#i-globe"/></svg> Flöw'ü görüntüle <svg class="icon arrow" style="margin-left:auto;width:15px"><use href="#i-external"/></svg></a><div class="side-foot">FLÜSH PORTAL · V1.0</div></div>
+  </aside>
+  <main class="content" id="main">
+    <header class="topbar">
+      <div class="crumb"><button type="button" class="iconbtn mobile-menu" id="menuBtn" aria-label="Menüyü aç" aria-expanded="false"><svg class="icon"><use href="#i-menu"/></svg></button><small>Flüsh</small><span class="slash">/</span><strong id="pageTitle">Genel Bakış</strong></div>
+      <div class="topright"><span class="account-name" id="usernameTag"></span><button type="button" class="logout" id="logoutBtn">Çıkış</button><span class="environment">Yönetim alanı</span><span class="separator"></span><button type="button" class="iconbtn" id="reloadBtn" aria-label="Seçili paneli yenile" title="Paneli yenile" hidden><svg class="icon"><use href="#i-reload"/></svg></button><a class="outline-link" id="externalBtn" href="#" target="_blank" rel="noopener noreferrer" hidden><svg class="icon"><use href="#i-external"/></svg> Ayrı sekmede aç</a></div>
+    </header>
+    <div class="viewport" id="viewport">
+      <section class="screen overview" id="overview">
+        <div class="hero"><div class="hero-text"><span class="eyebrow">İŞLER TEK YERDE</span><h1>Flöw'ün kontrol merkezi.</h1><p>Analytics, reklam yönetimi ve geri bildirimler, ayrı ayrı çalışan sistemler olarak tek bir çatı altında. İhtiyacın olan her şey bir tık uzağında.</p></div><div class="hero-mark" aria-hidden="true"><div class="orb-line"></div><div class="orb-vert"></div><div class="orb"></div><div class="orb-dot first"></div><div class="orb-dot second"></div><div class="orb-dot third"></div></div></div>
+        <div class="section-head"><div><h2>Fasiliteler</h2><p>İşlemlerine kaldığın yerden devam et.</p></div><span class="section-kicker">3 bağlı araç</span></div>
+        <div class="cards">
+          <button type="button" class="tool-card" data-target="analytics"><div class="card-top"><span class="card-icon"><svg class="icon"><use href="#i-chart"/></svg></span><span class="pill">BAĞLI</span></div><h3>Analytics</h3><p>Ziyaretçiler, kullanıcı davranışları ve reklam performansını incele.</p><div class="card-foot">İstatistik panelini aç <svg class="icon"><use href="#i-arrow"/></svg></div></button>
+          <button type="button" class="tool-card" data-target="flowery"><div class="card-top"><span class="card-icon"><svg class="icon"><use href="#i-ad"/></svg></span><span class="pill">BAĞLI</span></div><h3>Reklam Merkezi</h3><p>Reklamları, yayın takvimini ve kampanya içeriklerini yönet.</p><div class="card-foot">Reklam merkezini aç <svg class="icon"><use href="#i-arrow"/></svg></div></button>
+          <button type="button" class="tool-card" data-target="feedback"><div class="card-top"><span class="card-icon"><svg class="icon"><use href="#i-feedback"/></svg></span><span class="pill">BAĞLI</span></div><h3>Feedback</h3><p>Geri bildirimleri, kullanıcı notlarını ve bildirim eğilimlerini takip et.</p><div class="card-foot">Geri bildirimleri aç <svg class="icon"><use href="#i-arrow"/></svg></div></button>
+        </div>
+        <div class="bottom-message"><svg class="icon"><use href="#i-spark"/></svg><div><h4>Flüsh büyümeye hazır.</h4><p>Yeni sistemler eklenirken mevcut araçlara müdahale edilmez. Her modül bağımsız adresinde çalışmaya devam eder.</p></div></div>
+      </section>
+      <section class="screen" id="appScreen" hidden>
+        <div class="appview"><div class="frame-top"><div class="frame-descriptor"><div class="frame-icon" id="frameIcon"><svg class="icon"><use href="#i-chart"/></svg></div><div><h2 id="frameTitle">Analytics</h2><p id="frameAddress"></p></div></div><div class="frame-toolbar"><button type="button" class="iconbtn" id="frameReload" aria-label="Paneli yenile" title="Yenile"><svg class="icon"><use href="#i-reload"/></svg></button></div></div><div class="frame-shell" id="frameShell"><div class="frame-empty" id="frameEmpty">Panel hazırlanıyor...</div></div><div class="frame-hint">Bu sayfa kendi sistemi üzerinden çalışır. İçerik görünmüyorsa veya giriş açılmıyorsa <a href="#" id="fallbackLink" target="_blank" rel="noopener noreferrer">aracı ayrı sekmede aç</a>.</div></div>
+      </section>
+      <section class="screen" id="users" hidden><div class="admin-users"><div class="section-head"><div><h2>Kullanıcı Yetkileri</h2><p>Yalnızca superadmin bu bölümü görebilir ve kullanıcıları yönetebilir.</p></div></div><div class="users-grid"><div class="user-box"><h2>Yeni kullanıcı ekle</h2><p>Hesaplar yalnızca seçilen fasilitelere erişebilir. Oluşturulan kullanıcı ilk girişte parolasını değiştirecek.</p><form id="newUserForm"><label class="field">Kullanıcı adı<input id="newUsername" type="text" required minlength="3" maxlength="40" placeholder="ornek.kullanici" spellcheck="false"></label><label class="field">Geçici parola<input id="newPasswordUser" type="password" required minlength="12" autocomplete="new-password"></label><div class="permissions" id="newPermissions"></div><button class="primary-btn" type="submit">Kullanıcı oluştur</button><p class="user-msg" id="createStatus" role="status"></p></form></div><div class="user-box"><h2>Hesaplar ve erişim izinleri</h2><p>İzinler kaydedildiğinde hemen geçerli olur. Hesap kapatılırsa tüm Flüsh oturumları sonlandırılır.</p><div id="userList"></div></div></div></div></section>
+      <section class="screen" id="future" hidden><div class="future-wrap"><div class="future-symbol"><svg class="icon"><use href="#i-plus"/></svg></div><h1>Yeni bir fasiliteye yer var.</h1><p>Flüsh, modüler bir kabuk. Sonradan ekleyeceğimiz araçları soldaki menüye bağlayabilir, mevcut sistemlerin adreslerini ve çalışmalarını değiştirmeden içeri alabiliriz.</p><div class="codehint"><strong>Geliştirme notu</strong><br>Yeni bir araç eklemek için <code>MODULES</code> tanımına modülün kimliğini, başlığını ve adresini eklemek; menüye ona bağlı bir buton yerleştirmek yeterlidir. Araç, kendi giriş ve API düzenini kullanır.</div></div></section>
+    </div>
+  </main>
+</div>
+<script>
+(() => {
+ 'use strict';
+ const AUTH = 'https://auth.xn--flw-tna.tr';
+ const MODULES = {
+  analytics: {title:'Analytics',url:'https://xn--flw-tna.tr/admin/analytics.html',icon:'i-chart'},
+  flowery: {title:'Reklam Merkezi',url:'https://flowery.xn--flw-tna.tr/',icon:'i-ad'},
+  feedback: {title:'Feedback',url:'https://xn--flw-tna.tr/admin/feedback-admin.html',icon:'i-feedback'}
+ };
+ const $=id=>document.getElementById(id);
+ let currentUser=null,active='overview';
+ const frames={},screens={overview:$('overview'),app:$('appScreen'),future:$('future'),users:$('users')};
+ const sidebar=$('sidebar'),backdrop=$('backdrop'),menuBtn=$('menuBtn');
+ const facilityNames={analytics:'Analytics',flowery:'Reklam Merkezi',feedback:'Feedback'};
+ const enc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ async function api(path,options={}){
+   const res=await fetch(AUTH+path,{credentials:'include',cache:'no-store',...options,headers:{'Accept':'application/json',...(options.body?{'Content-Type':'application/json'}:{}),...(options.headers||{})}});
+   const data=await res.json().catch(()=>({}));
+   if(!res.ok)throw new Error(data.error||`HTTP ${res.status}`);
+   return data;
+ }
+ function closeMenu(){sidebar.classList.remove('open');backdrop.classList.remove('show');menuBtn.setAttribute('aria-expanded','false')}
+ function setMenuOpen(open){sidebar.classList.toggle('open',open);backdrop.classList.toggle('show',open);menuBtn.setAttribute('aria-expanded',String(open))}
+ menuBtn.addEventListener('click',()=>setMenuOpen(!sidebar.classList.contains('open')));
+ backdrop.addEventListener('click',closeMenu);
+ window.addEventListener('keydown',ev=>{if(ev.key==='Escape')closeMenu()});
+ function permitted(id){return !!currentUser&&(currentUser.role==='superadmin'||(currentUser.permissions||[]).includes(id))}
+ function gate(view,message=''){
+   $('authGate').hidden=view==='app';$('shell').hidden=view!=='app';$('passwordChange').hidden=view!=='password';$('loginPanel').hidden=view==='password';
+   if(message)$('loginError').textContent=message;
+ }
+ function adaptMenu(){
+   $('usernameTag').textContent=currentUser.username;
+   $('adminNav').hidden=currentUser.role!=='superadmin';$('adminGroup').hidden=currentUser.role!=='superadmin';
+   document.querySelectorAll('[data-target]').forEach(el=>{
+     const id=el.dataset.target;
+     el.hidden=!!MODULES[id]&&!permitted(id);
+   });
+ }
+ function newFrame(id,mod){
+   const frame=document.createElement('iframe');frame.className='panel-frame';frame.title=mod.title+' yönetim aracı';frame.name='flush-'+id;frame.referrerPolicy='strict-origin-when-cross-origin';
+   frame.setAttribute('allow','clipboard-read; clipboard-write; fullscreen');frame.loading='eager';frame.src=mod.url;
+   $('frameShell').appendChild(frame);frames[id]=frame;return frame;
+ }
+ async function select(id){
+   if(!currentUser)return;
+   if(!['overview','future','users',...Object.keys(MODULES)].includes(id))id='overview';
+   if((MODULES[id]&&!permitted(id))||(id==='users'&&currentUser.role!=='superadmin'))id='overview';
+   active=id;const mod=MODULES[id],isApp=!!mod;
+   $('pageTitle').textContent=mod?.title||(id==='future'?'Yeni Fasiliteler':id==='users'?'Kullanıcı Yetkileri':'Genel Bakış');
+   Object.entries(screens).forEach(([name,screen])=>screen.hidden=(name==='app'?!isApp:name!==id));
+   $('reloadBtn').hidden=!isApp;$('externalBtn').hidden=!isApp;
+   document.querySelectorAll('.navbtn[data-target]').forEach(el=>el.classList.toggle('active',el.dataset.target===id));
+   Object.entries(frames).forEach(([key,frame])=>frame.classList.toggle('on',isApp&&key===id));
+   if(isApp){
+     $('frameTitle').textContent=mod.title;$('frameAddress').textContent=new URL(mod.url).hostname;
+     $('frameIcon').querySelector('use').setAttribute('href','#'+mod.icon);
+     $('externalBtn').href=mod.url;$('fallbackLink').href=mod.url;
+     (frames[id]||newFrame(id,mod)).classList.add('on');$('frameEmpty').hidden=true;
+     $('viewport').style.paddingBottom='14px';
+   }else{$('viewport').style.paddingBottom='26px';}
+   if(id==='users')await loadUsers();
+   closeMenu();document.title=`${$('pageTitle').textContent} | Flüsh`;
+ }
+ function navigate(id){if(location.hash!=='#'+id)location.hash=id;else select(id)}
+ document.querySelectorAll('[data-target]').forEach(el=>el.addEventListener('click',()=>navigate(el.dataset.target)));
+ function refresh(){const f=frames[active];if(f){try{f.contentWindow.location.reload()}catch{f.src=MODULES[active].url}}}
+ $('reloadBtn').addEventListener('click',refresh);$('frameReload').addEventListener('click',refresh);
+ window.addEventListener('hashchange',()=>select(decodeURIComponent(location.hash.slice(1))));
+ function sessionState(user){currentUser=user;adaptMenu();gate('app');select(decodeURIComponent(location.hash.slice(1))||'overview')}
+ async function boot(){
+  $('loginError').textContent='';
+  try{
+   const data=await api('/api/session');
+   if(!data.authenticated){currentUser=null;gate('login');return;}
+   currentUser=data.user;
+   if(currentUser.mustChangePassword){gate('password');return;}
+   sessionState(currentUser);
+  }catch{$('loginError').textContent='Giriş sunucusuyla bağlantı kurulamadı. Yayın yapılandırmasını kontrol edin.';gate('login')}
+ }
+ $('loginForm').addEventListener('submit',async event=>{
+   event.preventDefault();$('loginError').textContent='';const b=$('loginSubmit');b.disabled=true;
+   try{const data=await api('/api/login',{method:'POST',body:JSON.stringify({username:$('loginUser').value,password:$('loginPassword').value})});
+     $('loginPassword').value='';currentUser=data.user;
+     if(currentUser.mustChangePassword)gate('password');else sessionState(currentUser);
+   }catch(e){$('loginError').textContent=e.message}finally{b.disabled=false}
+ });
+ $('passwordForm').addEventListener('submit',async ev=>{
+   ev.preventDefault();const msg=$('passwordMsg');msg.textContent='';
+   const b=$('passwordSubmit');b.disabled=true;
+   try{await api('/api/password',{method:'POST',body:JSON.stringify({currentPassword:$('oldPassword').value,newPassword:$('newPassword').value})});
+      $('oldPassword').value='';$('newPassword').value='';await boot();
+   }catch(e){msg.textContent=e.message}finally{b.disabled=false}
+ });
+ $('logoutBtn').addEventListener('click',async()=>{try{await api('/api/logout',{method:'POST'})}catch{};for(const fr of Object.values(frames))fr.remove();for(const k of Object.keys(frames))delete frames[k];currentUser=null;location.hash='#overview';gate('login')});
+ function permBoxes(selected=[],prefix='p'){
+   return Object.entries(facilityNames).map(([id,label])=>`<label class="check-row"><input type="checkbox" name="${prefix}-${id}" value="${id}" ${selected.includes(id)?'checked':''}><span>${enc(label)}</span></label>`).join('');
+ }
+ $('newPermissions').innerHTML=permBoxes(['analytics','flowery','feedback'],'new');
+ const checkedPermissions=parent=>[...parent.querySelectorAll('input[type=checkbox][data-facility], input[type=checkbox][name^=new-]:checked')].filter(e=>e.checked).map(e=>e.value);
+ $('newUserForm').addEventListener('submit',async e=>{
+   e.preventDefault();const status=$('createStatus');status.textContent='';
+   try{const perms=[...$('newPermissions').querySelectorAll('input:checked')].map(x=>x.value);
+    await api('/api/users',{method:'POST',body:JSON.stringify({username:$('newUsername').value,password:$('newPasswordUser').value,permissions:perms})});
+    $('newUsername').value='';$('newPasswordUser').value='';status.textContent='Hesap oluşturuldu. Kullanıcı ilk girişinde parolasını değiştirecek.';await loadUsers();
+   }catch(err){status.textContent=err.message}
+ });
+ async function loadUsers(){
+   if(currentUser?.role!=='superadmin')return;
+   const list=$('userList');list.textContent='Hesaplar yükleniyor...';
+   try{const data=await api('/api/users');list.innerHTML=data.users.map(user=>{
+     const isSuper=user.role==='superadmin';
+     const checkboxes=isSuper?'<span class="role-note">Tüm fasilitelere tam erişim</span>':Object.entries(facilityNames).map(([key,label])=>`<label class="check-row"><input data-facility="${key}" value="${key}" type="checkbox" ${user.permissions.includes(key)?'checked':''}><span>${enc(label)}</span></label>`).join('');
+     return `<article class="user-item" data-id="${enc(user.id)}"><div class="user-head"><div><strong>${enc(user.username)}</strong> <span class="role-tag">${isSuper?'SUPERADMIN':'KULLANICI'}</span></div>${isSuper?'':`<label class="check-row"><input class="user-active" type="checkbox" ${user.active?'checked':''}><span>Hesap aktif</span></label>`}</div><div class="permissions">${checkboxes}</div>${isSuper?'':`<div class="user-actions"><button type="button" class="outline-link save-perms">Yetkileri kaydet</button><button type="button" class="outline-link reset-pass">Parola yenile</button><span class="user-msg" role="status"></span></div>`}</article>`;
+   }).join('');
+   list.querySelectorAll('.user-item').forEach(item=>{
+     const id=item.dataset.id,save=item.querySelector('.save-perms'),reset=item.querySelector('.reset-pass'),msg=item.querySelector('.user-msg');
+     save?.addEventListener('click',async()=>{save.disabled=true;try{
+       const perms=[...item.querySelectorAll('input[data-facility]:checked')].map(x=>x.value);
+       await api('/api/users/'+id,{method:'PATCH',body:JSON.stringify({permissions:perms,active:item.querySelector('.user-active').checked})});msg.textContent='Kaydedildi.';
+     }catch(e){msg.textContent=e.message}finally{save.disabled=false}});
+     reset?.addEventListener('click',async()=>{
+       const password=prompt('Bu kullanıcı için yeni geçici parola (en az 12 karakter):');if(password===null)return;
+       try{await api('/api/users/'+id+'/password',{method:'POST',body:JSON.stringify({password})});msg.textContent='Parola yenilendi. Oturumları kapatıldı.'}
+       catch(e){msg.textContent=e.message}
+     });
+   });
+   }catch(err){list.textContent='Kullanıcı listesi alınamadı: '+err.message}
+ }
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&currentUser)api('/api/session').then(data=>{
+   if(!data.authenticated){location.reload();return}
+   if(data.user.mustChangePassword){currentUser=data.user;gate('password');return}
+   currentUser=data.user;adaptMenu();if((MODULES[active]&&!permitted(active))||(active==='users'&&currentUser.role!=='superadmin'))navigate('overview');
+ }).catch(()=>{})});
+ boot();
+})();
+
+</script>
+</body>
+</html>
