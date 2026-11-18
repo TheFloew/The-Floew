@@ -98,8 +98,18 @@
       <section class="screen" id="appScreen" hidden>
         <div class="appview"><div class="frame-top"><div class="frame-descriptor"><div class="frame-icon" id="frameIcon"><svg class="icon"><use href="#i-chart"/></svg></div><div><h2 id="frameTitle">Analytics</h2><p id="frameAddress"></p></div></div><div class="frame-toolbar"><button type="button" class="iconbtn" id="frameReload" aria-label="Paneli yenile" title="Yenile"><svg class="icon"><use href="#i-reload"/></svg></button></div></div><div class="frame-shell" id="frameShell"><div class="frame-empty" id="frameEmpty">Panel hazırlanıyor...</div></div><div class="frame-hint">Bu sayfa kendi sistemi üzerinden çalışır. İçerik görünmüyorsa veya giriş açılmıyorsa <a href="#" id="fallbackLink" target="_blank" rel="noopener noreferrer">aracı ayrı sekmede aç</a>.</div></div>
       </section>
-      <section class="screen" id="users" hidden><div class="admin-users"><div class="section-head"><div><h2>Kullanıcı Yetkileri</h2><p>Yalnızca superadmin bu bölümü görebilir ve kullanıcıları yönetebilir.</p></div></div><div class="users-grid"><div class="user-box"><h2>Yeni kullanıcı ekle</h2><p>Hesaplar yalnızca seçilen fasilitelere erişebilir. Oluşturulan kullanıcı ilk girişte parolasını değiştirecek.</p><form id="newUserForm"><label class="field">Kullanıcı adı<input id="newUsername" type="text" required minlength="3" maxlength="40" placeholder="ornek.kullanici" spellcheck="false"></label><label class="field">Geçici parola<input id="newPasswordUser" type="password" required minlength="12" autocomplete="new-password"></label><label class="field">Hesap türü<select id="newRole"><option value="member">Kullanıcı</option><option value="superadmin">Superadmin (yedek)</option></select></label>
- <div class="permissions" id="newPermissions"></div><button class="primary-btn" type="submit">Hesap oluştur</button><p class="user-msg" id="createStatus" role="status"></p></form></div><div class="user-box"><h2>Hesaplar ve erişim izinleri</h2><p>İzinler kaydedildiğinde hemen geçerli olur. Hesap kapatılırsa tüm Flüsh oturumları sonlandırılır.</p><div id="userList"></div></div></div></div></section>
+      <section class="screen" id="users" hidden><div class="admin-users"><div class="section-head"><div><h2>Kullanıcı Yetkileri</h2><p>Yalnızca superadmin bu bölümü görebilir ve kullanıcıları yönetebilir.</p></div></div><div class="users-grid"><div class="user-box"><h2>Yeni kullanıcı ekle</h2><p>Hesaplar yalnızca seçilen fasilitelere erişebilir. Oluşturulan kullanıcı ilk girişte parolasını değiştirecek.</p><form id="newUserForm"><label class="field">Kullanıcı adı<input id="newUsername" type="text" required minlength="3" maxlength="40" placeholder="ornek.kullanici" spellcheck="false"></label><label class="field">Geçici parola<input id="newPasswordUser" type="password" required minlength="12" autocomplete="new-password"></label>
+ <div class="permissions" id="newPermissions"></div><button class="primary-btn" type="submit">Hesap oluştur</button><p class="user-msg" id="createStatus" role="status"></p></form></div><div class="user-box"><h2>Hesaplar ve erişim izinleri</h2><p>İzinler kaydedildiğinde hemen geçerli olur. Hesap kapatılırsa tüm Flüsh oturumları sonlandırılır.</p><div id="userList"></div></div></div>
+<div class="user-box" id="recoveryBox" hidden style="margin-top:18px;max-width:760px">
+ <h2>Ana yönetici erişimini kurtar</h2>
+ <p>Yalnızca korumalı kurtarma hesabında görünür. Ana yöneticinin parolasını yeniler ve tüm açık oturumlarını sonlandırır.</p>
+ <form id="recoveryForm">
+  <label class="field">Kurtarma hesabının mevcut parolası<input id="recoveryCurrentPassword" type="password" required autocomplete="current-password"></label>
+  <label class="field">Ana yönetici için yeni parola<input id="recoveryNewPassword" type="password" required minlength="12" maxlength="128" autocomplete="new-password"></label>
+  <button class="primary-btn" type="submit">Ana yönetici erişimini kurtar</button>
+  <p class="user-msg" id="recoveryStatus" role="status"></p>
+ </form>
+</div></div></section>
       <section class="screen" id="future" hidden><div class="future-wrap"><div class="future-symbol"><svg class="icon"><use href="#i-plus"/></svg></div><h1>Yeni bir fasiliteye yer var.</h1><p>Flüsh, modüler bir kabuk. Sonradan ekleyeceğimiz araçları soldaki menüye bağlayabilir, mevcut sistemlerin adreslerini ve çalışmalarını değiştirmeden içeri alabiliriz.</p><div class="codehint"><strong>Geliştirme notu</strong><br>Yeni bir araç eklemek için <code>MODULES</code> tanımına modülün kimliğini, başlığını ve adresini eklemek; menüye ona bağlı bir buton yerleştirmek yeterlidir. Araç, kendi giriş ve API düzenini kullanır.</div></div></section>
     </div>
   </main>
@@ -214,6 +224,7 @@
  async function loadUsers(){
    if(currentUser?.role!=='superadmin')return;
    const list=$('userList');list.textContent='Hesaplar yükleniyor...';
+   $('recoveryBox').hidden=!currentUser?.isRecovery;
    try{const data=await api('/api/users');list.innerHTML=data.users.map(user=>{
      const isSuper=user.role==='superadmin';
      const checkboxes=isSuper?'<span class="role-note">Tüm fasilitelere tam erişim</span>':Object.entries(facilityNames).map(([key,label])=>`<label class="check-row"><input data-facility="${key}" value="${key}" type="checkbox" ${user.permissions.includes(key)?'checked':''}><span>${enc(label)}</span></label>`).join('');
@@ -233,6 +244,21 @@
    });
    }catch(err){list.textContent='Kullanıcı listesi alınamadı: '+err.message}
  }
+ $('recoveryForm').addEventListener('submit',async ev=>{
+   ev.preventDefault();const status=$('recoveryStatus');
+   if(!currentUser?.isRecovery){status.textContent='Yetkiniz yok.';return}
+   if(!confirm('Ana yönetici parolası yenilensin ve tüm açık oturumları kapatılsın mı?'))return;
+   const btn=ev.submitter;btn.disabled=true;
+   try{
+     await api('/api/recovery/primary',{method:'POST',body:JSON.stringify({
+       currentPassword:$('recoveryCurrentPassword').value,
+       newPassword:$('recoveryNewPassword').value
+     })});
+     $('recoveryCurrentPassword').value='';$('recoveryNewPassword').value='';
+     status.textContent='Ana yöneticinin parolası yenilendi ve eski oturumları kapatıldı.';
+   }catch(err){status.textContent=err.message}
+   finally{btn.disabled=false}
+ });
  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&currentUser)api('/api/session').then(data=>{
    if(!data.authenticated){location.reload();return}
    if(data.user.mustChangePassword){currentUser=data.user;gate('password');return}
