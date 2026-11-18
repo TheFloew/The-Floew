@@ -1,0 +1,22 @@
+name = "floew-flush-auth"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
+
+# Use a separate D1 database. Do not reuse Analytics or Ad Center.
+[[d1_databases]]
+binding = "DB"
+database_name = "floew-flush-auth"
+database_id = "REPLACE_WITH_NEW_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+[vars]
+ALLOWED_ORIGINS = "https://xn--flw-tna.tr,https://flush.xn--flw-tna.tr"
+COOKIE_DOMAIN = "xn--flw-tna.tr"
+ANALYTICS_WORKER_BASE = "https://thefloew-analytics.thefloewback.workers.dev"
+
+# Required secrets:
+# BOOTSTRAP_KEY
+# ANALYTICS_ADMIN_TOKEN
+# THROTTLE_SECRET
+# AUTH_PEPPER
