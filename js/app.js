@@ -11234,6 +11234,21 @@ async function startPiPTransition(fromStory,toStory,dir){
   schedulePiPRender();
 }
 
+/* Browser-initiated PiP (tab switch) is ignored; explicit user PiP still works. */
+function installManualOnlyPiPHandler(){
+  if(!navigator.mediaSession?.setActionHandler)return;
+  try{
+    navigator.mediaSession.setActionHandler("enterpictureinpicture",details=>{
+      const reason=details?.enterPictureInPictureReason||details?.reason||"";
+      if(reason==="useraction"){
+        void togglePiP();
+      }
+      /* "contentoccluded" and unknown reasons must not open PiP. */
+    });
+  }catch(e){/* Unsupported browser: native settings remain authoritative. */}
+}
+installManualOnlyPiPHandler();
+
 async function ensurePiPVideo(){
   if(!pipCanvas){
     pipCanvas=document.createElement("canvas");
