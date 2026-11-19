@@ -220,8 +220,9 @@
     button.setAttribute("aria-label","Kaydedilen haberler");
     button.title="Kaydedilen haberler";
     button.innerHTML='<span id="floew-bookmark-number-inside" aria-hidden="true"></span>';
-    const settings=$("#menu-button");
-    menu.insertBefore(button,settings||null);
+    const info=$("#info-button",menu);
+    const settings=$("#menu-button",menu);
+    menu.insertBefore(button,info||settings||null);
     button.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();openPanel();});
   }
   function addStyles(){
