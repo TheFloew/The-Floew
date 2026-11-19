@@ -415,24 +415,33 @@
     const storyRef=currentStoryForShare(slide,articleUrl);
     let baitbuster=null;
 
-    // The main feed already knows both versions; never call AI while sharing.
-    if(slide.querySelector(".baitbuster-rewrite-mark")){
+    // Read both titles from the BaitBuster presentation already attached to
+    // this slide. Unlike lookup by story key, this also works after toggling
+    // back to the original headline, without any new Worker/AI request.
+    const presentation=globalThis.BaitBusterBeta?.getPresentation?.(slide);
+    const hasRewrite=Boolean(
+      presentation ||
+      heading?.dataset?.baitbusterApplied==="1" ||
+      slide.querySelector(".baitbuster-rewrite-mark")
+    );
+    if(hasRewrite){
       const originalTitle=clean(
+        presentation?.originalTitle ||
         heading?.dataset?.baitbusterOriginalTitle ||
         storyRef?.title
       );
-      let flowTitle=clean(heading?.dataset?.baitbusterFlowTitle);
+      let flowTitle=clean(
+        presentation?.flowTitle ||
+        heading?.dataset?.baitbusterFlowTitle
+      );
 
-      try{
-        const result=globalThis.BaitBusterBeta?.getResult?.(storyRef);
-        if(result?.rewriteStatus==="rewritten"){
-          flowTitle=clean(result.flowTitle);
-        }
-      }catch(e){}
-
-      if(!flowTitle && title && title!==originalTitle){
-        flowTitle=title;
+      if(!flowTitle && storyRef){
+        try{
+          const result=globalThis.BaitBusterBeta?.getResult?.(storyRef);
+          if(result?.rewriteStatus==="rewritten")flowTitle=clean(result.flowTitle);
+        }catch(e){}
       }
+      if(!flowTitle && title && title!==originalTitle)flowTitle=title;
 
       if(originalTitle && flowTitle && originalTitle!==flowTitle){
         baitbuster={
