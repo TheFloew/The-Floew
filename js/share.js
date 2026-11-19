@@ -8,7 +8,7 @@
 (function(){
   "use strict";
 
-  const FEATURE_VERSION="3.1.0";
+  const FEATURE_VERSION="3.2.0";
   const SHARE_LABEL="Haberi paylaş";
   const SHARE_WORKER_BASE=String(
     window.FLOEW_CONFIG?.shareWorkerBase||"https://thefloew-share.thefloewback.workers.dev"
@@ -287,11 +287,9 @@
       );
 
     return {
-      title:
-        clean(
-          storyRef?.title ||
-          story.title
-        ).slice(0,700),
+      // The visible heading is captured synchronously when Share is pressed.
+      title:clean(story.title).slice(0,700),
+      baitbuster:story.baitbuster || null,
       source:
         clean(
           storyRef?.source ||
@@ -412,14 +410,38 @@
         sourceLink?.getAttribute("href")
       );
 
-    const title=
-      clean(
-        slide.querySelector("h1")
-          ?.dataset
-          ?.baitbusterOriginalTitle ||
-        slide.querySelector("h1")
-          ?.textContent
+    const heading=slide.querySelector("h1");
+    const title=clean(heading?.textContent);
+    const storyRef=currentStoryForShare(slide,articleUrl);
+    let baitbuster=null;
+
+    // The main feed already knows both versions; never call AI while sharing.
+    if(slide.querySelector(".baitbuster-rewrite-mark")){
+      const originalTitle=clean(
+        heading?.dataset?.baitbusterOriginalTitle ||
+        storyRef?.title
       );
+      let flowTitle="";
+
+      try{
+        const result=globalThis.BaitBusterBeta?.getResult?.(storyRef);
+        if(result?.rewriteStatus==="rewritten"){
+          flowTitle=clean(result.flowTitle);
+        }
+      }catch(e){}
+
+      if(!flowTitle && title && title!==originalTitle){
+        flowTitle=title;
+      }
+
+      if(originalTitle && flowTitle && originalTitle!==flowTitle){
+        baitbuster={
+          originalTitle:originalTitle.slice(0,700),
+          flowTitle:flowTitle.slice(0,700),
+          mode:title===originalTitle ? "original" : "ai"
+        };
+      }
+    }
 
     const source=
       clean(
@@ -437,6 +459,7 @@
         "Flöw'de bir haber",
       source,
       articleUrl,
+      baitbuster,
       shareUrl:"",
       snapshot:null
     };
