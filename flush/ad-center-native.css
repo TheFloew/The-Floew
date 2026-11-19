@@ -29,6 +29,10 @@
 .fac-dialog-head{display:flex;justify-content:space-between;align-items:start;gap:16px;padding-bottom:18px;border-bottom:1px solid #2c4454;margin-bottom:18px}
 .fac-dialog-head h2{font-size:24px;margin:0}
 #facForm{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}
+.fac-date-pair,.fac-media-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px;min-width:0}
+.fac-media-pair{padding-top:2px}
+.fac-media-pair .fac-field{min-width:0}
+
 .fac-field{font-size:12px;color:#a3bece;font-weight:600;display:block;min-width:0}
 .fac-field input,.fac-field select{display:block;width:100%;min-width:0;margin-top:7px;padding:13px 12px;background:#0a151e;border:1px solid #345365;color:#dceaf1;border-radius:10px;outline:none;font:12px system-ui}
 .fac-field input:focus,.fac-field select:focus{border-color:#8fc5e1}
@@ -37,4 +41,4 @@
 .fac-hint{font-size:11px;color:#8aaaba;margin:2px 0}
 .fac-form-message{min-height:18px;font-size:12px;color:#efa8b1;margin:0}
 .fac-form-actions{display:flex;justify-content:flex-end;gap:10px}
-@media(max-width:750px){.fac-grid{grid-template-columns:1fr}.fac-card-media img,.fac-card-media video,.fac-empty-media{height:130px}#facForm{grid-template-columns:1fr}.fac-dialog{padding:17px}.fac-card-body{flex-direction:column}}
+@media(max-width:750px){.fac-date-pair,.fac-media-pair{grid-template-columns:1fr}.fac-grid{grid-template-columns:1fr}.fac-card-media img,.fac-card-media video,.fac-empty-media{height:130px}#facForm{grid-template-columns:1fr}.fac-dialog{padding:17px}.fac-card-body{flex-direction:column}}
