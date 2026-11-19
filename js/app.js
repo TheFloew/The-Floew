@@ -5468,6 +5468,7 @@ function setStoryImage(img,story){
 function fill(el,s,options={}){
   resetSlideMedia(el);
   el.dataset.storyKey=mediaKey(s);
+  el.__floewSavedStory=s;
 
   const slideImage=el.querySelector(".slide-image");
   setStoryImage(slideImage,s);
@@ -5572,6 +5573,7 @@ function fill(el,s,options={}){
   if(videoEnabled && options.prepareMedia!==false){
     prepareSlideMedia(el,s);
   }
+  window.FloewBookmarks?.syncSlide?.(el);
 }
 
 function activateSlideMedia(el,story){
@@ -10607,6 +10609,7 @@ function setFullscreenIcon(){
 
 function anyControlPanelOpen(){
   return Boolean(
+    document.getElementById("saved-stories-overlay")?.classList.contains("open") ||
     document.getElementById("control-menu-panel")?.classList.contains("open") ||
     document.getElementById("time-range-panel")?.classList.contains("open") ||
     document.getElementById("keyword-filter-panel")?.classList.contains("open") ||
@@ -10623,6 +10626,7 @@ function anyControlPanelOpen(){
 */
 function navigationBlockingPanelOpen(){
   return Boolean(
+    document.getElementById("saved-stories-overlay")?.classList.contains("open") ||
     document.getElementById("time-range-panel")?.classList.contains("open") ||
     document.getElementById("keyword-filter-panel")?.classList.contains("open") ||
     document.getElementById("keyword-watch-panel")?.classList.contains("open") ||
@@ -13821,6 +13825,7 @@ function currentFlowRemainingTime(){
 
 function anyUiPauseSurfaceOpen(){
   return Boolean(
+    document.getElementById("saved-stories-overlay")?.classList.contains("open") ||
     floraPopoverOpen ||
     document.getElementById("control-menu-panel")?.classList.contains("open") ||
     document.getElementById("time-range-panel")?.classList.contains("open") ||
