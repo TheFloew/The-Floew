@@ -6,6 +6,15 @@
   font-weight:400;
   font-display:block;
 }
+/* Flöw Icons ailesinin yer imi glifleri: mevcut E001–E030 dosyası korunur. */
+@font-face{
+  font-family:"Flöw Icons";
+  src:url("../assets/fonts/flow-icons-bookmark.woff2?v=1") format("woff2");
+  font-style:normal;
+  font-weight:400;
+  font-display:block;
+  unicode-range:U+E031-E032;
+}
 
 .fi::before{
   display:inline-block;
@@ -71,6 +80,8 @@
 .fi-tag::before{content:"\e02e"}
 .fi-bulb::before{content:"\e02f"}
 .fi-bug::before{content:"\e030"}
+.fi-bookmark::before{content:"\\e031"}
+.fi-bookmark-filled::before{content:"\\e032"}
 
 /* Top-right controls: preserve the stable host geometry. */
 #fullscreen-button.fi::before{font-size:38px !important;transform:none !important}
