@@ -114,9 +114,9 @@
   inset:0;
   z-index:1600;
   display:flex;
-  align-items:center;
+  align-items:flex-start;
   justify-content:center;
-  padding:5vh 5vw;
+  padding:4em 5vw 5vh;
   box-sizing:border-box;
   pointer-events:auto;
   background:rgba(0,0,0,.80);
@@ -126,6 +126,7 @@
 .floew-saved-panel {
   width:min(760px,88vw);
   max-height:84vh;
+  max-height:min(84vh,calc(100dvh - 4em - 5vh));
   min-width:0;
   display:flex;
   flex-direction:column;
@@ -235,7 +236,7 @@
   color:rgba(255,255,255,.35);
 }
 @media(max-width:700px){
-  .floew-saved-overlay {padding:5vh 4vw}
+  .floew-saved-overlay {padding:4em 4vw 5vh}
   .floew-saved-panel {width:min(92vw,560px);max-height:82vh}
   .floew-saved-row {min-height:64px;padding:12px 0}
   .floew-saved-story strong {font-size:11px}
