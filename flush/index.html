@@ -88,6 +88,7 @@
  [hidden]{display:none!important}.auth-gate{min-height:100dvh;display:grid;place-items:center;background:radial-gradient(ellipse at 50% 0%,#193244 0%,#090d14 65%);padding:20px}.auth-card{width:min(420px,100%);background:#101923;border:1px solid #314455;border-radius:20px;padding:34px;box-shadow:0 20px 70px #0005}.auth-logo{width:160px;display:block;margin:0 0 34px}.auth-card h1{margin:0 0 8px;font-size:27px;letter-spacing:-.04em}.auth-card p{font-size:12px;color:#91a5b5;line-height:1.7;margin:0 0 22px}.field{display:block;color:#a5bbc9;font-size:12px;font-weight:650;margin:15px 0}.field input,.field select{display:block;width:100%;margin-top:8px;padding:12px 13px;border:1px solid #354b5d;background:#0b1119;color:#edf6fb;border-radius:10px;outline:0;font:inherit}.field input:focus{border-color:#83b4cf}.primary-btn{width:100%;background:#83b4cf;color:#08131c;border:0;border-radius:11px;padding:13px;font-weight:780;cursor:pointer;margin-top:10px}.primary-btn:disabled{opacity:.5;cursor:wait}.error-text{min-height:20px;color:#f39c9c;font-size:12px!important}.account-name{font-size:11px;color:#9db5c5;white-space:nowrap}.logout{background:transparent;border:1px solid #304658;color:#aec4d1;border-radius:9px;padding:9px 11px;font-size:11px}.logout:hover{background:#172b3a}.admin-users{max-width:1100px;margin:0 auto;width:100%}.users-grid{display:grid;grid-template-columns:330px 1fr;gap:18px;align-items:start}.user-box{border:1px solid #2d4150;border-radius:16px;background:#101923;padding:21px}.user-box h2{font-size:18px;margin:0 0 10px}.user-box p{font-size:12px;color:#8ba0b1;line-height:1.6}.permissions{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}.check-row{display:inline-flex;align-items:center;gap:7px;color:#a6bdca;font-size:12px;cursor:pointer}.check-row input{accent-color:#80abc5}.user-item{border:1px solid #2b3c4a;border-radius:12px;margin-bottom:10px;padding:16px;background:#0d151e}.user-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.role-tag{font-size:9px;color:#9abed3;border:1px solid #2c4e61;padding:4px 7px;border-radius:50px;margin-left:8px}.user-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.user-actions button{cursor:pointer}.user-msg,.role-note{font-size:11px;color:#7aafc5}.user-box .field{margin:12px 0}.admin-users .section-head{margin-top:0}@media(max-width:940px){.users-grid{grid-template-columns:1fr}.topright .account-name{display:none}}@media(max-width:550px){.auth-card{padding:24px}.topright .environment{display:none}}
 </style>
 <link rel="stylesheet" href="feedback-native.css?v=20261119">
+<link rel="stylesheet" href="ad-center-native.css?v=20261119">
 </head>
 <body>
 <svg aria-hidden="true" width="0" height="0" style="position:absolute;overflow:hidden"><defs>
@@ -179,6 +180,7 @@
   </main>
 </div>
 <script src="feedback-native.js?v=20261119"></script>
+<script src="ad-center-native.js?v=20261119"></script>
 <script>
 (() => {
  'use strict';
@@ -190,7 +192,7 @@
   flowery: {title:'Reklam Merkezi',url:'https://flowery.xn--flw-tna.tr/',icon:'i-ad'},
   feedback: {title:'Feedback',url:'https://xn--flw-tna.tr/admin/feedback-admin.html',icon:'i-feedback'}
  };
- const NATIVE_MODULES=new Set(['audience','behavior','ad_performance','feedback']);
+ const NATIVE_MODULES=new Set(['audience','behavior','ad_performance','flowery','feedback']);
  const $=id=>document.getElementById(id);
  let currentUser=null,active='overview';
  const frames={},screens={overview:$('overview'),app:$('appScreen'),future:$('future'),users:$('users')};
@@ -360,6 +362,12 @@
  }
  async function loadNative(id,force=false){
   if(!NATIVE_MODULES.has(id)||!currentUser||!permitted(id))return;
+  if(id==='flowery'){
+    ++nativeMemory.load;
+    if(!window.FlushAdCenterNative){$('nativeView').innerHTML='<div class="fn-error">Reklam Merkezi modülü yüklenemedi. Sayfayı yenile.</div>';return;}
+    window.FlushAdCenterNative.mount($('nativeView'));
+    return;
+  }
   if(id==='feedback'){
     ++nativeMemory.load;
     if(!window.FlushFeedbackNative){$('nativeView').innerHTML='<p class="fn-error">Feedback modülü yüklenemedi. Sayfayı yenile.</p>';return;}
