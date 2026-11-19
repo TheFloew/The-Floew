@@ -15,3 +15,8 @@ database_id = "a3b61630-c5ff-4162-be4a-d3c7d2e3565c"
 
 [observability]
 enabled = true
+
+# Native Flüsh login: service binding is required to validate the shared session.
+[[services]]
+binding = "FLUSH_AUTH"
+service = "floew-flush-auth"
