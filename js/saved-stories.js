@@ -160,7 +160,6 @@
     panel.setAttribute("aria-hidden","false");
     document.body.classList.add("floew-saved-open");
     if(typeof window.pauseFlowForUi==="function")window.pauseFlowForUi();
-    if(typeof window.closeControlMenu==="function")window.closeControlMenu();
     render();
     $("#floew-saved-close",panel)?.focus();
   }
