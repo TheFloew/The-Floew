@@ -129,3 +129,17 @@ test("transient AI failures are not cached as final session results",async()=>{
   assert.match(client,/resultByKey\.delete\(story\.key\)/);
   assert.match(client,/TRANSIENT_RETRY_MS=60\*1000/);
 });
+
+test("sharing directly captures BaitBuster slide presentation without another AI request",async()=>{
+  const baitbuster=await source("js/baitbuster-beta.js");
+  const share=await source("js/share.js");
+
+  assert.match(baitbuster,/getPresentation:slide=>/);
+  assert.match(baitbuster,/const current=appliedState\.get\(slide\)/);
+  assert.match(share,/BaitBusterBeta\?\.getPresentation\?\.\(slide\)/);
+  assert.match(share,/presentation\?\.originalTitle/);
+  assert.match(share,/presentation\?\.flowTitle/);
+  assert.match(share,/title:clean\(story\.title\)\.slice\(0,700\)/);
+  assert.match(share,/baitbuster:story\.baitbuster \|\| null/);
+  assert.doesNotMatch(share,/\/v1\/evaluate/);
+});
