@@ -140,9 +140,7 @@
       <div class="group"><div class="group-label">HESAP</div>
         <button type="button" class="navbtn" data-target="account"><svg class="icon"><use href="#i-home"/></svg><span class="menu-title">Hesabım</span></button>
       </div>
-      <div class="group"><div class="group-label">GELECEK</div>
-        <button type="button" class="navbtn" data-target="future"><svg class="icon"><use href="#i-plus"/></svg><span class="menu-title">Yeni Fasiliteler</span><svg class="icon arrow"><use href="#i-arrow"/></svg></button>
-      </div>
+
     </nav>
     <div class="side-bottom"><a class="link-website" href="https://xn--flw-tna.tr/" target="_blank" rel="noopener noreferrer"><svg class="icon"><use href="#i-globe"/></svg> Flöw'ü görüntüle <svg class="icon arrow" style="margin-left:auto;width:15px"><use href="#i-external"/></svg></a><div class="side-foot">FLÜSH PORTAL · V1.0</div></div>
   </aside>
@@ -153,7 +151,6 @@
     </header>
     <div class="viewport" id="viewport">
       <section class="screen overview" id="overview">
-        <div class="hero"><div class="hero-text"><span class="eyebrow">İŞLER TEK YERDE</span><h1>Flöw'ün kontrol merkezi.</h1><p>İstatistikler, reklam yönetimi ve geri bildirimler tek bir çalışma alanında. Her modül, yetkili kullanıcıya kendi verilerini gösterir.</p></div><div class="hero-mark" aria-hidden="true"><div class="orb-line"></div><div class="orb-vert"></div><div class="orb"></div><div class="orb-dot first"></div><div class="orb-dot second"></div><div class="orb-dot third"></div></div></div>
         <div class="section-head"><div><h2>Fasiliteler</h2><p>İşlemlerine kaldığın yerden devam et.</p></div><span class="section-kicker">5 modül</span></div>
         <div class="cards">
           <button type="button" class="tool-card" data-target="audience"><div class="card-top"><span class="card-icon"><svg class="icon"><use href="#i-chart"/></svg></span><span class="pill">ANALİTİK</span></div><h3>Kullanıcılar</h3><p>Oturumlar, cihazlar, coğrafya ve demografi.</p><div class="card-foot">Kullanıcı istatistiklerini aç <svg class="icon"><use href="#i-arrow"/></svg></div></button>
@@ -180,7 +177,7 @@
   <p class="user-msg" id="recoveryStatus" role="status"></p>
  </form>
 </div></div></section>
-      <section class="screen" id="future" hidden><div class="future-wrap"><div class="future-symbol"><svg class="icon"><use href="#i-plus"/></svg></div><h1>Yeni bir fasiliteye yer var.</h1><p>Flüsh, modüler bir kabuk. Sonradan ekleyeceğimiz araçları soldaki menüye bağlayabilir, mevcut sistemlerin adreslerini ve çalışmalarını değiştirmeden içeri alabiliriz.</p><div class="codehint"><strong>Geliştirme notu</strong><br>Yeni araçlar, sunucu tarafı yetkilendirme denetimi ve portalın ortak veri bileşenleriyle eklenir.</div></div></section>
+
     </div>
   </main>
 </div>
@@ -201,7 +198,7 @@
  const NATIVE_MODULES=new Set(['audience','behavior','ad_performance','flowery','feedback']);
  const $=id=>document.getElementById(id);
  let currentUser=null,active='overview';
- const frames={},screens={overview:$('overview'),app:$('appScreen'),future:$('future'),users:$('users'),account:$('account')};
+ const frames={},screens={overview:$('overview'),app:$('appScreen'),users:$('users'),account:$('account')};
  const sidebar=$('sidebar'),backdrop=$('backdrop'),menuBtn=$('menuBtn');
  const facilityNames={audience:'Kullanıcılar',behavior:'Davranış',ad_performance:'Reklam Performansı',flowery:'Reklam Merkezi',feedback:'Feedback'};
  const enc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -236,10 +233,10 @@
  }
  async function select(id){
    if(!currentUser)return;
-   if(!['overview','future','users','account',...Object.keys(MODULES)].includes(id))id='overview';
+   if(!['overview','users','account',...Object.keys(MODULES)].includes(id))id='overview';
    if((MODULES[id]&&!permitted(id))||(id==='users'&&currentUser.role!=='superadmin'))id='overview';
    active=id;const mod=MODULES[id],isApp=!!mod,isNative=NATIVE_MODULES.has(id);
-   $('pageTitle').textContent=mod?.title||(id==='future'?'Yeni Fasiliteler':id==='users'?'Kullanıcı Yetkileri':id==='account'?'Hesabım':'Genel Bakış');
+   $('pageTitle').textContent=mod?.title||(id==='users'?'Kullanıcı Yetkileri':id==='account'?'Hesabım':'Genel Bakış');
    Object.entries(screens).forEach(([name,screen])=>screen.hidden=(name==='app'?!isApp:name!==id));
    $('reloadBtn').hidden=!isApp;$('externalBtn').hidden=!isApp;
    document.querySelectorAll('.navbtn[data-target]').forEach(el=>el.classList.toggle('active',el.dataset.target===id));
