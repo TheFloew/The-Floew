@@ -89,6 +89,7 @@
 </style>
 <link rel="stylesheet" href="feedback-native.css?v=20261119">
 <link rel="stylesheet" href="ad-center-native.css?v=20261119-2">
+<link rel="stylesheet" href="account-native.css?v=20261119-a1">
 </head>
 <body>
 <svg aria-hidden="true" width="0" height="0" style="position:absolute;overflow:hidden"><defs>
@@ -136,6 +137,9 @@
       <div class="group" id="adminGroup" hidden><div class="group-label">YETKİLENDİRME</div>
         <button type="button" class="navbtn" id="adminNav" data-target="users" hidden><svg class="icon"><use href="#i-grid"/></svg><span class="menu-title">Kullanıcı Yetkileri</span><svg class="icon arrow"><use href="#i-arrow"/></svg></button>
       </div>
+      <div class="group"><div class="group-label">HESAP</div>
+        <button type="button" class="navbtn" data-target="account"><svg class="icon"><use href="#i-home"/></svg><span class="menu-title">Hesabım</span></button>
+      </div>
       <div class="group"><div class="group-label">GELECEK</div>
         <button type="button" class="navbtn" data-target="future"><svg class="icon"><use href="#i-plus"/></svg><span class="menu-title">Yeni Fasiliteler</span><svg class="icon arrow"><use href="#i-arrow"/></svg></button>
       </div>
@@ -145,7 +149,7 @@
   <main class="content" id="main">
     <header class="topbar">
       <div class="crumb"><button type="button" class="iconbtn mobile-menu" id="menuBtn" aria-label="Menüyü aç" aria-expanded="false"><svg class="icon"><use href="#i-menu"/></svg></button><small>Flüsh</small><span class="slash">/</span><strong id="pageTitle">Genel Bakış</strong></div>
-      <div class="topright"><span class="account-name" id="usernameTag"></span><button type="button" class="logout" id="logoutBtn">Çıkış</button><span class="environment">Yönetim alanı</span><span class="separator"></span><button type="button" class="iconbtn" id="reloadBtn" aria-label="Seçili paneli yenile" title="Paneli yenile" hidden><svg class="icon"><use href="#i-reload"/></svg></button><a class="outline-link" id="externalBtn" href="#" target="_blank" rel="noopener noreferrer" hidden><svg class="icon"><use href="#i-external"/></svg> Ayrı sekmede aç</a></div>
+      <div class="topright"><button type="button" class="account-name account-link" id="usernameTag" data-target="account" title="Hesabım"></button><button type="button" class="logout" id="logoutBtn">Çıkış</button><span class="environment">Yönetim alanı</span><span class="separator"></span><button type="button" class="iconbtn" id="reloadBtn" aria-label="Seçili paneli yenile" title="Paneli yenile" hidden><svg class="icon"><use href="#i-reload"/></svg></button><a class="outline-link" id="externalBtn" href="#" target="_blank" rel="noopener noreferrer" hidden><svg class="icon"><use href="#i-external"/></svg> Ayrı sekmede aç</a></div>
     </header>
     <div class="viewport" id="viewport">
       <section class="screen overview" id="overview">
@@ -163,6 +167,7 @@
       <section class="screen" id="appScreen" hidden><div id="nativeView" class="flush-native" hidden></div>
         <div class="appview"><div class="frame-top"><div class="frame-descriptor"><div class="frame-icon" id="frameIcon"><svg class="icon"><use href="#i-chart"/></svg></div><div><h2 id="frameTitle">Analytics</h2><p id="frameAddress"></p></div></div><div class="frame-toolbar"><button type="button" class="iconbtn" id="frameReload" aria-label="Paneli yenile" title="Yenile"><svg class="icon"><use href="#i-reload"/></svg></button></div></div><div class="frame-shell" id="frameShell"><div class="frame-empty" id="frameEmpty">Panel hazırlanıyor...</div></div><div class="frame-hint">Bu sayfa kendi sistemi üzerinden çalışır. İçerik görünmüyorsa veya giriş açılmıyorsa <a href="#" id="fallbackLink" target="_blank" rel="noopener noreferrer">aracı ayrı sekmede aç</a>.</div></div>
       </section>
+      <section class="screen" id="account" hidden><div id="accountPanel" class="admin-users"></div></section>
       <section class="screen" id="users" hidden><div class="admin-users"><div class="section-head"><div><h2>Kullanıcı Yetkileri</h2><p>Yalnızca superadmin bu bölümü görebilir ve kullanıcıları yönetebilir.</p></div></div><div class="users-grid"><div class="user-box"><h2>Yeni kullanıcı ekle</h2><p>Hesaplar yalnızca seçilen fasilitelere erişebilir. Oluşturulan kullanıcı ilk girişte parolasını değiştirecek.</p><form id="newUserForm"><label class="field">Kullanıcı adı<input id="newUsername" type="text" required minlength="3" maxlength="40" placeholder="ornek.kullanici" spellcheck="false"></label><label class="field">Geçici parola<input id="newPasswordUser" type="password" required minlength="12" autocomplete="new-password"></label>
  <div class="permissions" id="newPermissions"></div><button class="primary-btn" type="submit">Hesap oluştur</button><p class="user-msg" id="createStatus" role="status"></p></form></div><div class="user-box"><h2>Hesaplar ve erişim izinleri</h2><p>İzinler kaydedildiğinde hemen geçerli olur. Hesap kapatılırsa tüm Flüsh oturumları sonlandırılır.</p><div id="userList"></div></div></div>
 <div class="user-box" id="recoveryBox" hidden style="margin-top:18px;max-width:760px">
@@ -181,6 +186,7 @@
 </div>
 <script src="feedback-native.js?v=20261119"></script>
 <script src="ad-center-native.js?v=20261119-2"></script>
+<script src="account-native.js?v=20261119-a1"></script>
 <script>
 (() => {
  'use strict';
@@ -195,7 +201,7 @@
  const NATIVE_MODULES=new Set(['audience','behavior','ad_performance','flowery','feedback']);
  const $=id=>document.getElementById(id);
  let currentUser=null,active='overview';
- const frames={},screens={overview:$('overview'),app:$('appScreen'),future:$('future'),users:$('users')};
+ const frames={},screens={overview:$('overview'),app:$('appScreen'),future:$('future'),users:$('users'),account:$('account')};
  const sidebar=$('sidebar'),backdrop=$('backdrop'),menuBtn=$('menuBtn');
  const facilityNames={audience:'Kullanıcılar',behavior:'Davranış',ad_performance:'Reklam Performansı',flowery:'Reklam Merkezi',feedback:'Feedback'};
  const enc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -230,10 +236,10 @@
  }
  async function select(id){
    if(!currentUser)return;
-   if(!['overview','future','users',...Object.keys(MODULES)].includes(id))id='overview';
+   if(!['overview','future','users','account',...Object.keys(MODULES)].includes(id))id='overview';
    if((MODULES[id]&&!permitted(id))||(id==='users'&&currentUser.role!=='superadmin'))id='overview';
    active=id;const mod=MODULES[id],isApp=!!mod,isNative=NATIVE_MODULES.has(id);
-   $('pageTitle').textContent=mod?.title||(id==='future'?'Yeni Fasiliteler':id==='users'?'Kullanıcı Yetkileri':'Genel Bakış');
+   $('pageTitle').textContent=mod?.title||(id==='future'?'Yeni Fasiliteler':id==='users'?'Kullanıcı Yetkileri':id==='account'?'Hesabım':'Genel Bakış');
    Object.entries(screens).forEach(([name,screen])=>screen.hidden=(name==='app'?!isApp:name!==id));
    $('reloadBtn').hidden=!isApp;$('externalBtn').hidden=!isApp;
    document.querySelectorAll('.navbtn[data-target]').forEach(el=>el.classList.toggle('active',el.dataset.target===id));
@@ -252,6 +258,7 @@
      }
    }
    if(id==='users')await loadUsers();
+   if(id==='account'&&window.FlushAccountNative)window.FlushAccountNative.mountSelf($('accountPanel'),api,currentUser,user=>{currentUser=user;adaptMenu()});
    closeMenu();document.title=`${$('pageTitle').textContent} | Flüsh`;
  }
  const nfNative=new Intl.NumberFormat('tr-TR');
@@ -457,20 +464,16 @@
    try{const data=await api('/api/users');list.innerHTML=data.users.map(user=>{
      const isSuper=user.role==='superadmin';
      const checkboxes=isSuper?'<span class="role-note">Tüm fasilitelere tam erişim</span>':Object.entries(facilityNames).map(([key,label])=>`<label class="check-row"><input data-facility="${key}" value="${key}" type="checkbox" ${user.permissions.includes(key)?'checked':''}><span>${enc(label)}</span></label>`).join('');
-     return `<article class="user-item" data-id="${enc(user.id)}"><div class="user-head"><div><strong>${enc(user.username)}</strong> <span class="role-tag">${isSuper?'SUPERADMIN':'KULLANICI'}</span></div>${isSuper?'':`<label class="check-row"><input class="user-active" type="checkbox" ${user.active?'checked':''}><span>Hesap aktif</span></label>`}</div><div class="permissions">${checkboxes}</div>${isSuper?'':`<div class="user-actions"><button type="button" class="outline-link save-perms">Yetkileri kaydet</button><button type="button" class="outline-link reset-pass">Parola yenile</button><span class="user-msg" role="status"></span></div>`}</article>`;
+     return `<article class="user-item" data-id="${enc(user.id)}"><div class="user-head"><div><strong>${enc(user.username)}</strong> <span class="role-tag">${isSuper?'SUPERADMIN':'KULLANICI'}</span></div>${isSuper?'':`<label class="check-row"><input class="user-active" type="checkbox" ${user.active?'checked':''}><span>Hesap aktif</span></label>`}</div><div class="permissions">${checkboxes}</div>${isSuper?'':`<div class="user-actions"><button type="button" class="outline-link save-perms">Yetkileri kaydet</button><button type="button" class="outline-link manage-login" aria-expanded="false">Giriş bilgilerini yönet</button><span class="user-msg" role="status"></span></div>`}</article>`;
    }).join('');
    list.querySelectorAll('.user-item').forEach(item=>{
-     const id=item.dataset.id,save=item.querySelector('.save-perms'),reset=item.querySelector('.reset-pass'),msg=item.querySelector('.user-msg');
+     const id=item.dataset.id,save=item.querySelector('.save-perms'),msg=item.querySelector('.user-msg');
      save?.addEventListener('click',async()=>{save.disabled=true;try{
        const perms=[...item.querySelectorAll('input[data-facility]:checked')].map(x=>x.value);
        await api('/api/users/'+id,{method:'PATCH',body:JSON.stringify({permissions:perms,active:item.querySelector('.user-active').checked})});msg.textContent='Kaydedildi.';
      }catch(e){msg.textContent=e.message}finally{save.disabled=false}});
-     reset?.addEventListener('click',async()=>{
-       const password=prompt('Bu kullanıcı için yeni geçici parola (en az 12 karakter):');if(password===null)return;
-       try{await api('/api/users/'+id+'/password',{method:'POST',body:JSON.stringify({password})});msg.textContent='Parola yenilendi. Oturumları kapatıldı.'}
-       catch(e){msg.textContent=e.message}
-     });
    });
+   window.FlushAccountNative?.mountAdmin(list,api);
    }catch(err){list.textContent='Kullanıcı listesi alınamadı: '+err.message}
  }
  $('recoveryForm').addEventListener('submit',async ev=>{
