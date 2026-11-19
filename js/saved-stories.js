@@ -29,7 +29,8 @@
     catch{return false;}
   }
   function current(slide){
-    const href=validUrl($(".source-link",slide)?.getAttribute("href")||"");
+    const raw=$(".source-link",slide)?.getAttribute("href")||"";
+    const href=raw&&raw!=="#"?validUrl(raw):"";
     const title=$("h1",slide)?.textContent?.trim()||"";
     if(!href||href===location.href||!title)return null;
     return {
@@ -43,7 +44,7 @@
     $$(".slide .save-story-button").forEach(button=>{
       const story=current(button.closest(".slide"));
       const selected=!!story&&items.some(x=>x.url===story.url);
-      button.disabled=!story;
+      button.hidden=!story;
       button.setAttribute("aria-pressed",String(selected));
       button.setAttribute("aria-label",selected?"Kaydedilenlerden çıkar":"Sonra okumak için kaydet");
       button.title=selected?"Kaydedilenlerden çıkar":"Sonra okumak için kaydet";
@@ -170,7 +171,9 @@
   function addStyles(){
     const style=make("style");
     style.textContent=`
-      .save-story-button{display:inline-flex;align-items:center;justify-content:center;color:#fff;background:transparent;border:0;padding:0;margin:0;cursor:pointer;opacity:.8;flex:0 0 auto;transition:opacity .16s ease,transform .16s ease}
+      .headline-actions > .save-story-button{display:inline-flex!important;align-items:center!important;justify-content:center!important;inline-size:48px!important;block-size:44px!important;min-inline-size:48px!important;min-block-size:44px!important;max-inline-size:48px!important;box-sizing:border-box!important;color:#fff;background:transparent;border:0;padding:0!important;margin:0!important;cursor:pointer;opacity:.8;flex:0 0 auto;pointer-events:auto!important;touch-action:manipulation;-webkit-tap-highlight-color:transparent;position:relative;z-index:1;transition:opacity .16s ease,transform .16s ease}
+      .headline-actions > .save-story-button[hidden]{display:none!important}
+      @media(max-width:700px),(pointer:coarse){.headline-actions > .save-story-button{inline-size:52px!important;block-size:48px!important;min-inline-size:52px!important;min-block-size:48px!important;max-inline-size:52px!important}}
       .save-story-button:hover,.save-story-button:focus-visible{opacity:1}
       .save-story-button:active{transform:scale(.88)}
       .save-story-button[aria-pressed="true"] svg{fill:currentColor}
