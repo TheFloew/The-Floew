@@ -1,0 +1,197 @@
+/* Kaydet ve Sonra Oku | Flöw beta visual integration */
+
+/* Existing action strip uses 30x36 controls and integer flex ordering. */
+.headline-actions > .save-story-button {
+  order:3!important;
+  display:inline-grid!important;
+  place-items:center!important;
+  align-self:center!important;
+  flex:0 0 30px!important;
+  inline-size:30px!important;
+  min-inline-size:30px!important;
+  max-inline-size:30px!important;
+  block-size:36px!important;
+  min-block-size:36px!important;
+  max-block-size:36px!important;
+  box-sizing:border-box!important;
+  padding:0!important;
+  margin:0!important;
+  border:0!important;
+  background:transparent!important;
+  color:#fff;
+  opacity:.82;
+  cursor:pointer;
+  pointer-events:auto!important;
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+  appearance:none;
+  position:relative;
+  z-index:1;
+  transition:opacity .16s ease;
+}
+.headline-actions > .feedback-inline-link {order:4!important}
+.headline-actions > .source-link {order:5!important}
+.headline-actions > .save-story-button[hidden] {display:none!important}
+.headline-actions > .save-story-button svg {
+  width:22px;
+  height:22px;
+  display:block;
+  filter:drop-shadow(0 1px 3px rgba(0,0,0,.65));
+}
+.headline-actions > .save-story-button[aria-pressed="true"] svg {fill:currentColor}
+.headline-actions > .save-story-button:hover,
+.headline-actions > .save-story-button:focus-visible {opacity:1}
+.headline-actions > .save-story-button:focus-visible {
+  outline:1px solid rgba(255,255,255,.72);
+  outline-offset:4px;
+}
+@media(max-width:700px),(pointer:coarse){
+  .headline-actions > .save-story-button svg {width:23px;height:23px}
+}
+
+/* Tools tray: matches sibling icon sizes and geometry. */
+#saved-stories-button {position:relative;display:grid;place-items:center}
+#saved-stories-button svg {width:30px;height:30px;display:block}
+#floew-saved-count {
+  position:absolute;
+  right:0;
+  top:0;
+  min-width:12px;
+  text-align:center;
+  font:700 10px/1 "Comfortaa",sans-serif;
+  color:#fff;
+}
+
+/* Modal mirrors Preferences and Flöw about: blurred backdrop, no card. */
+.floew-saved-overlay[hidden] {display:none!important}
+.floew-saved-overlay {
+  position:fixed;
+  inset:0;
+  z-index:1600;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:5vh 5vw;
+  box-sizing:border-box;
+  pointer-events:auto;
+  background:rgba(0,0,0,.80);
+  backdrop-filter:blur(5px);
+  -webkit-backdrop-filter:blur(5px);
+}
+.floew-saved-panel {
+  width:min(760px,88vw);
+  max-height:84vh;
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+  color:#fff;
+  font-family:"Comfortaa",sans-serif;
+}
+.floew-saved-header {
+  flex:0 0 auto;
+  align-items:center!important;
+  padding:0 2px 12px!important;
+}
+#floew-saved-close {
+  flex:0 0 38px;
+  width:38px;
+  height:38px;
+  display:grid;
+  place-items:center;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  color:#fff;
+  cursor:pointer;
+  opacity:.68;
+}
+#floew-saved-close.fi::before {font-size:26px!important}
+#floew-saved-close:hover {opacity:1}
+#floew-saved-close:focus-visible {opacity:1;outline:1px solid rgba(255,255,255,.72)}
+.floew-saved-meta {
+  padding:12px 2px 7px;
+  color:rgba(255,255,255,.45);
+  text-align:left;
+  font:500 10px/1.5 "Comfortaa",sans-serif;
+}
+#floew-saved-status {
+  margin:0;
+  color:rgba(255,180,180,.85);
+  font:500 10px/1.5 "Comfortaa",sans-serif;
+}
+#floew-saved-status:empty {display:none}
+.floew-saved-list {
+  min-height:70px;
+  padding:0 2px 8px;
+  overflow:auto;
+  overscroll-behavior:contain;
+  touch-action:pan-y;
+}
+.floew-saved-row {
+  display:flex;
+  align-items:center;
+  gap:15px;
+  min-height:70px;
+  padding:14px 0;
+  border-bottom:1px solid rgba(255,255,255,.10);
+}
+.floew-saved-row:last-child {border-bottom:0}
+.floew-saved-story {
+  display:flex;
+  flex:1;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:7px;
+  min-width:0;
+  padding:0;
+  margin:0;
+  background:none;
+  border:0;
+  color:#fff;
+  cursor:pointer;
+  text-align:left;
+  font-family:inherit;
+  line-height:1.5;
+}
+.floew-saved-story strong {font-size:12px;font-weight:500;line-height:1.5}
+.floew-saved-story:hover strong,
+.floew-saved-story:focus-visible strong {opacity:.72}
+.floew-saved-story:focus-visible {outline:1px solid rgba(255,255,255,.65);outline-offset:4px}
+.floew-saved-source {font-size:10px;color:rgba(255,255,255,.42)}
+.floew-saved-remove {
+  flex:0 0 34px;
+  width:34px;
+  height:34px;
+  display:grid;
+  place-items:center;
+  padding:0;
+  border:0;
+  background:none;
+  color:rgba(255,255,255,.45);
+  cursor:pointer;
+  transition:color .15s ease;
+}
+.floew-saved-remove.fi::before {font-size:19px!important}
+.floew-saved-remove:hover,
+.floew-saved-remove:focus-visible {color:#fff}
+.floew-saved-empty {color:rgba(255,255,255,.48);font-size:11px;line-height:1.8;padding:24px 0}
+.floew-saved-panel footer {
+  flex:0 0 auto;
+  margin-top:8px;
+  padding:12px 2px 0;
+  border-top:1px solid rgba(255,255,255,.08);
+  font-size:9px;
+  color:rgba(255,255,255,.35);
+}
+@media(max-width:700px){
+  .floew-saved-overlay {padding:5vh 4vw}
+  .floew-saved-panel {width:min(92vw,560px);max-height:82vh}
+  .floew-saved-row {min-height:64px;padding:12px 0}
+  .floew-saved-story strong {font-size:11px}
+}
