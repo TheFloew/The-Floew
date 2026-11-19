@@ -450,6 +450,16 @@
     prefetchStories,
     clearSlide,
     normalizeStory,
+    // Exact title pair for the displayed slide. No story-key lookup or AI call.
+    getPresentation:slide=>{
+      const current=appliedState.get(slide);
+      if(!current)return null;
+      return {
+        originalTitle:current.originalTitle,
+        flowTitle:current.flowTitle,
+        mode:current.mode
+      };
+    },
     getResult:rawStory=>{
       const story=normalizeStory(rawStory);
       return story?resultByKey.get(story.key)||null:null;
