@@ -50,7 +50,7 @@
       button.setAttribute("aria-label",selected?"Kaydedilenlerden çıkar":"Sonra okumak için kaydet");
       button.title=selected?"Kaydedilenlerden çıkar":"Sonra okumak için kaydet";
     });
-    const count=$("#floew-saved-count");
+    const count=$("#floew-bookmark-number-inside");
     if(count){
       count.textContent=items.length?String(items.length):"";
       count.dataset.digits=String(items.length).length;
@@ -222,7 +222,7 @@
     button.setAttribute("aria-label","Kaydedilen haberler");
     button.title="Kaydedilen haberler";
     // Sayaç doğrudan SVG koordinatlarına bağlanır, CSS konumu değiştiremez.
-    button.innerHTML=bookmark.replace("</svg>",'<text id="floew-saved-count" x="12" y="11.2" text-anchor="middle" dominant-baseline="middle" stroke="none" fill="currentColor" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="9"></text></svg>');
+    button.innerHTML=bookmark.replace("</svg>",'<text id="floew-bookmark-number-inside" x="12" y="11.2" text-anchor="middle" dominant-baseline="middle" stroke="none" fill="currentColor" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="9"></text></svg>');
     const settings=$("#menu-button");
     menu.insertBefore(button,settings||null);
     button.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();openPanel();});
@@ -232,7 +232,7 @@
     const link=document.createElement("link");
     link.id="floew-saved-stories-css";
     link.rel="stylesheet";
-    link.href="/css/saved-stories.css?v=5";
+    link.href="/css/saved-stories.css?v=6";
     document.head.append(link);
   }
   function init(){
