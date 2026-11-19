@@ -19,6 +19,16 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method.toUpperCase();
+    if(method==="OPTIONS" && path.startsWith("/api/") && portalOrigin(request)){
+      return new Response(null,{status:204,headers:{
+        "Access-Control-Allow-Origin":portalOrigin(request),
+        "Access-Control-Allow-Credentials":"true",
+        "Access-Control-Allow-Methods":"GET, POST, PATCH, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers":"Accept, Content-Type, X-File-Name",
+        "Access-Control-Max-Age":"900",
+        "Vary":"Origin"
+      }});
+    }
 
     try {
       if (path === "/api/login" && method === "POST") {
@@ -30,7 +40,7 @@ export default {
         return await logout(request, env);
       }
       if (path === "/api/session" && method === "GET") {
-        return json({ authenticated: await isAdmin(request, env) });
+        return portalCors(request,json({ authenticated: await isAdmin(request, env) }));
       }
       if (path === "/api/health" && method === "GET") {
         const check = await env.DB.prepare("SELECT 1 AS ok").first();
@@ -42,7 +52,7 @@ export default {
         });
       }
       if (path === "/api/categories" && method === "GET") {
-        return json({ categories: CATEGORIES });
+        return portalCors(request,json({ categories: CATEGORIES }));
       }
       if (path === "/api/flowery" && method === "OPTIONS") {
         return new Response(null, {
@@ -57,7 +67,7 @@ export default {
         });
       }
       if (path === "/api/flowery" && method === "GET") {
-        return await listAds(request, env);
+        return portalCors(request,await listAds(request, env));
       }
       if (path === "/api/internal/analytics-ads" && method === "GET") {
         return await listAdsForAnalytics(request, env);
@@ -65,24 +75,24 @@ export default {
       if (path === "/api/flowery" && method === "POST") {
         assertSameOrigin(request);
         if (!(await isAdmin(request, env))) return json({ error: "Oturum gerekli." }, 401);
-        return await createAd(request, env);
+        return portalCors(request,await createAd(request, env));
       }
       if (path === "/api/upload" && method === "POST") {
         assertSameOrigin(request);
         if (!(await isAdmin(request, env))) return json({ error: "Oturum gerekli." }, 401);
-        return await uploadMedia(request, env);
+        return portalCors(request,await uploadMedia(request, env));
       }
 
       const adMatch = path.match(/^\/api\/flowery\/([a-f0-9-]+)$/i);
       if (adMatch && method === "PATCH") {
         assertSameOrigin(request);
         if (!(await isAdmin(request, env))) return json({ error: "Oturum gerekli." }, 401);
-        return await updateAd(request, env, adMatch[1]);
+        return portalCors(request,await updateAd(request, env, adMatch[1]));
       }
       if (adMatch && method === "DELETE") {
         assertSameOrigin(request);
         if (!(await isAdmin(request, env))) return json({ error: "Oturum gerekli." }, 401);
-        return await deleteAd(env, adMatch[1]);
+        return portalCors(request,await deleteAd(env, adMatch[1]));
       }
 
       if (path === "/feed.xml" && method === "GET") {
@@ -95,9 +105,9 @@ export default {
 
       return env.ASSETS.fetch(request);
     } catch (error) {
-      if (error instanceof Response) return error;
+      if (error instanceof Response) return portalCors(request,error);
       console.error("Ad Center request failed:", error);
-      return json({ error: "İşlem tamamlanamadı. Lütfen tekrar deneyin." }, 500);
+      return portalCors(request,json({ error: "İşlem tamamlanamadı. Lütfen tekrar deneyin." }, 500));
     }
   }
 };
@@ -109,9 +119,38 @@ function json(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), { status, headers });
 }
 
+
+const FLUSH_PORTAL_ORIGIN = "https://xn--flw-tna.tr";
+function portalOrigin(request){
+ const origin=request.headers.get("Origin");
+ return origin===FLUSH_PORTAL_ORIGIN?origin:"";
+}
+function portalCors(request,response){
+ const origin=portalOrigin(request);
+ if(!origin)return response;
+ const h=new Headers(response.headers);
+ h.set("Access-Control-Allow-Origin",origin);
+ h.set("Access-Control-Allow-Credentials","true");
+ h.set("Access-Control-Allow-Methods","GET, POST, PATCH, DELETE, OPTIONS");
+ h.set("Access-Control-Allow-Headers","Accept, Content-Type, X-File-Name");
+ h.set("Vary","Origin");
+ return new Response(response.body,{status:response.status,statusText:response.statusText,headers:h});
+}
+async function isFlushAuthorized(request,env){
+ if(!env.FLUSH_AUTH)return false;
+ const cookie=request.headers.get("Cookie")||"";
+ if(!cookie.split(";").some(x=>x.trim().startsWith("__Secure-flush_session=")))return false;
+ try{
+  const r=await env.FLUSH_AUTH.fetch(new Request("https://flush.internal/api/session?facility=flowery",{method:"GET",headers:{"Cookie":cookie}}));
+  if(!r.ok)return false;
+  const data=await r.json();
+  return data.authenticated===true && data.permitted===true;
+ }catch(e){console.error("Flüsh session lookup failed",String(e));return false}
+}
+
 function assertSameOrigin(request) {
   const origin = request.headers.get("Origin");
-  if (origin && origin !== new URL(request.url).origin) {
+  if (origin && origin !== new URL(request.url).origin && origin !== FLUSH_PORTAL_ORIGIN) {
     throw new Response("Origin not allowed", { status: 403 });
   }
 }
@@ -184,6 +223,7 @@ async function createSession(secret) {
 }
 
 async function isAdmin(request, env) {
+  if (await isFlushAuthorized(request,env)) return true;
   if (!env.SESSION_SECRET) return false;
   const token = readCookie(request.headers.get("Cookie") || "", COOKIE_NAME);
   if (!token) return false;
