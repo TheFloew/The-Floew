@@ -5,6 +5,7 @@
   left:0;
   z-index:2147482000;
   display:block;
+  width:max-content;
   max-width:min(300px,calc(100vw - 20px));
   padding:7px 10px;
   border:1px solid rgba(255,255,255,.16);
