@@ -58,11 +58,10 @@
   const cards=[...list.querySelectorAll(".user-item")].filter(x=>x.querySelector(".manage-login"));
   for(const card of cards){
    const toggle=card.querySelector(".manage-login"),id=card.dataset.id;
-   const currentName=card.querySelector(".user-head strong")?.textContent||"";
+   let currentName=card.querySelector(".user-head strong")?.textContent||"";
    const space=document.createElement("div");
    space.className="account-manage-wrap";
    space.hidden=true;
-   const slug=Math.random().toString(36).slice(2); // display-only field ID suffix, not a credential
    space.innerHTML=[
     '<div class="account-manager-grid">',
     '<form class="account-manager-form account-rename-form"><h3>Kullanıcı adını değiştir</h3>',
@@ -99,6 +98,7 @@
      admin.value="";
      msg.textContent="Kullanıcı adı güncellendi. Yeni adla giriş yapılacak.";
      card.querySelector(".user-head strong").textContent=username;
+     currentName=username;
      input.defaultValue=username;
     }catch(error){msg.textContent=error.message}
     finally{admin.value="";btn.disabled=false}
