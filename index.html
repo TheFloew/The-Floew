@@ -16,7 +16,7 @@
 
 <link rel="preload" href="assets/fonts/flow-icons.woff2?v=5" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="css/styles.css?v=20261006-feedback1">
-<link rel="stylesheet" href="css/flow-icons.css?v=10.11">
+<link rel="stylesheet" href="css/flow-icons.css?v=10.12">
 
 <style id="boot-black-style">
   html,body{background:#000}
@@ -591,7 +591,7 @@
 
   <article class="slide active" id="a">
     <img class="slide-image" alt="" draggable="false" referrerpolicy="no-referrer">
-    <video class="slide-video" muted autoplay playsinline preload="auto" loop aria-hidden="true"></video>
+    <video class="slide-video" muted autoplay playsinline disablepictureinpicture preload="auto" loop aria-hidden="true"></video>
     <iframe class="slide-embed" title="Haber videosu" allow="autoplay; encrypted-media" referrerpolicy="strict-origin-when-cross-origin" aria-hidden="true"></iframe>
     <div class="shade"></div>
     <div class="headline">
@@ -617,7 +617,7 @@
 
   <article class="slide" id="b">
     <img class="slide-image" alt="" draggable="false" referrerpolicy="no-referrer">
-    <video class="slide-video" muted autoplay playsinline preload="auto" loop aria-hidden="true"></video>
+    <video class="slide-video" muted autoplay playsinline disablepictureinpicture preload="auto" loop aria-hidden="true"></video>
     <iframe class="slide-embed" title="Haber videosu" allow="autoplay; encrypted-media" referrerpolicy="strict-origin-when-cross-origin" aria-hidden="true"></iframe>
     <div class="shade"></div>
     <div class="headline">
@@ -643,7 +643,7 @@
   <div id="ad-overlay" hidden aria-hidden="true" aria-label="Reklam">
     <div class="ad-badge">Reklam</div>
     <img id="ad-image" class="ad-media" alt="Reklam" draggable="false" hidden>
-    <video id="ad-video" class="ad-media" muted playsinline preload="auto" hidden></video>
+    <video id="ad-video" class="ad-media" muted playsinline disablepictureinpicture preload="auto" hidden></video>
   </div>
 </main>
 
@@ -684,7 +684,7 @@
 </script>
 
 <script src="js/config.js?h=beda7fe1ea23"></script>
-<script src="js/app.js?v=icons2" onerror="
+<script src="js/app.js?v=manual-pip-1" onerror="
   var loader=document.getElementById('loading-screen');
   if(loader)loader.remove();
   var status=document.getElementById('status');
@@ -695,7 +695,7 @@
     if(close)close.onclick=function(){status.hidden=true;status.innerHTML='';};
   }
 "></script>
-<script src="js/share.js?v=baitbuster-present-1"></script>
+<script src="js/share.js?v=share-feedback-1"></script>
 <script src="js/feedback.js?v=icons2"></script>
 <script src="js/baitbuster-ui.js?v=5"></script>
 <script src="js/baitbuster-beta.js?v=a3492d50689d"></script>
