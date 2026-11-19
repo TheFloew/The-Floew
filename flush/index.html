@@ -73,6 +73,16 @@
 @media(max-width:1050px){.fn-two{grid-template-columns:1fr}.fn-ad-link>span{width:max-content;grid-template-columns:repeat(11,minmax(110px,1fr))}.fn-adsrow{overflow-x:auto!important}}
 @media(max-width:580px){.fn-toolbar{align-items:flex-start}.fn-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.fn-metric{padding:14px}.fn-metric strong{font-size:20px}}
 
+
+.fn-ads-table{table-layout:fixed;min-width:1465px;width:100%;font-variant-numeric:tabular-nums}
+.fn-ads-table th,.fn-ads-table td{box-sizing:border-box;text-align:left;vertical-align:middle}
+.fn-ads-table .fn-numeric{text-align:right}
+.fn-ads-table .fn-numeric .fn-adtile{text-align:right}
+.fn-ads-tr{cursor:pointer}
+.fn-ads-tr:focus-visible{outline:2px solid #82b9d7;outline-offset:-2px;background:#172e3b}
+.fn-ads-table .fn-adtile{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fn-ads-table td:first-child .fn-adtile{font-weight:600;color:#d1e6f2}
+
 </style>
 <style id="flush-auth-styles">
  [hidden]{display:none!important}.auth-gate{min-height:100dvh;display:grid;place-items:center;background:radial-gradient(ellipse at 50% 0%,#193244 0%,#090d14 65%);padding:20px}.auth-card{width:min(420px,100%);background:#101923;border:1px solid #314455;border-radius:20px;padding:34px;box-shadow:0 20px 70px #0005}.auth-logo{width:160px;display:block;margin:0 0 34px}.auth-card h1{margin:0 0 8px;font-size:27px;letter-spacing:-.04em}.auth-card p{font-size:12px;color:#91a5b5;line-height:1.7;margin:0 0 22px}.field{display:block;color:#a5bbc9;font-size:12px;font-weight:650;margin:15px 0}.field input,.field select{display:block;width:100%;margin-top:8px;padding:12px 13px;border:1px solid #354b5d;background:#0b1119;color:#edf6fb;border-radius:10px;outline:0;font:inherit}.field input:focus{border-color:#83b4cf}.primary-btn{width:100%;background:#83b4cf;color:#08131c;border:0;border-radius:11px;padding:13px;font-weight:780;cursor:pointer;margin-top:10px}.primary-btn:disabled{opacity:.5;cursor:wait}.error-text{min-height:20px;color:#f39c9c;font-size:12px!important}.account-name{font-size:11px;color:#9db5c5;white-space:nowrap}.logout{background:transparent;border:1px solid #304658;color:#aec4d1;border-radius:9px;padding:9px 11px;font-size:11px}.logout:hover{background:#172b3a}.admin-users{max-width:1100px;margin:0 auto;width:100%}.users-grid{display:grid;grid-template-columns:330px 1fr;gap:18px;align-items:start}.user-box{border:1px solid #2d4150;border-radius:16px;background:#101923;padding:21px}.user-box h2{font-size:18px;margin:0 0 10px}.user-box p{font-size:12px;color:#8ba0b1;line-height:1.6}.permissions{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}.check-row{display:inline-flex;align-items:center;gap:7px;color:#a6bdca;font-size:12px;cursor:pointer}.check-row input{accent-color:#80abc5}.user-item{border:1px solid #2b3c4a;border-radius:12px;margin-bottom:10px;padding:16px;background:#0d151e}.user-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.role-tag{font-size:9px;color:#9abed3;border:1px solid #2c4e61;padding:4px 7px;border-radius:50px;margin-left:8px}.user-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.user-actions button{cursor:pointer}.user-msg,.role-note{font-size:11px;color:#7aafc5}.user-box .field{margin:12px 0}.admin-users .section-head{margin-top:0}@media(max-width:940px){.users-grid{grid-template-columns:1fr}.topright .account-name{display:none}}@media(max-width:550px){.auth-card{padding:24px}.topright .environment{display:none}}
@@ -299,13 +309,16 @@
    const result=n?(Number(v1)||0)-(Number(v2)||0):String(v1??'').localeCompare(String(v2??''),'tr',{numeric:true,sensitivity:'base'});
    return nativeMemory.direction==='asc'?result:-result;
  })}
+
  function nAdsTable(ads){
   const rows=nSortedAds(ads);
-  const heads=nAdKeys.map(([key,label])=>`<th aria-sort="${nativeMemory.sort===key?(nativeMemory.direction==='asc'?'ascending':'descending'):'none'}"><button type="button" class="fn-sort" data-native-sort="${key}">${nEsc(label)} <span>${nativeMemory.sort===key?(nativeMemory.direction==='asc'?'▲':'▼'):'↕'}</span></button></th>`).join('');
-  return nCard('Kampanyalar',rows.length?`<div class="fn-table-wrap"><table class="fn-table"><thead><tr>${heads}</tr></thead><tbody>${rows.map(r=>{
+  const heads=nAdKeys.map(([key,label])=>'<th scope="col" aria-sort="'+(nativeMemory.sort===key?(nativeMemory.direction==='asc'?'ascending':'descending'):'none')+'"><button type="button" class="fn-sort" data-native-sort="'+key+'">'+nEsc(label)+' <span>'+(nativeMemory.sort===key?(nativeMemory.direction==='asc'?'▲':'▼'):'↕')+'</span></button></th>').join('');
+  const widths='<colgroup><col style="width:265px"><col style="width:180px"><col style="width:118px"><col style="width:118px"><col style="width:137px"><col style="width:112px"><col style="width:112px"><col style="width:96px"><col style="width:116px"><col style="width:116px"><col style="width:95px"></colgroup>';
+  const body=rows.map(r=>{
    const values=[r.title||[r.brand,r.campaign].filter(Boolean).join(' · ')||r.ad_id,r.category||'—',nFormatDate(r.ad_start_date),nFormatDate(r.ad_end_date),r.ad_status||(r.ad_active?'Aktif':'Pasif'),nNum(r.views),nDuration(r.avg_dwell_ms),nPct(r.skip_rate),nPct(r.completion_rate),nPct(r.return_rate),nPct(r.repeat_rate)];
-   return `<tr><td colspan="11" class="fn-adsrow"><button type="button" data-native-ad="${nEsc(r.ad_id)}" class="fn-ad-link"><span>${values.map((v,i)=>`<span class="fn-adtile" data-label="${nEsc(nAdKeys[i][1])}">${nEsc(v)}</span>`).join('')}</span></button></td></tr>`;
-  }).join('')}</tbody></table></div>`:'<div class="fn-empty">Bu aralıkta reklam verisi yok.</div>');
+   return '<tr class="fn-ads-tr" role="button" tabindex="0" data-native-ad="'+nEsc(r.ad_id)+'" aria-label="'+nEsc(values[0])+' reklam ayrıntısını aç">'+values.map((v,i)=>'<td title="'+nEsc(v)+'"'+(i>=5?' class="fn-numeric"':'')+'><span class="fn-adtile">'+nEsc(v)+'</span></td>').join('')+'</tr>';
+  }).join('');
+  return nCard('Kampanyalar',rows.length?'<div class="fn-table-wrap"><table class="fn-table fn-ads-table">'+widths+'<thead><tr>'+heads+'</tr></thead><tbody>'+body+'</tbody></table></div>':'<div class="fn-empty">Bu aralıkta reklam verisi yok.</div>');
  }
  function nRenderAds(data){const t=data.totals||{};
  return nMetrics([['Reklam',nNum(t.ads)],['Gösterim',nNum(t.views)],['Tekil izleyici',nNum(t.viewers)],['Ort. izleme',nDuration(t.avg_dwell_ms)],['Skip',nPct(t.skip_rate)],['Tamamlama',nPct(t.completion_rate)],['Geri dönüş',nPct(t.return_rate)],['Tekrar',nPct(t.repeat_rate)]])+
@@ -318,7 +331,7 @@
    else {nativeMemory.sort=key;nativeMemory.direction=['brand','category','ad_start_date','ad_end_date','ad_active'].includes(key)?'asc':'desc'}
    $('nativeAdsList').innerHTML=nAdsTable(nativeMemory.lastAds?.ads||[]);nBindAds();
   }));
-  document.querySelectorAll('[data-native-ad]').forEach(b=>b.addEventListener('click',()=>nAdDetail(b.dataset.nativeAd)));
+  document.querySelectorAll('[data-native-ad]').forEach(row=>{row.addEventListener('click',()=>nAdDetail(row.dataset.nativeAd));row.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();nAdDetail(row.dataset.nativeAd)}})});
  }
  async function nAdDetail(adId){
   if(!adId||!permitted('ad_performance')||active!=='ad_performance')return;
