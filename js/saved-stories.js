@@ -6,9 +6,6 @@
   const MAX=300;
   const $=(selector,root=document)=>root.querySelector(selector);
   const $$=(selector,root=document)=>Array.from(root.querySelectorAll(selector));
-  // Kaynağı gör simgesindeki dolgun, yuvarlatılmış çizgi oranına uyumlu yer imi.
-  const bookmark='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.05" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M6.1 3.1h11.8c.65 0 1.1.5 1.1 1.1v16.7L12 16.5 5 20.9V4.2c0-.6.45-1.1 1.1-1.1z"/></svg>';
-  const closeIcon='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg>';
   let items=[];
   let panel=null;
   let lastFocus=null;
@@ -46,6 +43,8 @@
       const story=current(button.closest(".slide"));
       const selected=!!story&&items.some(x=>x.url===story.url);
       button.hidden=!story;
+      button.classList.toggle("fi-bookmark-filled",selected);
+      button.classList.toggle("fi-bookmark",!selected);
       button.setAttribute("aria-pressed",String(selected));
       button.setAttribute("aria-label",selected?"Kaydedilenlerden çıkar":"Sonra okumak için kaydet");
       button.title=selected?"Kaydedilenlerden çıkar":"Sonra okumak için kaydet";
@@ -54,7 +53,7 @@
     if(count){
       count.textContent=items.length?String(items.length):"";
       count.dataset.digits=String(items.length).length;
-      count.setAttribute("font-size",items.length>=100?"6.4":items.length>=10?"7.7":"9");
+      count.style.fontSize=items.length>=100?"8px":items.length>=10?"10px":"12px";
       count.closest("button")?.setAttribute("aria-label",items.length?("Kaydedilen haberler: "+items.length):"Kaydedilen haberler");
     }
   }
@@ -82,9 +81,8 @@
   function addAction(actions){
     if($(".save-story-button",actions))return;
     const button=document.createElement("button");
-    button.className="save-story-button";
+    button.className="save-story-button fi fi-bookmark";
     button.type="button";
-    button.innerHTML=bookmark;
     const anchor=$(".feedback-inline-link",actions)||$(".source-link",actions);
     if(anchor)actions.insertBefore(button,anchor);
     else actions.append(button);
@@ -216,13 +214,12 @@
   function addMenuEntry(){
     const menu=$("#control-menu-panel");
     if(!menu||$("#saved-stories-button"))return;
-    const button=make("button","control-menu-item floew-saved-menu");
+    const button=make("button","control-menu-item floew-saved-menu fi fi-bookmark");
     button.id="saved-stories-button";
     button.type="button";
     button.setAttribute("aria-label","Kaydedilen haberler");
     button.title="Kaydedilen haberler";
-    // Sayaç doğrudan SVG koordinatlarına bağlanır, CSS konumu değiştiremez.
-    button.innerHTML=bookmark.replace("</svg>",'<text id="floew-bookmark-number-inside" x="12" y="11.2" text-anchor="middle" dominant-baseline="middle" stroke="none" fill="currentColor" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="9"></text></svg>');
+    button.innerHTML='<span id="floew-bookmark-number-inside" aria-hidden="true"></span>';
     const settings=$("#menu-button");
     menu.insertBefore(button,settings||null);
     button.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();openPanel();});
@@ -232,7 +229,7 @@
     const link=document.createElement("link");
     link.id="floew-saved-stories-css";
     link.rel="stylesheet";
-    link.href="/css/saved-stories.css?v=8";
+    link.href="/css/saved-stories.css?v=9";
     document.head.append(link);
   }
   function init(){
