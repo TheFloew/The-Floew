@@ -94,29 +94,56 @@
     if(text!=null)el.textContent=text;
     return el;
   }
+  function openSavedSource(entry){
+    const viewer=window.openSourceViewer;
+    if(typeof viewer!=="function"){
+      const status=$("#floew-saved-status",panel);
+      if(status)status.textContent="Kaynak görüntüleyici kullanılamıyor. Lütfen sayfayı yenileyin.";
+      return;
+    }
+    closePanel();
+    if(!viewer(entry.url,entry.source||"Kaynak")){
+      openPanel();
+      const status=$("#floew-saved-status",panel);
+      if(status)status.textContent="Haber kaynağı açılamadı.";
+    }
+  }
   function render(){
     if(!panel)return;
     const list=$("#floew-saved-list",panel);
     list.replaceChildren();
+    const count=$("#floew-saved-total",panel);
+    if(count)count.textContent=items.length+" haber kaydedildi";
     if(!items.length){
-      list.append(make("p","floew-saved-empty","Henüz kaydedilmiş haber yok. Haber altındaki yer imi simgesine dokunarak buraya ekleyebilirsiniz."));
+      list.append(make("p","floew-saved-empty","Henüz kaydedilmiş haber yok. Haber altındaki yer imi simgesine basarak ekleyebilirsiniz."));
       return;
     }
     for(const entry of items){
       const row=make("div","floew-saved-row");
-      const link=make("a","floew-saved-story");
-      link.href=entry.url;
-      link.target="_blank";
-      link.rel="noopener noreferrer";
+      const link=make("button","floew-saved-story");
+      link.type="button";
+      link.title="Haberi Flöw içinde aç";
       link.append(make("strong","",entry.title));
       if(entry.source)link.append(make("span","floew-saved-source",entry.source));
-      const remove=make("button","floew-saved-remove","×");
+      link.addEventListener("click",e=>{
+        e.preventDefault();
+        e.stopPropagation();
+        openSavedSource(entry);
+      });
+      const remove=make("button","floew-saved-remove fi fi-close");
       remove.type="button";
-      remove.title="Listeden çıkar";
+      remove.title="Kaydedilenlerden çıkar";
       remove.setAttribute("aria-label","Haberi listeden çıkar: "+entry.title);
-      remove.addEventListener("click",()=>{
+      remove.addEventListener("click",e=>{
+        e.preventDefault();
+        e.stopPropagation();
+        const previous=items.slice();
         items=items.filter(x=>x.url!==entry.url);
-        persist();render();syncButtons();
+        if(!persist()){
+          items=previous;
+          alert("Bu cihazda kayıt silinemedi. Tarayıcı depolama iznini kontrol edin.");
+        }
+        render();syncButtons();
       });
       row.append(link,remove);
       list.append(row);
@@ -126,34 +153,59 @@
     if(!panel)return;
     lastFocus=document.activeElement;
     panel.hidden=false;
+    panel.setAttribute("aria-hidden","false");
     document.body.classList.add("floew-saved-open");
+    if(typeof window.pauseFlowForUi==="function")window.pauseFlowForUi();
+    if(typeof window.closeControlMenu==="function")window.closeControlMenu();
     render();
     $("#floew-saved-close",panel)?.focus();
   }
   function closePanel(){
-    if(!panel)return;
+    if(!panel||panel.hidden)return;
     panel.hidden=true;
+    panel.setAttribute("aria-hidden","true");
     document.body.classList.remove("floew-saved-open");
+    if(typeof window.queueUiFlowResumeCheck==="function")window.queueUiFlowResumeCheck();
     if(lastFocus?.isConnected)lastFocus.focus();
   }
   function setupPanel(){
     panel=make("div","floew-saved-overlay");
     panel.id="floew-saved-overlay";
     panel.hidden=true;
-    panel.innerHTML='<section class="floew-saved-panel" role="dialog" aria-modal="true" aria-labelledby="floew-saved-title"><header class="floew-saved-header"><div><h2 id="floew-saved-title">Kaydedilen Haberler</h2><p>Sonra okumak için ayırdıklarınız</p></div><button id="floew-saved-close" type="button" aria-label="Kapat">'+closeIcon+'</button></header><div id="floew-saved-list" class="floew-saved-list"></div><footer>Haberler yalnızca bu cihazda saklanır.</footer></section>';
+    panel.setAttribute("aria-hidden","true");
+    panel.innerHTML='<section class="floew-saved-panel" role="dialog" aria-modal="true" aria-labelledby="floew-saved-title"><div class="menu-header floew-saved-header"><div><div id="floew-saved-title" class="menu-title">Kaydedilen Haberler</div><div class="menu-subtitle">Sonra okumak için ayırdıklarınız</div></div><button id="floew-saved-close" class="fi fi-close" type="button" aria-label="Kaydedilen haberleri kapat" title="Kapat"></button></div><div class="floew-saved-meta"><span id="floew-saved-total"></span></div><p id="floew-saved-status" role="status" aria-live="polite"></p><div id="floew-saved-list" class="floew-saved-list"></div><footer>Bu liste yalnızca bu cihazda saklanır.</footer></section>';
     document.body.append(panel);
+    // Pencere içi tıklama, scroll ve dokunma hareketleri haber akışına iletilmesin.
+    for(const name of ["pointerdown","pointerup","pointermove","pointercancel","mousedown","mouseup","touchstart","touchmove","touchend","wheel","click","dblclick","contextmenu"]){
+      panel.addEventListener(name,e=>e.stopPropagation(),{passive:name==="wheel"||name.startsWith("touch")});
+    }
     panel.addEventListener("click",e=>{if(e.target===panel)closePanel();});
-    $("#floew-saved-close",panel).addEventListener("click",closePanel);
-    document.addEventListener("keydown",e=>{
+    $("#floew-saved-close",panel).addEventListener("click",e=>{e.preventDefault();closePanel();});
+    window.addEventListener("keydown",e=>{
       if(panel.hidden)return;
-      if(e.key==="Escape"){e.preventDefault();closePanel();}
-      if(e.key==="Tab"){
-        const focusable=$$('button,a[href]',panel).filter(el=>!el.disabled);
-        if(!focusable.length)return;
-        if(e.shiftKey&&document.activeElement===focusable[0]){e.preventDefault();focusable[focusable.length-1].focus();}
-        else if(!e.shiftKey&&document.activeElement===focusable[focusable.length-1]){e.preventDefault();focusable[0].focus();}
+      if(e.key==="Escape"){e.preventDefault();e.stopImmediatePropagation();closePanel();return;}
+      if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","PageUp","PageDown"," "].includes(e.key)){
+        e.stopImmediatePropagation();
       }
-    });
+      if(e.key==="Tab"){
+        const focusable=$$("button:not([disabled])",panel).filter(el=>el.getClientRects().length);
+        if(!focusable.length)return;
+        if(e.shiftKey&&document.activeElement===focusable[0]){
+          e.preventDefault();focusable[focusable.length-1].focus();
+        }else if(!e.shiftKey&&document.activeElement===focusable[focusable.length-1]){
+          e.preventDefault();focusable[0].focus();
+        }
+      }
+    },{capture:true});
+    // Mevcut global haber navigasyonunu beta modal açıkken devre dışı bırak.
+    const originalBlocking=window.navigationBlockingPanelOpen;
+    if(typeof originalBlocking==="function"){
+      window.navigationBlockingPanelOpen=function(){return !panel.hidden||originalBlocking();};
+    }
+    const originalPauseSurface=window.anyUiPauseSurfaceOpen;
+    if(typeof originalPauseSurface==="function"){
+      window.anyUiPauseSurfaceOpen=function(){return !panel.hidden||originalPauseSurface();};
+    }
   }
   function addMenuEntry(){
     const menu=$("#control-menu-panel");
