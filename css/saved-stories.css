@@ -88,23 +88,13 @@
   margin:auto;
   overflow:visible;
 }
-#floew-saved-count {
-  position:absolute;
-  left:50%;
-  top:46%;
-  transform:translate(-50%,-50%);
-  min-width:0;
-  margin:0;
-  padding:0;
+/* Sayı SVG'nin kendi koordinat sisteminde ortalanır, ayrı bir badge değildir. */
+#saved-stories-button #floew-saved-count {
+  position:static;
+  fill:currentColor;
+  stroke:none;
   pointer-events:none;
-  white-space:nowrap;
-  text-align:center;
-  font:700 10.5px/1 Arial,Helvetica,sans-serif;
-  color:#fff;
-  text-shadow:0 0 3px #000;
 }
-#floew-saved-count[data-digits="2"] {font-size:9px}
-#floew-saved-count[data-digits="3"] {font-size:7.3px}
 @media(max-width:700px){
   #control-menu-panel #saved-stories-button {width:38px!important;height:38px!important}
 }
