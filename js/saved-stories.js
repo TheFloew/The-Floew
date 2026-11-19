@@ -53,7 +53,7 @@
     if(count){
       count.textContent=items.length?String(items.length):"";
       count.dataset.digits=String(items.length).length;
-      count.style.fontSize=items.length>=100?"8px":items.length>=10?"10px":"12px";
+      count.style.fontSize=items.length>=100?"7px":items.length>=10?"9px":"11px";
       count.closest("button")?.setAttribute("aria-label",items.length?("Kaydedilen haberler: "+items.length):"Kaydedilen haberler");
     }
   }
@@ -229,7 +229,7 @@
     const link=document.createElement("link");
     link.id="floew-saved-stories-css";
     link.rel="stylesheet";
-    link.href="/css/saved-stories.css?v=10";
+    link.href="/css/saved-stories.css?v=11";
     document.head.append(link);
   }
   function init(){
