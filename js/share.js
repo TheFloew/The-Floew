@@ -421,7 +421,7 @@
         heading?.dataset?.baitbusterOriginalTitle ||
         storyRef?.title
       );
-      let flowTitle="";
+      let flowTitle=clean(heading?.dataset?.baitbusterFlowTitle);
 
       try{
         const result=globalThis.BaitBusterBeta?.getResult?.(storyRef);
