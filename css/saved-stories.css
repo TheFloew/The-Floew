@@ -85,14 +85,15 @@
 #control-menu-panel #saved-stories-button.fi::before {
   font-size:32px!important;
   line-height:1!important;
-  transform:translateX(-4px)!important;
+  /* Geometrik kutu aynı kalır; glif, komşu ikonların görsel merkezine alınır. */
+  transform:translate(-4px,-7px)!important;
   text-shadow:0 1px 3px rgba(0,0,0,.65),0 2px 7px rgba(0,0,0,.42);
 }
 /* Sayı, font glifinin optik merkezini izler. */
 #saved-stories-button #floew-bookmark-number-inside {
   position:absolute;
   left:calc(50% - 4px);
-  top:47%;
+  top:calc(47% - 7px);
   transform:translate(-50%,-50%);
   width:auto;
   line-height:1;
