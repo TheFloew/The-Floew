@@ -51,7 +51,7 @@
 
 /* Araçlar: tüm komşular gibi sabit 42x42 (mobilde 38x38), kutusuz hover. */
 #control-menu-panel #saved-stories-button {
-  position:static!important;
+  position:relative!important;
   inset:auto!important;
   width:42px!important;
   height:42px!important;
