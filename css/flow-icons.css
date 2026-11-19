@@ -80,8 +80,8 @@
 .fi-tag::before{content:"\e02e"}
 .fi-bulb::before{content:"\e02f"}
 .fi-bug::before{content:"\e030"}
-.fi-bookmark::before{content:"\\e031"}
-.fi-bookmark-filled::before{content:"\\e032"}
+.fi-bookmark::before{content:"\${hex}"}
+.fi-bookmark-filled::before{content:"\${hex}"}
 
 /* Top-right controls: preserve the stable host geometry. */
 #fullscreen-button.fi::before{font-size:38px !important;transform:none !important}
