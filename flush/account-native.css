@@ -1,0 +1,25 @@
+/* Flüsh account settings */
+.account-heading{max-width:1000px;margin:0 auto 24px}
+.account-heading h2{font-size:clamp(27px,3vw,35px);letter-spacing:-.045em;margin:0 0 9px}
+.account-heading p{font-size:13px;color:#91a8b8;margin:0;line-height:1.55}
+.account-self-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:17px;max-width:1000px;margin:0 auto}
+.account-self-cards .user-box{min-width:0;padding:25px}
+.account-self-cards .user-box h2{font-size:19px}
+.account-self-cards .user-box p{line-height:1.55}
+.account-self-cards .user-box p b{color:#cfe4f1}
+.account-self-cards .primary-btn{margin-top:18px}
+.account-self-cards .user-msg{display:block;min-height:20px;margin:10px 0 0;color:#95d2ed;font-size:12px;overflow-wrap:anywhere}
+.account-hint{font-size:11px!important;line-height:1.6!important;color:#859dab!important;margin:9px 0 0!important}
+.account-manager-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:14px 0}
+.account-manage-wrap{border-top:1px solid #294554;margin-top:13px}
+.account-manager-form{background:#0c1720;border:1px solid #274052;border-radius:12px;padding:16px;min-width:0}
+.account-manager-form h3{font-size:14px;font-weight:700;color:#d5e9f5;margin:0 0 15px}
+.account-manager-form .field{font-size:11px;margin:12px 0}
+.account-manager-form .field input{width:100%;min-width:0;font-size:12px}
+.account-manager-form .outline-link{font-size:12px}
+.account-manager-form .user-msg{display:block;min-height:18px;margin:10px 0 0;overflow-wrap:anywhere}
+.account-link{border:0;background:transparent;padding:5px 3px;cursor:pointer;border-radius:6px}
+.account-link:hover{color:#c8e8f6;text-decoration:underline}
+.account-link.active{color:#9cddf8}
+@media(max-width:1040px){.account-self-cards,.account-manager-grid{grid-template-columns:1fr}}
+@media(max-width:600px){.account-self-cards .user-box{padding:18px}}
