@@ -1,4 +1,4 @@
-/* Kaydet ve Sonra Oku | Flöw beta visual integration */
+/* Kaydet ve Sonra Oku | Flöw Icons family integration */
 
 /* Existing action strip uses 30x36 controls and integer flex ordering. */
 .headline-actions > .save-story-button {
@@ -20,6 +20,7 @@
   background:transparent!important;
   color:#fff;
   opacity:.82;
+  text-shadow:0 1px 3px rgba(0,0,0,.65),0 2px 7px rgba(0,0,0,.42);
   cursor:pointer;
   pointer-events:auto!important;
   touch-action:manipulation;
@@ -32,13 +33,11 @@
 .headline-actions > .feedback-inline-link {order:4!important}
 .headline-actions > .source-link {order:5!important}
 .headline-actions > .save-story-button[hidden] {display:none!important}
-.headline-actions > .save-story-button svg {
-  width:25px;
-  height:25px;
-  display:block;
-  filter:drop-shadow(0 1px 3px rgba(0,0,0,.65));
+.headline-actions > .save-story-button.fi::before {
+  font-size:26px!important;
+  line-height:1!important;
+  transform:none!important;
 }
-.headline-actions > .save-story-button[aria-pressed="true"] svg {fill:currentColor}
 .headline-actions > .save-story-button:hover,
 .headline-actions > .save-story-button:focus-visible {opacity:1}
 .headline-actions > .save-story-button:focus-visible {
@@ -46,7 +45,7 @@
   outline-offset:4px;
 }
 @media(max-width:700px),(pointer:coarse){
-  .headline-actions > .save-story-button svg {width:26px;height:26px}
+  .headline-actions > .save-story-button.fi::before {font-size:27px!important}
 }
 
 /* Araçlar: tüm komşular gibi sabit 42x42 (mobilde 38x38), kutusuz hover. */
@@ -81,19 +80,25 @@
   outline-offset:2px;
 }
 #saved-stories-button {position:relative}
-#saved-stories-button svg {
-  width:31px;
-  height:31px;
-  display:block;
-  margin:auto;
-  overflow:visible;
-  transform:translateX(-4px);
+#control-menu-panel #saved-stories-button.fi::before {
+  font-size:31px!important;
+  line-height:1!important;
+  transform:translateX(-4px)!important;
+  text-shadow:0 1px 3px rgba(0,0,0,.65),0 2px 7px rgba(0,0,0,.42);
 }
-/* Sayı SVG'nin kendi koordinat sisteminde ortalanır, ayrı bir badge değildir. */
+/* Sayı yer imi glifinin boşluğunda kalır, ikonla birlikte dört piksel sola hizalanır. */
 #saved-stories-button #floew-bookmark-number-inside {
-  position:static;
-  fill:currentColor;
-  stroke:none;
+  position:absolute;
+  left:calc(50% - 4px);
+  top:47%;
+  transform:translate(-50%,-50%);
+  width:auto;
+  line-height:1;
+  font-family:Arial,Helvetica,sans-serif;
+  font-weight:700;
+  color:#fff;
+  text-align:center;
+  text-shadow:0 1px 3px rgba(0,0,0,.65),0 2px 7px rgba(0,0,0,.42);
   pointer-events:none;
 }
 @media(max-width:700px){
