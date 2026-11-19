@@ -1,0 +1,40 @@
+/* Native Reklam Merkezi */
+.fac-toolbar-actions{display:flex;align-items:center;gap:9px}
+.fac-primary{background:#78b4d0!important;color:#092031!important;font-weight:750!important}
+.fac-primary:hover{background:#a5d4e7!important;color:#092031!important}
+.fac-status,.fac-info{margin:0 0 20px;font-size:12px;color:#8fabbb;line-height:1.6}
+.fac-info{border:1px solid #28475a;background:#122734;border-radius:10px;padding:12px 16px}
+.fac-info a{color:#95cfec}
+.fac-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(335px,1fr));gap:16px}
+.fac-card{min-width:0;border:1px solid #2d4452;background:#101f29;border-radius:15px;overflow:hidden}
+.fac-card-media{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px;background:#0a141c}
+.fac-card-media>div{min-width:0}
+.fac-card-media>div>span{display:block;margin:0 0 8px;color:#7294a7;font-size:10px;font-weight:650;letter-spacing:.1em}
+.fac-card-media img,.fac-card-media video{display:block;width:100%;height:165px;object-fit:contain;background:#070e14;border-radius:7px}
+.fac-empty-media{width:100%;height:165px;display:grid;place-items:center;color:#536d7d;font-size:12px;border:1px dashed #254153;border-radius:7px}
+.fac-card-body{display:flex;justify-content:space-between;align-items:start;gap:12px;padding:17px 16px}
+.fac-card-body>div{min-width:0}
+.fac-card-body b{display:block;font-size:14px;line-height:1.45;color:#deedf5;overflow-wrap:anywhere}
+.fac-card-body p{font-size:11px;color:#85a6b9;margin:8px 0 0}
+.fac-status-pill{flex:none;font-size:10px;border-radius:99px;padding:6px 9px;border:1px solid #35586b;background:#172e3d;color:#aed6e7}
+.fac-on{background:#143b36;border-color:#245b50;color:#9ddfd0}
+.fac-off,.fac-expired{background:#303037;border-color:#51505c;color:#bec0cc}
+.fac-scheduled{background:#322d1d;border-color:#5e5336;color:#e6cc92}
+.fac-actions{border-top:1px solid #263f50;display:flex;justify-content:flex-end;align-items:center;gap:8px;padding:12px 16px}
+.fac-active{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:#b3d3e4;margin-right:auto}
+.fac-active input{accent-color:#77bbd5}
+.fac-danger{color:#d99fa9!important;border:1px solid #71424b!important}
+.fac-overlay{position:fixed;inset:0;z-index:1200;background:#02080cdb;display:grid;place-items:center;padding:20px}
+.fac-dialog{width:min(730px,100%);max-height:90dvh;overflow-y:auto;background:#101e2a;border:1px solid #3c5b6f;border-radius:19px;padding:25px;box-shadow:0 35px 120px #0008}
+.fac-dialog-head{display:flex;justify-content:space-between;align-items:start;gap:16px;padding-bottom:18px;border-bottom:1px solid #2c4454;margin-bottom:18px}
+.fac-dialog-head h2{font-size:24px;margin:0}
+#facForm{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}
+.fac-field{font-size:12px;color:#a3bece;font-weight:600;display:block;min-width:0}
+.fac-field input,.fac-field select{display:block;width:100%;min-width:0;margin-top:7px;padding:13px 12px;background:#0a151e;border:1px solid #345365;color:#dceaf1;border-radius:10px;outline:none;font:12px system-ui}
+.fac-field input:focus,.fac-field select:focus{border-color:#8fc5e1}
+.fac-field small{font-size:10px;font-weight:400;color:#7fa7ba;line-height:1.6;display:block;margin-top:5px;overflow-wrap:anywhere}
+.fac-full{grid-column:1/-1}
+.fac-hint{font-size:11px;color:#8aaaba;margin:2px 0}
+.fac-form-message{min-height:18px;font-size:12px;color:#efa8b1;margin:0}
+.fac-form-actions{display:flex;justify-content:flex-end;gap:10px}
+@media(max-width:750px){.fac-grid{grid-template-columns:1fr}.fac-card-media img,.fac-card-media video,.fac-empty-media{height:130px}#facForm{grid-template-columns:1fr}.fac-dialog{padding:17px}.fac-card-body{flex-direction:column}}
