@@ -105,6 +105,7 @@
 
     if(heading){
       delete heading.dataset.baitbusterOriginalTitle;
+      delete heading.dataset.baitbusterFlowTitle;
       delete heading.dataset.baitbusterApplied;
     }
 
@@ -140,6 +141,7 @@
 
     appliedState.set(slide,stateForSlide);
     heading.dataset.baitbusterOriginalTitle=story.title;
+    heading.dataset.baitbusterFlowTitle=flowTitle;
     heading.dataset.baitbusterApplied="1";
     heading.textContent=flowTitle;
 
