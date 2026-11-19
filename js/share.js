@@ -8,7 +8,7 @@
 (function(){
   "use strict";
 
-  const FEATURE_VERSION="3.2.0";
+  const FEATURE_VERSION="3.2.1";
   const SHARE_LABEL="Haberi paylaş";
   const SHARE_WORKER_BASE=String(
     window.FLOEW_CONFIG?.shareWorkerBase||"https://thefloew-share.thefloewback.workers.dev"
@@ -533,7 +533,8 @@
 
   function flashButton(
     button,
-    ok=true
+    ok=true,
+    mode="clipboard"
   ){
     if(!button)return;
 
@@ -564,7 +565,7 @@
     button.setAttribute(
       "aria-label",
       ok
-        ? "Flöw paylaşım bağlantısı kopyalandı"
+        ? (mode==="native" ? "Haber paylaşıldı" : "Flöw paylaşım bağlantısı kopyalandı")
         : "Bağlantı kopyalanamadı"
     );
 
@@ -703,6 +704,8 @@
           text,
           url:story.shareUrl
         });
+
+        flashButton(button,true,"native");
 
         telemetry(
           story,
