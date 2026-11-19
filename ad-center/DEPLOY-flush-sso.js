@@ -207,10 +207,10 @@ function json(data, status = 200, extraHeaders = {}) {
 }
 
 
-const FLUSH_PORTAL_ORIGIN = "https://xn--flw-tna.tr";
+const FLUSH_PORTAL_ORIGINS = new Set(["https://xn--flw-tna.tr", "https://flush.xn--flw-tna.tr"]);
 function portalOrigin(request){
  const origin=request.headers.get("Origin");
- return origin===FLUSH_PORTAL_ORIGIN?origin:"";
+ return FLUSH_PORTAL_ORIGINS.has(origin)?origin:"";
 }
 function portalCors(request,response){
  const origin=portalOrigin(request);
@@ -237,7 +237,7 @@ async function isFlushAuthorized(request,env){
 
 function assertSameOrigin(request) {
   const origin = request.headers.get("Origin");
-  if (origin && origin !== new URL(request.url).origin && origin !== FLUSH_PORTAL_ORIGIN) {
+  if (origin && origin !== new URL(request.url).origin && !FLUSH_PORTAL_ORIGINS.has(origin)) {
     throw new Response("Origin not allowed", { status: 403 });
   }
 }
