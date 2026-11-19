@@ -54,7 +54,8 @@
     if(count){
       count.textContent=items.length?String(items.length):"";
       count.dataset.digits=String(items.length).length;
-      count.parentElement?.setAttribute("aria-label",items.length?("Kaydedilen haberler: "+items.length):"Kaydedilen haberler");
+      count.setAttribute("font-size",items.length>=100?"6.4":items.length>=10?"7.7":"9");
+      count.closest("button")?.setAttribute("aria-label",items.length?("Kaydedilen haberler: "+items.length):"Kaydedilen haberler");
     }
   }
   function toggle(slide){
@@ -220,7 +221,8 @@
     button.type="button";
     button.setAttribute("aria-label","Kaydedilen haberler");
     button.title="Kaydedilen haberler";
-    button.innerHTML=bookmark+'<span id="floew-saved-count" aria-hidden="true"></span>';
+    // Sayaç doğrudan SVG koordinatlarına bağlanır, CSS konumu değiştiremez.
+    button.innerHTML=bookmark.replace("</svg>",'<text id="floew-saved-count" x="12" y="11.2" text-anchor="middle" dominant-baseline="middle" stroke="none" fill="currentColor" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="9"></text></svg>');
     const settings=$("#menu-button");
     menu.insertBefore(button,settings||null);
     button.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();openPanel();});
