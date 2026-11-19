@@ -6,7 +6,8 @@
   const MAX=300;
   const $=(selector,root=document)=>root.querySelector(selector);
   const $$=(selector,root=document)=>Array.from(root.querySelectorAll(selector));
-  const bookmark='<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M6 3.8h12v17l-6-4-6 4z"/></svg>';
+  // Kaynağı gör simgesindeki dolgun, yuvarlatılmış çizgi oranına uyumlu yer imi.
+  const bookmark='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.05" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M6.1 3.1h11.8c.65 0 1.1.5 1.1 1.1v16.7L12 16.5 5 20.9V4.2c0-.6.45-1.1 1.1-1.1z"/></svg>';
   const closeIcon='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg>';
   let items=[];
   let panel=null;
@@ -50,7 +51,11 @@
       button.title=selected?"Kaydedilenlerden çıkar":"Sonra okumak için kaydet";
     });
     const count=$("#floew-saved-count");
-    if(count)count.textContent=items.length?String(items.length):"";
+    if(count){
+      count.textContent=items.length?String(items.length):"";
+      count.dataset.digits=String(items.length).length;
+      count.parentElement?.setAttribute("aria-label",items.length?("Kaydedilen haberler: "+items.length):"Kaydedilen haberler");
+    }
   }
   function toggle(slide){
     const story=current(slide);
@@ -225,7 +230,7 @@
     const link=document.createElement("link");
     link.id="floew-saved-stories-css";
     link.rel="stylesheet";
-    link.href="/css/saved-stories.css?v=3";
+    link.href="/css/saved-stories.css?v=4";
     document.head.append(link);
   }
   function init(){
