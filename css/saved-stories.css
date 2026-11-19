@@ -34,14 +34,36 @@
 .headline-actions > .feedback-inline-link{order:4 !important}
 .headline-actions > .source-link{order:5 !important}
 #control-menu-panel #saved-stories-open{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  color:#fff;
-  opacity:.82;
+  position:static !important;
+  inset:auto !important;
+  width:42px !important;
+  height:42px !important;
+  display:grid !important;
+  place-items:center !important;
+  margin:0 !important;
+  padding:0 !important;
+  border:0 !important;
+  background:transparent !important;
+  color:#fff !important;
+  transform:none !important;
+  cursor:pointer;
+  text-shadow:0 1px 3px rgba(0,0,0,.65);
+  transition:opacity .18s ease;
+}
+#control-menu-panel[aria-hidden="true"] #saved-stories-open{
+  pointer-events:none !important;
+  visibility:hidden !important;
+}
+#control-menu-panel.open[aria-hidden="false"] #saved-stories-open{
+  opacity:.82 !important;
+  visibility:visible !important;
+  pointer-events:auto !important;
 }
 #saved-stories-open svg{width:27px;height:27px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-#control-menu-panel #saved-stories-open:hover{opacity:1}
+#control-menu-panel.open #saved-stories-open:hover{opacity:1 !important}
+@media(max-width:700px){
+  #control-menu-panel #saved-stories-open{width:38px !important;height:38px !important}
+}
 #saved-stories-overlay[hidden]{display:none !important}
 #saved-stories-overlay{
   position:fixed;
