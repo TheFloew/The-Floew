@@ -230,7 +230,7 @@
     const link=document.createElement("link");
     link.id="floew-saved-stories-css";
     link.rel="stylesheet";
-    link.href="/css/saved-stories.css?v=13";
+    link.href="/css/saved-stories.css?v=14";
     document.head.append(link);
   }
   function init(){
