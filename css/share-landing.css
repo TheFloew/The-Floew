@@ -1,0 +1,151 @@
+/* Flöw | Paylaşılmış haber sayfası butonları
+   Ana sayfadaki css/flow-icons.css v10.11 boyut ve hover dilini izler.
+   Bu dosya yalnızca share-landing-ui.js ile işaretlenen öğelere uygulanır. */
+@font-face {
+  font-family:"Flöw Icons";
+  src:url("../assets/fonts/flow-icons.woff2?v=5") format("woff2");
+  font-style:normal;
+  font-weight:400;
+  font-display:block;
+}
+
+[data-floew-share-control] {
+  -webkit-tap-highlight-color:transparent;
+  transition:opacity .18s ease,color .18s ease,background-color .18s ease !important;
+}
+[data-floew-share-control]:hover,
+[data-floew-share-control]:focus-visible {
+  opacity:1 !important;
+  transform:none !important;
+}
+[data-floew-share-control]:active {
+  transform:none !important;
+}
+[data-floew-share-control]:focus-visible {
+  outline:1px solid rgba(255,255,255,.72) !important;
+  outline-offset:4px !important;
+}
+
+[data-floew-share-icon-only="true"] {
+  display:inline-grid !important;
+  place-items:center !important;
+  inline-size:30px !important;
+  min-inline-size:30px !important;
+  max-inline-size:30px !important;
+  block-size:36px !important;
+  min-block-size:36px !important;
+  max-block-size:36px !important;
+  box-sizing:border-box !important;
+  margin:0 !important;
+  padding:0 !important;
+  border:0 !important;
+  border-radius:0 !important;
+  box-shadow:none !important;
+  background:transparent !important;
+  color:#fff !important;
+  font-size:0 !important;
+  line-height:1 !important;
+  opacity:.76;
+  cursor:pointer;
+  text-decoration:none !important;
+  transform:none !important;
+}
+[data-floew-share-icon-only="true"] > svg,
+[data-floew-share-icon-only="true"] > img {
+  display:none !important;
+}
+[data-floew-share-icon-only="true"] > span:not(.sr-only):not(.visually-hidden) {
+  font-size:0 !important;
+}
+[data-floew-share-icon-only="true"]::before {
+  content:"" !important;
+  display:block !important;
+  width:22px !important;
+  height:22px !important;
+  flex:0 0 22px !important;
+  background:currentColor !important;
+  -webkit-mask-position:center !important;
+  mask-position:center !important;
+  -webkit-mask-repeat:no-repeat !important;
+  mask-repeat:no-repeat !important;
+  -webkit-mask-size:contain !important;
+  mask-size:contain !important;
+  transform:none !important;
+}
+
+[data-floew-share-control="share"][data-floew-share-icon-only="true"]::before {
+  -webkit-mask-image:url("../assets/icon-share.svg?v=3") !important;
+  mask-image:url("../assets/icon-share.svg?v=3") !important;
+}
+[data-floew-share-control="source"][data-floew-share-icon-only="true"]::before,
+[data-floew-share-control="external"][data-floew-share-icon-only="true"]::before {
+  -webkit-mask-image:url("../assets/icon-source-rounded.svg?v=1") !important;
+  mask-image:url("../assets/icon-source-rounded.svg?v=1") !important;
+}
+[data-floew-share-control="close"][data-floew-share-icon-only="true"]::before {
+  -webkit-mask-image:url("../assets/icon-close-balanced.svg?v=1") !important;
+  mask-image:url("../assets/icon-close-balanced.svg?v=1") !important;
+  width:26px !important;
+  height:26px !important;
+}
+[data-floew-share-control="feedback"][data-floew-share-icon-only="true"]::before,
+[data-floew-share-control="back"][data-floew-share-icon-only="true"]::before {
+  background:none !important;
+  -webkit-mask:none !important;
+  mask:none !important;
+  font-family:"Flöw Icons" !important;
+  font-weight:400 !important;
+  font-size:23px !important;
+  line-height:22px !important;
+  text-align:center !important;
+}
+[data-floew-share-control="feedback"][data-floew-share-icon-only="true"]::before {
+  content:"\e012" !important;
+}
+[data-floew-share-control="back"][data-floew-share-icon-only="true"]::before {
+  content:"\e02c" !important;
+}
+
+/* Başarılı kopyalamada ana sayfadaki fi-check / fi-warning davranışı. */
+[data-floew-share-control="share"].share-done[data-floew-share-icon-only="true"]::before,
+[data-floew-share-control="share"].share-error[data-floew-share-icon-only="true"]::before {
+  background:none !important;
+  -webkit-mask:none !important;
+  mask:none !important;
+  font-family:"Flöw Icons" !important;
+  font-weight:400 !important;
+  font-size:22px !important;
+  line-height:22px !important;
+  text-align:center !important;
+}
+[data-floew-share-control="share"].share-done[data-floew-share-icon-only="true"]::before {
+  content:"\e014" !important;
+}
+[data-floew-share-control="share"].share-error[data-floew-share-icon-only="true"]::before {
+  content:"\e02d" !important;
+}
+[data-floew-share-control="share"].share-done {opacity:1 !important}
+[data-floew-share-control="share"].share-error {opacity:.72 !important}
+
+@media (max-width:700px), (pointer:coarse) {
+  [data-floew-share-icon-only="true"] {
+    inline-size:32px !important;
+    min-inline-size:32px !important;
+    max-inline-size:32px !important;
+    block-size:38px !important;
+    min-block-size:38px !important;
+    max-block-size:38px !important;
+  }
+  [data-floew-share-icon-only="true"]::before {
+    width:23px !important;
+    height:23px !important;
+  }
+  [data-floew-share-control="close"][data-floew-share-icon-only="true"]::before {
+    width:26px !important;
+    height:26px !important;
+  }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  [data-floew-share-control] {transition:none !important}
+}
