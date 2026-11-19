@@ -94,29 +94,56 @@
     if(text!=null)el.textContent=text;
     return el;
   }
+  function openSavedSource(entry){
+    const viewer=window.openSourceViewer;
+    if(typeof viewer!=="function"){
+      const status=$("#floew-saved-status",panel);
+      if(status)status.textContent="Kaynak görüntüleyici kullanılamıyor. Lütfen sayfayı yenileyin.";
+      return;
+    }
+    closePanel();
+    if(!viewer(entry.url,entry.source||"Kaynak")){
+      openPanel();
+      const status=$("#floew-saved-status",panel);
+      if(status)status.textContent="Haber kaynağı açılamadı.";
+    }
+  }
   function render(){
     if(!panel)return;
     const list=$("#floew-saved-list",panel);
     list.replaceChildren();
+    const count=$("#floew-saved-total",panel);
+    if(count)count.textContent=items.length+" haber kaydedildi";
     if(!items.length){
-      list.append(make("p","floew-saved-empty","Henüz kaydedilmiş haber yok. Haber altındaki yer imi simgesine dokunarak buraya ekleyebilirsiniz."));
+      list.append(make("p","floew-saved-empty","Henüz kaydedilmiş haber yok. Haber altındaki yer imi simgesine basarak ekleyebilirsiniz."));
       return;
     }
     for(const entry of items){
       const row=make("div","floew-saved-row");
-      const link=make("a","floew-saved-story");
-      link.href=entry.url;
-      link.target="_blank";
-      link.rel="noopener noreferrer";
+      const link=make("button","floew-saved-story");
+      link.type="button";
+      link.title="Haberi Flöw içinde aç";
       link.append(make("strong","",entry.title));
       if(entry.source)link.append(make("span","floew-saved-source",entry.source));
-      const remove=make("button","floew-saved-remove","×");
+      link.addEventListener("click",e=>{
+        e.preventDefault();
+        e.stopPropagation();
+        openSavedSource(entry);
+      });
+      const remove=make("button","floew-saved-remove fi fi-close");
       remove.type="button";
-      remove.title="Listeden çıkar";
+      remove.title="Kaydedilenlerden çıkar";
       remove.setAttribute("aria-label","Haberi listeden çıkar: "+entry.title);
-      remove.addEventListener("click",()=>{
+      remove.addEventListener("click",e=>{
+        e.preventDefault();
+        e.stopPropagation();
+        const previous=items.slice();
         items=items.filter(x=>x.url!==entry.url);
-        persist();render();syncButtons();
+        if(!persist()){
+          items=previous;
+          alert("Bu cihazda kayıt silinemedi. Tarayıcı depolama iznini kontrol edin.");
+        }
+        render();syncButtons();
       });
       row.append(link,remove);
       list.append(row);
@@ -126,34 +153,59 @@
     if(!panel)return;
     lastFocus=document.activeElement;
     panel.hidden=false;
+    panel.setAttribute("aria-hidden","false");
     document.body.classList.add("floew-saved-open");
+    if(typeof window.pauseFlowForUi==="function")window.pauseFlowForUi();
+    if(typeof window.closeControlMenu==="function")window.closeControlMenu();
     render();
     $("#floew-saved-close",panel)?.focus();
   }
   function closePanel(){
-    if(!panel)return;
+    if(!panel||panel.hidden)return;
     panel.hidden=true;
+    panel.setAttribute("aria-hidden","true");
     document.body.classList.remove("floew-saved-open");
+    if(typeof window.queueUiFlowResumeCheck==="function")window.queueUiFlowResumeCheck();
     if(lastFocus?.isConnected)lastFocus.focus();
   }
   function setupPanel(){
     panel=make("div","floew-saved-overlay");
     panel.id="floew-saved-overlay";
     panel.hidden=true;
-    panel.innerHTML='<section class="floew-saved-panel" role="dialog" aria-modal="true" aria-labelledby="floew-saved-title"><header class="floew-saved-header"><div><h2 id="floew-saved-title">Kaydedilen Haberler</h2><p>Sonra okumak için ayırdıklarınız</p></div><button id="floew-saved-close" type="button" aria-label="Kapat">'+closeIcon+'</button></header><div id="floew-saved-list" class="floew-saved-list"></div><footer>Haberler yalnızca bu cihazda saklanır.</footer></section>';
+    panel.setAttribute("aria-hidden","true");
+    panel.innerHTML='<section class="floew-saved-panel" role="dialog" aria-modal="true" aria-labelledby="floew-saved-title"><div class="menu-header floew-saved-header"><div><div id="floew-saved-title" class="menu-title">Kaydedilen Haberler</div><div class="menu-subtitle">Sonra okumak için ayırdıklarınız</div></div><button id="floew-saved-close" class="fi fi-close" type="button" aria-label="Kaydedilen haberleri kapat" title="Kapat"></button></div><div class="floew-saved-meta"><span id="floew-saved-total"></span></div><p id="floew-saved-status" role="status" aria-live="polite"></p><div id="floew-saved-list" class="floew-saved-list"></div><footer>Bu liste yalnızca bu cihazda saklanır.</footer></section>';
     document.body.append(panel);
+    // Pencere içi tıklama, scroll ve dokunma hareketleri haber akışına iletilmesin.
+    for(const name of ["pointerdown","pointerup","pointermove","pointercancel","mousedown","mouseup","touchstart","touchmove","touchend","wheel","click","dblclick","contextmenu"]){
+      panel.addEventListener(name,e=>e.stopPropagation(),{passive:name==="wheel"||name.startsWith("touch")});
+    }
     panel.addEventListener("click",e=>{if(e.target===panel)closePanel();});
-    $("#floew-saved-close",panel).addEventListener("click",closePanel);
-    document.addEventListener("keydown",e=>{
+    $("#floew-saved-close",panel).addEventListener("click",e=>{e.preventDefault();closePanel();});
+    window.addEventListener("keydown",e=>{
       if(panel.hidden)return;
-      if(e.key==="Escape"){e.preventDefault();closePanel();}
-      if(e.key==="Tab"){
-        const focusable=$$('button,a[href]',panel).filter(el=>!el.disabled);
-        if(!focusable.length)return;
-        if(e.shiftKey&&document.activeElement===focusable[0]){e.preventDefault();focusable[focusable.length-1].focus();}
-        else if(!e.shiftKey&&document.activeElement===focusable[focusable.length-1]){e.preventDefault();focusable[0].focus();}
+      if(e.key==="Escape"){e.preventDefault();e.stopImmediatePropagation();closePanel();return;}
+      if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","PageUp","PageDown"," "].includes(e.key)){
+        e.stopImmediatePropagation();
       }
-    });
+      if(e.key==="Tab"){
+        const focusable=$$("button:not([disabled])",panel).filter(el=>el.getClientRects().length);
+        if(!focusable.length)return;
+        if(e.shiftKey&&document.activeElement===focusable[0]){
+          e.preventDefault();focusable[focusable.length-1].focus();
+        }else if(!e.shiftKey&&document.activeElement===focusable[focusable.length-1]){
+          e.preventDefault();focusable[0].focus();
+        }
+      }
+    },{capture:true});
+    // Mevcut global haber navigasyonunu beta modal açıkken devre dışı bırak.
+    const originalBlocking=window.navigationBlockingPanelOpen;
+    if(typeof originalBlocking==="function"){
+      window.navigationBlockingPanelOpen=function(){return !panel.hidden||originalBlocking();};
+    }
+    const originalPauseSurface=window.anyUiPauseSurfaceOpen;
+    if(typeof originalPauseSurface==="function"){
+      window.anyUiPauseSurfaceOpen=function(){return !panel.hidden||originalPauseSurface();};
+    }
   }
   function addMenuEntry(){
     const menu=$("#control-menu-panel");
@@ -169,39 +221,12 @@
     button.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();openPanel();});
   }
   function addStyles(){
-    const style=make("style");
-    style.textContent=`
-      .headline-actions > .save-story-button{display:inline-flex!important;align-items:center!important;justify-content:center!important;inline-size:48px!important;block-size:44px!important;min-inline-size:48px!important;min-block-size:44px!important;max-inline-size:48px!important;box-sizing:border-box!important;color:#fff;background:transparent;border:0;padding:0!important;margin:0!important;cursor:pointer;opacity:.8;flex:0 0 auto;pointer-events:auto!important;touch-action:manipulation;-webkit-tap-highlight-color:transparent;position:relative;z-index:1;transition:opacity .16s ease,transform .16s ease}
-      .headline-actions > .save-story-button[hidden]{display:none!important}
-      @media(max-width:700px),(pointer:coarse){.headline-actions > .save-story-button{inline-size:52px!important;block-size:48px!important;min-inline-size:52px!important;min-block-size:48px!important;max-inline-size:52px!important}}
-      .save-story-button:hover,.save-story-button:focus-visible{opacity:1}
-      .save-story-button:active{transform:scale(.88)}
-      .save-story-button[aria-pressed="true"] svg{fill:currentColor}
-      .save-story-button:disabled{opacity:.3;cursor:default}
-      .floew-saved-menu{position:relative}
-      .floew-saved-menu svg{width:20px;height:20px}
-      #floew-saved-count{position:absolute;font-size:10px;right:1px;top:1px;line-height:1}
-      .floew-saved-overlay[hidden]{display:none!important}
-      .floew-saved-overlay{position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.76);display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box}
-      .floew-saved-panel{background:#141414;color:#fff;border:1px solid #353535;border-radius:16px;width:min(580px,100%);max-height:min(80vh,780px);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 80px #000b;font-family:inherit}
-      .floew-saved-header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:24px 24px 18px;border-bottom:1px solid #333}
-      .floew-saved-header h2{font-size:22px;margin:0 0 4px;font-weight:650}
-      .floew-saved-header p{font-size:13px;color:#aaa;margin:0}
-      #floew-saved-close{background:none;border:0;color:#fff;cursor:pointer;padding:5px}
-      .floew-saved-list{overflow:auto;overscroll-behavior:contain;padding:10px 24px;min-height:80px}
-      .floew-saved-row{display:flex;align-items:center;gap:12px;border-bottom:1px solid #303030;padding:14px 0}
-      .floew-saved-row:last-child{border:0}
-      .floew-saved-story{color:#fff!important;text-decoration:none;flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;line-height:1.4}
-      .floew-saved-story:hover strong{text-decoration:underline}
-      .floew-saved-story strong{font-size:15px;font-weight:500}
-      .floew-saved-source{color:#aaa;font-size:12px}
-      .floew-saved-remove{background:transparent;border:0;color:#aaa;font-size:25px;cursor:pointer;padding:8px}
-      .floew-saved-remove:hover{color:#fff}
-      .floew-saved-empty{color:#aaa;font-size:14px;line-height:1.6;padding:14px 0}
-      .floew-saved-panel footer{font-size:11px;color:#999;padding:14px 24px;border-top:1px solid #333}
-      @media(max-width:600px){.floew-saved-overlay{padding:12px}.floew-saved-header{padding:20px 18px 14px}.floew-saved-list{padding:8px 18px}.floew-saved-panel footer{padding:12px 18px}}
-    `;
-    document.head.append(style);
+    if(document.getElementById("floew-saved-stories-css"))return;
+    const link=document.createElement("link");
+    link.id="floew-saved-stories-css";
+    link.rel="stylesheet";
+    link.href="/css/saved-stories.css?v=3";
+    document.head.append(link);
   }
   function init(){
     load();addStyles();setupPanel();addMenuEntry();
