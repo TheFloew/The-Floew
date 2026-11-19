@@ -87,6 +87,7 @@
   display:block;
   margin:auto;
   overflow:visible;
+  transform:translateX(-2px);
 }
 /* Sayı SVG'nin kendi koordinat sisteminde ortalanır, ayrı bir badge değildir. */
 #saved-stories-button #floew-bookmark-number-inside {
