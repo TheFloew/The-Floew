@@ -34,7 +34,7 @@
 .headline-actions > .source-link {order:5!important}
 .headline-actions > .save-story-button[hidden] {display:none!important}
 .headline-actions > .save-story-button.fi::before {
-  font-size:26px!important;
+  font-size:30px!important;
   line-height:1!important;
   transform:none!important;
 }
@@ -45,7 +45,7 @@
   outline-offset:4px;
 }
 @media(max-width:700px),(pointer:coarse){
-  .headline-actions > .save-story-button.fi::before {font-size:27px!important}
+  .headline-actions > .save-story-button.fi::before {font-size:31px!important}
 }
 
 /* Araçlar: tüm komşular gibi sabit 42x42 (mobilde 38x38), kutusuz hover. */
@@ -81,15 +81,15 @@
 }
 #saved-stories-button {position:relative}
 #control-menu-panel #saved-stories-button.fi::before {
-  font-size:31px!important;
+  font-size:36px!important;
   line-height:1!important;
-  transform:translateX(-4px)!important;
+  transform:none!important;
   text-shadow:0 1px 3px rgba(0,0,0,.65),0 2px 7px rgba(0,0,0,.42);
 }
-/* Sayı yer imi glifinin boşluğunda kalır, ikonla birlikte dört piksel sola hizalanır. */
+/* Sayı, font glifinin optik merkezini izler. */
 #saved-stories-button #floew-bookmark-number-inside {
   position:absolute;
-  left:calc(50% - 4px);
+  left:50%;
   top:47%;
   transform:translate(-50%,-50%);
   width:auto;
