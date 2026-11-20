@@ -813,7 +813,10 @@
     button.addEventListener("click",event=>{
       event.preventDefault();
       event.stopPropagation();
-      void shareStory(button);
+      // Görsel kart ve mevcut bağlantı paylaşımı tek seçim ekranında.
+      if(!window.FloewVisualShare?.open?.(button)){
+        void shareStory(button);
+      }
     });
 
     syncButton(button,sourceLink);
@@ -842,6 +845,15 @@
       .floewShareVersion=
       FEATURE_VERSION;
   }
+
+  // Görsel kartın mevcut snapshot/short-link akışını tekrar kullanması için.
+  window.FloewShare={
+    storyFromButton,
+    buildShareSnapshot,
+    shareUrlForArticle,
+    shareStory,
+    telemetry
+  };
 
   if(
     document.readyState===
