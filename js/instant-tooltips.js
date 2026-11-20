@@ -70,6 +70,28 @@
         left=actionRow.getBoundingClientRect().right-width;
         top=actionRow.getBoundingClientRect().bottom+10;
       }
+    }else if(active.matches(".source-line .source, .source-line .category")){
+      // Kaynak ve kategori aynı etiket çizgisini kullanır:
+      // kategori + logo + kaynak grubunun en solundaki öğenin solunda biter.
+      const sourceLine=active.closest(".source-line");
+      const visible=Array.from(sourceLine.children).filter(el=>{
+        if(!el.getClientRects().length)return false;
+        const style=getComputedStyle(el);
+        return style.display!=="none"&&style.visibility!=="hidden";
+      });
+      const firstLeft=visible.length
+        ? Math.min(...visible.map(el=>el.getBoundingClientRect().left))
+        : rect.left;
+      const available=firstLeft-gap-edge;
+      if(available>=92){
+        label.style.maxWidth=Math.min(300,available)+"px";
+        left=firstLeft-gap-label.offsetWidth;
+        top=rect.top+(rect.height-label.offsetHeight)/2;
+      }else{
+        // Dar ekranda üst üste binmek yerine kaynak satırının altında kal.
+        left=sourceLine.getBoundingClientRect().right-label.offsetWidth;
+        top=sourceLine.getBoundingClientRect().bottom+10;
+      }
     }else if(active.matches(".description")){
       // Manşet açıklaması başlığın üzerinde değil, açıklamanın solunda.
       left=rect.left-label.offsetWidth-gap;
