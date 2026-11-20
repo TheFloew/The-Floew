@@ -339,3 +339,44 @@ test("70B classifier still splits and retries structured-output parse failures a
   assert.ok(classifierCalls.some(size=>size===2));
   assert.ok(classifierCalls.some(size=>size===1));
 });
+
+test("question headings bypass the 8B gate and reach the 70B classifier",async()=>{
+  const calls=[];
+  const env={AI:{async run(model,input){
+    const stories=JSON.parse(input.messages[1].content).stories;
+    calls.push({model,stories});
+    if(model===AI_GATE_MODEL_DEFAULT)return {response:"0|clear|0.99"};
+    return {response:{results:[{
+      key:"0",clickbait:true,confidence:.93,needsArticle:false,
+      reasonCode:"question_information_gap",missingQuestion:"Ne açıklandı?",
+      candidateFact:"Faiz oranı yüzde 42,5 oldu"
+    }]}};
+  }}};
+  const rows=await classifyStories([
+    {key:"q",title:"Faiz kararı ne oldu?",description:"Faiz oranı yüzde 42,5 oldu"},
+    {key:"a",title:"Merkez Bankası faizi yüzde 42,5 olarak açıkladı"}
+  ],env);
+  assert.deepEqual(calls.map(call=>call.model),[AI_GATE_MODEL_DEFAULT,AI_MODEL_DEFAULT]);
+  assert.deepEqual(calls[0].stories.map(story=>story.title),["Merkez Bankası faizi yüzde 42,5 olarak açıkladı"]);
+  assert.deepEqual(calls[1].stories.map(story=>story.title),["Faiz kararı ne oldu?"]);
+  assert.equal(rows[0].clickbait,true);
+  assert.equal(rows[1].reasonCode,"clear_headline_8b_gate");
+});
+
+test("all-question batches avoid the 8B gate call",async()=>{
+  const calls=[];
+  const env={AI:{async run(model,input){
+    calls.push(model);
+    const stories=JSON.parse(input.messages[1].content).stories;
+    return {response:{results:stories.map(story=>({
+      key:story.key,clickbait:false,confidence:.97,needsArticle:false,
+      reasonCode:"already_informative",missingQuestion:"",candidateFact:""
+    }))}};
+  }}};
+  const rows=await classifyStories([
+    {key:"q1",title:"Ne olacak？"},
+    {key:"q2",title:"Neden böyle؟"}
+  ],env);
+  assert.deepEqual(calls,[AI_MODEL_DEFAULT]);
+  assert.equal(rows.length,2);
+});
