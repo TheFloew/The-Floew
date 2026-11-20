@@ -114,3 +114,24 @@ Yeni modüller: `ad-reach-sketch.mjs`, `ad-reach-store.mjs`, `ad-reach-hourly.sq
 7. **Canlı bağlantı yok:** Modül `node:crypto` ve yerel SQLite kullanır. Worker'a geçişte Web Crypto, batch/atomic upsert, veri saklama politikası ve gerçek SQL eşitliği doğrulanmalı.
 
 **Durum:** Bu aşamada Cloudflare Worker, Flüsh, D1 veya canlı kullanıcı kayıtlarında **hiçbir değişiklik yapılmadı**.
+
+## Aşama 5: Birleşik reklam raporu ve kesin kayan zaman aralıkları (20 Kasım 2026)
+
+**Yeni dosyalar:** `ad-unified-report.mjs`, `ad-unified-report.test.mjs`. Yalnızca **offline Node.js / SQLite** prototipidir. Canlı Cloudflare Worker kodu değildir.
+
+**Yeni API:** `getUnifiedAdReport({ db, range, now, boundarySource, secret, keyId })`. Üç rapor aralığı `24h`, `7d`, `all`. Genel reklam istatistikleri; gösterim, atlama, tamamlanma, geri dönüş, tekrar gösterim, izleme süreleri, benzersiz anonim tanımlayıcı sayısı ve tahmini frekans; reklam bazlı cihaz, yön, yerel saat, yön×cihaz kırılımları birlikte hesaplanır. Tekil sayılar tahminiyse `viewers_exact:false`, `returners_exact:false`, `reach_relative_error` gibi alanlarla etiketlenir.
+
+**Kayan saat başlangıcı:** Örneğin saat 15.37'de seçilen `24h` görünümü, önceki gün tam **15.37**'den başlar. Tamamlanan saatleri `ad_hourly_deltas` ve `ad_reach_hourly` özetlerinden okur. En fazla iki eksik saat parçasını `boundarySource({since, until})` üzerinden, sınırlar `[since, until)` olacak şekilde alır. **Kaynak, ilgili aralığın tüm olaylarını eksiksiz sağlamalıdır.** Aksi hâlde rapor doğru olmayabilir. Böyle bir canlı boundarySource henüz yazılmamıştır.
+
+**Offline doğrulama:** Yerelde `node --test analytics/v2/ad-unified-report.test.mjs` ile **11/11 senaryo** başarılı. Kaynak deposuna ayrıca aynı hesaplamaların 8 temel örneğini içeren bağımsız entegrasyon testleri eklendi. Testler sentetik veri ve özel SQLite üzerinde çalışır; Cloudflare D1 yükünü ölçmez.
+
+### Üretim öncesi zorunlu eksikler
+
+1. **Global event_id dedup ve doğrulanmış toplu işleme:** Önceki `ad-delta-store` farklı batch ID'lerde tekrarlanan olayı iki kere sayabilir. Tekil reach kendi tekrarlarını birleştirir, fakat toplam gösterim hâlâ çift sayılabilir. Henüz uçtan uca exactly-once garantisi **yoktur**.
+2. **Tutarlı watermark:** Son dakika/son saat ve tamamlanmış saat özetlerinin aynı olayı eksik veya iki kez içermeyecek şekilde yayımlanması için gecikmiş olay politikası ve snapshot/watermark gerekir.
+3. **Özel, sınırlı kısmi saat kaynağı:** Özellikle günlük 500 bin kullanıcı varsayımında bir saate ait ham olaylar bile çok büyük olabilir. Dakikalık özet veya birden fazla kısa zaman çözünürlüğü denenmeden canlı D1'i kısmi saat sorgusuna maruz bırakmayın.
+4. **Günlük/aylık birleştirme:** `all` henüz bütün ilgili saatlik özetleri okuyor. Ham olay tablosunu taramasa bile yıllar içinde pahalılaşabilir. Günlük/aylık sayaç ve birleşebilir reach sketch rollup'ları sonraki aşamada şart.
+5. **Gizlilik ve anahtar yönetimi:** Gerçek `secret` kod deposuna yüklenmez. HMAC çıktıları da uygun erişim/silme politikası olan takma adlı veridir.
+6. **Flüsh API sözleşmesi:** Ad Center metadata, kategori etiketleri, rapor yetkilendirmesi, feedback ve `generatedAt` uyumu ayrı tamamlanacak. Bu prototip **deploy edilmemeli**.
+
+**Güvenlik:** Canlı Worker, D1, Flüsh veya kullanıcı verisi değiştirilmedi.
