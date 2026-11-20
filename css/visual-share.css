@@ -1,0 +1,139 @@
+/* Flöw | Görsel Haber Paylaşımı v1 */
+.floew-visual-share[hidden]{display:none!important}
+.floew-visual-share{
+  position:fixed;
+  inset:0;
+  z-index:1900;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:24px max(18px,env(safe-area-inset-right)) 24px max(18px,env(safe-area-inset-left));
+  box-sizing:border-box;
+  overflow:auto;
+  background:rgba(0,0,0,.84);
+  -webkit-backdrop-filter:blur(8px);
+  backdrop-filter:blur(8px);
+  touch-action:pan-y;
+  overscroll-behavior:contain;
+}
+.floew-visual-share-dialog{
+  width:min(860px,94vw);
+  max-height:min(92vh,920px);
+  display:flex;
+  flex-direction:column;
+  gap:15px;
+  padding:0;
+  margin:auto;
+  border:0;
+  color:#fff;
+  background:transparent;
+  font-family:"Comfortaa",sans-serif;
+  box-sizing:border-box;
+  touch-action:pan-y;
+}
+.floew-visual-share-header{
+  flex:0 0 auto;
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:20px;
+}
+.floew-visual-share-heading{font-size:21px;font-weight:700;line-height:1.35}
+.floew-visual-share-subtitle{font-size:11px;color:rgba(255,255,255,.62);line-height:1.55;margin-top:6px}
+.floew-visual-share-close{
+  display:grid;
+  place-items:center;
+  flex:0 0 38px;
+  width:38px;
+  height:38px;
+  border:0;
+  background:transparent;
+  color:#fff;
+  opacity:.72;
+  font:400 31px/1 Arial,sans-serif;
+  cursor:pointer;
+}
+.floew-visual-share-close:hover,.floew-visual-share-close:focus-visible{opacity:1}
+.floew-visual-share-body{
+  flex:1 1 auto;
+  min-height:0;
+  display:flex;
+  gap:28px;
+  align-items:stretch;
+}
+.floew-visual-share-canvas-wrap{
+  flex:0 0 auto;
+  width:min(275px,30vw);
+  min-height:360px;
+  display:grid;
+  place-items:center;
+  padding:10px;
+  border:1px solid rgba(255,255,255,.14);
+  background:#101115;
+  box-sizing:border-box;
+}
+#floew-visual-share-canvas{
+  display:block;
+  max-width:100%;
+  max-height:min(62vh,550px);
+  width:auto;
+  height:auto;
+  aspect-ratio:9/16;
+  object-fit:contain;
+  box-shadow:0 12px 35px rgba(0,0,0,.25);
+}
+.floew-visual-share-controls{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:15px;
+  min-width:0;
+}
+.floew-visual-share-note{
+  margin:0;
+  color:rgba(255,255,255,.76);
+  font:500 12px/1.65 "Comfortaa",sans-serif;
+}
+.floew-visual-share-links{display:flex;flex-direction:column;gap:12px}
+.floew-visual-share-action{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:48px;
+  padding:13px 18px;
+  border:1px solid rgba(255,255,255,.32);
+  border-radius:6px;
+  background:rgba(255,255,255,.12);
+  color:#fff;
+  font:700 12px/1.4 "Comfortaa",sans-serif;
+  cursor:pointer;
+  text-align:center;
+  transition:background .14s ease,border-color .14s ease;
+}
+.floew-visual-share-action:hover:not(:disabled),.floew-visual-share-action:focus-visible{
+  background:rgba(255,255,255,.22);
+  border-color:rgba(255,255,255,.65);
+}
+.floew-visual-share-action.secondary{background:transparent;border-color:rgba(255,255,255,.18)}
+.floew-visual-share-action.secondary:hover{background:rgba(255,255,255,.10)}
+.floew-visual-share-action:disabled{opacity:.40;cursor:wait}
+.floew-visual-share-status{
+  margin:0;
+  min-height:1.5em;
+  color:rgba(255,255,255,.62);
+  font:500 11px/1.6 "Comfortaa",sans-serif;
+}
+.floew-visual-share-status[data-error="true"]{color:#ffb7b7}
+@media(max-width:700px),(max-height:570px){
+  .floew-visual-share{padding:16px;align-items:flex-start}
+  .floew-visual-share-dialog{width:min(530px,100%);max-height:none;gap:11px}
+  .floew-visual-share-heading{font-size:17px}
+  .floew-visual-share-body{flex-direction:column;align-items:center;gap:14px}
+  .floew-visual-share-canvas-wrap{width:min(220px,55vw);min-height:0;padding:6px}
+  #floew-visual-share-canvas{max-height:min(42vh,390px)}
+  .floew-visual-share-controls{width:100%;justify-content:flex-start;gap:10px}
+  .floew-visual-share-links{flex-direction:row;gap:9px}
+  .floew-visual-share-action{flex:1;padding:11px 8px;font-size:10px}
+  .floew-visual-share-note,.floew-visual-share-status{font-size:10px}
+}
