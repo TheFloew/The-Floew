@@ -30,6 +30,3 @@
 @media(max-width:700px){
   #floew-instant-tooltip {font-size:10px;padding:6px 8px;max-width:min(260px,calc(100vw - 16px))}
 }
-@media(hover:none) and (pointer:coarse){
-  #floew-instant-tooltip {display:none!important}
-}
