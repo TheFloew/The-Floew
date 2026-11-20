@@ -2,7 +2,8 @@ import {
   normalizeStory,
   storyCacheKey,
   originalResult,
-  rewrittenResult
+  rewrittenResult,
+  hasQuestionMark
 } from "./core.js";
 import {fetchArticleText} from "./article.js";
 import {
@@ -12,7 +13,7 @@ import {
 } from "./ai.js";
 
 const SERVICE="thefloew-baitbuster";
-const VERSION="1.6.7";
+const VERSION="1.6.8";
 const ALLOWED_ORIGIN="https://xn--flw-tna.tr";
 const MAX_STORIES=12;
 const CACHE_TTL_SECONDS=30*24*60*60;
@@ -110,7 +111,9 @@ async function evaluateStories(rawStories,env,ctx){
     const cacheKey=`v7:${await storyCacheKey(story)}`;
     cacheKeyByStory.set(story.key,cacheKey);
     const cached=await readCached(env,cacheKey);
-    if(cached&&cached.originalTitle===story.title&&cached.key===story.key){
+    // Recheck only question headlines previously dismissed by the 8B gate.
+    const staleQuestionGate=hasQuestionMark(story.title)&&cached?.reasonCode==="clear_headline_8b_gate";
+    if(cached&&!staleQuestionGate&&cached.originalTitle===story.title&&cached.key===story.key){
       finalByKey.set(story.key,cached);
       cacheHits++;
     }else{
