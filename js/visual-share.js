@@ -300,6 +300,14 @@
     ctx.fillStyle=shade;ctx.fillRect(0,930,W,680);
     ctx.fillStyle="#0b0d12";ctx.fillRect(0,1608,W,H-1608);
 
+    // Güvenli alanın içi dış çevreden hafif koyu; fotoğraf ve yazılar üstte
+    // çizildiği için parlaklıklarını kaybetmezler.
+    ctx.save();
+    roundedRect(ctx,SAFE.x,SAFE.y,SAFE.w,SAFE.h,SAFE.r);
+    ctx.fillStyle="rgba(0,0,0,.25)";
+    ctx.fill();
+    ctx.restore();
+
     // Beta yazmayan resmî Flöw logosu, güvenli alanın üstünde.
     if(brand){
       const maxW=214,maxH=85,scale=Math.min(maxW/brand.width,maxH/brand.height);
