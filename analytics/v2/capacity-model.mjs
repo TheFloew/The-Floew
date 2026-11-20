@@ -27,7 +27,7 @@ export function estimate(params = {}) {
   // This assumes the account's 10M included Worker requests are unused by other Workers.
   const workersExtraUSD=Math.max(0,workersTelemetryRequests-10_000_000)/1e6*0.30;
   const r2StoredGB=compressedGB*monthsOfArchive;
-  const r2StorageUSD=Math.max(0,r2StoredGB-10)*0.015; // snapshot after N months, not cumulative bill
+  const r2StorageUSD=Math.round(Math.max(0,r2StoredGB-10)*0.015*100)/100; // snapshot, USD cents
   const baseWorkersPaidUSD=5;
   const modeledMonthlyAtMonthN=basinTransformUSD+basinSinkUSD+workersExtraUSD+r2StorageUSD+baseWorkersPaidUSD;
   return {
