@@ -60,9 +60,15 @@
     }
     el(".floew-visual-share-close",overlay).addEventListener("click",close);
     linkButton.addEventListener("click",()=>{
-      const button=current?.button;
+      const entry=current;
+      if(!entry)return;
       close();
-      if(button)void window.FloewShare?.shareStory(button);
+      if(entry.story.shareUrl){
+        // Link hazır: OS paylaşım penceresi doğrudan kullanıcı tıklamasında açılır.
+        void window.FloewShare?.sharePreparedStory(entry.button,entry.story);
+      }else{
+        void window.FloewShare?.shareStory(entry.button);
+      }
     });
     visualButton.addEventListener("click",()=>{
       if(current?.blob)void shareImage();
@@ -291,7 +297,8 @@
   function reset(){
     visualButton.disabled=true;
     visualButton.textContent="Görsel hazırlanıyor…";
-    linkButton.disabled=false;
+    linkButton.disabled=true;
+    linkButton.textContent="Bağlantı hazırlanıyor…";
     textStatus("Flöw kartı hazırlanıyor…",false);
     const ctx=canvas.getContext("2d");
     ctx.fillStyle="#11151c";ctx.fillRect(0,0,W,H);
@@ -307,10 +314,12 @@
       entry.snapshot=await share.buildShareSnapshot(entry.button,entry.story);
       const shortUrl=await share.shareUrlForArticle(entry.story.articleUrl,entry.snapshot);
       if(!current||serial!==buildSerial)return;
+      entry.story.shareUrl=shortUrl;
+      linkButton.textContent="Bağlantı paylaş";
+      linkButton.disabled=!shortUrl;
       if(!SHORT_RE.test(shortUrl)){
         throw new Error("short_link_unavailable");
       }
-      entry.story.shareUrl=shortUrl;
       const photo=await getPhoto(entry.snapshot,entry.story);
       if(!current||serial!==buildSerial)return;
       await drawCard(entry.story,entry.snapshot,shortUrl,photo);
@@ -333,6 +342,9 @@
       if(serial!==buildSerial)return;
       console.warn("Flöw visual share:",error);
       visualButton.disabled=true;
+      // QR kartı oluşturulamadıysa mevcut link paylaşımı yine kullanılabilir.
+      linkButton.textContent="Bağlantı paylaş";
+      linkButton.disabled=false;
       textStatus(error?.message==="short_link_unavailable"
         ?"QR için kısa Flöw bağlantısı oluşturulamadı. Bağlantı paylaşmayı kullanabilirsin."
         :"Görsel kart oluşturulamadı. Bağlantı paylaşmayı kullanabilirsin.",true);
