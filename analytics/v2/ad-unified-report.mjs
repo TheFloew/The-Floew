@@ -94,7 +94,7 @@ export async function getUnifiedAdReport({db,range='7d',now=Date.now(),boundaryS
   if(!(secret instanceof Uint8Array)||secret.length<32||!keyId)throw Error('Private HMAC secret/keyId required');
   if(typeof boundarySource!=='function')throw Error('Complete trusted boundarySource required');
   const window=periodBounds(range,now),adCounts=new Map(),facetCounts=new Map(),reaches=new Map();
-  let factRowsRead=0,reachRowsRead=0,boundaryEventsRead=0;
+  let factGroupsReturned=0,reachSketchRowsReturned=0,boundaryEventsRead=0;
   function ingestFact(f,c){
     if(!f.ad)return;
     if(!adCounts.has(f.ad))adCounts.set(f.ad,counter());
@@ -112,11 +112,11 @@ export async function getUnifiedAdReport({db,range='7d',now=Date.now(),boundaryS
       SUM(dwell_sum_ms) AS dwell_sum_ms,SUM(dwell_count) AS dwell_count
       FROM ad_hourly_deltas WHERE hour_start>=? AND hour_start<?
       GROUP BY ad_id,device_type,orientation,local_hour`).all(window.fullStart,window.fullEnd);
-    for(const row of rows){factRowsRead++;ingestFact(normalizeFacet(row),row);}
+    for(const row of rows){factGroupsReturned++;ingestFact(normalizeFacet(row),row);}
     const reachRows=db.prepare(`SELECT scope,ad_id,kind,dimension,dimension_value,key_id,reach
       FROM ad_reach_hourly WHERE hour_start>=? AND hour_start<?`).all(window.fullStart,window.fullEnd);
     for(const row of reachRows){
-      reachRowsRead++;
+      reachSketchRowsReturned++;
       const sketch=ReachSketch.fromBytes(row.reach,row.key_id);
       addReach(reaches,reachKey(row.scope,row.ad_id,row.kind,row.dimension,row.dimension_value),sketch,keyId);
     }
@@ -163,6 +163,6 @@ export async function getUnifiedAdReport({db,range='7d',now=Date.now(),boundaryS
   }
   return {range,since:window.since,until:window.until,totals,ads:displayed,details,
     diagnostic:{fullHourStart:window.fullStart,fullHourEnd:window.fullEnd,
-      edgeIntervals:window.edges,factRowsRead,reachRowsRead,boundaryEventsRead,
+      edgeIntervals:window.edges,factGroupsReturned,reachSketchRowsReturned,boundaryEventsRead,
       fullRawEventTableScanned:false,globalEventDedupNotImplemented:true}};
 }
