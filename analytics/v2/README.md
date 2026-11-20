@@ -41,3 +41,21 @@ Bu prototip **kalıcı ham olay arşivi**, **kimlik verisi güvenliği**, **GA4 
 5. Üretim için sınırlı yazmalı saatlik özet veritabanı ve güvenli idempotent işleme prototipi tasarla; istemci API'lerine dokunmadan **dual-run** test et.
 
 **Bu aşamada hiçbir canlı API, D1 veri yapısı, oturum veya reklam kaydı değiştirilmedi.**
+
+## Aşama 2: v31.22.2 SQL eşitlik testi (20 Kasım 2026)
+
+`ad-hourly.mjs` artık `queryHourlyAdDetail()` de içeriyor. Reklam bazında **yön**, **cihaz**, **yerel saat** ve **yön × cihaz** kırılımlarını saatlik özetlerden hesaplıyor. Aynı ziyaretçi saatler veya reklamlar arasında tekrar karşılaşılsa bile tekil tanımlayıcı bir kez sayılıyor. `local_hour=-1` detayın saat kırılımından dışlanıyor; genel reklam toplamından dışlanmıyor. Gösterimi olmayan kırılım satırları kaldırılıyor.
+
+Yeni `ad-hourly.sql-parity.test.mjs`, üretim sistemine bağlanmadan, **kullanıcının mevcut v31.22.2 Analytics Worker dosyasını** yerel SQLite D1 taklidiyle çağırıyor. Worker kodu bu repoya kopyalanmaz ve testlerde gerçek kullanıcı verisi, token veya ağ bağlantısı kullanılmaz.
+
+Node.js **22+** ile gerçek Worker'ın `worker.js` içeriğini `worker.mjs` uzantısıyla yerel bir klasöre kopyalayıp test et:
+
+```sh
+FLOEW_ANALYTICS_WORKER_PATH=/path/to/worker.mjs node --test analytics/v2/*.test.mjs
+```
+
+Kaynak dosya belirtilmezse SQL'e bağımlı 9 test **skip** edilir, bağımsız prototipin ilk 7 testi çalışır. Kaynak sağlandığında **toplam 16 test** çalışır: genel reklam performansı için 24h/7d/all (3), iki reklamın dört ayrı detay kırılımı için aynı dönemler (6), önceki 7 temel test. 20 Kasım 2026'da yüklenen v31.22.2 Worker ile 16 testin tamamı yerelde başarılıdır.
+
+**Önemli eşitlik ayrımı:** Worker, `/admin/ads` ve `/admin/ad` JSON'larında kategori kodunu örneğin `W` → Türkçe metne dönüştürür ve Ad Center metadatasını ayrı servisten ekleyebilir. Test, istatistik ve ham metaveri alanlarının aynı olmasını karşılaştırır, bu sunum katmanındaki dönüşümü ayrıca kabul eder. GA4 demografisi, reklam detay HTML raporu ve canlı ölçüm yükü henüz bu prototipin kapsamı değildir.
+
+**Canlıya almama nedeni:** Prototip anonim ziyaretçi kimlikleri için bellekte `Set` kullanır; kayan 24h/7d'nin tam sınırını çözmek için başlangıç saatindeki olayları da bellekte tutar. Bu iki yöntem yüksek trafikte aynı biçimde kullanılamaz. Kalıcı, idempotent saatlik yazma/tekilleştirme tasarımı ve doğru özel ham veri arşivi ayrı uygulama aşaması gerektirir. Hiçbir D1 tablosu veya Worker deploy'u değiştirilmemiştir.
