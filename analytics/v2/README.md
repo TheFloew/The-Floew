@@ -85,3 +85,32 @@ Yerel doğrulama: **8/8 başarılı.** Sentetik 20.000 gösterim aynı reklam/sa
 5. **D1 sınırlaması:** Mevcut D1'daki tek tek ham olay yazıları devam ederse bu prototip tek başına büyüme sorununu çözmez. Ham olay arşivi, sıra/batch sistemi, depolama kararı, backfill ve eski ham sorguların kapatılması ayrı aşamadır.
 
 **Uygulama kararı:** Canlıya alma, D1 migrasyonu veya çalışan Worker değişikliği yapılmadı. Bunlar yapılmadan önce global dedup, tekil erişim, 24h/7d sınırları, gizlilik, arşiv ve gerçek maliyet testleri tamamlanmalı.
+
+## Aşama 4: Tekil reklam erişimi (offline, 20 Kasım 2026)
+
+Yeni modüller: `ad-reach-sketch.mjs`, `ad-reach-store.mjs`, `ad-reach-hourly.sql`, `ad-reach-store.test.mjs`.
+
+**Yöntem:** 32+ baytlık gizli HMAC-SHA256 anahtarından üretilmiş kimlik özeti ve birleşebilir `ReachSketch`:
+
+- **1–128 farklı tanımlayıcı:** 128-bit anahtarlı özetlerle **kesin** tekil erişim.
+- **129+ farklı tanımlayıcı:** Sparse HyperLogLog, yeterince büyürse `p=14` dense HLL. Yaklaşık sayım; **%0,8125** teorik bağıl standart hata (garantili maksimum hata değildir).
+- Büyük bir sketch'in binary boyutu **16.387 bayt**. Küçük gruplar daha kompakt.
+- Aynı ziyaretçi farklı saat, gün ve reklamlarda tekrar etse bile eskizler birleştirilerek tekrar sayılmıyor. Birden fazla küçük grubun birleşimi 128'i aşınca birleşik sonuç yaklaşık olabilir.
+- `ad_view` ve `ad_return` tekil tanımlayıcıları; reklam, cihaz, yön, yerel saat ve yön×cihaz kırılımları destekleniyor. Bu sayılar **gerçek tekil kişi** değil, anonim tarayıcı/kurulum tanımlayıcı sayısıdır.
+- Gösterim/atlama/tamamlama **olay sayıları** mevcut kesin sayaçlarda kalır. Tahmini tekil erişime dayanan frekans ve geri dönüş oranları da yaklaşık olarak etiketlenmelidir.
+
+**Kalıcı offline örnek:** `ad_reach_hourly` tekil sketch BLOB'ları, `ad_reach_batches` aynı batch'in tekrar uygulanmamasını sağlayan manifest tutar. SQLite `BEGIN IMMEDIATE` ile saatlik sketch'ler işlem içinde birleştirilir. Üretim D1 için **aynen kullanılamaz**; yazma yarışları, transaction desteği ve batch stratejisi tasarlanmalıdır.
+
+**Test:** `node --test analytics/v2/ad-reach-store.test.mjs` (Node 22+). Yerelde **13/13 başarılı**. 100.000 sentetik farklı ziyaretçide **100.488** tahmin edildi (bu tek testte **%0,488** sapma). Gerçek Cloudflare maliyet veya trafik testi değildir. Anahtarlar ve kullanıcılar sentetiktir.
+
+### Canlıya geçiş öncesi sınırlar
+
+1. **Tam 24h/7d:** Prototip sadece *saat başlangıcına hizalı* raporları kabul eder. Kayan son 24 saat ve 7 gün için dakika/alt saat bölümü veya sınırlı saat sınırı taraması gereklidir. HLL'den belirli bir saat dilimi çıkarılamaz.
+2. **Tüm zamanlar:** Ham olayı taramaz, ama çok sayıda saatlik eskiz birikebilir. Ömür boyu sorguyu sınırlandırmak için günlük/aylık birleşik sketch arşivi gerekir.
+3. **Trafik maliyeti:** Çok sayıda reklam ve kırılım için BLOB birleştirme/yazma iş yükü ölçülmeli. D1, sıraya alınmış işlemci, depolama ve arşiv seçimi henüz yapılmadı.
+4. **Gizlilik:** Gizli anahtar asla GitHub'a yüklenmeyecek. HMAC özetleri **takma adlı veri** olarak korunacak. Küçük gruplar reklamveren raporunda ayrıca gizlenebilir. Anahtar rotasyonu / kaybı halinde eski-yeni eskizler yeniden hesaplama olmaksızın birleşemez; keyId ve gerçek secret eşleştirmesi şarttır.
+5. **Deduplikasyon:** Reach aynı anonim kişiyi ayrı batch'te doğal biçimde birleştirir; **normal gösterim sayaçları** için farklı batch'lerde tekrar eden `event_id` hâlâ ayrı çözülmelidir.
+6. **Veri kapsamı:** Eksik/yenilenen ziyaretçi kimlikleri, cihaz değişimi, takip engeli gibi nedenlerle hiçbir hesap gerçek insan erişimini garanti etmez. `visitor_id` alanı olmayan olaylar tekil erişime dahil edilmez.
+7. **Canlı bağlantı yok:** Modül `node:crypto` ve yerel SQLite kullanır. Worker'a geçişte Web Crypto, batch/atomic upsert, veri saklama politikası ve gerçek SQL eşitliği doğrulanmalı.
+
+**Durum:** Bu aşamada Cloudflare Worker, Flüsh, D1 veya canlı kullanıcı kayıtlarında **hiçbir değişiklik yapılmadı**.
