@@ -12192,7 +12192,8 @@ async function importPreferencesFile(file){
     const allowed=new Set(preferenceTransferKeys());
 
     /* Kaydedilenler varsa geçerli bir liste olduğunu yazmadan önce doğrula. */
-    if(Object.prototype.hasOwnProperty.call(payload.settings,SAVED_STORIES_TRANSFER_KEY)){
+    const importsSavedStories=Object.prototype.hasOwnProperty.call(payload.settings,SAVED_STORIES_TRANSFER_KEY);
+    if(importsSavedStories){
       const raw=payload.settings[SAVED_STORIES_TRANSFER_KEY];
       if(typeof raw!=="string" || !Array.isArray(JSON.parse(raw))){
         throw new Error("invalid_saved_stories");
@@ -12211,7 +12212,9 @@ async function importPreferencesFile(file){
       }
     }
 
-    setPreferenceTransferFeedback("Tercihler ve kaydedilen haberler içe aktarıldı. Flöw yeniden yükleniyor…");
+    setPreferenceTransferFeedback(importsSavedStories
+      ?"Tercihler ve kaydedilen haberler içe aktarıldı. Flöw yeniden yükleniyor…"
+      :"Tercihler içe aktarıldı. Bu cihazdaki kaydedilen haberler korundu. Flöw yeniden yükleniyor…");
     setTimeout(()=>location.reload(),650);
   }catch(error){
     console.warn("Preference import:",error);
