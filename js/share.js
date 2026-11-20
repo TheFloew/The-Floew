@@ -660,87 +660,60 @@
     }catch(e){}
   }
 
-  async function shareStory(
-    button
-  ){
-    const story=
-      storyFromButton(button);
-
-    if(!story)return;
-
-    button?.setAttribute("aria-busy","true");
-
-    try{
-      story.snapshot=
-        await buildShareSnapshot(
-          button,
-          story
-        );
-
-      story.shareUrl=
-        await shareUrlForArticle(
-          story.articleUrl,
-          story.snapshot
-        );
-    }finally{
-      button?.removeAttribute("aria-busy");
-    }
-
-    if(!story.shareUrl){
+  // Önceden hazırlanmış bağlantı: navigator.share kullanıcı tıklamasının
+  // içinde, hiçbir await gerçekleşmeden başlar (özellikle iOS için önemli).
+  function sharePreparedStory(button,story){
+    if(!story?.shareUrl){
       flashButton(button,false);
-      return;
+      return Promise.resolve(false);
     }
 
-    const text=
-      shareText(story);
+    const text=shareText(story);
+    const fallback=async()=>{
+      const ok=await copyText(text+"\n"+story.shareUrl);
+      flashButton(button,ok);
+      if(ok)telemetry(story,"clipboard");
+      return ok;
+    };
 
-    if(
-      typeof navigator.share===
-      "function"
-    ){
+    if(typeof navigator.share==="function"){
       try{
-        await navigator.share({
+        const native=navigator.share({
           title:story.title,
           text,
           url:story.shareUrl
         });
-
-        flashButton(button,true,"native");
-
-        telemetry(
-          story,
-          "native"
-        );
-
-        return;
+        return Promise.resolve(native).then(()=>{
+          flashButton(button,true,"native");
+          telemetry(story,"native");
+          return true;
+        }).catch(error=>{
+          if(error?.name==="AbortError")return false;
+          // Paylaşım izni yoksa veya platform reddederse kopyalamaya geç.
+          return fallback();
+        });
       }catch(error){
-        if(
-          error?.name===
-            "AbortError" ||
-          error?.name===
-            "NotAllowedError"
-        ){
-          return;
-        }
+        if(error?.name==="AbortError")return Promise.resolve(false);
       }
     }
+    return fallback();
+  }
 
-    const copied=
-      await copyText(
-        `${text}\n${story.shareUrl}`
-      );
-
-    flashButton(
-      button,
-      copied
-    );
-
-    if(copied){
-      telemetry(
-        story,
-        "clipboard"
-      );
+  async function shareStory(button){
+    const story=storyFromButton(button);
+    if(!story)return false;
+    button?.setAttribute("aria-busy","true");
+    try{
+      story.snapshot=await buildShareSnapshot(button,story);
+      story.shareUrl=await shareUrlForArticle(story.articleUrl,story.snapshot);
+    }catch(error){
+      console.warn("Flöw share:",error);
+      flashButton(button,false);
+      return false;
+    }finally{
+      button?.removeAttribute("aria-busy");
     }
+    return sharePreparedStory(button,story);
   }
 
   function syncButton(
@@ -852,6 +825,7 @@
     buildShareSnapshot,
     shareUrlForArticle,
     shareStory,
+    sharePreparedStory,
     telemetry
   };
 
