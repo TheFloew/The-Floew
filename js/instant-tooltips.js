@@ -40,33 +40,57 @@
   function place(){
     if(!active||!label||label.hidden)return;
     if(!active.isConnected){hide();return;}
+
     const rect=active.getBoundingClientRect();
-    const w=label.offsetWidth,h=label.offsetHeight,edge=8;
-    const availableW=window.innerWidth,availableH=window.innerHeight;
+    const edge=8,gap=13;
+    const vw=window.innerWidth,vh=window.innerHeight;
+    const actionRow=active.closest(".headline-actions");
+    label.style.maxWidth="";
     let left,top;
 
-    // Manşet açıklaması: başlığın üstünü örtmeden metnin sol yanında.
-    if(active.matches(".description")){
-      left=rect.left-w-12;
-      top=rect.top+(rect.height-h)/2;
-      // Çok dar ekranlarda açıklamanın altına geç, başlığa çıkma.
+    if(actionRow){
+      // Tüm manşet aksiyonlarının etiketleri aynı düşey çizgide biter.
+      // Metinlerin kendisi sola yaslıdır; butonların konumu değişmez.
+      const visible=Array.from(actionRow.children).filter(el=>{
+        if(!el.getClientRects().length)return false;
+        const style=getComputedStyle(el);
+        return style.display!=="none"&&style.visibility!=="hidden";
+      });
+      const firstLeft=visible.length
+        ? Math.min(...visible.map(el=>el.getBoundingClientRect().left))
+        : rect.left;
+      const available=firstLeft-gap-edge;
+      if(available>=92){
+        label.style.maxWidth=Math.min(300,available)+"px";
+        left=firstLeft-gap-label.offsetWidth;
+        top=rect.top+(rect.height-label.offsetHeight)/2;
+      }else{
+        // Dar görünüm: etiketleri buton sırasının altında tut.
+        const width=label.offsetWidth;
+        left=actionRow.getBoundingClientRect().right-width;
+        top=actionRow.getBoundingClientRect().bottom+10;
+      }
+    }else if(active.matches(".description")){
+      // Manşet açıklaması başlığın üzerinde değil, açıklamanın solunda.
+      left=rect.left-label.offsetWidth-gap;
+      top=rect.top+(rect.height-label.offsetHeight)/2;
       if(left<edge){
         left=rect.left;
-        top=rect.bottom+9;
+        top=rect.bottom+10;
       }
-    }else if(active.closest("#control-menu-panel")){
-      // Araçlar menüsündeki düğmelerin etiketleri ikonların solunda.
-      left=rect.left-w-10;
-      if(left<edge)left=rect.right+10;
-      top=rect.top+(rect.height-h)/2;
     }else{
-      left=rect.left+(rect.width-w)/2;
-      top=rect.top-h-9;
-      if(top<edge)top=rect.bottom+9;
-      if(top+h>availableH-edge)top=rect.top-h-9;
+      // Diğer bütün etiketlerde sağ kenardan çıkan ok butona döner.
+      left=rect.left-label.offsetWidth-gap;
+      top=rect.top+(rect.height-label.offsetHeight)/2;
+      if(left<edge){
+        left=rect.left+(rect.width-label.offsetWidth)/2;
+        top=rect.bottom+10;
+      }
     }
-    left=Math.min(Math.max(edge,left),Math.max(edge,availableW-w-edge));
-    top=Math.min(Math.max(edge,top),Math.max(edge,availableH-h-edge));
+
+    const w=label.offsetWidth,h=label.offsetHeight;
+    left=Math.min(Math.max(edge,left),Math.max(edge,vw-w-edge));
+    top=Math.min(Math.max(edge,top),Math.max(edge,vh-h-edge));
     label.style.transform="translate3d("+Math.round(left)+"px,"+Math.round(top)+"px,0)";
   }
 
