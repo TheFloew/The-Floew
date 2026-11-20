@@ -18,6 +18,10 @@ export function clamp01(value){
   return Number.isFinite(n)?Math.max(0,Math.min(1,n)):0;
 }
 
+export function hasQuestionMark(title){
+  return /[?？؟]/.test(String(title||""));
+}
+
 export function normalizeStory(input){
   if(!input||typeof input!=="object")return null;
   const title=String(input.title||"").trim().slice(0,700);
@@ -716,7 +720,8 @@ export async function classifyStories(stories,env){
 
   let gateRows=new Map();
   try{
-    gateRows=await runGate(stories,env);
+    // Every question-mark headline bypasses the 8B gate for deeper review.
+    gateRows=await runGate(stories.filter(story=>!hasQuestionMark(story.title)),env);
   }catch(error){
     console.warn("BaitBuster 8B gate",JSON.stringify({
       name:String(error?.name||""),
@@ -788,7 +793,7 @@ export const AI_MODEL_DEFAULT=DEFAULT_MODEL;
 export const AI_GATE_MODEL_DEFAULT=DEFAULT_GATE_MODEL;
 
 const SERVICE="thefloew-baitbuster";
-const VERSION="1.6.7";
+const VERSION="1.6.8";
 const ALLOWED_ORIGIN="https://xn--flw-tna.tr";
 const MAX_STORIES=12;
 const CACHE_TTL_SECONDS=30*24*60*60;
@@ -886,7 +891,9 @@ async function evaluateStories(rawStories,env,ctx){
     const cacheKey=`v7:${await storyCacheKey(story)}`;
     cacheKeyByStory.set(story.key,cacheKey);
     const cached=await readCached(env,cacheKey);
-    if(cached&&cached.originalTitle===story.title&&cached.key===story.key){
+    // Recheck only question headlines previously dismissed by the 8B gate.
+    const staleQuestionGate=hasQuestionMark(story.title)&&cached?.reasonCode==="clear_headline_8b_gate";
+    if(cached&&!staleQuestionGate&&cached.originalTitle===story.title&&cached.key===story.key){
       finalByKey.set(story.key,cached);
       cacheHits++;
     }else{
