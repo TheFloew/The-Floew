@@ -45,8 +45,17 @@
     const availableW=window.innerWidth,availableH=window.innerHeight;
     let left,top;
 
-    // Sağ üstteki dikey araç menüsünün etiketleri solunda açılır.
-    if(active.closest("#control-menu-panel")){
+    // Manşet açıklaması: başlığın üstünü örtmeden metnin sol yanında.
+    if(active.matches(".description")){
+      left=rect.left-w-12;
+      top=rect.top+(rect.height-h)/2;
+      // Çok dar ekranlarda açıklamanın altına geç, başlığa çıkma.
+      if(left<edge){
+        left=rect.left;
+        top=rect.bottom+9;
+      }
+    }else if(active.closest("#control-menu-panel")){
+      // Araçlar menüsündeki düğmelerin etiketleri ikonların solunda.
       left=rect.left-w-10;
       if(left<edge)left=rect.right+10;
       top=rect.top+(rect.height-h)/2;
@@ -80,7 +89,7 @@
   function show(target){
     if(active===target)return;
     hide();
-    if(!target || target.closest("[inert]") || target.matches(":disabled"))return;
+    if(!target || target.id==="control-menu-button" || target.closest("[inert]") || target.matches(":disabled"))return;
     const title=(target.getAttribute("title")||target.dataset.floewTooltipTitle||"").trim();
     if(!title)return;
     active=target;
