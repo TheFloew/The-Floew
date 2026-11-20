@@ -155,3 +155,13 @@ Yeni modüller: `ad-reach-sketch.mjs`, `ad-reach-store.mjs`, `ad-reach-hourly.sq
 - **Üretim için ekonomik olmadığı bilinen kısım:** Kesin dedup ledger'ı *her yeni olay başına bir satır yazıyor*. 500 bin günlük ziyaretçi × 20 olay = yaklaşık 10 milyon ledger satırı/gün; yüksek hacimli canlı çözüm değildir. Geçmişin tam saatine yönelik boundary kontrolleri de bir saatte çok sayıda olay okuyabilir. Daha küçük bucket/işleyici/kuyruk/kalıcı arşiv seçimi ve maliyet analizi şarttır.
 - Cloudflare Worker / D1 / Flüsh canlı sürümleri **değiştirilmedi**.
 
+
+## Aşama 7: Ücretsiz bugünden ücretli büyümeye geçiş kararı (20 Kasım 2026)
+
+**Okuma:** [README-stage7.md](README-stage7.md) · **Kapasite hesabı:** [capacity-model.mjs](capacity-model.mjs) · [capacity-model.test.mjs](capacity-model.test.mjs).
+
+Karar: Mevcut Analytics Worker v31.22.2 ve D1 sistemini **şimdi koru**. 500 bin günlük kullanıcı ve reklamverenlere tam tarihsel raporlama hedefi için **Workers Paid + Basin Pipelines + özel R2 Parquet/Iceberg arşivi + periyodik güvenilir özetler + Flüsh API** yolunu seç. Özellik budama yok; ham olaylar arşivlenebilir/replay edilebilir. Ayrıntılı filtreler, kampanya kırılımları, cihaz/yön, süre, tekil erişim, özel RSS, Feedback, GA4 entegrasyonu kaybolmayacak.
+
+Kapasite modelinde fiyatlar **yaklaşık ve kısmi**, gerçek Cloudflare faturası değildir. Varsayımlar değiştirilebilir; sonuçta bilinçli olarak hariç tutulan maliyet kalemleri listelenir. Yerel Node 22 test: `node --test analytics/v2/capacity-model.test.mjs` (**5/5 başarılı**).
+
+**Hiçbir yeni ücretli servis açılmadı. Hiçbir Cloudflare deploy'u yapılmadı.**
