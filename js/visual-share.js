@@ -202,24 +202,58 @@
     return t.trimEnd()+"…";
   }
 
+
+  function roundedRect(ctx,x,y,w,h,r){
+    const radius=Math.min(r,w/2,h/2);
+    ctx.beginPath();
+    ctx.moveTo(x+radius,y);
+    ctx.lineTo(x+w-radius,y);
+    ctx.quadraticCurveTo(x+w,y,x+w,y+radius);
+    ctx.lineTo(x+w,y+h-radius);
+    ctx.quadraticCurveTo(x+w,y+h,x+w-radius,y+h);
+    ctx.lineTo(x+radius,y+h);
+    ctx.quadraticCurveTo(x,y+h,x,y+h-radius);
+    ctx.lineTo(x,y+radius);
+    ctx.quadraticCurveTo(x,y,x+radius,y);
+    ctx.closePath();
+  }
+
   function qrDraw(ctx,shortUrl,x,y,size){
     if(typeof window.qrcode!=="function")throw new Error("qr_generator_unavailable");
     const qr=window.qrcode(0,"M");
-    // URL.href converts flöw.tr into the ASCII punycode form for QR scanners.
     qr.addData(new URL(shortUrl).href);
     qr.make();
     const count=qr.getModuleCount(),quiet=4,unit=size/(count+quiet*2);
-    ctx.fillStyle="#fff";
-    ctx.fillRect(x,y,size,size);
-    ctx.fillStyle="#111318";
+    ctx.save();
+    // Küçük QR: metinlerle aynı açık renk, yarı saydam koyu zemin.
+    roundedRect(ctx,x,y,size,size,14);
+    ctx.fillStyle="rgba(10,13,20,.68)";
+    ctx.fill();
+    ctx.beginPath();
+    roundedRect(ctx,x,y,size,size,14);
+    ctx.clip();
+    ctx.fillStyle="rgba(255,255,255,.92)";
     for(let row=0;row<count;row++){
       for(let col=0;col<count;col++){
-        if(qr.isDark(row,col)){
-          const x1=x+(col+quiet)*unit,y1=y+(row+quiet)*unit;
-          const x2=x+(col+quiet+1)*unit,y2=y+(row+quiet+1)*unit;
-          ctx.fillRect(Math.floor(x1),Math.floor(y1),Math.ceil(x2)-Math.floor(x1),Math.ceil(y2)-Math.floor(y1));
-        }
+        if(!qr.isDark(row,col))continue;
+        const x1=x+(col+quiet)*unit,y1=y+(row+quiet)*unit;
+        const x2=x+(col+quiet+1)*unit,y2=y+(row+quiet+1)*unit;
+        ctx.fillRect(Math.floor(x1),Math.floor(y1),
+          Math.ceil(x2)-Math.floor(x1),Math.ceil(y2)-Math.floor(y1));
       }
+    }
+    ctx.restore();
+  }
+
+  async function getSourceFavicon(snapshot,story){
+    let favicon=snapshot?.sourceLogo||"";
+    if(!favicon){
+      try{favicon=new URL("/favicon.ico",new URL(story.articleUrl).origin).href;}catch{}
+    }
+    if(!favicon)return null;
+    try{return await image(proxyUrl(favicon,story.articleUrl),2600);}
+    catch{
+      try{return await image(favicon,1600);}catch{return null;}
     }
   }
 
@@ -228,13 +262,23 @@
       try{await Promise.race([document.fonts.load('700 62px "Comfortaa"'),
         new Promise(resolve=>setTimeout(resolve,1200))]);}catch{}
     }
-    const brand=await image("assets/logo-beta.png",2300).catch(()=>null);
+    const [brand,favicon]=await Promise.all([
+      image("assets/logo.png",2300).catch(()=>null),
+      getSourceFavicon(snapshot,story)
+    ]);
     const ctx=canvas.getContext("2d",{alpha:false});
     if(!ctx)throw new Error("canvas_unsupported");
     ctx.clearRect(0,0,W,H);
-    ctx.fillStyle="#080a0e";ctx.fillRect(0,0,W,H);
+    ctx.textAlign="left";
+    ctx.textBaseline="alphabetic";
+    ctx.fillStyle="#090b10";ctx.fillRect(0,0,W,H);
 
-    // Bulanık arka plan kartı doldurur, gerçek haber görseli ASLA kırpılmaz.
+    // 1080×1920 hikâye: UI kontrollerinden uzak kalmak için üst/alt güvenli alan.
+    const SAFE={x:64,y:206,w:952,h:1430,r:28};
+    const inset=36;
+    const left=SAFE.x+inset,right=SAFE.x+SAFE.w-inset;
+
+    // Tam fotoğraf, arkada hafifçe bulanıklaşmış kendi görüntüsünün üzerinde.
     if(photo){
       ctx.save();
       ctx.filter="blur(32px) saturate(.86)";
@@ -243,78 +287,92 @@
       ctx.fillStyle="rgba(5,8,13,.38)";
       ctx.fillRect(0,0,W,1390);
     }else{
-      const shade=ctx.createLinearGradient(0,0,W,1350);
-      shade.addColorStop(0,"#334554");shade.addColorStop(.48,"#18232d");shade.addColorStop(1,"#070a0f");
+      const shade=ctx.createLinearGradient(0,0,W,1390);
+      shade.addColorStop(0,"#334554");shade.addColorStop(.48,"#18232d");
+      shade.addColorStop(1,"#070a0f");
       ctx.fillStyle=shade;ctx.fillRect(0,0,W,1390);
     }
-    const g=ctx.createLinearGradient(0,940,0,1540);
-    g.addColorStop(0,"rgba(11,13,18,0)");
-    g.addColorStop(.35,"rgba(11,13,18,.85)");
-    g.addColorStop(.72,"#0b0d12");
-    g.addColorStop(1,"#0b0d12");
-    ctx.fillStyle=g;ctx.fillRect(0,940,W,600);
-    ctx.fillStyle="#0b0d12";ctx.fillRect(0,1510,W,410);
+    const shade=ctx.createLinearGradient(0,930,0,1610);
+    shade.addColorStop(0,"rgba(11,13,18,0)");
+    shade.addColorStop(.34,"rgba(11,13,18,.84)");
+    shade.addColorStop(.77,"#0b0d12");
+    shade.addColorStop(1,"#0b0d12");
+    ctx.fillStyle=shade;ctx.fillRect(0,930,W,680);
+    ctx.fillStyle="#0b0d12";ctx.fillRect(0,1608,W,H-1608);
 
-    // Ana görsel üst katmanda, bütün köşeleri görünecek şekilde ortalanır.
-    if(photo)contain(ctx,photo,44,205,W-88,850);
-
-    // Brand mark.
+    // Beta yazmayan resmî Flöw logosu, güvenli alanın üstünde.
     if(brand){
-      const maxW=236,maxH=102,scale=Math.min(maxW/brand.width,maxH/brand.height);
+      const maxW=214,maxH=85,scale=Math.min(maxW/brand.width,maxH/brand.height);
       ctx.save();
-      ctx.shadowColor="rgba(0,0,0,.55)";ctx.shadowBlur=18;
-      ctx.drawImage(brand,74,75,brand.width*scale,brand.height*scale);
+      ctx.shadowColor="rgba(0,0,0,.55)";ctx.shadowBlur=16;
+      ctx.drawImage(brand,left,256,brand.width*scale,brand.height*scale);
       ctx.restore();
     }else{
-      ctx.fillStyle="#fff";ctx.font='700 75px "Comfortaa",sans-serif';
-      ctx.fillText("flöw",74,158);
+      ctx.fillStyle="#fff";
+      ctx.font='700 65px "Comfortaa",sans-serif';
+      ctx.fillText("flöw",left,313);
     }
 
-    const category=String(snapshot?.category||"GÜNDEM").replace(/^#/,"").toLocaleUpperCase("tr-TR");
-    ctx.font='700 26px "Comfortaa",sans-serif';
-    ctx.fillStyle="rgba(255,255,255,.72)";
-    ctx.fillText(category.slice(0,35),74,1110);
-    ctx.fillStyle="#fff";ctx.font='700 31px "Comfortaa",sans-serif';
-    ctx.fillText(String(snapshot?.source||story.source||"FLÖW").toLocaleUpperCase("tr-TR").slice(0,48),74,1174,930);
+    // Fotoğrafın tüm içeriği görünür: "contain" ile kaynak kadrajına dokunulmaz.
+    if(photo)contain(ctx,photo,left,364,right-left,670);
 
+    // Kaynak, anasayfadaki gibi sağa yaslı, yanında gerçek kaynak favicon'u.
+    const sourceName=String(snapshot?.source||story.source||"FLÖW").trim();
+    const sourceY=1132;
+    const iconSize=36;
+    let sourceRight=right;
+    if(favicon){
+      ctx.save();
+      roundedRect(ctx,right-iconSize,sourceY-iconSize+6,iconSize,iconSize,7);
+      ctx.clip();
+      ctx.drawImage(favicon,right-iconSize,sourceY-iconSize+6,iconSize,iconSize);
+      ctx.restore();
+      sourceRight=right-iconSize-15;
+    }
+    ctx.textAlign="right";
+    ctx.font='700 29px "Comfortaa",sans-serif';
+    ctx.fillStyle="rgba(255,255,255,.85)";
+    ctx.fillText(sourceName.slice(0,75),sourceRight,sourceY,sourceRight-left);
+
+    // Kategori yok. Kullanıcının o anda gördüğü orijinal/BaitBuster başlık korunur.
     const headline=String(story.title||"Flöw'de bir haber").trim();
-    const maxW=928,maxH=332;
-    let font=68,lines=[],lineHeight=82;
-    while(font>=38){
+    const titleW=right-left,titleH=247;
+    let font=60,lineHeight=73,lines=[];
+    while(font>=35){
       ctx.font='700 '+font+'px "Comfortaa",sans-serif';
-      lines=measureLines(ctx,headline,maxW);
+      lines=measureLines(ctx,headline,titleW);
       lineHeight=Math.round(font*1.23);
-      if(lines.length*lineHeight<=maxH)break;
+      if(lines.length*lineHeight<=titleH)break;
       font-=2;
     }
-    const availableLines=Math.max(1,Math.floor(maxH/lineHeight));
-    if(lines.length>availableLines){
-      lines=lines.slice(0,availableLines);
-      lines[lines.length-1]=truncateLine(ctx,lines[lines.length-1]+"…",maxW);
+    const maxLines=Math.max(1,Math.floor(titleH/lineHeight));
+    if(lines.length>maxLines){
+      lines=lines.slice(0,maxLines);
+      lines[maxLines-1]=truncateLine(ctx,lines[maxLines-1]+"…",titleW);
     }
     ctx.fillStyle="#fff";
-    let y=1260;
+    let titleY=1212;
     for(const line of lines){
-      ctx.fillText(truncateLine(ctx,line,maxW),74,y,maxW);
-      y+=lineHeight;
+      ctx.fillText(truncateLine(ctx,line,titleW),right,titleY,titleW);
+      titleY+=lineHeight;
     }
 
-    ctx.strokeStyle="rgba(255,255,255,.22)";
-    ctx.lineWidth=2;
-    ctx.beginPath();ctx.moveTo(74,1634);ctx.lineTo(1006,1634);ctx.stroke();
-
-    ctx.fillStyle="#fff";
-    ctx.font='700 29px "Comfortaa",sans-serif';
-    ctx.fillText("HABERİ FLÖW'DE AÇ",74,1730,670);
-    ctx.fillStyle="rgba(255,255,255,.65)";
-    ctx.font='500 25px "Comfortaa",sans-serif';
+    // Gereksiz CTA/slogan kaldırıldı. Kısa adres ve küçük QR alt köşede.
+    const qrSize=155;
+    const qrX=right-qrSize,qrY=1452;
+    qrDraw(ctx,shortUrl,qrX,qrY,qrSize);
+    ctx.font='500 23px "Comfortaa",sans-serif';
+    ctx.fillStyle="rgba(255,255,255,.72)";
     const display=shortUrl.replace(/^https:\/\//,"").replace(/^xn--flw-tna\.tr/,"flöw.tr");
-    ctx.fillText(display,74,1793,660);
-    ctx.fillStyle="rgba(255,255,255,.42)";
-    ctx.font='500 20px "Comfortaa",sans-serif';
-    ctx.fillText("Gündemi yakala. Akışta kal.",74,1851,640);
+    ctx.fillText(display,qrX-21,1592,qrX-left-25);
 
-    qrDraw(ctx,shortUrl,777,1655,230);
+    // İnce yuvarlatılmış güvenli alan çizgisi tüm öğelerin çevresinde.
+    ctx.save();
+    roundedRect(ctx,SAFE.x,SAFE.y,SAFE.w,SAFE.h,SAFE.r);
+    ctx.strokeStyle="rgba(255,255,255,.38)";
+    ctx.lineWidth=2.3;
+    ctx.stroke();
+    ctx.restore();
     return canvas;
   }
 
