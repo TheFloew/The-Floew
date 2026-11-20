@@ -142,3 +142,16 @@ Yeni modüller: `ad-reach-sketch.mjs`, `ad-reach-store.mjs`, `ad-reach-hourly.sq
 - **İki veri katmanında atomiklik:** Offline testlerde `storeBatch` ve `storeReachBatch` ayrı transaction'lardır. Üretimde birinin başarılı, diğerinin başarısız kalması ölçümleri ayırabilir. Her ikisinin aynı watermark/sürümde hazır olduğunun onaylandığı rapor yayını ve yeniden oynatma garantisi zorunludur.
 - **Boundary source eksiksizliği:** Kod yalnızca saat aralığı dışındaki hatalı olayları reddeder, atlanmış olayları kendi kendine tespit edemez. Geç işlenen olaylar ve veri tutarlılığı için doğrulanmış manifest/checkpoint gerekir.
 - **Toplam frekans ve ilk 1000 reklam:** Örnek mevcut Worker gibi 1000 reklam sınırını korur. 1000'den çok reklam varsa genel tekil erişim tüm reklamlardan, gösterim toplamı ise listelenen reklamlardan gelebilir; toplam frekans ayrı tam toplamlama olmadan reklamverene sunulmamalıdır.
+
+## Aşama 6 (20 Kasım 2026) | Global event-ID ayıklama ve günlük/aylık rollup
+
+**Yalnızca offline SQLite prototipi.** Yeni uygulama: [README-stage6.md](README-stage6.md), [ad-stage6-pipeline.mjs](ad-stage6-pipeline.mjs), [ad-stage6-report.mjs](ad-stage6-report.mjs), [ad-stage6.sql](ad-stage6.sql), [ad-stage6.test.mjs](ad-stage6.test.mjs).
+
+- Aynı `event_id` farklı paketlerde tekrar gelse bile tek seferlik sayaç ve reach işleme; aynı ID farklı içerikle gelirse hata.
+- Olay ledger'ı, özet sayaç ve HMAC/HLL tekil erişim güncellemesini aynı yerel SQLite transaction içinde gerçekleştirir.
+- Eski saatleri tam UTC gününe, eski günleri tam UTC ayına birleştirir. Alt ayrıntılar ancak dış kaynak watermark'ı doğrulandıktan ve yakın 8 gün korunarak kapatılır. Gecikmiş yeni olaylar sessizce sayılmaz; karantina/yeniden işleme üretimde gereklidir.
+- 24 saat / 7 gün / tüm zamanlar raporlarının karma granülerlikte aynı sonuçları üretmesi sınanmıştır. Eksik saatler için doğrulanmış kabul edilmiş olay kaynağı zorunludur.
+- **25/25 yerel test başarılı** (14 yeni ve 11 önceki Aşama 5 testi). Gerçek Cloudflare D1 satır tüketimi ya da canlı 500 bin kullanıcı yükü test edilmemiştir.
+- **Üretim için ekonomik olmadığı bilinen kısım:** Kesin dedup ledger'ı *her yeni olay başına bir satır yazıyor*. 500 bin günlük ziyaretçi × 20 olay = yaklaşık 10 milyon ledger satırı/gün; yüksek hacimli canlı çözüm değildir. Geçmişin tam saatine yönelik boundary kontrolleri de bir saatte çok sayıda olay okuyabilir. Daha küçük bucket/işleyici/kuyruk/kalıcı arşiv seçimi ve maliyet analizi şarttır.
+- Cloudflare Worker / D1 / Flüsh canlı sürümleri **değiştirilmedi**.
+
