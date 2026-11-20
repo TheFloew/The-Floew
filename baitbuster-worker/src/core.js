@@ -12,6 +12,10 @@ export function clamp01(value){
   return Number.isFinite(n)?Math.max(0,Math.min(1,n)):0;
 }
 
+export function hasQuestionMark(title){
+  return /[?？؟]/.test(String(title||""));
+}
+
 export function normalizeStory(input){
   if(!input||typeof input!=="object")return null;
   const title=String(input.title||"").trim().slice(0,700);
