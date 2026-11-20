@@ -59,3 +59,29 @@ Kaynak dosya belirtilmezse SQL'e bağımlı 9 test **skip** edilir, bağımsız 
 **Önemli eşitlik ayrımı:** Worker, `/admin/ads` ve `/admin/ad` JSON'larında kategori kodunu örneğin `W` → Türkçe metne dönüştürür ve Ad Center metadatasını ayrı servisten ekleyebilir. Test, istatistik ve ham metaveri alanlarının aynı olmasını karşılaştırır, bu sunum katmanındaki dönüşümü ayrıca kabul eder. GA4 demografisi, reklam detay HTML raporu ve canlı ölçüm yükü henüz bu prototipin kapsamı değildir.
 
 **Canlıya almama nedeni:** Prototip anonim ziyaretçi kimlikleri için bellekte `Set` kullanır; kayan 24h/7d'nin tam sınırını çözmek için başlangıç saatindeki olayları da bellekte tutar. Bu iki yöntem yüksek trafikte aynı biçimde kullanılamaz. Kalıcı, idempotent saatlik yazma/tekilleştirme tasarımı ve doğru özel ham veri arşivi ayrı uygulama aşaması gerektirir. Hiçbir D1 tablosu veya Worker deploy'u değiştirilmemiştir.
+
+## Aşama 3: Kalıcı saatlik delta satırları (offline SQLite prototipi)
+
+Yeni dosyalar:
+
+- `ad-hourly-deltas.sql`: **Yalnızca yerel test amaçlı** şema. `batch_id + UTC hour + ad_id + device_type + orientation + local_hour` birleşik anahtarlı, append-only özet satırları. Canlı D1'de çalıştırmayın.
+- `ad-delta-store.mjs`: gelen bir paket içindeki olayları ilgili saatlik kırılımlara indirger, SQLite transaction ile `INSERT OR IGNORE` yazar, saat hizalı dönemlerde özetleri sorgular.
+- `ad-delta-store.test.mjs`: tekrarlanan paketin çift sayılmaması, paket içi tekrarlanan `event_id`, büyük tek-kırılım paketi, farklı kampanyalar, saat sınırları, ağırlıklı izleme ortalaması ve kimliklerin özet satırında tutulmaması için 8 test.
+
+Yerel Node 22+ komutu:
+
+```sh
+node --test analytics/v2/ad-delta-store.test.mjs
+```
+
+Yerel doğrulama: **8/8 başarılı.** Sentetik 20.000 gösterim aynı reklam/saat/cihaz/yön kırılımında tek bir SQLite özet satırı olarak kaydedildi. Bu yalnızca seçilmiş sentetik senaryodur, gerçek kullanıcı trafiği ve Cloudflare D1 maliyet ölçümü değildir. Gerçekte satır sayısı aktif kampanya, zaman ve kırılım çeşitliliğine bağlıdır.
+
+**Bilinen sınırlamalar ve canlıya geçiş engelleri:**
+
+1. **Paket düzeyinde idempotent:** Aynı `batch_id` tekrar gelirse satır çakışması sayesinde iki kez yazılmaz. Aynı `event_id` **farklı batch_id'lerde** geldiyse, bu prototip onu yeniden sayabilir. Üretimde upstream olay kimliği deduplikasyonu ve stabil paketleme *zorunlu*. Aynı `batch_id` altında **farklı içerik** kabul edilmemeli; üretim aşamasında paket içerik özeti/manifest doğrulaması olmalı.
+2. **Tekil erişim bu depoda yok:** Anonim ziyaretçi kimliklerini saklamadan `COUNT(DISTINCT)` üretmek için ayrı kesin reach indeksi veya açıklanmış tahmini HyperLogLog benzeri birleşebilir sketch gerekir. Bu prototip izleyici/geri dönen izleyici frekansı üretmez.
+3. **Tam kayan 24 saat/7 gün sorgusu yok:** Saat ortasında başlayan dönemleri sessizce yuvarlamak yanlış sonuç verir. Kod böyle istekleri reddeder. Sınır saatinin küçük ayrı bir partisyondan okunması, dakikalık özet veya ayrı canlı delta çözümü tasarlanmadan Flüsh'e bağlanmamalı.
+4. **Kapsam:** Reklam gösterim/atlama/tamamlama/tekrar/geri dönüş sayaçları ve süre toplamları. Reklam kırılımları SQL'de boyut olarak bulunur; detay sayfası ve metadata eşleştirmesi için üretim API henüz hazırlanmadı. GA4, Feedback ve diğer Analytics modüllerine dokunulmadı.
+5. **D1 sınırlaması:** Mevcut D1'daki tek tek ham olay yazıları devam ederse bu prototip tek başına büyüme sorununu çözmez. Ham olay arşivi, sıra/batch sistemi, depolama kararı, backfill ve eski ham sorguların kapatılması ayrı aşamadır.
+
+**Uygulama kararı:** Canlıya alma, D1 migrasyonu veya çalışan Worker değişikliği yapılmadı. Bunlar yapılmadan önce global dedup, tekil erişim, 24h/7d sınırları, gizlilik, arşiv ve gerçek maliyet testleri tamamlanmalı.
