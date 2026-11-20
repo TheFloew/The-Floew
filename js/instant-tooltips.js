@@ -101,6 +101,10 @@
   }
 
   // Delegasyon: daha sonra oluşan haber butonlarında da çalışır.
+  // Tek ortak etiket DOM’da hazırdır; ilk hover anında oluşturma gecikmesi olmaz.
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",makeLabel,{once:true});
+  else makeLabel();
+
   document.addEventListener("pointerover",e=>{
     if(e.pointerType==="touch")return;
     const target=getTarget(e.target);
