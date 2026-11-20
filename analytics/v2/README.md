@@ -135,3 +135,10 @@ Yeni modüller: `ad-reach-sketch.mjs`, `ad-reach-store.mjs`, `ad-reach-hourly.sq
 6. **Flüsh API sözleşmesi:** Ad Center metadata, kategori etiketleri, rapor yetkilendirmesi, feedback ve `generatedAt` uyumu ayrı tamamlanacak. Bu prototip **deploy edilmemeli**.
 
 **Güvenlik:** Canlı Worker, D1, Flüsh veya kullanıcı verisi değiştirilmedi.
+
+### Aşama 5 doğruluk notları
+
+- `diagnostic.factGroupsReturned` ve `diagnostic.reachSketchRowsReturned`, **SQLite'dan dönen sonuç satırlarının sayısıdır**. Cloudflare D1'in faturalandırdığı `Rows read` değerleri **değildir**; gerçek D1 yükü yalnızca canlıya yakın benchmark ile doğrulanabilir.
+- **İki veri katmanında atomiklik:** Offline testlerde `storeBatch` ve `storeReachBatch` ayrı transaction'lardır. Üretimde birinin başarılı, diğerinin başarısız kalması ölçümleri ayırabilir. Her ikisinin aynı watermark/sürümde hazır olduğunun onaylandığı rapor yayını ve yeniden oynatma garantisi zorunludur.
+- **Boundary source eksiksizliği:** Kod yalnızca saat aralığı dışındaki hatalı olayları reddeder, atlanmış olayları kendi kendine tespit edemez. Geç işlenen olaylar ve veri tutarlılığı için doğrulanmış manifest/checkpoint gerekir.
+- **Toplam frekans ve ilk 1000 reklam:** Örnek mevcut Worker gibi 1000 reklam sınırını korur. 1000'den çok reklam varsa genel tekil erişim tüm reklamlardan, gösterim toplamı ise listelenen reklamlardan gelebilir; toplam frekans ayrı tam toplamlama olmadan reklamverene sunulmamalıdır.
