@@ -35,7 +35,7 @@ curl -i https://thefloew-baitbuster.thefloewback.workers.dev/health
 Expected body:
 
 ```json
-{"ok":true,"service":"thefloew-baitbuster","version":"1.6.7"}
+{"ok":true,"service":"thefloew-baitbuster","version":"1.6.8"}
 ```
 
 CORS preflight:
@@ -58,3 +58,5 @@ Expected: HTTP `204` and `Access-Control-Allow-Origin: https://xn--flw-tna.tr`.
 ```
 
 Maximum batch size: 12 stories. The Worker checks KV first, classifies uncached headlines with Workers AI, fetches full article text only for suspicious stories, and falls back to the original headline if AI or article extraction fails.
+
+Question-mark headlines (including full-width and Arabic question marks) bypass the 8B gate and are classified by 70B. Only cached question headlines previously marked `clear_headline_8b_gate` are reclassified; other cache entries remain valid. A question is not rewritten when the article lacks a supported, material answer.
