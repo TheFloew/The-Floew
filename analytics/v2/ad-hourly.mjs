@@ -55,7 +55,7 @@ function rangeSince(range,now) {
   if(range==='all')return 0;
   if(range==='24h')return now-24*HOUR_MS;
   if(range==='7d')return now-7*24*HOUR_MS;
-  throw new Error(\`Unsupported range: \${range}\`);
+  throw new Error(`Unsupported range: ${range}`);
 }
 const facetKey = row => JSON.stringify([
   row.ad_id,row.orientation??null,row.device_type??null,row.local_hour??null
@@ -146,8 +146,8 @@ function detailBreakdown(aggregated,adId,dimension,denominator) {
       repeat_views:f.repeat_views,avg_dwell_ms:f.avg_dwell_ms,
       percent:roundPercent(f.views,denominator),skip_rate:f.skip_rate,
       completion_rate:f.completion_rate,return_rate:f.return_rate,repeat_rate:f.repeat_rate};
-    if(dimension==='orientationDevice')return {...rest,orientation:display(raw[0]),device:display(raw[1]),label:\`\${display(raw[0])} · \${display(raw[1])}\`};
-    return {label:dimension==='hour'?\`\${String(raw[0]).padStart(2,'0')}:00\`:display(raw[0]),...rest};
+    if(dimension==='orientationDevice')return {...rest,orientation:display(raw[0]),device:display(raw[1]),label:`${display(raw[0])} · ${display(raw[1])}`};
+    return {label:dimension==='hour'?`${String(raw[0]).padStart(2,'0')}:00`:display(raw[0]),...rest};
   }).filter(row=>row.views>0);
   if(dimension==='hour')return rows.sort((a,b)=>a.label.localeCompare(b.label));
   if(dimension==='orientationDevice')return rows.sort((a,b)=>b.views-a.views||a.orientation.localeCompare(b.orientation)||a.device.localeCompare(b.device));
