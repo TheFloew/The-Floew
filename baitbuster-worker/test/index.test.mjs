@@ -8,7 +8,7 @@ const ORIGIN="https://xn--flw-tna.tr";
 test("health is public and reports service version",async()=>{
   const res=await handleRequest(new Request("https://worker.test/health"),{},{});
   assert.equal(res.status,200);
-  assert.deepEqual(await res.json(),{ok:true,service:"thefloew-baitbuster",version:"1.6.7"});
+  assert.deepEqual(await res.json(),{ok:true,service:"thefloew-baitbuster",version:"1.6.8"});
 });
 
 test("preflight allows only Flöw production origin",async()=>{
@@ -106,4 +106,55 @@ test("high-confidence 8B gate result is returned and cached without a 70B call",
   assert.equal(body.results[0].rewriteStatus,"not_clickbait");
   assert.equal(body.results[0].modelVersion,"@cf/meta/llama-3.1-8b-instruct-fp8");
   assert.equal(writes.length,1);
+});
+
+test("questions erroneously cleared by the 8B gate are reclassified once",async()=>{
+  const story=normalizeStory({key:"q",url:"https://example.com/question",title:"Faiz kararı ne oldu?"});
+  const cacheKey=`v7:${await storyCacheKey(story)}`;
+  const cached=originalResult(story,"not_clickbait",{
+    reasonCode:"clear_headline_8b_gate",modelVersion:"8b"
+  });
+  const calls=[];
+  const writes=[];
+  const env={
+    AI:{async run(model,input){
+      calls.push(model);
+      const key=JSON.parse(input.messages[1].content).stories[0].key;
+      return {response:{results:[{
+        key,clickbait:false,confidence:.98,needsArticle:false,
+        reasonCode:"reviewed_by_70b",missingQuestion:"",candidateFact:""
+      }]}};
+    }},
+    BAITBUSTER_CACHE:{
+      async get(key){return key===cacheKey?cached:null;},
+      async put(key,value){writes.push({key,value:JSON.parse(value)});}
+    }
+  };
+  const res=await handleRequest(new Request("https://worker.test/v1/evaluate",{
+    method:"POST",headers:{Origin:ORIGIN,"Content-Type":"application/json"},
+    body:JSON.stringify({stories:[story]})
+  }),env,{});
+  assert.equal((await res.json()).results[0].reasonCode,"reviewed_by_70b");
+  assert.deepEqual(calls,["@cf/meta/llama-3.3-70b-instruct-fp8-fast"]);
+  assert.equal(writes.length,1);
+  assert.equal(writes[0].key,cacheKey);
+});
+
+test("already reviewed question headlines keep their cached results",async()=>{
+  const story=normalizeStory({key:"q",url:"https://example.com/reviewed",title:"Faiz kararı ne oldu?"});
+  const cached=originalResult(story,"not_clickbait",{
+    reasonCode:"reviewed_by_70b",modelVersion:"70b"
+  });
+  const env={
+    AI:{run:async()=>{throw new Error("No AI call expected");}},
+    BAITBUSTER_CACHE:{
+      async get(){return cached;},
+      async put(){throw new Error("No cache write expected");}
+    }
+  };
+  const res=await handleRequest(new Request("https://worker.test/v1/evaluate",{
+    method:"POST",headers:{Origin:ORIGIN,"Content-Type":"application/json"},
+    body:JSON.stringify({stories:[story]})
+  }),env,{});
+  assert.equal((await res.json()).results[0].reasonCode,"reviewed_by_70b");
 });
