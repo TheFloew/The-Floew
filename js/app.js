@@ -12099,6 +12099,7 @@ async function addCustomRssFromInput(){
 
 const PREFERENCE_TRANSFER_FORMAT="thefloew-preferences";
 const PREFERENCE_TRANSFER_VERSION=1;
+const SAVED_STORIES_TRANSFER_KEY="floew.savedStories.v1";
 
 function preferenceTransferKeys(){
   return [
@@ -12117,7 +12118,8 @@ function preferenceTransferKeys(){
     STOCK_TICKER_VISIBLE_KEY,
     STOCK_TICKER_SCALE_KEY,
     NEWS_CONTENT_SCALE_KEY,
-    INFO_BLOCK_SCALE_KEY
+    INFO_BLOCK_SCALE_KEY,
+    SAVED_STORIES_TRANSFER_KEY
   ];
 }
 
@@ -12140,6 +12142,7 @@ function exportPreferences(){
     for(const key of preferenceTransferKeys()){
       const value=localStorage.getItem(key);
       if(value!==null)settings[key]=value;
+      else if(key===SAVED_STORIES_TRANSFER_KEY)settings[key]="[]";
     }
 
     const payload={
@@ -12162,7 +12165,7 @@ function exportPreferences(){
     a.click();
     a.remove();
     setTimeout(()=>URL.revokeObjectURL(url),600);
-    setPreferenceTransferFeedback("Tercihler dosyası hazırlandı.");
+    setPreferenceTransferFeedback("Tercihler ve kaydedilen haberler dosyası hazırlandı.");
   }catch(error){
     console.warn("Preference export:",error);
     setPreferenceTransferFeedback("Tercihler dışa aktarılamadı.",true);
@@ -12188,18 +12191,27 @@ async function importPreferencesFile(file){
 
     const allowed=new Set(preferenceTransferKeys());
 
+    /* Kaydedilenler varsa geçerli bir liste olduğunu yazmadan önce doğrula. */
+    if(Object.prototype.hasOwnProperty.call(payload.settings,SAVED_STORIES_TRANSFER_KEY)){
+      const raw=payload.settings[SAVED_STORIES_TRANSFER_KEY];
+      if(typeof raw!=="string" || !Array.isArray(JSON.parse(raw))){
+        throw new Error("invalid_saved_stories");
+      }
+    }
+
     /* İçe aktarma, tercih kümesini dosyadaki haline birebir taşır. */
     for(const key of allowed){
       if(Object.prototype.hasOwnProperty.call(payload.settings,key)){
         const value=payload.settings[key];
         if(typeof value!=="string")throw new Error("invalid_value");
         localStorage.setItem(key,value);
-      }else{
+      }else if(key!==SAVED_STORIES_TRANSFER_KEY){
+        /* Eski yedek dosyaları cihazdaki kayıtlı haberleri silmemeli. */
         localStorage.removeItem(key);
       }
     }
 
-    setPreferenceTransferFeedback("Tercihler içe aktarıldı. Flöw yeniden yükleniyor…");
+    setPreferenceTransferFeedback("Tercihler ve kaydedilen haberler içe aktarıldı. Flöw yeniden yükleniyor…");
     setTimeout(()=>location.reload(),650);
   }catch(error){
     console.warn("Preference import:",error);
