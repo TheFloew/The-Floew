@@ -237,10 +237,10 @@
     // Bulanık arka plan kartı doldurur, gerçek haber görseli ASLA kırpılmaz.
     if(photo){
       ctx.save();
-      ctx.filter="blur(42px) saturate(.76)";
+      ctx.filter="blur(32px) saturate(.86)";
       cover(ctx,photo,-54,-54,W+108,1450);
       ctx.restore();
-      ctx.fillStyle="rgba(5,8,13,.56)";
+      ctx.fillStyle="rgba(5,8,13,.38)";
       ctx.fillRect(0,0,W,1390);
     }else{
       const shade=ctx.createLinearGradient(0,0,W,1350);
