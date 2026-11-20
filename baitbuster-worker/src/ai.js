@@ -1,6 +1,7 @@
 import {
   sanitizeClassificationResult,
-  sanitizeRewriteResult
+  sanitizeRewriteResult,
+  hasQuestionMark
 } from "./core.js";
 
 const DEFAULT_MODEL="@cf/meta/llama-3.3-70b-instruct-fp8-fast";
@@ -331,7 +332,8 @@ export async function classifyStories(stories,env){
 
   let gateRows=new Map();
   try{
-    gateRows=await runGate(stories,env);
+    // Every question-mark headline bypasses the 8B gate for deeper review.
+    gateRows=await runGate(stories.filter(story=>!hasQuestionMark(story.title)),env);
   }catch(error){
     console.warn("BaitBuster 8B gate",JSON.stringify({
       name:String(error?.name||""),
