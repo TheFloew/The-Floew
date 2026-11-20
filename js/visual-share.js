@@ -164,6 +164,23 @@
     ctx.drawImage(img,(iw-sw)/2,(ih-sh)/2,sw,sh,x,y,w,h);
   }
 
+  function contain(ctx,img,x,y,w,h){
+    const iw=img.naturalWidth||img.width,ih=img.naturalHeight||img.height;
+    if(!iw||!ih)return;
+    // Fotoğrafın orijinal kadrajının tamamı, oranı bozulmadan görünür.
+    const scale=Math.min(w/iw,h/ih);
+    const dw=iw*scale,dh=ih*scale;
+    const dx=x+(w-dw)/2,dy=y+(h-dh)/2;
+    ctx.save();
+    ctx.shadowColor="rgba(0,0,0,.48)";
+    ctx.shadowBlur=32;
+    ctx.drawImage(img,dx,dy,dw,dh);
+    ctx.restore();
+    ctx.strokeStyle="rgba(255,255,255,.15)";
+    ctx.lineWidth=2;
+    ctx.strokeRect(dx,dy,dw,dh);
+  }
+
   function measureLines(ctx,value,maxWidth){
     const words=String(value||"").split(/\s+/).filter(Boolean),lines=[];
     let line="";
@@ -217,22 +234,29 @@
     ctx.clearRect(0,0,W,H);
     ctx.fillStyle="#080a0e";ctx.fillRect(0,0,W,H);
 
-    // Upper hero image with dark gradients for readable type.
+    // Bulanık arka plan kartı doldurur, gerçek haber görseli ASLA kırpılmaz.
     if(photo){
-      cover(ctx,photo,0,0,W,1390);
+      ctx.save();
+      ctx.filter="blur(42px) saturate(.76)";
+      cover(ctx,photo,-54,-54,W+108,1450);
+      ctx.restore();
+      ctx.fillStyle="rgba(5,8,13,.56)";
+      ctx.fillRect(0,0,W,1390);
     }else{
       const shade=ctx.createLinearGradient(0,0,W,1350);
       shade.addColorStop(0,"#334554");shade.addColorStop(.48,"#18232d");shade.addColorStop(1,"#070a0f");
       ctx.fillStyle=shade;ctx.fillRect(0,0,W,1390);
     }
-    let g=ctx.createLinearGradient(0,0,0,1530);
-    g.addColorStop(0,"rgba(0,0,0,.48)");
-    g.addColorStop(.37,"rgba(0,0,0,.08)");
-    g.addColorStop(.62,"rgba(0,0,0,.45)");
-    g.addColorStop(.82,"#0b0d12");
+    const g=ctx.createLinearGradient(0,940,0,1540);
+    g.addColorStop(0,"rgba(11,13,18,0)");
+    g.addColorStop(.35,"rgba(11,13,18,.85)");
+    g.addColorStop(.72,"#0b0d12");
     g.addColorStop(1,"#0b0d12");
-    ctx.fillStyle=g;ctx.fillRect(0,0,W,1560);
+    ctx.fillStyle=g;ctx.fillRect(0,940,W,600);
     ctx.fillStyle="#0b0d12";ctx.fillRect(0,1510,W,410);
+
+    // Ana görsel üst katmanda, bütün köşeleri görünecek şekilde ortalanır.
+    if(photo)contain(ctx,photo,44,205,W-88,850);
 
     // Brand mark.
     if(brand){
