@@ -2089,14 +2089,13 @@ async function loadInlineFloraScores(force=false){
 
     /* Bir akış geçici hata verse bile diğer akışın geçerli skorlarını koru. */
     if(payloads.length){
-      if(payloads.length===streams.length){
-        floraScoreMap.clear();
-        floraStatsMap.clear();
-      }
-
       for(const data of payloads){
+        const generatedAt=Number(data.generatedAt)||0;
         for(const row of data?.scores||[]){
-          cacheFloraStatsRow(row);
+          const key=String(row?.story_key||"").trim();
+          // Saatlik toplu snapshot, daha yeni tekil verinin üzerine yazamaz.
+          if((floraStatsFetchedAt.get(key)||0)>generatedAt)continue;
+          cacheFloraStatsRow(row,generatedAt);
         }
       }
 
@@ -5891,7 +5890,7 @@ async function prepareStorySlideInternal(
 
   const floraTask=(
     story?.customRss ||
-    floraScoreMap.has(identity) ||
+    floraHasFreshRealData(identity) ||
     Number(floraStoryMissingUntil.get(identity)||0)>Date.now()
   )
     ? Promise.resolve(null)
@@ -5900,6 +5899,10 @@ async function prepareStorySlideInternal(
         5000,
         null
       );
+
+  const floraPredictionTask=story?.customRss
+    ? Promise.resolve(null)
+    : settleWithin(loadFloraVocabulary(),1500,null);
 
   const imageTask=waitForSlideImageStable(
     el,
@@ -5924,6 +5927,7 @@ async function prepareStorySlideInternal(
   ]=await Promise.all([
     baitbusterTask,
     floraTask,
+    floraPredictionTask,
     imageTask,
     mediaTask
   ]);
@@ -6221,7 +6225,7 @@ function prepareTransitionSlideImmediate(el,story){
   if(
     !story?.customRss &&
     identity &&
-    !floraScoreMap.has(identity) &&
+    !floraHasFreshRealData(identity) &&
     Number(floraStoryMissingUntil.get(identity)||0)<=Date.now()
   ){
     void loadFloraStoryStats(story).catch(()=>{});
@@ -17319,6 +17323,9 @@ setTimeout(requestDesktopWakeLock,0);
 
 setFullscreenIcon();
 startAdsCatalogRefresh();
+void loadInlineFloraScores();
+void loadFloraVocabulary();
+setInterval(loadInlineFloraScores,FLORA_SCORES_REFRESH_MS);
 load();
 loadGa4Config();
 setInterval(load,REFRESH_MS);
