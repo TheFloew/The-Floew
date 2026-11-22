@@ -69,10 +69,13 @@
     scheduleTabIndicator();
   }
 
-  // 2) Animate a VISUAL COPY of Flöra's score. The real score text stays
-  // untouched, so sharing, aria labels, and other consumers keep the truth.
+
+  // 2) Count up a visual copy of the existing Flöra score. Preserve the
+  // authoritative value, labels and click handler. Start only after the
+  // initial loading veil has disappeared, and observe late score arrivals.
   var runningScores=new WeakMap();
   var lastStoryBySlide=new WeakMap();
+
   function stopScore(slide){
     var task=runningScores.get(slide);
     if(!task)return;
@@ -81,19 +84,30 @@
     task.value.classList.remove("flow-flora-value-hidden");
     runningScores.delete(slide);
   }
+
   function showScore(slide){
-    if(!slide.classList.contains("active")){stopScore(slide);return;}
+    if(!slide.classList.contains("active")){
+      stopScore(slide);
+      lastStoryBySlide.delete(slide);
+      return;
+    }
+    if(!window.__floewInitialReady&&document.getElementById("loading-screen")){
+      return;
+    }
+
     var box=slide.querySelector(".flora-inline.has-score");
     var value=box&&box.querySelector(".flora-inline-value");
-    var storyKey=box&&(box.dataset.floraStoryKey||slide.dataset.storyKey);
-    if(!box||!value||!storyKey)return;
-    if(lastStoryBySlide.get(slide)===storyKey)return;
-    var target=Number((value.textContent||"").trim().replace(",","."));
-    if(!Number.isFinite(target))return;
-    lastStoryBySlide.set(slide,storyKey);
-    if(motionOff()||target<=0)return;
+    var key=box&&box.dataset.floraStoryKey;
+    if(!box||!value||!key)return;
+
+    var score=Number((value.textContent||"").trim().replace(",","."));
+    if(!Number.isFinite(score))return;
+    if(lastStoryBySlide.get(slide)===key)return;
 
     stopScore(slide);
+    lastStoryBySlide.set(slide,key);
+    if(motionOff()||score<=0)return;
+
     var style=getComputedStyle(value);
     var overlay=document.createElement("span");
     overlay.className="flow-flora-count";
@@ -109,6 +123,7 @@
     overlay.textContent="0.0";
     box.appendChild(overlay);
     value.classList.add("flow-flora-value-hidden");
+
     var task={overlay:overlay,value:value,frame:0};
     runningScores.set(slide,task);
     var start=null;
@@ -118,9 +133,9 @@
         stopScore(slide);
         return;
       }
-      var progress=Math.min(1,(now-start)/560);
+      var progress=Math.min(1,(now-start)/800);
       var eased=1-Math.pow(1-progress,3);
-      overlay.textContent=(target*eased).toFixed(1);
+      overlay.textContent=(score*eased).toFixed(1);
       if(progress<1){
         task.frame=requestAnimationFrame(step);
       }else{
@@ -129,40 +144,65 @@
     }
     task.frame=requestAnimationFrame(step);
   }
+
   ["a","b"].forEach(function(id){
     var slide=document.getElementById(id);
     if(!slide)return;
-    var frame=0;
-    new MutationObserver(function(){
-      if(frame)return;
-      frame=requestAnimationFrame(function(){frame=0;showScore(slide);});
-    }).observe(slide,{attributes:true,attributeFilter:["class","data-story-key"]});
-    showScore(slide);
-  });
-
-  // 3) After BaitBuster's own pointer/keyboard handler changes the heading,
-  // briefly introduce the new title. No interception of its click logic.
-  function animateBaitbusterToggle(event){
-    if(event.type==="keydown"&&event.key!=="Enter"&&event.key!==" ")return;
-    var marker=event.target&&event.target.closest
-      ? event.target.closest(".baitbuster-rewrite-mark")
-      : null;
-    if(!marker)return;
-    var slide=marker.closest(".slide");
-    var heading=slide&&slide.querySelector("h1");
-    if(!heading)return;
-    var previous=heading.textContent;
-    queueMicrotask(function(){
-      if(motionOff()||!heading.isConnected||heading.textContent===previous)return;
-      if(typeof heading.animate==="function"){
-        heading.animate(
-          [{opacity:.4,transform:"translateY(3px)"},
-           {opacity:1,transform:"translateY(0)"}],
-          {duration:190,easing:"ease-out"}
-        );
+    var box=slide.querySelector(".flora-inline");
+    var value=box&&box.querySelector(".flora-inline-value");
+    var pendingFrame=0;
+    function scheduleScore(){
+      if(!pendingFrame){
+        pendingFrame=requestAnimationFrame(function(){
+          pendingFrame=0;
+          showScore(slide);
+        });
       }
+    }
+
+    new MutationObserver(scheduleScore).observe(slide,{
+      attributes:true,attributeFilter:["class","data-story-key"]
     });
-  }
-  document.addEventListener("pointerup",animateBaitbusterToggle,true);
-  document.addEventListener("keydown",animateBaitbusterToggle,true);
+    if(box){
+      new MutationObserver(scheduleScore).observe(box,{
+        attributes:true,attributeFilter:["class","data-flora-story-key"]
+      });
+    }
+    if(value){
+      new MutationObserver(scheduleScore).observe(value,{
+        childList:true,characterData:true,subtree:true
+      });
+    }
+    window.addEventListener("floew:ready",scheduleScore);
+    scheduleScore();
+
+    // 3) BaitBuster changes the H1 node's textContent synchronously inside
+    // its own toggle handler. Watch that real change instead of guessing
+    // event order. Guard against preload/automatic headline updates.
+    var heading=slide.querySelector("h1");
+    if(!heading)return;
+    var previousTitle=heading.textContent;
+    var lastHeadlineAnimation=null;
+    new MutationObserver(function(){
+      var nextTitle=heading.textContent;
+      if(nextTitle===previousTitle)return;
+      previousTitle=nextTitle;
+      if(motionOff()||!slide.classList.contains("active"))return;
+      if(!window.__floewInitialReady&&document.getElementById("loading-screen"))return;
+      if(heading.dataset.baitbusterApplied!=="1")return;
+      if(!slide.querySelector(".baitbuster-rewrite-mark"))return;
+      if(typeof heading.animate!=="function")return;
+
+      if(lastHeadlineAnimation)lastHeadlineAnimation.cancel();
+      // H1 is inline for the β marker layout; opacity works on inline
+      // text without changing width/wrapping, unlike transform/flip.
+      lastHeadlineAnimation=heading.animate(
+        [{opacity:.18,filter:"blur(1.5px)"},
+         {opacity:1,filter:"blur(0px)"}],
+        {duration:300,easing:"cubic-bezier(.16,1,.3,1)"}
+      );
+    }).observe(heading,{
+      childList:true,characterData:true,subtree:true
+    });
+  });
 })();
