@@ -115,7 +115,7 @@
 
 
 /* ========================================================================
-   FLÖW ANALYTICS / FLÖRA — V31.22.1
+   FLÖW ANALYTICS / FLÖRA — V31.23.0 (hourly Behavior rollups + durable cache + ad shadow)
    ======================================================================== */
 
 const CONTENT_SCHEMA = `
@@ -329,6 +329,197 @@ CREATE INDEX IF NOT EXISTS idx_ads_device_time ON ad_events(device_type, occurre
 CREATE INDEX IF NOT EXISTS idx_ads_orientation_time ON ad_events(orientation, occurred_at);
 CREATE INDEX IF NOT EXISTS idx_ads_hour_time ON ad_events(local_hour, occurred_at);
 `;
+
+/*
+  V31.22.3: optional shadow-only ad hourly counters in the EXISTING BEHAVIOR_DB.
+  No ad raw records or current report endpoints are replaced. The schema is
+  created only via authenticated POST /admin/v2/setup. Nothing writes unless
+  ANALYTICS_V2_AD_SHADOW=on is configured after setup.
+*/
+const ANALYTICS_V2_AD_SCHEMA = `
+CREATE TABLE IF NOT EXISTS analytics_ad_hourly_v2 (
+  hour_start INTEGER NOT NULL,
+  ad_id TEXT NOT NULL,
+  device_type TEXT NOT NULL DEFAULT '',
+  orientation TEXT NOT NULL DEFAULT '',
+  local_hour INTEGER NOT NULL DEFAULT -1,
+  views INTEGER NOT NULL DEFAULT 0,
+  skips INTEGER NOT NULL DEFAULT 0,
+  completes INTEGER NOT NULL DEFAULT 0,
+  returns INTEGER NOT NULL DEFAULT 0,
+  repeat_views INTEGER NOT NULL DEFAULT 0,
+  dwell_sum_ms INTEGER NOT NULL DEFAULT 0,
+  dwell_count INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (hour_start, ad_id, device_type, orientation, local_hour)
+);
+CREATE INDEX IF NOT EXISTS idx_analytics_ad_hourly_v2_ad
+  ON analytics_ad_hourly_v2(ad_id, hour_start);
+CREATE TABLE IF NOT EXISTS analytics_ad_hourly_v2_ledger (
+  event_id TEXT PRIMARY KEY,
+  occurred_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_analytics_ad_hourly_v2_ledger_time
+  ON analytics_ad_hourly_v2_ledger(occurred_at);
+`;
+
+function analyticsV2AdShadowEnabled(env) {
+  return String(env.ANALYTICS_V2_AD_SHADOW || '').toLowerCase() === 'on';
+}
+
+/*
+  Reads only the accepted ad_events rows not yet reflected in the v2 ledger.
+  The summary upsert and ledger insert share one D1.batch transaction. Raw
+  ad_events writes have already committed in the legacy path, so failure in
+  the OPTIONAL shadow path never drops historical analytics events.
+
+  A single incoming /track packet has <=60 events; the existing event_id PK
+  and the v2 ledger PK give idempotent cross-packet replay. No personal visitor
+  identifiers are stored in the hourly summary or ledger.
+*/
+function analyticsV2AdShadowStatements(env, eventIds) {
+  const ids = [...new Set((eventIds || []).map(id => String(id || '')).filter(Boolean))];
+  if (!ids.length) return [];
+  if (ids.length > 60) throw new Error('v2 shadow batch exceeds 60 event ids');
+  const marks = ids.map(() => '?').join(',');
+  const freshPredicate = `e.event_id IN (${marks})
+    AND NOT EXISTS (
+      SELECT 1 FROM analytics_ad_hourly_v2_ledger l
+      WHERE l.event_id = e.event_id
+    )`;
+
+  const aggregate = env.BEHAVIOR_DB.prepare(`
+    INSERT INTO analytics_ad_hourly_v2 (
+      hour_start, ad_id, device_type, orientation, local_hour,
+      views, skips, completes, returns, repeat_views,
+      dwell_sum_ms, dwell_count
+    )
+    SELECT
+      CAST(e.occurred_at / 3600000 AS INTEGER) * 3600000,
+      e.ad_id,
+      COALESCE(e.device_type,''),
+      COALESCE(e.orientation,''),
+      COALESCE(e.local_hour,-1),
+      SUM(CASE WHEN e.event_type='ad_view' THEN 1 ELSE 0 END),
+      SUM(CASE WHEN e.event_type='ad_skip' THEN 1 ELSE 0 END),
+      SUM(CASE WHEN e.event_type='ad_complete' THEN 1 ELSE 0 END),
+      SUM(CASE WHEN e.event_type='ad_return' THEN 1 ELSE 0 END),
+      SUM(CASE WHEN e.event_type='ad_repeat_view' THEN 1 ELSE 0 END),
+      SUM(CASE WHEN e.event_type IN ('ad_skip','ad_complete') AND e.dwell_ms > 0 THEN e.dwell_ms ELSE 0 END),
+      SUM(CASE WHEN e.event_type IN ('ad_skip','ad_complete') AND e.dwell_ms > 0 THEN 1 ELSE 0 END)
+    FROM ad_events e
+    WHERE ${freshPredicate} AND e.ad_id <> ''
+    GROUP BY 1,2,3,4,5
+    ON CONFLICT (hour_start, ad_id, device_type, orientation, local_hour)
+    DO UPDATE SET
+      views=views+excluded.views,
+      skips=skips+excluded.skips,
+      completes=completes+excluded.completes,
+      returns=returns+excluded.returns,
+      repeat_views=repeat_views+excluded.repeat_views,
+      dwell_sum_ms=dwell_sum_ms+excluded.dwell_sum_ms,
+      dwell_count=dwell_count+excluded.dwell_count
+  `).bind(...ids);
+
+  const ledger = env.BEHAVIOR_DB.prepare(`
+    INSERT OR IGNORE INTO analytics_ad_hourly_v2_ledger(event_id, occurred_at)
+    SELECT e.event_id, e.occurred_at
+    FROM ad_events e
+    WHERE e.event_id IN (${marks}) AND e.ad_id <> ''
+  `).bind(...ids);
+
+  return [aggregate, ledger];
+}
+
+async function analyticsV2AdShadowStatus(env) {
+  const status = {
+    enabled: analyticsV2AdShadowEnabled(env),
+    mode: 'shadow-only',
+    changesExistingReports: false,
+    tableReady: false,
+    ledgerReady: false,
+    startedAt: null,
+    completeHistoricalCoverage: false
+  };
+  if (!env.BEHAVIOR_DB) return status;
+  try {
+    const names = await analyticsAll(env.BEHAVIOR_DB.prepare(`
+      SELECT name FROM sqlite_master
+      WHERE type='table'
+        AND name IN ('analytics_ad_hourly_v2','analytics_ad_hourly_v2_ledger')
+    `));
+    const tables = new Set(names.map(row => row.name));
+    status.tableReady = tables.has('analytics_ad_hourly_v2');
+    status.ledgerReady = tables.has('analytics_ad_hourly_v2_ledger');
+    if (status.ledgerReady) {
+      const first = await env.BEHAVIOR_DB.prepare(
+        'SELECT MIN(occurred_at) AS first_at FROM analytics_ad_hourly_v2_ledger'
+      ).first();
+      status.startedAt = first?.first_at ?? null;
+    }
+  } catch (error) {
+    status.error = String(error?.message || error);
+  }
+  return status;
+}
+
+async function analyticsV2AdShadowReport(env, rangeKey = '7d') {
+  const status = await analyticsV2AdShadowStatus(env);
+  if (!status.tableReady || !status.ledgerReady) {
+    return {ok:false, error:'Run POST /admin/v2/setup first', status};
+  }
+  const range = analyticsRange(rangeKey);
+  const now = Date.now();
+  const start = Math.ceil(range.since / 3600000) * 3600000;
+  const end = Math.floor(now / 3600000) * 3600000;
+  const ads = await analyticsAll(env.BEHAVIOR_DB.prepare(`
+    SELECT ad_id,
+      SUM(views) AS views,
+      SUM(skips) AS skips,
+      SUM(completes) AS completes,
+      SUM(returns) AS returns,
+      SUM(repeat_views) AS repeat_views,
+      SUM(dwell_sum_ms) AS dwell_sum_ms,
+      SUM(dwell_count) AS dwell_count
+    FROM analytics_ad_hourly_v2
+    WHERE hour_start >= ? AND hour_start < ?
+    GROUP BY ad_id
+    ORDER BY views DESC, ad_id ASC
+    LIMIT 1000
+  `).bind(start, end));
+  const normalized = ads.map(row => ({
+    ad_id: String(row.ad_id),
+    views:analyticsNumber(row.views),
+    skips:analyticsNumber(row.skips),
+    completes:analyticsNumber(row.completes),
+    returns:analyticsNumber(row.returns),
+    repeat_views:analyticsNumber(row.repeat_views),
+    dwell_sum_ms:analyticsNumber(row.dwell_sum_ms),
+    dwell_count:analyticsNumber(row.dwell_count),
+    avg_dwell_ms:Math.round(analyticsNumber(row.dwell_sum_ms) / Math.max(1,analyticsNumber(row.dwell_count)))
+  }));
+  return {
+    ok:true,
+    mode:'shadow-only',
+    range:range.key,
+    generatedAt: now,
+    status,
+    coverage: {
+      type:'completed-UTC-hours-only',
+      from: start,
+      untilExclusive: end,
+      historicalBackfillComplete: false,
+      warning:'Only events ingested while the shadow flag was ON. No backfill or exact rolling 24h/7d boundaries. Not for advertiser reports.'
+    },
+    totals: {
+      views:normalized.reduce((n,r) => n+r.views,0),
+      skips:normalized.reduce((n,r) => n+r.skips,0),
+      completes:normalized.reduce((n,r) => n+r.completes,0),
+      returns:normalized.reduce((n,r) => n+r.returns,0),
+      repeat_views:normalized.reduce((n,r) => n+r.repeat_views,0)
+    },
+    ads: normalized
+  };
+}
 
 const CONTENT_EVENT_TYPES = new Set([
   "story_view",
@@ -1211,7 +1402,7 @@ function analyticsEventStory(event) {
   };
 }
 
-async function trackAnalytics(request, env, corsHeaders) {
+async function trackAnalytics(request, env, corsHeaders, ctx) {
   const missing = analyticsMissingBindings(env);
   if (missing.length) {
     return analyticsJsonResponse({
@@ -1738,6 +1929,21 @@ async function trackAnalytics(request, env, corsHeaders) {
     try {
       await env.BEHAVIOR_DB.batch(adStatements);
       adStored = adStatements.length;
+      // V31.22.3 opt-in: only AFTER legacy ad_events has committed.
+      if (analyticsV2AdShadowEnabled(env)) {
+        try {
+          const adIds = normalized
+            .filter(e => AD_EVENT_TYPES.has(e.eventType) && e.ad.id)
+            .map(e => e.id);
+          const v2Statements = analyticsV2AdShadowStatements(env, adIds);
+          if (v2Statements.length) {
+            await env.BEHAVIOR_DB.batch(v2Statements);
+          }
+        } catch (shadowError) {
+          console.warn('Analytics v2 shadow skipped (legacy stored safely):',
+            String(shadowError?.message || shadowError));
+        }
+      }
     } catch (error) {
       /*
         During a Worker-first deployment the new ad_events table might not
@@ -1747,6 +1953,8 @@ async function trackAnalytics(request, env, corsHeaders) {
       console.warn("Ad analytics write skipped:", error);
     }
   }
+
+  behaviorV3Schedule(ctx,env);
 
   return analyticsJsonResponse({
     ok: true,
@@ -1806,7 +2014,6 @@ function publicFloraStatsPayload(row) {
     video_completes: analyticsNumber(row.video_completes)
   };
 }
-
 
 
 /*
@@ -2521,6 +2728,563 @@ async function audienceSummary(env, rangeKey = "7d") {
   };
 }
 
+/*
+  The Behavior dashboard runs twelve aggregation / timeline queries per load.
+  Repeating those large scans on every refresh can exhaust the shared D1 free
+  plan read quota (including the independent login D1 database).
+
+  Only callers already authorized by /admin/behavior's Bearer-token check may
+  access this cache. No public endpoint exposes it. Since v31.22.4 the report
+  snapshot itself MAY also be stored in a private D1 cache table, after that
+  table is installed. No auth credentials or session cookies are cached.
+  Raw /track events and feedback edits remain immediate and uncached.
+*/
+const ANALYTICS_ADMIN_BEHAVIOR_CACHE_VERSION = "31.23.0";
+const ANALYTICS_ADMIN_BEHAVIOR_MEMORY = new Map();
+const ANALYTICS_ADMIN_BEHAVIOR_INFLIGHT = new Map();
+
+function analyticsAdminBehaviorCacheTtl(rangeKey) {
+  if (rangeKey === "24h") return 10 * 60 * 1000;
+  if (rangeKey === "all") return 2 * 60 * 60 * 1000;
+  return 30 * 60 * 1000;
+}
+
+/*
+  V31.22.4: durable, private, precomputed Behavior report snapshots in D1.
+  The region-local Cache API and isolate memory remain the first two layers.
+  On a regional cold start we read ONE indexed snapshot row, not twelve large
+  event aggregations. A snapshot is created only after an authorized request
+  finishes its existing behaviorSummary() calculations.
+
+  This improves cache-miss cost across isolates and Cloudflare regions; it
+  does NOT make the first/expired calculation cheap and is NOT a replacement
+  for per-event rollups at very high traffic. One write per *new report*, not
+  per tracked event. Raw events, Flüsh's JSON shape, ad shadow and feedback
+  CRUD are untouched.
+*/
+const ANALYTICS_BEHAVIOR_REPORT_SNAPSHOT_SCHEMA = `
+CREATE TABLE IF NOT EXISTS analytics_behavior_report_cache_v2 (
+  cache_key TEXT PRIMARY KEY,
+  generated_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  snapshot_json TEXT NOT NULL
+);
+`;
+
+function analyticsBehaviorSnapshotEnabled(env) {
+  return String(env.ANALYTICS_V2_BEHAVIOR_REPORT_CACHE || "").toLowerCase() !== "off";
+}
+
+async function analyticsBehaviorSnapshotRead(env, key, range, ttlMs) {
+  if (!analyticsBehaviorSnapshotEnabled(env) || !env.BEHAVIOR_DB) return null;
+  const now = Date.now();
+  try {
+    const row = await env.BEHAVIOR_DB.prepare(`
+      SELECT generated_at, expires_at, snapshot_json
+      FROM analytics_behavior_report_cache_v2
+      WHERE cache_key=? AND expires_at>?
+    `).bind(key, now).first();
+    if (!row) return null;
+    const generatedAt = Number(row.generated_at), expiresAt = Number(row.expires_at);
+    // Reject invalid/old/future snapshots and never extend their TTL.
+    if (!Number.isFinite(generatedAt) || !Number.isFinite(expiresAt) ||
+        generatedAt > now + 60000 || generatedAt + ttlMs < now ||
+        expiresAt > generatedAt + ttlMs || expiresAt <= now) return null;
+    const data = JSON.parse(row.snapshot_json);
+    if (data?.ok !== true || data.range !== range ||
+        Number(data.generatedAt) !== generatedAt) return null;
+    return {data, expiresAt};
+  } catch (error) {
+    // Worker-first deployment: missing table must never break old Behavior.
+    console.warn("Analytics Behavior durable snapshot read unavailable:",
+      String(error?.message || error));
+    return null;
+  }
+}
+
+async function analyticsBehaviorSnapshotWrite(env, key, data, ttlMs) {
+  if (!analyticsBehaviorSnapshotEnabled(env) || !env.BEHAVIOR_DB) return;
+  try {
+    const payload = JSON.stringify(data);
+    // Keep an excessively large report out of a single SQLite TEXT cell.
+    if (payload.length > 900000) {
+      console.warn("Analytics Behavior snapshot exceeds durable cache size limit");
+      return;
+    }
+    const generatedAt = Number(data.generatedAt);
+    if (!Number.isSafeInteger(generatedAt)) return;
+    await env.BEHAVIOR_DB.prepare(`
+      INSERT INTO analytics_behavior_report_cache_v2
+        (cache_key, generated_at, expires_at, snapshot_json)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(cache_key) DO UPDATE SET
+        generated_at=excluded.generated_at,
+        expires_at=excluded.expires_at,
+        snapshot_json=excluded.snapshot_json
+      WHERE analytics_behavior_report_cache_v2.generated_at <= excluded.generated_at
+    `).bind(key, generatedAt, generatedAt + ttlMs, payload).run();
+  } catch (error) {
+    console.warn("Analytics Behavior durable snapshot write unavailable:",
+      String(error?.message || error));
+  }
+}
+
+/* ========================================================================
+   FLÖW Behavior v3, resumable immutable hourly rollups.
+   Raw behavior_events stays authoritative. The interval planner never mixes
+   incomplete summaries with raw data; it falls back on v31.22.4 otherwise.
+   ======================================================================== */
+const BEHAVIOR_V3_HOUR = 3600000;
+const BEHAVIOR_V3_BATCH = 1000;
+const BEHAVIOR_V3_MAX_EVENTS_PER_HOUR = 12000;
+const BEHAVIOR_V3_MAX_JSON_SIZE = 950000;
+const BEHAVIOR_V3_RECENT_RAW_HOURS = 2;
+let behaviorV3SetupPromise = null;
+let behaviorV3SetupRetryAt = 0;
+let behaviorV3LastMaintenanceAttempt = 0;
+
+function behaviorV3Enabled(env) {
+  return String(env.ANALYTICS_V3_BEHAVIOR_ROLLUP || "").toLowerCase() !== "off";
+}
+
+async function behaviorV3Setup(env) {
+  if (!behaviorV3Enabled(env) || !env.BEHAVIOR_DB) return false;
+  if (behaviorV3SetupRetryAt > Date.now()) return false;
+  if (!behaviorV3SetupPromise) {
+    behaviorV3SetupPromise = (async () => {
+      await env.BEHAVIOR_DB.prepare(`
+        CREATE TABLE IF NOT EXISTS analytics_behavior_hourly_v3 (
+          hour_start INTEGER PRIMARY KEY,
+          built_at INTEGER NOT NULL,
+          event_count INTEGER NOT NULL,
+          summary_json TEXT NOT NULL
+        )
+      `).run();
+      await env.BEHAVIOR_DB.prepare(`
+        CREATE TABLE IF NOT EXISTS analytics_behavior_v3_maintenance (
+          id INTEGER PRIMARY KEY CHECK (id=1),
+          lease_until INTEGER NOT NULL,
+          lease_owner TEXT NOT NULL
+        )
+      `).run();
+      // SQLite trigger fires only on LATE arrivals. On-time /track events
+      // retain the exact previous write count: no per-event summary UPSERT.
+      await env.BEHAVIOR_DB.prepare(`
+        CREATE TRIGGER IF NOT EXISTS analytics_behavior_v3_late_event
+        AFTER INSERT ON behavior_events
+        WHEN NEW.occurred_at < CAST((unixepoch('now') * 1000 - 2 * 3600000) / 3600000 AS INTEGER) * 3600000
+        BEGIN
+          DELETE FROM analytics_behavior_hourly_v3
+          WHERE hour_start = CAST(NEW.occurred_at / 3600000 AS INTEGER) * 3600000;
+        END
+      `).run();
+      // Administrative retention/pruning must not leave phantom counts.
+      await env.BEHAVIOR_DB.prepare(`
+        CREATE TRIGGER IF NOT EXISTS analytics_behavior_v3_deleted_event
+        AFTER DELETE ON behavior_events
+        BEGIN
+          DELETE FROM analytics_behavior_hourly_v3
+          WHERE hour_start = CAST(OLD.occurred_at / 3600000 AS INTEGER) * 3600000;
+        END
+      `).run();
+      return true;
+    })().catch(error => {
+      behaviorV3SetupPromise = null;
+      behaviorV3SetupRetryAt = Date.now() + 120000;
+      console.warn('Behavior v3 setup unavailable:', String(error?.message || error));
+      return false;
+    });
+  }
+  return behaviorV3SetupPromise;
+}
+
+function behaviorV3Empty() {
+  return {
+    events: 0, types: Object.create(null), visitors: [], sessions: [],
+    keywords: Object.create(null), sources: Object.create(null), categories: Object.create(null), filters: Object.create(null),
+    auto: {pauses:0,resumes:0,total:0,avgSum:0,avgCount:0,users:[]},
+    rss: {adds:0,addFailures:0,removes:0,storyViews:0,dwellSum:0,dwellCount:0,failures:Object.create(null),states:Object.create(null)},
+    daily:Object.create(null)
+  };
+}
+function behaviorV3Increment(dict, key, amount=1) {
+  const k = String(key ?? '');
+  dict[k] = (dict[k] || 0) + amount;
+}
+function behaviorV3AddEvent(a, e) {
+  a.events++;
+  behaviorV3Increment(a.types, e.event_type);
+  if (e.visitor_id != null) a.visitors.push(String(e.visitor_id));
+  if (e.session_id != null) a.sessions.push(String(e.session_id));
+  const keyword = String(e.keyword_text || '');
+  if (keyword) behaviorV3Increment(a.keywords, JSON.stringify([keyword, e.mode ?? null]));
+  if (e.source != null && e.source !== '') behaviorV3Increment(a.sources, e.source);
+  if (e.category != null && e.category !== '') behaviorV3Increment(a.categories, e.category);
+  const type = String(e.event_type);
+  const visitor = String(e.visitor_id ?? '');
+  const value = Number(e.value_num) || 0;
+  const label = String(e.value_text || '');
+  if ((type === 'source_filter_open' || type === 'source_filter_close') && label) {
+    const f = a.filters[label] ||= {opens:0,users:[],durationSum:0,durationCount:0,storyViews:0};
+    if (type === 'source_filter_open') {f.opens++; if(e.visitor_id != null)f.users.push(visitor);}
+    if (type === 'source_filter_close') {
+      if (value > 0) {f.durationSum += value;f.durationCount++;}
+      try {
+        const stories = JSON.parse(e.meta_json || '{}')?.stories_viewed;
+        const val = Number(stories);
+        if (Number.isFinite(val)) f.storyViews += Math.trunc(val);
+      } catch {}
+    }
+  }
+  if (type === 'auto_advance_pause') {a.auto.pauses++;if(e.visitor_id != null)a.auto.users.push(visitor);}
+  if (type === 'auto_advance_resume') a.auto.resumes++;
+  if (type === 'auto_advance_resume' || type === 'auto_advance_pause_end') {
+    a.auto.total += value;
+    if (value > 0) {a.auto.avgSum += value;a.auto.avgCount++;}
+  }
+  if (type === 'custom_rss_add') a.rss.adds++;
+  if (type === 'custom_rss_add_failed') {a.rss.addFailures++;behaviorV3Increment(a.rss.failures,e.mode);}
+  if (type === 'custom_rss_remove') a.rss.removes++;
+  if (type === 'custom_rss_story_view') a.rss.storyViews++;
+  if (type === 'custom_rss_story_leave' && value > 0) {a.rss.dwellSum+=value;a.rss.dwellCount++;}
+  if (['custom_rss_state','custom_rss_add','custom_rss_remove'].includes(type)) {
+    const at = Number(e.occurred_at), id = String(e.event_id);
+    const prior = a.rss.states[visitor];
+    if (!prior || at > prior[0] || (at === prior[0] && id > prior[1])) {
+      a.rss.states[visitor] = [at, id, value];
+    }
+  }
+  const day = new Date(Number(e.occurred_at)).toISOString().slice(0,10);
+  behaviorV3Increment(a.daily,day);
+}
+function behaviorV3Unique(arr) {return [...new Set(arr)];}
+function behaviorV3Seal(a) {
+  a.visitors = behaviorV3Unique(a.visitors);
+  a.sessions = behaviorV3Unique(a.sessions);
+  a.auto.users = behaviorV3Unique(a.auto.users);
+  for (const f of Object.values(a.filters)) f.users = behaviorV3Unique(f.users);
+  return a;
+}
+function behaviorV3Merge(to, from) {
+  to.events += from.events;
+  for (const field of ['types','keywords','sources','categories','daily']) {
+    for (const [key,n] of Object.entries(from[field])) behaviorV3Increment(to[field],key,n);
+  }
+  to.visitors.push(...from.visitors);
+  to.sessions.push(...from.sessions);
+  const a=to.auto,b=from.auto;
+  for(const k of ['pauses','resumes','total','avgSum','avgCount']) a[k]+=b[k];
+  a.users.push(...b.users);
+  for(const [label,f] of Object.entries(from.filters)) {
+    const dst=to.filters[label] ||= {opens:0,users:[],durationSum:0,durationCount:0,storyViews:0};
+    dst.opens+=f.opens;dst.users.push(...f.users);dst.durationSum+=f.durationSum;
+    dst.durationCount+=f.durationCount;dst.storyViews+=f.storyViews;
+  }
+  const r=to.rss,s=from.rss;
+  for(const k of ['adds','addFailures','removes','storyViews','dwellSum','dwellCount'])r[k]+=s[k];
+  for(const [key,n] of Object.entries(s.failures))behaviorV3Increment(r.failures,key,n);
+  for(const [key,state] of Object.entries(s.states)) {
+    const prior=r.states[key];
+    if(!prior || state[0]>prior[0] || (state[0]===prior[0] && state[1]>prior[1]))r.states[key]=state;
+  }
+  return to;
+}
+function behaviorV3Top(dict,limit,labelKey='label') {
+  return Object.entries(dict).map(([label,count])=>({[labelKey]:label,count}))
+    .sort((a,b)=>b.count-a.count || String(a[labelKey]).localeCompare(String(b[labelKey])))
+    .slice(0,limit);
+}
+function behaviorV3Report(a, rangeKey, now) {
+  const range=analyticsRange(rangeKey);
+  const eventTypes=behaviorV3Top(a.types,80);
+  const keywords=Object.entries(a.keywords).map(([key,count])=>{
+    const [keyword,mode]=JSON.parse(key);return {keyword,mode,count};
+  }).sort((x,y)=>y.count-x.count || x.keyword.localeCompare(y.keyword)).slice(0,100);
+  const sourceFilters=Object.entries(a.filters).map(([label,f])=>({
+    label,opens:f.opens,visitors:new Set(f.users).size,
+    avg_duration_ms:Math.round(f.durationCount?f.durationSum/f.durationCount:0),story_views:f.storyViews
+  })).sort((x,y)=>y.opens-x.opens || y.story_views-x.story_views || x.label.localeCompare(y.label)).slice(0,40);
+  const states=Object.values(a.rss.states).filter(v=>v[2]>0);
+  const attempts=a.rss.adds+a.rss.addFailures;
+  return {
+    ok:true,range:range.key,label:range.label,generatedAt:now,
+    totals:{events:a.events,sessions:new Set(a.sessions).size,visitors:new Set(a.visitors).size},
+    eventTypes,keywords,sources:behaviorV3Top(a.sources,40),categories:behaviorV3Top(a.categories,40),
+    sourceFilters,
+    autoAdvance:{pauses:a.auto.pauses,resumes:a.auto.resumes,users:new Set(a.auto.users).size,
+      total_pause_ms:Math.round(a.auto.total),avg_pause_ms:Math.round(a.auto.avgCount?a.auto.avgSum/a.auto.avgCount:0)},
+    customRss:{configured_visitors:states.length,
+      avg_feed_count:Math.round((states.length?states.reduce((s,v)=>s+v[2],0)/states.length:0)*10)/10,
+      adds:a.rss.adds,add_failures:a.rss.addFailures,
+      add_success_rate:attempts?Math.round(a.rss.adds/attempts*1000)/10:0,
+      removes:a.rss.removes,story_views:a.rss.storyViews,
+      avg_dwell_ms:Math.round(a.rss.dwellCount?a.rss.dwellSum/a.rss.dwellCount:0),
+      failures:behaviorV3Top(a.rss.failures,20)},
+    daily:Object.entries(a.daily).sort(([x],[y])=>x.localeCompare(y)).map(([day,events])=>({day,events})),
+    latest:[]
+  };
+}
+
+async function behaviorV3Scan(env,start,end,cap=BEHAVIOR_V3_MAX_EVENTS_PER_HOUR) {
+  const acc=behaviorV3Empty();
+  let cursorTime=start-1,cursorRowid=0, highestRowid=0;
+  while(true) {
+    const rows=await analyticsAll(env.BEHAVIOR_DB.prepare(`
+      SELECT rowid, event_id, occurred_at, visitor_id, session_id, event_type,
+        source, category, keyword_text, mode, value_num, value_text, meta_json
+      FROM behavior_events
+      WHERE occurred_at>=? AND occurred_at<?
+        AND (occurred_at>? OR (occurred_at=? AND rowid>?))
+      ORDER BY occurred_at, rowid
+      LIMIT ${BEHAVIOR_V3_BATCH}
+    `).bind(start,end,cursorTime,cursorTime,cursorRowid));
+    if(!rows.length) break;
+    for(const e of rows) {
+      behaviorV3AddEvent(acc,e);
+      cursorTime=Number(e.occurred_at);cursorRowid=Number(e.rowid);
+      highestRowid=Math.max(highestRowid,cursorRowid);
+    }
+    if(acc.events>cap) throw new Error('v3 scan exceeded safe bounded event count');
+    if(rows.length<BEHAVIOR_V3_BATCH)break;
+  }
+  acc._highestRowid=highestRowid;
+  return behaviorV3Seal(acc);
+}
+async function behaviorV3FirstHour(env) {
+  const row=await env.BEHAVIOR_DB.prepare(`
+    SELECT occurred_at FROM behavior_events ORDER BY occurred_at ASC LIMIT 1
+  `).first();
+  return row ? Math.floor(Number(row.occurred_at)/BEHAVIOR_V3_HOUR)*BEHAVIOR_V3_HOUR : null;
+}
+
+async function behaviorV3Summary(env, rangeKey) {
+  if(!await behaviorV3Setup(env)) return null;
+  const range=analyticsRange(rangeKey), now=Date.now(), H=BEHAVIOR_V3_HOUR;
+  let first=range.key==='all' ? await behaviorV3FirstHour(env) : range.since;
+  if(first==null) { // Empty database: old behavior still handles this.
+    return null;
+  }
+  // Early partial hours are read precisely; recent mutable hours are raw.
+  const fullStart=Math.ceil(first/H)*H;
+  const fullEnd=Math.floor((now-BEHAVIOR_V3_RECENT_RAW_HOURS*H)/H)*H;
+  const segments=[];
+  if(fullStart<fullEnd) {
+    const slots=await analyticsAll(env.BEHAVIOR_DB.prepare(`
+      SELECT hour_start, summary_json FROM analytics_behavior_hourly_v3
+      WHERE hour_start>=? AND hour_start<? ORDER BY hour_start ASC
+    `).bind(fullStart,fullEnd));
+    let expected=fullStart;
+    for(const slot of slots) {
+      if(Number(slot.hour_start)!==expected)return null;
+      let summary;
+      try {summary=JSON.parse(slot.summary_json);} catch{return null;}
+      if(!summary || summary.overflow || !Number.isInteger(summary.events))return null;
+      segments.push(summary);
+      expected+=H;
+    }
+    if(expected!==fullEnd)return null; // Not fully built, never partial reports.
+  }
+  const acc=behaviorV3Empty();
+  for(const slot of segments)behaviorV3Merge(acc,slot);
+  // At most the first partial hour plus the two most recent hours. For tiny
+  // time spans there is only one raw interval; avoid overlap/double counts.
+  if(first<fullStart && fullStart<fullEnd) {
+    behaviorV3Merge(acc,await behaviorV3Scan(env,first,fullStart,20000));
+    behaviorV3Merge(acc,await behaviorV3Scan(env,fullEnd,9000000000000000,20000));
+  } else if(first<fullEnd) {
+    behaviorV3Merge(acc,await behaviorV3Scan(env,fullEnd,9000000000000000,20000));
+  } else {
+    behaviorV3Merge(acc,await behaviorV3Scan(env,first,9000000000000000,20000));
+  }
+  const out=behaviorV3Report(acc,range.key,now);
+  // The private newest-events drilldown remains indexed against raw events;
+  // no event metadata is dropped or silently reconstructed from aggregates.
+  out.latest=await analyticsAll(env.BEHAVIOR_DB.prepare(`
+      SELECT occurred_at, visitor_id, session_id, event_type, story_key,
+        source, category, feed_mode, keyword_text, keyword_count,
+        mode, value_num, value_text, meta_json
+      FROM behavior_events
+      WHERE occurred_at >= ?
+      ORDER BY occurred_at DESC LIMIT 150
+  `).bind(range.since));
+  return out;
+}
+
+async function behaviorV3MakeHour(env,hour) {
+  const now=Date.now();
+  if(hour+BEHAVIOR_V3_HOUR > now-BEHAVIOR_V3_RECENT_RAW_HOURS*BEHAVIOR_V3_HOUR)return false;
+  let data;
+  try {data=await behaviorV3Scan(env,hour,hour+BEHAVIOR_V3_HOUR);} catch(error) {
+    if(!String(error?.message||error).includes('exceeded safe bounded'))throw error;
+    data={overflow:true,events:0};
+  }
+  const scannedMaxRowid=Number(data._highestRowid||0);
+  delete data._highestRowid;
+  let payload=JSON.stringify(data);
+  if(new TextEncoder().encode(payload).length>BEHAVIOR_V3_MAX_JSON_SIZE) {
+    // The report deliberately stays on the exact legacy SQL path for this hour.
+    // Store a marker to avoid repeatedly scanning an oversized hour.
+    data={overflow:true,events:0};payload=JSON.stringify(data);
+  }
+  // Atomic validation protects a rollup from concurrent late inserts during
+  // multi-page scanning. If even one row was inserted, retry on the next pass.
+  const expectedMaxRowid=scannedMaxRowid;
+  if(data.overflow) {
+    await env.BEHAVIOR_DB.prepare(`
+      INSERT INTO analytics_behavior_hourly_v3(hour_start,built_at,event_count,summary_json)
+      VALUES (?,?,?,?)
+      ON CONFLICT(hour_start) DO UPDATE SET built_at=excluded.built_at,
+        event_count=excluded.event_count,summary_json=excluded.summary_json
+    `).bind(hour,Date.now(),-1,payload).run();
+    return false;
+  }
+  const wrote=await env.BEHAVIOR_DB.prepare(`
+    INSERT INTO analytics_behavior_hourly_v3(hour_start,built_at,event_count,summary_json)
+    SELECT ?,?,?,?
+    WHERE (SELECT COALESCE(MAX(rowid),0) FROM behavior_events
+           WHERE occurred_at>=? AND occurred_at<?) = ?
+    ON CONFLICT(hour_start) DO UPDATE SET
+      built_at=excluded.built_at,event_count=excluded.event_count,
+      summary_json=excluded.summary_json
+  `).bind(hour,Date.now(),data.events,payload,
+    hour,hour+BEHAVIOR_V3_HOUR,expectedMaxRowid).run();
+  return Number(wrote?.meta?.changes || 0)>0;
+}
+
+async function behaviorV3Maintain(env) {
+  if(!await behaviorV3Setup(env))return;
+  const now=Date.now(),owner=crypto.randomUUID(),H=BEHAVIOR_V3_HOUR;
+  const lease=await env.BEHAVIOR_DB.prepare(`
+    INSERT INTO analytics_behavior_v3_maintenance(id,lease_until,lease_owner)
+    VALUES (1,?,?)
+    ON CONFLICT(id) DO UPDATE SET
+      lease_until=excluded.lease_until,lease_owner=excluded.lease_owner
+    WHERE analytics_behavior_v3_maintenance.lease_until < ?
+  `).bind(now+120000,owner,now).run();
+  if(Number(lease?.meta?.changes||0)===0)return;
+  try {
+    const cutoff=Math.floor((now-BEHAVIOR_V3_RECENT_RAW_HOURS*H)/H)*H;
+    const oldest=await behaviorV3FirstHour(env);
+    if(oldest==null)return;
+    const priority=Math.max(oldest,Math.floor((now-7*86400000)/H)*H);
+    const rows=await analyticsAll(env.BEHAVIOR_DB.prepare(`
+      SELECT hour_start FROM analytics_behavior_hourly_v3
+      WHERE hour_start>=? AND hour_start<?
+      ORDER BY hour_start DESC
+    `).bind(priority,cutoff));
+    const present=new Set(rows.map(r=>Number(r.hour_start)));
+    const missing=[];
+    // Newest first, so the 24h report becomes cheap before the 7d report.
+    for(let h=cutoff-H;h>=priority && missing.length<2;h-=H) {
+      if(!present.has(h)) missing.push(h);
+    }
+    // Once the recent week is complete, backfill all historical hours.
+    if(!missing.length && oldest<priority) {
+      const ancient=await analyticsAll(env.BEHAVIOR_DB.prepare(`
+        SELECT hour_start FROM analytics_behavior_hourly_v3
+        WHERE hour_start>=? AND hour_start<? ORDER BY hour_start ASC
+      `).bind(oldest,priority));
+      const oldSet=new Set(ancient.map(r=>Number(r.hour_start)));
+      for(let h=priority-H;h>=oldest && missing.length<2;h-=H) {
+        if(!oldSet.has(h))missing.push(h);
+      }
+    }
+    for(const hour of missing) {
+      try {await behaviorV3MakeHour(env,hour);} catch(error) {
+        console.warn('Behavior v3 hourly build skipped:',hour,String(error?.message||error));
+        break;
+      }
+    }
+  } finally {
+    try {await env.BEHAVIOR_DB.prepare(`
+      UPDATE analytics_behavior_v3_maintenance
+      SET lease_until=0 WHERE id=1 AND lease_owner=?
+    `).bind(owner).run();}catch{}
+  }
+}
+
+function behaviorV3Schedule(ctx,env,force=false) {
+  if(!ctx?.waitUntil || !behaviorV3Enabled(env))return;
+  const now=Date.now();
+  if(!force && now-behaviorV3LastMaintenanceAttempt<90000)return;
+  behaviorV3LastMaintenanceAttempt=now;
+  ctx.waitUntil(behaviorV3Maintain(env).catch(error=>
+    console.warn('Behavior v3 maintenance unavailable:',String(error?.message||error))));
+}
+
+async function behaviorSummaryCached(env, request, ctx, rangeKey = "7d") {
+  const range = analyticsRange(rangeKey).key;
+  const key = `${ANALYTICS_ADMIN_BEHAVIOR_CACHE_VERSION}:private-behavior:${range}`;
+  const now = Date.now();
+  const ttlMs = analyticsAdminBehaviorCacheTtl(range);
+  const hit = ANALYTICS_ADMIN_BEHAVIOR_MEMORY.get(key);
+  if (hit && hit.until > now) return hit.data;
+  if (hit) ANALYTICS_ADMIN_BEHAVIOR_MEMORY.delete(key);
+
+  const pending = ANALYTICS_ADMIN_BEHAVIOR_INFLIGHT.get(key);
+  if (pending) return pending;
+
+  const task = (async () => {
+    const publish = async (data, expiresAt) => {
+      const remainingMs = Math.max(0, expiresAt - Date.now());
+      if (!remainingMs) return data;
+      ANALYTICS_ADMIN_BEHAVIOR_MEMORY.set(key, {
+        until: Date.now() + Math.min(remainingMs, 60000), data
+      });
+      // Synthetic Cache API entry contains no Authorization/Cookie header.
+      const response = new Response(JSON.stringify(data), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": `public, max-age=${Math.max(1,Math.floor(remainingMs/1000))}`
+        }
+      });
+      await analyticsEdgeCachePut(request, key, response, ctx);
+      return data;
+    };
+
+    // This key is generated from a fixed range enum. No token, cookie or ID.
+    const cached = await analyticsEdgeCacheMatch(request, key);
+    if (cached) {
+      try {
+        const data = await cached.json();
+        if (data?.ok === true && data.range === range) {
+          ANALYTICS_ADMIN_BEHAVIOR_MEMORY.set(key, {
+            until: Date.now() + Math.min(ttlMs, 60000), data
+          });
+          return data;
+        }
+      } catch (error) {
+        console.warn("Analytics Behavior regional cache invalid:", String(error));
+      }
+    }
+
+    // Cross-region / cold-isolate cache hit: only one indexed D1 row.
+    const durable = await analyticsBehaviorSnapshotRead(env, key, range, ttlMs);
+    if (durable) return publish(durable.data, durable.expiresAt);
+
+    // Behavior v3 reads complete sealed hour snapshots, plus precise recent/
+    // boundary raw events. If even one hour is not built, return the proven
+    // legacy report. Never show an incomplete count.
+    let data = null;
+    try {data = await behaviorV3Summary(env, range);} catch(error) {
+      console.warn('Behavior v3 report fell back:', String(error?.message || error));
+    }
+    if(!data) data = await behaviorSummary(env, range);
+    if (data?.ok === true) {
+      const expiresAt = Number(data.generatedAt) + ttlMs;
+      await analyticsBehaviorSnapshotWrite(env, key, data, ttlMs);
+      await publish(data, expiresAt);
+    }
+    return data;
+  })().finally(() => {
+    ANALYTICS_ADMIN_BEHAVIOR_INFLIGHT.delete(key);
+  });
+
+  ANALYTICS_ADMIN_BEHAVIOR_INFLIGHT.set(key, task);
+  return task;
+}
+
 async function behaviorSummary(env, rangeKey = "7d") {
   const range = analyticsRange(rangeKey);
   if (!env.BEHAVIOR_DB) throw new Error("BEHAVIOR_DB is not configured");
@@ -2610,6 +3374,7 @@ async function behaviorSummary(env, rangeKey = "7d") {
       COUNT(DISTINCT CASE WHEN event_type='auto_advance_pause' THEN visitor_id END) AS users
     FROM behavior_events
     WHERE occurred_at >= ?
+      AND event_type IN ('auto_advance_pause','auto_advance_resume','auto_advance_pause_end')
   `).bind(range.since).first();
 
   const customRssRow = await env.BEHAVIOR_DB.prepare(`
@@ -2621,6 +3386,10 @@ async function behaviorSummary(env, rangeKey = "7d") {
       AVG(CASE WHEN event_type='custom_rss_story_leave' AND value_num>0 THEN value_num END) AS avg_dwell_ms
     FROM behavior_events
     WHERE occurred_at >= ?
+      AND event_type IN (
+        'custom_rss_add','custom_rss_add_failed','custom_rss_remove',
+        'custom_rss_story_view','custom_rss_story_leave'
+      )
   `).bind(range.since).first();
 
   const customRssStateRow = await env.BEHAVIOR_DB.prepare(`
@@ -4466,16 +5235,16 @@ function reportPeriod(title, audience, behavior) {
   `;
 }
 
-async function analyticsExportHtml(env) {
+async function analyticsExportHtml(env, request, ctx) {
   const [
     audience7d, behavior7d, ads7d,
     audienceAll, behaviorAll, adsAll
   ] = await Promise.all([
     audienceSummary(env, "7d"),
-    behaviorSummary(env, "7d"),
+    behaviorSummaryCached(env, request, ctx, "7d"),
     adSummary(env, "7d").catch(() => ({ads:[], totals:{}})),
     audienceSummary(env, "all"),
-    behaviorSummary(env, "all"),
+    behaviorSummaryCached(env, request, ctx, "all"),
     adSummary(env, "all").catch(() => ({ads:[], totals:{}}))
   ]);
 
@@ -4574,7 +5343,41 @@ export default {
           405
         );
       }
-      return trackAnalytics(request, env, corsHeaders);
+      return trackAnalytics(request, env, corsHeaders, ctx);
+    }
+
+    // V31.22.3 shadow admin endpoints; no public access, no old API changes.
+    if (url.pathname === '/admin/v2/setup' ||
+        url.pathname === '/admin/v2/status' ||
+        url.pathname === '/admin/v2/ads') {
+      if (!analyticsAuthorized(request, env)) {
+        return analyticsJsonResponse({ok:false,error:'Unauthorized'},corsHeaders,401);
+      }
+      if (!env.BEHAVIOR_DB) {
+        return analyticsJsonResponse({ok:false,error:'BEHAVIOR_DB missing'},corsHeaders,503);
+      }
+      if (url.pathname === '/admin/v2/setup' && request.method !== 'POST') {
+        return analyticsJsonResponse({ok:false,error:'Method Not Allowed'},corsHeaders,405);
+      }
+      if (url.pathname !== '/admin/v2/setup' && request.method !== 'GET') {
+        return analyticsJsonResponse({ok:false,error:'Method Not Allowed'},corsHeaders,405);
+      }
+      try {
+        if (url.pathname === '/admin/v2/setup') {
+          const statements = await runAnalyticsSchema(env.BEHAVIOR_DB,ANALYTICS_V2_AD_SCHEMA);
+          return analyticsJsonResponse({ok:true,statements:statements.length,
+            status:await analyticsV2AdShadowStatus(env)},corsHeaders);
+        }
+        if (url.pathname === '/admin/v2/status') {
+          return analyticsJsonResponse({ok:true,
+            status:await analyticsV2AdShadowStatus(env)},corsHeaders);
+        }
+        return analyticsJsonResponse(
+          await analyticsV2AdShadowReport(env,url.searchParams.get('range')||'7d'),
+          corsHeaders);
+      } catch (error) {
+        return analyticsJsonResponse({ok:false,error:String(error?.message||error)},corsHeaders,500);
+      }
     }
 
     if (url.pathname === "/admin/setup") {
@@ -4839,7 +5642,6 @@ export default {
       }
     }
 
-
     if (url.pathname === "/stats/flora-vocabulary") {
       try {
         const stream=url.searchParams.get("stream")==="foreign"?"foreign":"main";
@@ -5014,9 +5816,10 @@ export default {
         }
 
         if (url.pathname === "/admin/behavior") {
+          behaviorV3Schedule(ctx,env);
           return analyticsJsonResponse(
-            await behaviorSummary(
-              env,
+            await behaviorSummaryCached(
+              env, request, ctx,
               url.searchParams.get("range") || "7d"
             ),
             corsHeaders
@@ -5122,7 +5925,7 @@ export default {
           });
         }
 
-        const html = await analyticsExportHtml(env);
+        const html = await analyticsExportHtml(env, request, ctx);
         const stamp = new Date().toISOString().slice(0,10);
         return new Response(html, {
           status: 200,
