@@ -172,3 +172,21 @@ test("image warming uses the same initial URL as the visible slide",async()=>{
   assert.match(app,/const imagePromise=preloadImage\(storyInitialImageUrl\(story\)\)/);
   assert.match(app,/img\.referrerPolicy="no-referrer"/);
 });
+
+test("timed-out image preloads abort their real network request",async()=>{
+  const app=await source("js/app.js");
+  const block=app.match(/function preloadImage\(url,\{priority="auto"\}=\{\}\)\{[\s\S]*?\n\}/)?.[0]||"";
+  assert.match(block,/timeoutId=setTimeout\(\(\)=>finish\(false,true\),5000\)/);
+  assert.match(block,/if\(timedOut\)\{[\s\S]*?img\.removeAttribute\("src"\)/);
+  assert.match(block,/img\.onerror=\(\)=>finish\(false\)/);
+  assert.match(block,/imagePreloadCache\.delete\(url\)/);
+});
+
+test("BaitBuster warmup starts when news arrives, before bulk image loading",async()=>{
+  const app=await source("js/app.js");
+  const load=app.match(/async function performNewsLoad\(\)\{[\s\S]*?\n\}/)?.[0]||"";
+  assert.match(load,/const list=activeStories\(\);[\s\S]*?if\(list\.length && !state\.stories\.length\)[\s\S]*?waitForBaitBusterClient\(\)[\s\S]*?prefetchStories\?\.\(list\.slice\(0,5\)\)/);
+  assert.match(load,/scheduleNewsImagePreload/);
+  assert.ok(load.indexOf("prefetchStories?.(list.slice(0,5))")<load.indexOf("scheduleNewsImagePreload"));
+  assert.match(app,/setTimeout\(pumpNewsImagePreloadQueue,180\)/);
+});
