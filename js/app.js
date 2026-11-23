@@ -18,6 +18,7 @@ const SOURCE_VIEW_API=`${NEWS_WORKER_BASE}/source`;
 const MARKET_API=`${MARKET_WORKER_BASE}/market`;
 const FLORA_SCORES_API=`${ANALYTICS_WORKER_BASE}/stats/flora-scores`;
 const FLORA_STORY_API=`${ANALYTICS_WORKER_BASE}/stats/flora-story`;
+const FLORA_VOCAB_API=`${ANALYTICS_WORKER_BASE}/stats/flora-vocabulary`;
 const NEWS_REQUEST_SESSION=
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`;
 const NEWS_BATCH_CACHE_PREFIX="thefloew.newsBatchCache.v1.";
@@ -1536,12 +1537,64 @@ const floraScoreMap=new Map();
 const floraStatsMap=new Map();
 const floraStoryRequestCache=new Map();
 const floraStoryMissingUntil=new Map();
-const FLORA_STORY_NEGATIVE_CACHE_MS=30*60*1000;
+const FLORA_STORY_NEGATIVE_CACHE_MS=10*60*1000;
 const FLORA_STORY_ERROR_BACKOFF_MS=5*60*1000;
 let floraScoresLoading=false;
 let floraScoresLoadedAt=0;
 let floraPopoverOpen=false;
 const FLORA_SCORES_REFRESH_MS=5*60*1000;
+const FLORA_ACTUAL_REFRESH_MS=10*60*1000;
+const FLORA_ACTUAL_MIN_VIEWS=8;
+const floraStatsFetchedAt=new Map();
+const floraVocabularyModels=new Map();
+let floraVocabularyLoading=null;
+let floraVocabularyLoadedAt=0;
+
+async function loadFloraVocabulary(){
+  if(!globalThis.FloewFloraPredictor)return;
+  if(floraVocabularyLoading)return floraVocabularyLoading;
+  if(floraVocabularyLoadedAt && Date.now()-floraVocabularyLoadedAt<24*60*60*1000)return;
+  floraVocabularyLoading=(async()=>{
+    const results=await Promise.allSettled(
+      ["main","foreign"].map(async stream=>{
+        const url=new URL(FLORA_VOCAB_API);
+        url.searchParams.set("stream",stream);
+        const response=await fetch(url.href,{
+          method:"GET",mode:"cors",credentials:"omit",cache:"default",
+          headers:{"Accept":"application/json"}
+        });
+        if(!response.ok)throw new Error("Flöra sözlüğü: HTTP "+response.status);
+        const data=await response.json();
+        if(!data?.ok || data?.model?.version!==1)throw new Error("Flöra sözlüğü geçersiz");
+        return {stream,model:data.model};
+      })
+    );
+    let good=0;
+    for(const result of results){
+      if(result.status==="fulfilled"){
+        floraVocabularyModels.set(result.value.stream,result.value.model);
+        good++;
+      }
+    }
+    // Endpoint henüz yayınlanmamışsa sürekli 404 denemeyelim.
+    floraVocabularyLoadedAt=Date.now()-(good?0:23*60*60*1000);
+  })().finally(()=>{floraVocabularyLoading=null});
+  return floraVocabularyLoading;
+}
+function predictFloraForStory(story){
+  if(!story || story.customRss)return null;
+  const model=floraVocabularyModels.get(story.flowForeign?"foreign":"main");
+  return globalThis.FloewFloraPredictor?.estimate?.(story.title||"",model)||null;
+}
+function floraHasEnoughRealData(key){
+  const stats=floraStatsMap.get(key);
+  return Boolean(stats && stats.views>=FLORA_ACTUAL_MIN_VIEWS && stats.avg_dwell_ms>0);
+}
+function floraHasFreshRealData(key){
+  return floraStatsMap.has(key) &&
+    Date.now()-(floraStatsFetchedAt.get(key)||0)<FLORA_ACTUAL_REFRESH_MS;
+}
+
 
 function formatInlineFloraScore(value){
   const number=Number(value);
@@ -1574,11 +1627,12 @@ function normalizeFloraStatsRow(row){
   };
 }
 
-function cacheFloraStatsRow(row){
+function cacheFloraStatsRow(row,generatedAt=Date.now()){
   const normalized=normalizeFloraStatsRow(row);
   if(!normalized)return null;
 
   floraStatsMap.set(normalized.story_key,normalized);
+  floraStatsFetchedAt.set(normalized.story_key,Number(generatedAt)||0);
   floraStoryMissingUntil.delete(normalized.story_key);
   if(Number.isFinite(normalized.flora)){
     floraScoreMap.set(normalized.story_key,normalized.flora);
@@ -1669,7 +1723,11 @@ function renderFloraPopover(popover,story,stats){
   const statusEl=popover.querySelector(".flora-story-popover-status");
   const grid=popover.querySelector(".flora-story-popover-grid");
 
-  if(!stats){
+  const estimate=predictFloraForStory(story);
+  const isEstimated=Boolean(estimate && (
+    !stats || stats.views<FLORA_ACTUAL_MIN_VIEWS || stats.avg_dwell_ms<=0
+  ));
+  if(!stats && !isEstimated){
     if(scoreEl)scoreEl.textContent="—";
     if(statusEl)statusEl.textContent="Bu haber için henüz yeterli Flöra verisi oluşmadı.";
     if(grid)grid.replaceChildren();
@@ -1677,13 +1735,23 @@ function renderFloraPopover(popover,story,stats){
   }
 
   if(scoreEl){
-    scoreEl.textContent=Number.isFinite(stats.flora)
-      ? `${stats.flora.toFixed(1)} / 100`
-      : "—";
+    scoreEl.textContent=isEstimated
+      ? `≈${estimate.score.toFixed(1)} / 100`
+      : Number.isFinite(stats?.flora)
+        ? `${stats.flora.toFixed(1)} / 100`
+        : "—";
   }
 
   if(statusEl){
-    statusEl.textContent="Son 7 günlük anonim kullanım verileri";
+    statusEl.textContent=isEstimated
+      ? estimate.matchedTerms
+        ? "Tahmini başlangıç puanı: Benzer başlıkların geçmiş etkileşimlerinden hesaplanır. Gerçek kullanım verileri arttıkça kesinleşir."
+        : "Tahmini başlangıç puanı: Benzer kelime bulunamadığı için geçmiş Flöra puanlarının genel ortalaması gösterilir."
+      : "Son 7 günlük anonim kullanım verileri";
+  }
+  if(!stats){
+    if(grid)grid.replaceChildren();
+    return;
   }
 
   if(!grid)return;
@@ -1737,7 +1805,7 @@ async function loadFloraStoryStats(story,{force=false}={}){
   const key=storyIdentity(story);
   if(!key || story?.customRss)return null;
 
-  if(!force && floraStatsMap.has(key)){
+  if(!force && floraHasFreshRealData(key)){
     return floraStatsMap.get(key);
   }
 
@@ -1782,7 +1850,7 @@ async function loadFloraStoryStats(story,{force=false}={}){
       );
       return null;
     }
-    return cacheFloraStatsRow(data.stats);
+    return cacheFloraStatsRow(data.stats,Number(data.generatedAt)||Date.now());
   })()
     .catch(error=>{
       /*
@@ -1897,24 +1965,26 @@ function setSlideFloraScore(el,story){
   if(!scoreEl || !valueEl)return;
 
   const key=storyIdentity(story);
-  const score=key
-    ? floraScoreMap.get(key)
-    : undefined;
+  const actual=key?floraScoreMap.get(key):undefined;
+  const prediction=predictFloraForStory(story);
+  const estimated=Boolean(prediction && !floraHasEnoughRealData(key));
+  const score=estimated?prediction.score:actual;
+  const hasScore=Number.isFinite(score);
 
-  valueEl.textContent=formatInlineFloraScore(score);
+  valueEl.textContent=estimated
+    ? `≈${formatInlineFloraScore(score)}`
+    : formatInlineFloraScore(score);
   scoreEl.dataset.floraStoryKey=key;
+  scoreEl.dataset.floraEstimated=estimated?"1":"0";
   bindFloraScoreControl(scoreEl);
+  scoreEl.classList.toggle("has-score",hasScore);
+  scoreEl.classList.toggle("flora-estimated",estimated);
 
-  const hasScore=Number.isFinite(Number(score));
-
-  scoreEl.classList.toggle(
-    "has-score",
-    hasScore
-  );
-
-  scoreEl.title=hasScore
-    ? `Flöra: ${Number(score).toFixed(1)}/100 · Ayrıntıları göster`
-    : "Flöra ayrıntılarını göster";
+  scoreEl.title=estimated
+    ? `Flöra ${prediction.matchedTerms?"başlık":"genel ortalama"} tahmini: ${score.toFixed(1)}/100 · Gerçek etkileşim puanı henüz kesinleşmedi`
+    : hasScore
+      ? `Flöra: ${Number(score).toFixed(1)}/100 · Ayrıntıları göster`
+      : "Flöra ayrıntılarını göster";
 
   scoreEl.setAttribute(
     "aria-label",
@@ -2021,14 +2091,13 @@ async function loadInlineFloraScores(force=false){
 
     /* Bir akış geçici hata verse bile diğer akışın geçerli skorlarını koru. */
     if(payloads.length){
-      if(payloads.length===streams.length){
-        floraScoreMap.clear();
-        floraStatsMap.clear();
-      }
-
       for(const data of payloads){
+        const generatedAt=Number(data.generatedAt)||0;
         for(const row of data?.scores||[]){
-          cacheFloraStatsRow(row);
+          const key=String(row?.story_key||"").trim();
+          // Saatlik toplu snapshot, daha yeni tekil verinin üzerine yazamaz.
+          if((floraStatsFetchedAt.get(key)||0)>generatedAt)continue;
+          cacheFloraStatsRow(row,generatedAt);
         }
       }
 
@@ -5823,7 +5892,7 @@ async function prepareStorySlideInternal(
 
   const floraTask=(
     story?.customRss ||
-    floraScoreMap.has(identity) ||
+    floraHasFreshRealData(identity) ||
     Number(floraStoryMissingUntil.get(identity)||0)>Date.now()
   )
     ? Promise.resolve(null)
@@ -5832,6 +5901,10 @@ async function prepareStorySlideInternal(
         5000,
         null
       );
+
+  const floraPredictionTask=story?.customRss
+    ? Promise.resolve(null)
+    : settleWithin(loadFloraVocabulary(),1500,null);
 
   const imageTask=waitForSlideImageStable(
     el,
@@ -5856,6 +5929,7 @@ async function prepareStorySlideInternal(
   ]=await Promise.all([
     baitbusterTask,
     floraTask,
+    floraPredictionTask,
     imageTask,
     mediaTask
   ]);
@@ -6153,7 +6227,7 @@ function prepareTransitionSlideImmediate(el,story){
   if(
     !story?.customRss &&
     identity &&
-    !floraScoreMap.has(identity) &&
+    !floraHasFreshRealData(identity) &&
     Number(floraStoryMissingUntil.get(identity)||0)<=Date.now()
   ){
     void loadFloraStoryStats(story).catch(()=>{});
@@ -17251,6 +17325,12 @@ setTimeout(requestDesktopWakeLock,0);
 
 setFullscreenIcon();
 startAdsCatalogRefresh();
+/*
+  Toplu /stats/flora-scores dosyası her ziyaretçiye binlerce haber taşır.
+  Kaynak tüketimini artırmamak için bunu otomatik açmıyoruz:
+  yalnız hazırlanan haberin indeksli /stats/flora-story sorgusu çalışır.
+*/
+void loadFloraVocabulary();
 load();
 loadGa4Config();
 setInterval(load,REFRESH_MS);

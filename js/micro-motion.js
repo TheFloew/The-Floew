@@ -100,7 +100,7 @@
     var key=box&&box.dataset.floraStoryKey;
     if(!box||!value||!key)return;
 
-    var score=Number((value.textContent||"").trim().replace(",","."));
+    var score=Number((value.textContent||"").trim().replace(/^≈\s*/,"").replace(",","."));
     if(!Number.isFinite(score))return;
     if(lastStoryBySlide.get(slide)===key)return;
 
@@ -120,7 +120,7 @@
     overlay.style.lineHeight=style.lineHeight;
     overlay.style.letterSpacing=style.letterSpacing;
     overlay.style.color=style.color;
-    overlay.textContent="0.0";
+    overlay.textContent=box.classList.contains("flora-estimated")?"≈0.0":"0.0";
     box.appendChild(overlay);
     value.classList.add("flow-flora-value-hidden");
 
@@ -135,7 +135,7 @@
       }
       var progress=Math.min(1,(now-start)/800);
       var eased=1-Math.pow(1-progress,3);
-      overlay.textContent=(score*eased).toFixed(1);
+      overlay.textContent=(box.classList.contains("flora-estimated")?"≈":"")+(score*eased).toFixed(1);
       if(progress<1){
         task.frame=requestAnimationFrame(step);
       }else{
