@@ -305,6 +305,8 @@
 .market-ticker-change .fi::before{
   font-size:18px !important;
   vertical-align:middle;
+  position:relative;
+  top:2px;
   margin-right:.16em;
 }
 
