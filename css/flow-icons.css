@@ -304,7 +304,7 @@
 /* Market ticker */
 .market-ticker-change .fi::before{
   font-size:18px !important;
-  vertical-align:-.02em;
+  vertical-align:middle;
   margin-right:.16em;
 }
 
