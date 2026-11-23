@@ -1542,7 +1542,7 @@ const FLORA_STORY_ERROR_BACKOFF_MS=5*60*1000;
 let floraScoresLoading=false;
 let floraScoresLoadedAt=0;
 let floraPopoverOpen=false;
-const FLORA_SCORES_REFRESH_MS=60*60*1000;
+const FLORA_SCORES_REFRESH_MS=5*60*1000;
 const FLORA_ACTUAL_REFRESH_MS=10*60*1000;
 const FLORA_ACTUAL_MIN_VIEWS=8;
 const floraStatsFetchedAt=new Map();
@@ -17323,9 +17323,12 @@ setTimeout(requestDesktopWakeLock,0);
 
 setFullscreenIcon();
 startAdsCatalogRefresh();
-void loadInlineFloraScores();
+/*
+  Toplu /stats/flora-scores dosyası her ziyaretçiye binlerce haber taşır.
+  Kaynak tüketimini artırmamak için bunu otomatik açmıyoruz:
+  yalnız hazırlanan haberin indeksli /stats/flora-story sorgusu çalışır.
+*/
 void loadFloraVocabulary();
-setInterval(loadInlineFloraScores,FLORA_SCORES_REFRESH_MS);
 load();
 loadGa4Config();
 setInterval(load,REFRESH_MS);
