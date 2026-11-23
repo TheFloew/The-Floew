@@ -9601,8 +9601,9 @@ async function performNewsLoad(){
     renderOptions();
 
     const list=activeStories();
-    if(list.length){
-      // AI değerlendirmelerini toplu görsel kuyruğundan önce başlat.
+    if(list.length && !state.stories.length){
+      // İlk açılışta AI'yi resim kuyruğundan önce başlat. Her iki dakikalık
+      // yenilemede fazladan AI sınıflandırması yaratma.
       // Aynı haberlerin sonraki prefetch çağrıları requestByKey ile birleşir.
       void waitForBaitBusterClient()
         .then(api=>api?.prefetchStories?.(list.slice(0,5)))
