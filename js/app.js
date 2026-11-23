@@ -8185,10 +8185,27 @@ function preloadImage(url,{priority="auto"}={}){
     img.referrerPolicy="no-referrer";
     if(priority==="low")img.fetchPriority="low";
     let done=false;
+    let timeoutId=null;
 
-    const finish=()=>{
+    const finish=(loaded=false,timedOut=false)=>{
       if(done)return;
       done=true;
+      clearTimeout(timeoutId);
+      img.onload=null;
+      img.onerror=null;
+
+      if(timedOut){
+        // Süre aşımı yalnız promise'i değil, ağdaki gerçek görsel isteğini
+        // de bitirmeli. Yoksa kuyruk 3 aktif gösterirken onlarca istek birikir.
+        img.removeAttribute("src");
+      }
+
+      if(!loaded){
+        // Hatalı/zaman aşımına uğramış URL ileride yeniden denenebilsin.
+        imagePreloadCache.delete(url);
+        resolve();
+        return;
+      }
 
       if(img.decode){
         let resolved=false;
@@ -8204,10 +8221,10 @@ function preloadImage(url,{priority="auto"}={}){
       }
     };
 
-    img.onload=finish;
-    img.onerror=finish;
+    img.onload=()=>finish(img.naturalWidth>0);
+    img.onerror=()=>finish(false);
     img.src=url;
-    setTimeout(finish,5000);
+    timeoutId=setTimeout(()=>finish(false,true),5000);
   });
 
   imagePreloadCache.set(url,promise);
@@ -8334,7 +8351,8 @@ function pumpNewsImagePreloadQueue(){
       .catch(()=>{})
       .finally(()=>{
         newsImagePreloadActive--;
-        pumpNewsImagePreloadQueue();
+        // BaitBuster POST istekleri ve standby görseli için kısa ağ payı bırak.
+        setTimeout(pumpNewsImagePreloadQueue,180);
       });
   }
 }
@@ -9583,6 +9601,13 @@ async function performNewsLoad(){
     renderOptions();
 
     const list=activeStories();
+    if(list.length){
+      // AI değerlendirmelerini toplu görsel kuyruğundan önce başlat.
+      // Aynı haberlerin sonraki prefetch çağrıları requestByKey ile birleşir.
+      void waitForBaitBusterClient()
+        .then(api=>api?.prefetchStories?.(list.slice(0,5)))
+        .catch(()=>{});
+    }
     if(!list.length){
       status(emptyStoriesMessage());
 
