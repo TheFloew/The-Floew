@@ -1744,7 +1744,9 @@ function renderFloraPopover(popover,story,stats){
 
   if(statusEl){
     statusEl.textContent=isEstimated
-      ? "Tahmini başlangıç puanı: Geçmiş haberlerin başlık ve etkileşimlerinden hesaplanır. Gerçek kullanıcı verileri arttıkça kesinleşir."
+      ? estimate.matchedTerms
+        ? "Tahmini başlangıç puanı: Benzer başlıkların geçmiş etkileşimlerinden hesaplanır. Gerçek kullanım verileri arttıkça kesinleşir."
+        : "Tahmini başlangıç puanı: Benzer kelime bulunamadığı için geçmiş Flöra puanlarının genel ortalaması gösterilir."
       : "Son 7 günlük anonim kullanım verileri";
   }
   if(!stats){
@@ -1979,7 +1981,7 @@ function setSlideFloraScore(el,story){
   scoreEl.classList.toggle("flora-estimated",estimated);
 
   scoreEl.title=estimated
-    ? `Flöra tahmini: ${score.toFixed(1)}/100 · Gerçek etkileşim puanı henüz kesinleşmedi`
+    ? `Flöra ${prediction.matchedTerms?"başlık":"genel ortalama"} tahmini: ${score.toFixed(1)}/100 · Gerçek etkileşim puanı henüz kesinleşmedi`
     : hasScore
       ? `Flöra: ${Number(score).toFixed(1)}/100 · Ayrıntıları göster`
       : "Flöra ayrıntılarını göster";
