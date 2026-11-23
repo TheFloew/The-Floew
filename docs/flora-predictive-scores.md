@@ -1,38 +1,35 @@
-# Flöra Tahmini: güvenli dağıtım notu
+# Flöra Tahmini: uygulama ve dağıtım
 
-Bu değişiklik **canlı ortama dağıtılmadı**. Kod bir GitHub dalında hazırlanmıştır.
+## Hazırlanan sürümler
 
-## İşleyiş
+- **Analytics Worker**: Kullanıcı tarafından 23 Kasım 2026'da sağlanan **V31.23.0** temel alınmıştır. `analytics/worker-flora-prediction.js` dosyası tam, tek parça Worker kodudur.
+- **Web ön yüzü**: `js/flora-predictor.js` ve `js/app.js` güncellendi. `index.html` yardımcı modülü önce yükler.
+- Eski V31.22.1 Worker **artık referans alınmamaktadır**. Behavior v3, reklam analitiği, GA4 ve mevcut raporlama bölümleri korunmuştur.
+- Kod **canlıya otomatik gönderilmedi**.
 
-- Worker, `content_daily` içindeki son 30 günde en az 3 gösterim alan haberleri inceleyerek (en çok 2.400 haber/akış), Flöra puanlarını mevcut `calculateFlora` fonksiyonuyla hesaplar.
-- Yalnızca Türkçe/İngilizce anlamlı kelime ve ikili ifadeler için anonim toplu istatistik döner. Geçmiş haber başlıkları, kullanıcı kimlikleri ve ham olaylar API'de yayınlanmaz.
-- Sözlük, Worker'ın mevcut D1 + edge cache mekanizmasıyla 24 saat taze, 7 gün stale olarak tutulur. Kullanıcı veya yeni haber başına model eğitimi ya da AI çağrısı **yoktur**.
-- Tarayıcı bir sözlüğü oturumda bir defa alır, başlıklara `≈` ile gösterilen yaklaşık puan verir. 8+ görüntüleme ve pozitif bakma süresi oluştuğunda gerçek puana öncelik verir.
-- Tek haberin indeksli Flöra API'si 10 dakikalık cache'le tazelenir. Geçici puan yok sonucu da 10 dakika tutulur.
-- Haber görünürken puan otomatik değiştirilmez, bir sonraki hazırlanan ekran görüntüsüne yeni veri yansır.
-- Sözlük endpoint'i erişilemiyorsa eski puan görünümü aynen çalışır. Özel RSS tahmine katılmaz.
+## Nasıl çalışır?
 
-## Kritik sürüm uyarısı
+- Worker, son 30 günde `content_daily` tablosundan en az üç görüntülenmesi olan, en çok 2.400 haber/akış arasından geçmiş etkileşimleri ve Flöra skorlarını toplar.
+- `/stats/flora-vocabulary?stream=main` ve `stream=foreign` endpoint'leri, geçmiş haberlerin başlıklarını değil, en çok 1.800 adet kelime/ifade özetini yayınlar.
+- Model 24 saat taze, 7 gün stale önbellekte tutulur. Kullanıcı veya haber başına AI çağrısı ya da geçmiş istatistik taraması yapılmaz.
+- Yeni haberde, model üzerinden tarayıcıda `≈` ile gösterilen başlangıç puanı hesaplanır. Yeterli gerçek kullanım verisi (8+ görüntülenme ve bakma süresi) olduğunda gerçek Flöra puanına öncelik verilir.
+- Tek haber Flöra istatistik önbelleği artık 10 dk taze, 2 saat stale; edge'de 3 dk tutulur. Gösterilmiş haberin puanı arka plandan gelince ekranda değişmez. Yeni snapshot sonraki hazırlanmış haberde kullanılır.
+- Modelin kullanılabilmesi için en az 12 uygun geçmiş haber olması gerekir. Model boşsa eski normal Flöra davranışı sürer.
+- Özel RSS haberleri tahmine dahil edilmez.
 
-`analytics/worker-flora-prediction.js`, 19 Kasım 2026'da paylaşılan **Analytics Worker V31.22.1** kaynak metni temel alınarak hazırlanmıştır. **Canlı Worker'ın daha yeni bir sürümde olması ihtimaline karşı bu dosyayı doğrudan canlıya yapıştırmayın.** Aynı üç küçük sunucu değişikliğinin mevcut canlı sürüme uygulanması gerekir:
+## Önemli: Sıralama
 
-1. `js/flora-predictor.js` içindeki ortak kelime modelinin Worker'a dahil edilmesi.
-2. `publicFloraVocabulary` ve `/stats/flora-vocabulary` rotasının eklenmesi.
-3. `/stats/flora-story` önbellek anahtarının `flora-story-v2`, fresh TTL'nin 10 dk, stale TTL'nin 2 saat ve edge TTL'nin 3 dk yapılması.
+1. Cloudflare'deki **Analytics Worker** editörüne `analytics/worker-flora-prediction.js` içeriğini **tamamen** yapıştırın ve Deploy edin. Aynı Worker'ın mevcut ortam bağlamalarını/secrets'ını değiştirmeyin.
+2. Aşağıdaki iki test adresinde JSON `ok:true` ve `model` alanını doğrulayın:
+   - `https://thefloew-analytics.thefloewback.workers.dev/stats/flora-vocabulary?stream=main`
+   - `https://thefloew-analytics.thefloewback.workers.dev/stats/flora-vocabulary?stream=foreign`
+3. Sonra PR #12'yi `main` dalına merge edin.
+4. Siteyi yeniden yükleyip, tahmini haber için `≈` ve gerçek verili haber için standart puanı kontrol edin.
 
-Referans olarak tüm değişiklikler **`analytics/worker-flora-prediction.js`** içinde hazırlanmıştır. Herhangi bir D1 migrasyonu, yeni secret veya Workers AI bağlaması gerekmemektedir.
-
-## Dağıtım sırası
-
-1. Önce canlı Analytics Worker'ın sürümünü ve içeriğini kontrol ederek bu sunucu değişikliklerini daha yeni kodları koruyacak şekilde uygulayın.
-2. Sonra GitHub dalını `main` ile birleştirin. `index.html` yeni istemci yardımcı dosyasını `js/app.js` öncesinde yükler.
-3. `/stats/flora-vocabulary?stream=main` ve `?stream=foreign` yanıtlarında `ok:true`, `model.sampleStories`, `model.baseline` ve `model.terms` kontrol edin. Örnek sayısı 12'den azsa tahminin kapalı kalması normaldir.
-4. Flöw'de henüz görüntülenmemiş bir haberde `≈` tahminini, yeterli etkileşimi olan haberde normal Flöra puanını ve açılır penceredeki açıklamaları doğrulayın.
-
-## Test
+## Testler
 
 ```bash
 node --test tests/flora-predictor.test.mjs
 ```
 
-Ücretsiz planı korumak için toplu `/stats/flora-scores` çağrılarını her kullanıcıda başlatmadık. Sadece hazırlanan haberin indeksli sorgusu ve günlük özet sözlüğü kullanılıyor.
+Kaynak Worker'a yalnız Flöra ile ilişkili eklemeler yapıldı; Behavior v3 / ads / GA4 SQL sorguları ve hizmet rotaları değiştirilmedi.
