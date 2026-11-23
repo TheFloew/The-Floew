@@ -533,3 +533,34 @@
     font-size:19px !important;
   }
 }
+
+/*
+   Headline action top line: keep every visible glyph on the same y-position.
+   Controls have different touch-target heights (36/38px vs video 44/48px),
+   so centering each independently offset their icons vertically.
+   Preserve all touch target sizes, icon sizes, order and horizontal spacing.
+*/
+.headline-actions{
+  align-items:flex-start !important;
+}
+.headline-actions > .flora-inline,
+.headline-actions > .share-link,
+.headline-actions > .feedback-inline-link,
+.headline-actions > .source-link,
+.headline-actions > #video-audio-toggle{
+  align-self:flex-start !important;
+  box-sizing:border-box !important;
+  margin-top:0 !important;
+  padding-top:7px !important;
+}
+.headline-actions > .flora-inline{
+  align-items:flex-start !important;
+}
+.headline-actions > .share-link,
+.headline-actions > .feedback-inline-link,
+.headline-actions > .source-link{
+  place-items:start center !important;
+}
+.headline-actions > #video-audio-toggle{
+  align-items:flex-start !important;
+}
