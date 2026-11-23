@@ -250,7 +250,7 @@
   The touch target, order and dimensions stay unchanged.
 */
 .headline-actions > .save-story-button.fi::before{
-  transform:translateY(-5px)!important;
+  transform:translateY(-3px)!important;
 }
 
 /* Center the Flöra number vertically within the existing control.
