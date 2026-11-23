@@ -146,11 +146,11 @@ test("sharing directly captures BaitBuster slide presentation without another AI
 
 test("recycled story images cannot expose the previous frame during a new load",async()=>{
   const app=await source("js/app.js");
-  const block=app.match(/function setStoryImage\\(img,story\\)\\{[\\s\\S]*?\\n\\}/)?.[0]||"";
+  const block=app.match(/function setStoryImage\(img,story\)\{[\s\S]*?\n\}/)?.[0]||"";
   const hide=block.indexOf('img.style.visibility="hidden";');
   const clear=block.indexOf('img.removeAttribute("src");');
   const assign=block.indexOf("img.src=articleFirst ? articleProxy : direct;");
   assert.ok(hide>=0 && clear>hide && assign>clear);
-  assert.match(block,/img\\.onload=\\(\\)=>\\{[\\s\\S]*?img\\.style\\.visibility="visible";/);
-  assert.match(block,/img\\.onerror=\\(\\)=>\\{[\\s\\S]*?img\\.style\\.visibility="hidden";/);
+  assert.match(block,/img\.onload=\(\)=>\{[\s\S]*?img\.style\.visibility="visible";/);
+  assert.match(block,/img\.onerror=\(\)=>\{[\s\S]*?img\.style\.visibility="hidden";/);
 });
