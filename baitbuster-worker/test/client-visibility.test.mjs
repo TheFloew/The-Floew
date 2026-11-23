@@ -185,7 +185,7 @@ test("timed-out image preloads abort their real network request",async()=>{
 test("BaitBuster warmup starts when news arrives, before bulk image loading",async()=>{
   const app=await source("js/app.js");
   const load=app.match(/async function performNewsLoad\(\)\{[\s\S]*?\n\}/)?.[0]||"";
-  assert.match(load,/const list=activeStories\(\);[\s\S]*?waitForBaitBusterClient\(\)[\s\S]*?prefetchStories\?\.\(list\.slice\(0,5\)\)/);
+  assert.match(load,/const list=activeStories\(\);[\s\S]*?if\(list\.length && !state\.stories\.length\)[\s\S]*?waitForBaitBusterClient\(\)[\s\S]*?prefetchStories\?\.\(list\.slice\(0,5\)\)/);
   assert.match(load,/scheduleNewsImagePreload/);
   assert.ok(load.indexOf("prefetchStories?.(list.slice(0,5))")<load.indexOf("scheduleNewsImagePreload"));
   assert.match(app,/setTimeout\(pumpNewsImagePreloadQueue,180\)/);
