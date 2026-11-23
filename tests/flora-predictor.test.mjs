@@ -91,3 +91,14 @@ test("increased contrast remains bounded and older models remain compatible",()=
   assert.ok(Number.isFinite(predictor.estimate("Otomobil batarya",oldModel).score));
   assert.ok(model.features.every(row=>Array.isArray(row)&&row.length===3));
 });
+
+test("Flöra keeps a bounded local model backup when D1 is temporarily unavailable",()=>{
+  const app=readFileSync(new URL("../js/app.js",import.meta.url),"utf8");
+  assert.match(app,/FLORA_VOCABULARY_STORAGE_KEY="thefloew\.floraVocabulary\.v1"/);
+  assert.match(app,/FLORA_VOCABULARY_BACKUP_MAX_AGE_MS=7\*24\*60\*60\*1000/);
+  assert.match(app,/restoreFloraVocabularyBackup\(\)/);
+  assert.match(app,/if\(good\)saveFloraVocabularyBackup\(\)/);
+  assert.match(app,/function noteFloraQuotaError\(message\)/);
+  assert.match(app,/Date\.now\(\)<floraQuotaExceededUntil/);
+  assert.match(app,/const errorBody=await response\.json\(\)\.catch\(\(\)=>null\)/);
+});

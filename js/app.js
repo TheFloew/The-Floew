@@ -1549,12 +1549,59 @@ const FLORA_ACTUAL_REFRESH_MS=10*60*1000;
 const FLORA_ACTUAL_MIN_VIEWS=8;
 const floraStatsFetchedAt=new Map();
 const floraVocabularyModels=new Map();
+const FLORA_VOCABULARY_STORAGE_KEY="thefloew.floraVocabulary.v1";
+const FLORA_VOCABULARY_BACKUP_MAX_AGE_MS=7*24*60*60*1000;
+const FLORA_VOCABULARY_RETRY_MS=5*60*1000;
 let floraVocabularyLoading=null;
 let floraVocabularyLoadedAt=0;
+let floraQuotaExceededUntil=0;
+
+function validFloraVocabularyModel(model){
+  return Boolean(
+    model?.version===1 &&
+    Number(model.sampleStories)>=12 &&
+    Number.isFinite(Number(model.baseline)) &&
+    Array.isArray(model.terms)
+  );
+}
+
+function restoreFloraVocabularyBackup(){
+  try{
+    const saved=JSON.parse(localStorage.getItem(FLORA_VOCABULARY_STORAGE_KEY)||"null");
+    const age=Date.now()-Number(saved?.savedAt||0);
+    if(age<0 || age>FLORA_VOCABULARY_BACKUP_MAX_AGE_MS)return;
+    for(const stream of ["main","foreign"]){
+      const model=saved?.models?.[stream];
+      if(validFloraVocabularyModel(model)){
+        floraVocabularyModels.set(stream,model);
+      }
+    }
+  }catch(e){}
+}
+
+function saveFloraVocabularyBackup(){
+  try{
+    localStorage.setItem(FLORA_VOCABULARY_STORAGE_KEY,JSON.stringify({
+      savedAt:Date.now(),
+      models:Object.fromEntries(floraVocabularyModels)
+    }));
+  }catch(e){}
+}
+
+function noteFloraQuotaError(message){
+  if(!/exceeded D1.+daily row read limit/i.test(String(message||"")))return false;
+  // D1 free daily read quota resets at 00:00 UTC.
+  floraQuotaExceededUntil=
+    (Math.floor(Date.now()/86400000)+1)*86400000+30000;
+  return true;
+}
+
+restoreFloraVocabularyBackup();
 
 async function loadFloraVocabulary(){
   if(!globalThis.FloewFloraPredictor)return;
   if(floraVocabularyLoading)return floraVocabularyLoading;
+  if(Date.now()<floraQuotaExceededUntil)return;
   if(floraVocabularyLoadedAt && Date.now()-floraVocabularyLoadedAt<24*60*60*1000)return;
   floraVocabularyLoading=(async()=>{
     const results=await Promise.allSettled(
@@ -1565,7 +1612,11 @@ async function loadFloraVocabulary(){
           method:"GET",mode:"cors",credentials:"omit",cache:"default",
           headers:{"Accept":"application/json"}
         });
-        if(!response.ok)throw new Error("Flöra sözlüğü: HTTP "+response.status);
+        if(!response.ok){
+          const errorBody=await response.json().catch(()=>null);
+          noteFloraQuotaError(errorBody?.error);
+          throw new Error("Flöra sözlüğü: HTTP "+response.status);
+        }
         const data=await response.json();
         if(!data?.ok || data?.model?.version!==1)throw new Error("Flöra sözlüğü geçersiz");
         return {stream,model:data.model};
@@ -1573,13 +1624,14 @@ async function loadFloraVocabulary(){
     );
     let good=0;
     for(const result of results){
-      if(result.status==="fulfilled"){
+      if(result.status==="fulfilled" && validFloraVocabularyModel(result.value.model)){
         floraVocabularyModels.set(result.value.stream,result.value.model);
         good++;
       }
     }
-    // Endpoint henüz yayınlanmamışsa sürekli 404 denemeyelim.
-    floraVocabularyLoadedAt=Date.now()-(good?0:23*60*60*1000);
+    if(good)saveFloraVocabularyBackup();
+    // D1 kesintisinde mevcut kaydı koru; 5 dakika sonra veya kota açılınca yeniden dene.
+    floraVocabularyLoadedAt=Date.now()-(good?0:24*60*60*1000-FLORA_VOCABULARY_RETRY_MS);
   })().finally(()=>{floraVocabularyLoading=null});
   return floraVocabularyLoading;
 }
@@ -1805,7 +1857,7 @@ function closeFloraPopover({resume=true}={}){
 
 async function loadFloraStoryStats(story,{force=false}={}){
   const key=storyIdentity(story);
-  if(!key || story?.customRss)return null;
+  if(!key || story?.customRss || Date.now()<floraQuotaExceededUntil)return null;
 
   if(!force && floraHasFreshRealData(key)){
     return floraStatsMap.get(key);
@@ -1837,6 +1889,8 @@ async function loadFloraStoryStats(story,{force=false}={}){
     });
 
     if(!response.ok){
+      const errorBody=await response.json().catch(()=>null);
+      noteFloraQuotaError(errorBody?.error);
       throw new Error(`Flöra detay: HTTP ${response.status}`);
     }
 
