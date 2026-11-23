@@ -242,3 +242,20 @@
   .floew-saved-row {min-height:64px;padding:12px 0}
   .floew-saved-story strong {font-size:11px}
 }
+
+/* Manşet aksiyon satırı: Kaydet ayrı yüklenen CSS'te kalmıştı.
+   Diğer simgelerle aynı üst referansı kullan, glifini optik olarak 2px yükselt. */
+.headline-actions > .save-story-button{
+  align-self:flex-start!important;
+  place-items:start center!important;
+  padding-top:7px!important;
+}
+.headline-actions > .save-story-button.fi::before{
+  transform:translateY(-2px)!important;
+}
+
+/* 𝒇 simgesi üstte kalırken puanı ikonun düşey merkezine yerleştir.
+   24/18px ve mobilde 25/19px: farkın yarısı 3px. */
+.headline-actions > .flora-inline .flora-inline-value{
+  margin-top:3px!important;
+}
