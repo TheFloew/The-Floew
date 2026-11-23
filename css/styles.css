@@ -1780,6 +1780,21 @@ body.cursor-idle *{
   cursor:none !important;
 }
 
+@media (width > 700px) and (hover: hover) and (pointer: fine){
+  .headline-actions{
+    transition:opacity .55s cubic-bezier(.22,.61,.36,1);
+  }
+
+  body.cursor-idle .headline-actions:not(:has(:focus-visible)){
+    opacity:0;
+  }
+
+  body.cursor-idle .headline-actions:not(:has(:focus-visible)),
+  body.cursor-idle .headline-actions:not(:has(:focus-visible)) *{
+    pointer-events:none !important;
+  }
+}
+
 @media(max-width:700px){
   .keyword-tool-panel{
     right:calc(max(2.2vw,env(safe-area-inset-right)) + 52px);
