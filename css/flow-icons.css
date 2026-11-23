@@ -489,3 +489,47 @@
     height:23px !important;
   }
 }
+
+/* Flöra: match the visual scale of the adjacent headline action icons.
+   The estimate prefix (≈) and animated score must fit without clipping. */
+.headline-actions > .flora-inline{
+  inline-size:auto !important;
+  min-inline-size:0 !important;
+  max-inline-size:none !important;
+  block-size:36px !important;
+  min-block-size:36px !important;
+  max-block-size:36px !important;
+  flex:0 0 auto !important;
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:4px !important;
+  white-space:nowrap !important;
+  transform:none !important;
+}
+.headline-actions > .flora-inline .flora-inline-mark{
+  font-size:24px !important;
+  line-height:1 !important;
+}
+.headline-actions > .flora-inline .flora-inline-value{
+  font-size:18px !important;
+  line-height:1 !important;
+  font-variant-numeric:tabular-nums;
+}
+@media(max-width:700px), (pointer:coarse){
+  .headline-actions > .flora-inline{
+    inline-size:auto !important;
+    min-inline-size:0 !important;
+    max-inline-size:none !important;
+    block-size:38px !important;
+    min-block-size:38px !important;
+    max-block-size:38px !important;
+    transform:none !important;
+  }
+  .headline-actions > .flora-inline .flora-inline-mark{
+    font-size:25px !important;
+  }
+  .headline-actions > .flora-inline .flora-inline-value{
+    font-size:19px !important;
+  }
+}
