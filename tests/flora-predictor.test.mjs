@@ -48,3 +48,46 @@ test("training export is aggregates, not historical story records",()=>{
   assert.ok(!("stories" in model));
   assert.ok(model.terms.every(row=>Array.isArray(row)&&row.length===3));
 });
+
+test("two historical occurrences can inform a headline without relying on one-off terms",()=>{
+  const rows=Array.from({length:20},(_,i)=>({
+    title:i<2?`Fırtınada vapur seferi iptal ${i}`:`Ulaşım hatlarında gündelik sefer düzeni ${i}`,
+    views:6,
+    flora:i<2?20:48
+  }));
+  const model=predictor.build(rows);
+  assert.ok(model.terms.some(([term,nScore,n])=>term==="fırtınada"&&n===2));
+  const estimate=predictor.estimate("Fırtınada vapur seferi",model);
+  assert.ok(Number.isFinite(estimate.score));
+  assert.ok(estimate.matchedTerms>=1);
+});
+
+test("learned title format distinguishes questions without matching story words",()=>{
+  const rows=Array.from({length:60},(_,i)=>({
+    title:`Gündelik gelişmeler açıklaması ${i}`+(i<30?"?":""),
+    views:8,
+    flora:i<30?68:28
+  }));
+  const model=predictor.build(rows);
+  const question=predictor.estimate("Bilinmeyen konu?",model);
+  const statement=predictor.estimate("Bilinmeyen konu",model);
+  assert.equal(question.matchedTerms,0);
+  assert.equal(statement.matchedTerms,0);
+  assert.ok(question.score>statement.score);
+});
+
+test("increased contrast remains bounded and older models remain compatible",()=>{
+  const rows=Array.from({length:40},(_,i)=>({
+    title:i<20?`Otomobil enerji batarya teknolojisi ${i}`:`Futbol transfer maç direktör ${i}`,
+    views:10,
+    flora:i<20?90:10
+  }));
+  const model=predictor.build(rows);
+  for(const title of ["Otomobil enerji batarya","Futbol transfer maç","Bilinmeyen haber"]){
+    const result=predictor.estimate(title,model);
+    assert.ok(Math.abs(result.score-model.baseline)<=16.1);
+  }
+  const {features, ...oldModel}=model;
+  assert.ok(Number.isFinite(predictor.estimate("Otomobil batarya",oldModel).score));
+  assert.ok(model.features.every(row=>Array.isArray(row)&&row.length===3));
+});
