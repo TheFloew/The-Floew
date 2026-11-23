@@ -32,6 +32,8 @@ const NEWS_BATCH_COUNT=Math.max(1,Number(FLOEW_CONFIG.newsBatchCount)||12);
   sıkıştırabiliyor. Küçük bir kuyruk daha kararlı davranıyor.
 */
 const NEWS_BATCH_CONCURRENCY=4;
+// Batch sayısı haber sayısı değil: görselleri az sayıda eşzamanlı istekle ısıt.
+const NEWS_IMAGE_PRELOAD_CONCURRENCY=3;
 const INITIAL_NEWS_BATCH_COUNT=Math.min(NEWS_BATCH_COUNT,4);
 const NEWS_FETCH_TIMEOUT_MS=22000;
 const NEWS_JSONP_TIMEOUT_MS=22000;
@@ -5433,6 +5435,14 @@ function applySmartFocalPoint(img,story){
   );
 }
 
+function storyInitialImageUrl(story){
+  const direct=String(story?.image||"").trim();
+  if(!direct)return "";
+  return storyPrefersArticleImage(story)
+    ? storyImageProxyUrl(story,{preferArticle:true})||direct
+    : direct;
+}
+
 function setStoryImage(img,story){
   if(!img)return;
 
@@ -8166,12 +8176,14 @@ const storyAssetPreloadCache=new Map();
 const mediaWarmupCache=new Map();
 let nextStoryPreloadTimer=null;
 
-function preloadImage(url){
+function preloadImage(url,{priority="auto"}={}){
   if(!url)return Promise.resolve();
   if(imagePreloadCache.has(url))return imagePreloadCache.get(url);
 
   const promise=new Promise(resolve=>{
     const img=new Image();
+    img.referrerPolicy="no-referrer";
+    if(priority==="low")img.fetchPriority="low";
     let done=false;
 
     const finish=()=>{
@@ -8268,7 +8280,7 @@ function preloadStoryAssets(story){
   if(storyAssetPreloadCache.has(key))return storyAssetPreloadCache.get(key);
 
   const promise=(async()=>{
-    const imagePromise=preloadImage(story.image);
+    const imagePromise=preloadImage(storyInitialImageUrl(story));
     const focalPromise=
       smartCropEnabled() && story?.image
         ? detectSmartFocalPoint(story).catch(()=>null)
@@ -8296,6 +8308,84 @@ function preloadStoryAssets(story){
 
   return promise;
 }
+
+/*
+  12 /news batch'i 12 haber değildir. Her sonuçta çok sayıda haber olabilir.
+  Bu yüzden hepsinin görselini aynı anda indirmek yerine, görülebilecek
+  haberlerden başlayıp kalan görselleri küçük ve düşük öncelikli bir kuyrukta
+  ısıtıyoruz. Video/Flöra/BaitBuster istekleri bu kuyrukta yer almaz.
+*/
+const newsImagePreloadQueue=[];
+let newsImagePreloadActive=0;
+let newsImagePreloadTimer=null;
+
+function pumpNewsImagePreloadQueue(){
+  if(document.hidden || navigator.connection?.saveData)return;
+
+  while(
+    newsImagePreloadActive<NEWS_IMAGE_PRELOAD_CONCURRENCY &&
+    newsImagePreloadQueue.length
+  ){
+    const url=newsImagePreloadQueue.shift();
+    if(!url || imagePreloadCache.has(url))continue;
+
+    newsImagePreloadActive++;
+    void preloadImage(url,{priority:"low"})
+      .catch(()=>{})
+      .finally(()=>{
+        newsImagePreloadActive--;
+        pumpNewsImagePreloadQueue();
+      });
+  }
+}
+
+function scheduleNewsImagePreload(delay=180){
+  clearTimeout(newsImagePreloadTimer);
+
+  newsImagePreloadTimer=setTimeout(()=>{
+    const ordered=[];
+    const seen=new Set();
+    const add=story=>{
+      const url=storyInitialImageUrl(story);
+      if(!url || seen.has(url))return;
+      seen.add(url);
+      ordered.push(url);
+    };
+
+    // Önce seçilmiş sonraki haber ve yakın geçmiş, sonra bütün aktif akış.
+    if(state.stories.length>1 && !adActive){
+      const nextIndex=nextStoryIndexForPreload();
+      if(nextIndex>=0)add(state.stories[nextIndex]);
+    }
+    if(state.historyPos>0){
+      add(state.stories[state.history[state.historyPos-1]]);
+    }
+
+    const list=state.stories;
+    if(feedOrderMode==="chronological" || feedMode==="breaking"){
+      for(let i=1;i<list.length;i++){
+        add(list[(state.index+i)%list.length]);
+      }
+    }else{
+      for(const story of list){
+        if(!story?._historyOnly)add(story);
+      }
+    }
+
+    // Sekme değiştirilirse yeni ağ isteği gerektirmeden de önbellek sıcak olsun.
+    for(const story of rawStories)add(story);
+
+    newsImagePreloadQueue.length=0;
+    for(const url of ordered){
+      if(!imagePreloadCache.has(url))newsImagePreloadQueue.push(url);
+    }
+    pumpNewsImagePreloadQueue();
+  },Math.max(0,delay));
+}
+
+document.addEventListener("visibilitychange",()=>{
+  if(!document.hidden)pumpNewsImagePreloadQueue();
+});
 
 function nextStoryIndexForPreload(){
   if(state.stories.length<2)return -1;
@@ -8364,6 +8454,8 @@ function scheduleNextStoryPreload(delay=0){
       globalThis.BaitBusterBeta?.prefetchStories?.(warm);
     }catch(e){}
 
+    // Önce standby hazırlanır; toplu resim kuyruğu onu engellemez.
+    scheduleNewsImagePreload(180);
     void prepareStorySlide(
       inactiveSlide,
       story,
@@ -9533,6 +9625,7 @@ async function performNewsLoad(){
       finishInitialLoading();
       timer();
       scheduleNextStoryPreload(0);
+      scheduleNewsImagePreload(260);
 
       if(usedInitialCacheSnapshot || usedInitialNetworkFastPass){
         const refreshLive=()=>setTimeout(()=>load(),260);
@@ -9744,6 +9837,9 @@ async function performNewsLoad(){
 
     updateKeywordAlert(state.stories[state.index]);
     clearStatus();
+    // Her 12 kaynak grubunun son haber listesinde resimleri yeniden sırala.
+    scheduleNewsImagePreload(0);
+    scheduleNextStoryPreload(0);
     if(!initialLoadFinished){
       void finishInitialLoadingAfterVisual(slides[state.active]);
     }

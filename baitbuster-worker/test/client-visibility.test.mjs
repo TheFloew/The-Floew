@@ -154,3 +154,21 @@ test("recycled story images cannot expose the previous frame during a new load",
   assert.match(block,/img\.onload=\(\)=>\{[\s\S]*?img\.style\.visibility="visible";/);
   assert.match(block,/img\.onerror=\(\)=>\{[\s\S]*?img\.style\.visibility="hidden";/);
 });
+
+test("every news refresh schedules bounded background image warming",async()=>{
+  const app=await source("js/app.js");
+  assert.match(app,/const NEWS_BATCH_COUNT=.*12/);
+  assert.match(app,/const NEWS_IMAGE_PRELOAD_CONCURRENCY=3;/);
+  assert.match(app,/function scheduleNewsImagePreload\(delay=180\)/);
+  assert.match(app,/for\(const story of rawStories\)add\(story\)/);
+  assert.match(app,/function pumpNewsImagePreloadQueue\(\)[\s\S]*?newsImagePreloadActive<NEWS_IMAGE_PRELOAD_CONCURRENCY/);
+  assert.match(app,/preloadImage\(url,\{priority:"low"\}\)/);
+  assert.match(app,/function performNewsLoad\(\)[\s\S]*?scheduleNewsImagePreload\(0\)/);
+});
+
+test("image warming uses the same initial URL as the visible slide",async()=>{
+  const app=await source("js/app.js");
+  assert.match(app,/function storyInitialImageUrl\(story\)[\s\S]*?storyPrefersArticleImage\(story\)[\s\S]*?preferArticle:true/);
+  assert.match(app,/const imagePromise=preloadImage\(storyInitialImageUrl\(story\)\)/);
+  assert.match(app,/img\.referrerPolicy="no-referrer"/);
+});
