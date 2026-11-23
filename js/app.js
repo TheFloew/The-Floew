@@ -5450,16 +5450,19 @@ function setStoryImage(img,story){
   img.onload=null;
   img.alt=story?.title||"";
   img.referrerPolicy="no-referrer";
-  img.style.visibility="visible";
+  // Keep recycled slide pixels hidden until this story has actually loaded.
+  img.style.visibility="hidden";
   img.style.objectPosition="50% 50%";
   img.dataset.focalKey="";
   img.dataset.focalLockedKey="";
   img.__floewFocalPromise=null;
   img.dataset.imageResolveKey=imageResolveKey;
 
+  // Drop the previous story frame before assigning a new URL. Browsers may
+  // otherwise paint the old decoded image while the next request is pending.
+  img.removeAttribute("src");
+
   if(!direct){
-    img.removeAttribute("src");
-    img.style.visibility="hidden";
     return;
   }
 
