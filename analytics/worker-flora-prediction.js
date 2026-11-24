@@ -1533,6 +1533,11 @@ async function trackAnalytics(request, env, corsHeaders, ctx) {
       ? { key:"", title:"", source:"", category:"", link:"", published:"" }
       : rawStory;
 
+    if(eventType==="story_view" && !isCustomRss){
+      meta.analytics_device_type=clipAnalytics(client.device_type||"",80);
+      meta.analytics_browser=clipAnalytics(client.browser||"",120);
+    }
+
     return {
       id: clipAnalytics(raw?.id || crypto.randomUUID(), 180),
       eventType,
@@ -3808,6 +3813,256 @@ async function enrichAdSummaries(rows, env) {
   return (rows || []).map(row => enrichAdSummary(row, metadata));
 }
 
+const SOURCE_REPORT_CACHE = new Map();
+
+async function sourceStatsReport(env, rangeKey="7d") {
+  const range=analyticsRange(rangeKey);
+  if(!env.CONTENT_DB||!env.BEHAVIOR_DB)throw Error("CONTENT_DB and BEHAVIOR_DB are required");
+  // Daily content summaries are complete only after the 7-day backfill.
+  // All-time and 24h must read the precise raw events.
+  const daily=range.key==="7d"&&await analyticsDailyReady(env.CONTENT_DB);
+  const sourceWhere="source IS NOT NULL AND TRIM(source)<>'' AND story_key<>''";
+  const aggregate=daily
+    ? `SELECT source,
+         COUNT(DISTINCT CASE WHEN views>0 THEN story_key END) AS stories,
+         SUM(views) AS views,
+         SUM(dwell_sum_ms) AS dwell_sum_ms,
+         SUM(dwell_count) AS dwell_count
+       FROM content_daily WHERE day>=? AND ${sourceWhere}
+       GROUP BY source`
+    : `SELECT source,
+         COUNT(DISTINCT CASE WHEN event_type='story_view' THEN story_key END) AS stories,
+         SUM(CASE WHEN event_type='story_view' THEN 1 ELSE 0 END) AS views,
+         SUM(CASE WHEN event_type='story_leave' AND dwell_ms>0 THEN dwell_ms ELSE 0 END) AS dwell_sum_ms,
+         SUM(CASE WHEN event_type='story_leave' AND dwell_ms>0 THEN 1 ELSE 0 END) AS dwell_count
+       FROM content_events WHERE occurred_at>=? AND ${sourceWhere}
+       GROUP BY source`;
+  const aggregateSince=daily?analyticsUtcDayStart(range.since):range.since;
+  const [content,reach,devices]=await Promise.all([
+    analyticsAll(env.CONTENT_DB.prepare(aggregate).bind(aggregateSince)),
+    analyticsAll(env.BEHAVIOR_DB.prepare(`
+      SELECT source,
+        COUNT(DISTINCT CASE WHEN event_type='story_view' THEN NULLIF(visitor_id,'') END) AS visitors,
+        SUM(CASE WHEN event_type='story_share' THEN 1 ELSE 0 END) AS shares,
+        SUM(CASE WHEN event_type='story_view' THEN 1 ELSE 0 END) AS tracked_views
+      FROM behavior_events
+      WHERE occurred_at>=? AND source IS NOT NULL AND TRIM(source)<>''
+        AND event_type IN ('story_view','story_share')
+      GROUP BY source
+    `).bind(range.since)),
+    analyticsAll(env.BEHAVIOR_DB.prepare(`
+      SELECT source,
+        COALESCE(NULLIF(json_extract(meta_json,'$.analytics_device_type'),''),'Bilinmiyor') AS device,
+        COALESCE(NULLIF(json_extract(meta_json,'$.analytics_browser'),''),'Bilinmiyor') AS browser,
+        COUNT(*) AS views
+      FROM behavior_events
+      WHERE occurred_at>=? AND source IS NOT NULL AND TRIM(source)<>''
+        AND event_type='story_view'
+      GROUP BY source,device,browser
+    `).bind(range.since))
+  ]);
+  const sourceMap=new Map();
+  function entry(name){
+    name=String(name||"").trim();
+    if(!name)return null;
+    if(!sourceMap.has(name))sourceMap.set(name,{
+      source:name,stories:0,views:0,visitors:0,shares:0,dwell_sum_ms:0,
+      avg_user_dwell_ms:0,avg_flora:null,flora_story_count:0,
+      flora_sampled:false,devices:[],browsers:[],age:[],gender:[],
+      demographic_status:"Kaynak bazlı GA4 ölçümü henüz mevcut değil."
+    });
+    return sourceMap.get(name);
+  }
+  for(const r of content){
+    const x=entry(r.source);if(!x)continue;
+    x.stories=Number(r.stories)||0;x.views=Number(r.views)||0;
+    x.dwell_sum_ms=Number(r.dwell_sum_ms)||0;
+  }
+  for(const r of reach){
+    const x=entry(r.source);if(!x)continue;
+    x.visitors=Number(r.visitors)||0;x.shares=Number(r.shares)||0;
+  }
+  const dist=new Map();
+  for(const r of devices){
+    const x=entry(r.source);if(!x)continue;
+    if(!dist.has(x.source))dist.set(x.source,{devices:new Map(),browsers:new Map()});
+    const d=dist.get(x.source),v=Number(r.views)||0;
+    d.devices.set(r.device,(d.devices.get(r.device)||0)+v);
+    d.browsers.set(r.browser,(d.browsers.get(r.browser)||0)+v);
+  }
+  for(const [name,d] of dist){
+    const x=entry(name);
+    x.devices=[...d.devices].map(([label,views])=>({label,views})).sort((a,b)=>b.views-a.views);
+    x.browsers=[...d.browsers].map(([label,views])=>({label,views})).sort((a,b)=>b.views-a.views);
+  }
+  // Flöra averages are per distinct story, never weighted by visits.
+  // A finite cap bounds Worker memory for extremely large all-time datasets.
+  const floraLimit=20001;
+  const floraSql=daily
+    ? `SELECT source,story_key,SUM(views) AS views,
+      CAST(SUM(dwell_sum_ms) AS REAL)/NULLIF(SUM(dwell_count),0) AS avg_dwell_ms,
+      CAST(SUM(target_sum_ms) AS REAL)/NULLIF(SUM(target_count),0) AS avg_target_ms,
+      SUM(completes) AS completes,SUM(skips) AS skips,SUM(backs) AS backs,
+      SUM(source_opens) AS source_opens
+      FROM content_daily WHERE day>=? AND ${sourceWhere}
+      GROUP BY source,story_key HAVING SUM(views)>0
+      ORDER BY views DESC LIMIT ${floraLimit}`
+    : `SELECT source,story_key,
+      SUM(CASE WHEN event_type='story_view' THEN 1 ELSE 0 END) AS views,
+      AVG(CASE WHEN event_type='story_leave' AND dwell_ms>0 THEN dwell_ms END) AS avg_dwell_ms,
+      AVG(CASE WHEN event_type='story_leave' AND target_ms>0 THEN target_ms END) AS avg_target_ms,
+      SUM(CASE WHEN event_type='story_leave' AND completed=1 THEN 1 ELSE 0 END) AS completes,
+      SUM(CASE WHEN event_type='story_leave' AND manual_skip=1 THEN 1 ELSE 0 END) AS skips,
+      SUM(CASE WHEN event_type='story_back' THEN 1 ELSE 0 END) AS backs,
+      SUM(CASE WHEN event_type='source_open' THEN 1 ELSE 0 END) AS source_opens
+      FROM content_events WHERE occurred_at>=? AND ${sourceWhere}
+      GROUP BY source,story_key HAVING views>0
+      ORDER BY views DESC LIMIT ${floraLimit}`;
+  const floraRows=await analyticsAll(env.CONTENT_DB.prepare(floraSql).bind(aggregateSince));
+  const floraSum=new Map();
+  for(const r of floraRows.slice(0,20000)){
+    const x=entry(r.source);if(!x)continue;
+    const acc=floraSum.get(x.source)||{sum:0,count:0};
+    acc.sum+=calculateFlora(r);acc.count++;
+    floraSum.set(x.source,acc);
+  }
+  for(const x of sourceMap.values()){
+    const a=floraSum.get(x.source);
+    if(a){x.avg_flora=Math.round((a.sum/a.count)*10)/10;x.flora_story_count=a.count}
+    x.flora_sampled=x.flora_story_count<x.stories;
+    x.avg_user_dwell_ms=x.visitors?Math.round(x.dwell_sum_ms/x.visitors):0;
+  }
+  let demoAvailable=false,demoThresholded=false;
+  if(ga4ReportingConfigured(env)){
+    try{
+      const sourceFilter={filter:{fieldName:"eventName",stringFilter:{matchType:"EXACT",value:"floew_story_view"}}};
+      const fetchDemo=dimension=>ga4RunReport(env,{
+        dateRanges:[ga4DateRange(range.key)],
+        dimensions:[{name:"customEvent:news_source"},{name:dimension}],
+        metrics:[{name:"eventCount"},{name:"totalUsers"}],
+        dimensionFilter:sourceFilter,
+        limit:"10000"
+      });
+      const [ageReport,genderReport]=await Promise.all([
+        fetchDemo("userAgeBracket"),fetchDemo("userGender")
+      ]);
+      demoThresholded=Boolean(ageReport?.metadata?.subjectToThresholding||genderReport?.metadata?.subjectToThresholding);
+      for(const [report,field,key] of [
+        [ageReport,"userAgeBracket","age"],[genderReport,"userGender","gender"]
+      ]){
+        for(const r of ga4RowObjects(report)){
+          const x=sourceMap.get(String(r["customEvent:news_source"]||"").trim());
+          if(!x)continue;
+          const label=String(r[field]||"unknown");
+          x[key].push({label,users:Number(r.totalUsers)||0,views:Number(r.eventCount)||0});
+        }
+      }
+      demoAvailable=true;
+      for(const x of sourceMap.values()){
+        x.demographic_status=x.age.length||x.gender.length
+          ? "GA4 rızalı kullanıcı örneklemi; eşikleme ve eksik kapsama olabilir."
+          : "GA4 üzerinde bu kaynak için raporlanabilir yaş/cinsiyet verisi yok.";
+      }
+    }catch(e){
+      // Missing custom dimension or insufficient GA4 permissions must not
+      // block the first-party D1 source report.
+      demoAvailable=false;
+    }
+  }
+  const sources=[...sourceMap.values()].filter(x=>x.views||x.shares).sort((a,b)=>b.views-a.views||a.source.localeCompare(b.source,"tr"));
+  return {
+    ok:true,range:range.key,label:range.label,generatedAt:Date.now(),
+    granularity:daily?"UTC günlük toplamları":"Olay zaman damgası",
+    sources,demographics:{available:demoAvailable,subjectToThresholding:demoThresholded},
+    notes:{
+      stories:"Akışta görüntülenmiş farklı haberler; henüz hiç gösterilmemiş yayınlanan haberler sayılmaz.",
+      visitors:"Tekil anonim tarayıcı/cihaz tanımlayıcısıdır; gerçek kişi sayısı değildir.",
+      duration:"Toplam görüntüleme süresi story_leave olaylarından; kişi başına ortalama toplam süre / tekil tanımlayıcı.",
+      shares:"Paylaşım eylemi başlatma sayısıdır; platformda başarıyla yayımlandığı doğrulanmaz.",
+      flora:"Görüntülenen her farklı haberin Flöra puanının eşit ağırlıklı ortalaması. Çok geniş dönemlerde örneklem sınırı gösterilir.",
+      demographics:"Yalnız rıza verilmiş GA4 floew_story_view olayları ve news_source boyutuyla; veri yoksa demografi tahmin edilmez."
+    }
+  };
+}
+
+async function sourceStatsCached(env,rangeKey="7d") {
+  const range=analyticsRange(rangeKey).key;
+  const ttl=range==="all"?2*60*60*1000:range==="24h"?5*60*1000:15*60*1000;
+  const hit=SOURCE_REPORT_CACHE.get(range),now=Date.now();
+  if(hit&&hit.expires>now)return hit.result;
+  if(hit?.pending)return hit.pending;
+  const pending=sourceStatsReport(env,range).then(result=>{
+    SOURCE_REPORT_CACHE.set(range,{result,expires:Date.now()+ttl});
+    return result;
+  }).catch(e=>{SOURCE_REPORT_CACHE.delete(range);throw e});
+  SOURCE_REPORT_CACHE.set(range,{pending,expires:0});
+  return pending;
+}
+
+function sourceReportHtml(data,sourceName="") {
+  const sources=sourceName?data.sources.filter(x=>x.source===sourceName):data.sources;
+  if(sourceName&&!sources.length)return null;
+  const enc=x=>htmlEscape(x);
+  const value=x=>reportNumber(x);
+  const duration=x=>reportDuration(x);
+  const table=(title,rows,cols)=>reportTable(title,rows,cols);
+  const overview=table("Kaynak karşılaştırması",sources,[
+    {key:"source",label:"Kaynak"},
+    {key:"stories",label:"Farklı haber",format:value},
+    {key:"views",label:"Gösterim",format:value},
+    {key:"visitors",label:"Tekil erişim",format:value},
+    {key:"dwell_sum_ms",label:"Toplam süre",format:duration},
+    {key:"avg_user_dwell_ms",label:"Kişi başına",format:duration},
+    {key:"avg_flora",label:"Ort. Flöra",format:(v,r)=>v===null?"Veri yok":`${v}${r.flora_sampled?" (örnek)":""}`},
+    {key:"shares",label:"Paylaşım",format:value}
+  ]);
+  const details=sources.map(x=>`
+    <section class="source">
+      <h2>${enc(x.source)}</h2>
+      <div class="metrics">
+        ${[
+          ["Farklı haber",value(x.stories)],["Gösterim",value(x.views)],
+          ["Tekil erişim",value(x.visitors)],["Toplam süre",duration(x.dwell_sum_ms)],
+          ["Kişi başına süre",duration(x.avg_user_dwell_ms)],
+          ["Ortalama Flöra",x.avg_flora===null?"Veri yok":String(x.avg_flora)+(x.flora_sampled?" (örneklem)":"")],
+          ["Paylaşım",value(x.shares)]
+        ].map(([k,v])=>`<div class="metric"><span>${enc(k)}</span><strong>${enc(v)}</strong></div>`).join("")}
+      </div>
+      <div class="charts">
+        ${table("Cihazlar",x.devices,[{key:"label",label:"Cihaz"},{key:"views",label:"Gösterim",format:value}])}
+        ${table("Tarayıcılar",x.browsers,[{key:"label",label:"Tarayıcı"},{key:"views",label:"Gösterim",format:value}])}
+        ${table("Yaş",x.age,[{key:"label",label:"Yaş"},{key:"users",label:"GA4 kullanıcı",format:value}])}
+        ${table("Cinsiyet",x.gender,[{key:"label",label:"Cinsiyet"},{key:"users",label:"GA4 kullanıcı",format:value}])}
+      </div>
+      <p class="note">${enc(x.demographic_status)}</p>
+      ${x.flora_sampled?`<p class="note">Flöra örneklemi: ${value(x.flora_story_count)} / ${value(x.stories)} haber.</p>`:""}
+    </section>
+  `).join("");
+  return `<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>${enc(sourceName||"Tüm kaynaklar")} | Flöw kaynak raporu</title>
+    <style>
+      *{box-sizing:border-box}body{margin:0;background:#0b1119;color:#e8f0f5;font:14px/1.5 system-ui,Arial,sans-serif}
+      main{max-width:1400px;margin:auto;padding:38px 24px 70px}h1{font-size:32px;margin:10px 0}h2{margin:34px 0 18px;font-size:23px}
+      p,.note{color:#a7beca}small{color:#91acbd}.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin:18px 0}
+      .metric,.table-card{background:#122331;border:1px solid #2e4759;border-radius:11px;padding:16px;min-width:0}
+      .metric span{display:block;font-size:11px;color:#9bb5c7}.metric strong{font-size:20px;overflow-wrap:anywhere}
+      .table-card{overflow:auto}.table-card h3{margin:0 0 12px;font-size:15px}table{width:100%;border-collapse:collapse}
+      th,td{padding:9px;border-bottom:1px solid #29404c;text-align:left;white-space:nowrap}th{font-size:11px;color:#9eb9c9}
+      .charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+      .source{page-break-before:always}.source:first-of-type{page-break-before:auto}
+      .note{font-size:12px;margin-top:13px}.methods{margin-top:34px;font-size:12px;line-height:1.7}
+      @media(max-width:750px){.charts{grid-template-columns:1fr}main{padding:22px 14px}}
+      @media print{body{background:white;color:black}.metric,.table-card{background:white;color:black;border-color:#bbb}.source{break-before:page}}
+    </style></head><body><main>
+    <small>FLÖW / FLÜSH ANALYTICS • ${enc(data.label)}</small>
+    <h1>${enc(sourceName||"Haber kaynakları")} raporu</h1>
+    <p>Oluşturulma: ${enc(new Date(data.generatedAt).toLocaleString("tr-TR",{timeZone:"Europe/Istanbul"}))} • Ölçüm: ${enc(data.granularity)}</p>
+    ${overview}${details}
+    <section class="methods"><h2>Ölçüm notları</h2>${Object.values(data.notes).map(n=>`<p>${enc(n)}</p>`).join("")}
+    ${data.demographics.subjectToThresholding?"<p>GA4 gizlilik eşiklemesi uygulanmış olabilir.</p>":""}</section>
+    </main></body></html>`;
+}
+
 async function adSummary(env, rangeKey = "7d") {
   const range = analyticsRange(rangeKey);
   if (!env.BEHAVIOR_DB) throw new Error("BEHAVIOR_DB is not configured");
@@ -5868,6 +6123,8 @@ export default {
     }
 
     if (
+      url.pathname === "/admin/sources" ||
+      url.pathname === "/admin/source-report" ||
       url.pathname === "/admin/audience" ||
       url.pathname === "/admin/behavior" ||
       url.pathname === "/admin/feedback" ||
@@ -5887,6 +6144,24 @@ export default {
       }
 
       try {
+        if (url.pathname === "/admin/sources") {
+          return analyticsJsonResponse(
+            await sourceStatsCached(env, url.searchParams.get("range") || "7d"),
+            corsHeaders, 200, { "Cache-Control":"private, no-store" }
+          );
+        }
+        if (url.pathname === "/admin/source-report") {
+          const name=clipAnalytics(url.searchParams.get("source")||"",240);
+          const data=await sourceStatsCached(env,url.searchParams.get("range")||"7d");
+          const html=sourceReportHtml(data,name);
+          if(!html)return analyticsJsonResponse({ok:false,error:"Source not found"},corsHeaders,404);
+          return new Response(html,{status:200,headers:{
+            ...corsHeaders,"Content-Type":"text/html; charset=utf-8",
+            "Content-Security-Policy":"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; sandbox",
+            "Content-Disposition":'attachment; filename="floew-sources-'+data.range+(name?"-single":"")+'.html"',
+            "Cache-Control":"private, no-store"
+          }});
+        }
         if (url.pathname === "/admin/audience") {
           return analyticsJsonResponse(
             await audienceSummary(
@@ -6042,6 +6317,8 @@ export default {
           "/analytics/health",
           "/admin/ping",
           "/admin/audience",
+          "/admin/sources",
+          "/admin/source-report",
           "/admin/behavior",
           "/admin/feedback",
           "/admin/feedback-delete",
