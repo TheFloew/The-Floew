@@ -11216,6 +11216,15 @@ function telemetryQueueEvent(eventType,data={}){
   if(event.event.startsWith("ad_")){
     ga4TrackAdEvent(event.event,event);
   }
+  // Separate consented GA4 event for source-level demographic reporting.
+  // Custom RSS sources are private and must never be exposed to GA4.
+  if(mappedEventType==="story_view" && !isCustomRss &&
+     ga4Initialized && window.gtag && getGa4Consent()==="granted" &&
+     String(storyPayload?.source||"").trim()){
+    window.gtag("event","floew_story_view",{
+      news_source:String(storyPayload.source).trim().slice(0,100)
+    });
+  }
 
   if(telemetryQueue.length>=TELEMETRY_MAX_BATCH){
     telemetryFlush();
