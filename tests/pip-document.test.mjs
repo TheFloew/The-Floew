@@ -10,6 +10,7 @@ const html=readFileSync(new URL("../index.html",import.meta.url),"utf8");
 function fixture(){
  const intervals=new Map();
  let nextInterval=1,requestCount=0,animationCount=0;
+ const animations=[];
  class FakeElement{
   constructor(tag){
    this.tagName=tag.toUpperCase();this.children=[];this.parentElement=null;
@@ -28,8 +29,9 @@ function fixture(){
   removeAttribute(name){delete this[name];}
   addEventListener(name,fn){(this.events[name]??=[]).push(fn);}
   emit(name){for(const fn of this.events[name]||[])fn();}
-  animate(){
+  animate(frames){
    animationCount++;
+   animations.push(frames);
    return {finished:Promise.resolve(),cancel(){}};
   }
   set src(url){this._src=url;}
@@ -107,6 +109,7 @@ function fixture(){
   setStory:value=>{selected=value;},setAd:value=>{ad=value;},
   setBusy:value=>{busy=value;},tick:()=>{for(const item of intervals.values())item.fn();},
   requestCount:()=>requestCount,animationCount:()=>animationCount,
+  animationFrames:()=>animations,
   media:()=>findAll(scene(),"video")[0],
   image:()=>findAll(scene(),"img").at(-1),
   styles:()=>findAll(pipDocument.head,"style")[0]?.textContent||""
@@ -213,6 +216,18 @@ test("Provider iframe and compositor transitions use the PiP document",async()=>
  assert.ok(iframe);
  assert.match(iframe.src,/youtube\.com\/embed/);
  assert.ok(f.animationCount()>=2,"native compositor animates both cards");
+});
+
+test("PiP transition direction matches the feed: upwards enters from below",async()=>{
+ const f=fixture();
+ const a={title:"A",image:"https://img.test/a.jpg"};
+ const b={title:"B",image:"https://img.test/b.jpg"};
+ f.slide(a);f.slide(b);f.setStory(a);
+ await f.ctrl.toggle();
+ f.ctrl.transitionStory(b,1);
+ const [enter,exit]=f.animationFrames();
+ assert.equal(enter[0].transform,"translate3d(0,100%,0)");
+ assert.equal(exit[1].transform,"translate3d(0,-100%,0)");
 });
 
 test("Opening and closing is explicit; audio/video providers are configurable",async()=>{
