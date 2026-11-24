@@ -14286,6 +14286,8 @@ function setSourceViewerFrame(articleUrl,{direct=false}={}){
   return true;
 }
 
+let sourceViewerExitTimer=null;
+
 function openSourceViewer(articleUrl,sourceName="",options={}){
   const safe=String(articleUrl||"").trim();
   if(!/^https?:\/\//i.test(safe))return false;
@@ -14294,6 +14296,7 @@ function openSourceViewer(articleUrl,sourceName="",options={}){
     pauseFlowForSourceViewer();
   }
 
+  clearTimeout(sourceViewerExitTimer);
   sourceViewerOpen=true;
   uiFlowPauseActive=false;
   uiFlowPauseRemainingMs=0;
@@ -14357,7 +14360,15 @@ function closeSourceViewer(){
   overlay?.setAttribute("aria-hidden","true");
   document.body.classList.remove("source-viewer-open");
 
-  if(frame)frame.src="about:blank";
+  // Preserve the last iframe frame while the Preferences-style exit fades.
+  // A quick reopen cancels the pending cleanup, avoiding a blank new viewer.
+  if(frame){
+    clearTimeout(sourceViewerExitTimer);
+    const reduced=window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    sourceViewerExitTimer=setTimeout(()=>{
+      if(!sourceViewerOpen)frame.src="about:blank";
+    },reduced?0:340);
+  }
   if(external){
     external.hidden=false;
     external.removeAttribute("aria-hidden");
