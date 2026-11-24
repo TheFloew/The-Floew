@@ -90,7 +90,7 @@
 #control-menu-panel #time-range-button.fi::before{font-size:31px !important;transform:translateY(-2px) !important}
 #control-menu-panel #keyword-filter-button.fi::before{font-size:31px !important;transform:none !important}
 #control-menu-panel #keyword-watch-button.fi::before{font-size:30px !important;transform:translate(-3px,-6px) !important}
-#control-menu-panel #info-button.fi::before{font-size:31px !important;transform:translateX(-3px) !important}
+#control-menu-panel #info-button.fi::before{font-size:30px !important;transform:translateX(-3px) !important}
 #control-menu-panel #menu-button.fi::before{font-size:31px !important;transform:none !important}
 
 /* Modal / utility controls */
