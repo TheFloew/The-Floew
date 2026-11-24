@@ -11964,7 +11964,6 @@ function renderKeywordColumn(kind,title){
     remove.dataset.keywordKind=kind;
     remove.dataset.keywordIndex=String(index);
     remove.setAttribute("aria-label",title+" listesinden "+word+" kelimesini kaldır");
-    remove.title="Sil";
 
     row.append(label,remove);
     fragment.appendChild(row);
@@ -13787,7 +13786,6 @@ function openTimeRangePanel(){
   closeMenu();
   closeStatsOverlay();
   closeQuickPanels("time");
-  closeControlMenu();
 
   const panel=document.getElementById("time-range-panel");
   renderTimeRangeControl();
@@ -13810,7 +13808,6 @@ function openKeywordFilterPanel(){
   closeMenu();
   closeStatsOverlay();
   closeQuickPanels("filter");
-  closeControlMenu();
 
   const panel=document.getElementById("keyword-filter-panel");
   const input=document.getElementById("keyword-filter-input");

@@ -22,6 +22,12 @@
 
 ## YAYIMLANMAMIŞ DEĞİŞİKLİKLER
 
+### Hamburger menü ve anahtar kelime silme düzeltmeleri | 24 Kasım 2026
+- **Akış / Anahtar kelimeler:** Açılınca hamburger araç menüsü kapanmaz; tam ekran kapatıldığında önceki gibi açık kalır.
+- **Hamburger kapanışı:** Kaydedilen Haberler ikonunun zorunlu görünürlük ve tıklama CSS kuralları kaldırıldı. Böylece diğer ikonlarla aynı 320 ms kapanış hareketini izler.
+- **Anahtar kelimeler:** Listelerdeki çarpı düğmelerinin “Sil” hover etiketi kaldırıldı; erişilebilirlik açıklaması ve silme işlevi korundu.
+- Yeni menü tutarlılığı testleri eklendi; canlı tarayıcı doğrulaması ayrıca yapılmalı.
+
 ### [PROTOTİP] Akış ve Anahtar Kelimeler tam ekran tasarımı | 24 Kasım 2026
 - **Akış:** Sıralama (Algoritmik/Kronolojik) ve zaman aralığı seçenekleri, Tercihler ile aynı karartma ve açılış/kapanış animasyonuna sahip bağımsız tam ekran penceresine alındı.
 - **Anahtar Kelimeler:** Göster, Gizle ve Uyar işlemleri, tek ve ortalanmış giriş alanı ile üç sütun altında birleştirildi: Gösterilenler, Gizlenenler, Vurgulananlar.

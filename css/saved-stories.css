@@ -65,8 +65,8 @@
   background:transparent!important;
   color:#fff!important;
   opacity:1!important;
-  visibility:visible!important;
-  pointer-events:auto!important;
+  /* Visibility and hit testing are owned by the shared hamburger
+     open/is-closing/closed rules, just like the other menu icons. */
   cursor:pointer;
   transform:none;
   text-shadow:0 1px 3px rgba(0,0,0,.65),0 2px 7px rgba(0,0,0,.42);
