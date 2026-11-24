@@ -22,6 +22,14 @@
 
 ## YAYIMLANMAMIŞ DEĞİŞİKLİKLER
 
+### [PROTOTİP] PiP eşzamanlılık ve performans motoru v2 | 24 Kasım 2026
+- PiP bağımsız haber/görsel seçme mekanizmasından ayrıldı; akışın güncel haber veya reklam kimliğini tek doğruluk kaynağı kabul eder.
+- Haber resminde doğrudan RSS'deki ilk görsel yerine ana ekrana başarıyla yüklenmiş gerçek görselin URL'si izlenir. Eski haber görseli hiçbir durumda yeni habere yedeklenmez.
+- Ağ yanıtları sürüm belirteciyle kontrol edilerek geç kalan isteklerin güncel PiP karesini değiştirmesi engellendi; reklam-haber geçişleri ve değişen sekme haberleri periyodik doğrulanır.
+- Kayıt hattı elle frame göndermeyi (uygunsa captureStream(0) + requestFrame) kullanır; düşük tempolu sabit kare ve arka planda rAF'a bağlı olmayan güncelleme benimsenir. Video görüntüsü CORS kontrolünden sonra çizilir.
+- PiP açılışı görsel indirmesini beklemez; kullanıcı tıklamasının ardından hazırlanmış ilk kare hemen sunulur. PiP yalnız kullanıcı açınca çalışır.
+- Test ve canlı PiP tarayıcı doğrulaması yapılmadan yayımlanmamalıdır.
+
 ### Hamburger menü ve anahtar kelime silme düzeltmeleri | 24 Kasım 2026
 - **Akış / Anahtar kelimeler:** Açılınca hamburger araç menüsü kapanmaz; tam ekran kapatıldığında önceki gibi açık kalır.
 - **Hamburger kapanışı:** Kaydedilen Haberler ikonunun zorunlu görünürlük ve tıklama CSS kuralları kaldırıldı. Böylece diğer ikonlarla aynı 320 ms kapanış hareketini izler.
