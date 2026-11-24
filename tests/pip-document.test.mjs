@@ -139,7 +139,7 @@ test("Late-loaded headline image upgrades in place without removing the current 
  assert.equal(f.image().src,"https://img.test/article.jpg");
  assert.notEqual(f.image(),first);
  assert.ok(card.children.includes(first),"old image stays until upgrade is loaded");
- f.image().emit("load");
+ f.image().onload();
  assert.ok(f.image().classList.contains("is-ready"));
 });
 
