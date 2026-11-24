@@ -84,13 +84,15 @@ function fixture(){
   img.currentSrc=loaded?story.image:"";img.src=story.image;
   img.dataset.imageStage=loaded?"direct":"pending";
   const heading={textContent:story.title};
-  let direct=null,embed=null;
+  let direct=null,embed=null,dailymotion=null;
   const el={dataset:{storyKey:story.title},img,
    querySelector(sel){
     if(sel===".slide-image")return img;
     if(sel===".headline h1")return heading;
     if(sel===".slide-video.media-visible")return direct;
     if(sel===".slide-embed.media-visible")return embed;
+    if(sel===".slide-dailymotion.media-visible iframe")return null;
+    if(sel===".slide-dailymotion.media-visible")return dailymotion;
     return null;
    },
    video(src,type="video/mp4"){
@@ -99,7 +101,8 @@ function fixture(){
     direct.currentSrc=src;direct.src=src;direct.currentTime=4;
     return direct;
    },
-   embed(url){embed=new FakeElement("iframe");embed.src=url;return embed;}
+   embed(url){embed=new FakeElement("iframe");embed.src=url;return embed;},
+   setDailymotion(playerId,videoId){dailymotion={dataset:{dailymotionPlayerId:playerId,dailymotionVideoId:videoId}};}
   };
   slides.push(el);
   return el;
@@ -216,6 +219,18 @@ test("Provider iframe and compositor transitions use the PiP document",async()=>
  assert.ok(iframe);
  assert.match(iframe.src,/youtube\.com\/embed/);
  assert.ok(f.animationCount()>=2,"native compositor animates both cards");
+});
+
+test("Dailymotion news uses its real configured Player ID",async()=>{
+ const f=fixture();
+ const story={title:"Daily",image:"https://img.test/daily.jpg"};
+ const slide=f.slide(story);f.setStory(story);
+ await f.ctrl.toggle();
+ slide.setDailymotion("player123","x9abcde");
+ f.tick();
+ const frame=f.findAll(f.scene(),"iframe")[0];
+ assert.ok(frame);
+ assert.equal(frame.src,"https://geo.dailymotion.com/player/player123.html?video=x9abcde&mute=true");
 });
 
 test("PiP transition direction matches the feed: upwards enters from below",async()=>{
