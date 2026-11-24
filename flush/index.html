@@ -90,6 +90,7 @@
 <link rel="stylesheet" href="feedback-native.css?v=20261119">
 <link rel="stylesheet" href="ad-center-native.css?v=20261119-2">
 <link rel="stylesheet" href="account-native.css?v=20261119-a1">
+<link rel="stylesheet" href="sources-native.css?v=20261124-1">
 </head>
 <body>
 <svg aria-hidden="true" width="0" height="0" style="position:absolute;overflow:hidden"><defs>
@@ -128,6 +129,7 @@
       <div class="group"><div class="group-label">ANALİTİK</div>
         <button type="button" class="navbtn" data-target="audience"><svg class="icon"><use href="#i-chart"/></svg><span class="menu-title">Kullanıcılar</span></button>
         <button type="button" class="navbtn" data-target="behavior"><svg class="icon"><use href="#i-grid"/></svg><span class="menu-title">Davranış</span></button>
+        <button type="button" class="navbtn" data-target="sources"><svg class="icon"><use href="#i-chart"/></svg><span class="menu-title">Haber Kaynakları</span></button>
         <button type="button" class="navbtn" data-target="ad_performance"><svg class="icon"><use href="#i-chart"/></svg><span class="menu-title">Reklam Performansı</span></button>
       </div>
       <div class="group"><div class="group-label">YÖNETİM</div>
@@ -184,6 +186,7 @@
 <script src="feedback-native.js?v=20261119"></script>
 <script src="ad-center-native.js?v=20261119-2"></script>
 <script src="account-native.js?v=20261119-a1"></script>
+<script src="sources-native.js?v=20261124-1"></script>
 <script>
 (() => {
  'use strict';
@@ -191,11 +194,12 @@
  const MODULES = {
   audience: {title:'Kullanıcılar',url:'https://xn--flw-tna.tr/admin/analytics.html',icon:'i-chart'},
   behavior: {title:'Davranış',url:'https://xn--flw-tna.tr/admin/analytics.html',icon:'i-grid'},
+  sources: {title:'Haber Kaynakları',url:'https://xn--flw-tna.tr/admin/analytics.html',icon:'i-chart'},
   ad_performance: {title:'Reklam Performansı',url:'https://xn--flw-tna.tr/admin/analytics.html',icon:'i-chart'},
   flowery: {title:'Reklam Merkezi',url:'https://flowery.xn--flw-tna.tr/',icon:'i-ad'},
   feedback: {title:'Feedback',url:'https://xn--flw-tna.tr/admin/feedback-admin.html',icon:'i-feedback'}
  };
- const NATIVE_MODULES=new Set(['audience','behavior','ad_performance','flowery','feedback']);
+ const NATIVE_MODULES=new Set(['audience','behavior','sources','ad_performance','flowery','feedback']);
  const $=id=>document.getElementById(id);
  let currentUser=null,active='overview';
  const frames={},screens={overview:$('overview'),app:$('appScreen'),users:$('users'),account:$('account')};
@@ -213,7 +217,7 @@
  menuBtn.addEventListener('click',()=>setMenuOpen(!sidebar.classList.contains('open')));
  backdrop.addEventListener('click',closeMenu);
  window.addEventListener('keydown',ev=>{if(ev.key==='Escape')closeMenu()});
- function permitted(id){return !!currentUser&&(currentUser.role==='superadmin'||(currentUser.permissions||[]).includes(id))}
+ function permitted(id){return !!currentUser&&(currentUser.role==='superadmin'||(currentUser.permissions||[]).includes(id)||(id==='sources'&&(currentUser.permissions||[]).includes('audience')))}
  function gate(view,message=''){
    $('authGate').hidden=view==='app';$('shell').hidden=view!=='app';$('passwordChange').hidden=view!=='password';$('loginPanel').hidden=view==='password';
    if(message)$('loginError').textContent=message;
@@ -235,10 +239,11 @@
    if(!currentUser)return;
    if(!['overview','users','account',...Object.keys(MODULES)].includes(id))id='overview';
    if((MODULES[id]&&!permitted(id))||(id==='users'&&currentUser.role!=='superadmin'))id='overview';
+   if(id!=='sources'&&window.FlushSourcesNative)window.FlushSourcesNative.unmount();
    active=id;const mod=MODULES[id],isApp=!!mod,isNative=NATIVE_MODULES.has(id);
    $('pageTitle').textContent=mod?.title||(id==='users'?'Kullanıcı Yetkileri':id==='account'?'Hesabım':'Genel Bakış');
    Object.entries(screens).forEach(([name,screen])=>screen.hidden=(name==='app'?!isApp:name!==id));
-   $('reloadBtn').hidden=!isApp;$('externalBtn').hidden=!isApp;
+   $('reloadBtn').hidden=!isApp;$('externalBtn').hidden=!isApp||id==='sources';
    document.querySelectorAll('.navbtn[data-target]').forEach(el=>el.classList.toggle('active',el.dataset.target===id));
    Object.entries(frames).forEach(([key,frame])=>frame.classList.toggle('on',isApp&&!isNative&&key===id));
    $('nativeView').hidden=!isNative;
@@ -366,6 +371,12 @@
  }
  async function loadNative(id,force=false){
   if(!NATIVE_MODULES.has(id)||!currentUser||!permitted(id))return;
+  if(id==='sources'){
+    ++nativeMemory.load;
+    if(!window.FlushSourcesNative){$('nativeView').innerHTML='<div class="fn-error">Haber Kaynakları modülü yüklenemedi. Sayfayı yenile.</div>';return;}
+    window.FlushSourcesNative.mount($('nativeView'),AUTH);
+    return;
+  }
   if(id==='flowery'){
     ++nativeMemory.load;
     if(!window.FlushAdCenterNative){$('nativeView').innerHTML='<div class="fn-error">Reklam Merkezi modülü yüklenemedi. Sayfayı yenile.</div>';return;}
