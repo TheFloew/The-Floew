@@ -342,13 +342,15 @@
       ctx.clearRect(0,0,WIDTH,HEIGHT);
       if(transition){
         const fraction=Math.max(0,Math.min(1,(now()-transition.start)/420));
-        const p=1-Math.pow(1-fraction,3);
-        const move=transition.vector;
-        paint(ctx,transition.from,-move.x*WIDTH*p,-move.y*HEIGHT*p);
-        paint(ctx,transition.to,move.x*WIDTH*(1-p),move.y*HEIGHT*(1-p));
         if(fraction>=1){
           current=transition.to;
           transition=null;
+          paint(ctx,current);
+        }else{
+          const p=1-Math.pow(1-fraction,3);
+          const move=transition.vector;
+          paint(ctx,transition.from,-move.x*WIDTH*p,-move.y*HEIGHT*p);
+          paint(ctx,transition.to,move.x*WIDTH*(1-p),move.y*HEIGHT*(1-p));
         }
       }else if(current)paint(ctx,current);
       else{ctx.fillStyle="#090909";ctx.fillRect(0,0,WIDTH,HEIGHT);}
