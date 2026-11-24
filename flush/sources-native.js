@@ -8,7 +8,7 @@ const fmtTime=v=>{
  if(n<60)return n+" sn";
  if(n<3600)return Math.floor(n/60)+" dk "+n%60+" sn";
  if(n<86400)return Math.floor(n/3600)+" sa "+Math.floor(n%3600/60)+" dk";
- return Math.floor(n/86400)+" gün "+Math.floor(n%86400/3600000)+" sa";
+ return Math.floor(n/86400)+" gün "+Math.floor(n%86400/3600)+" sa";
 };
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const state={range:"7d",rows:[],data:null,selected:"",search:"",sort:"views",direction:-1,loading:false,error:"",lastUpdated:"",loadId:0,host:null,auth:""};
@@ -53,7 +53,7 @@ function header(){
  <button type="button" data-fns-range="all" class="${activeRange("all")}">Tüm zamanlar</button></div>
  <button type="button" class="fn-secondary fns-download" data-fns-action="all" ${!state.data?"disabled":""}>Tüm kaynakları HTML indir</button>
  </div></header>
- <div class="fns-status" role="status">${esc(state.error||state.loading?"Veriler yükleniyor…":state.lastUpdated)}</div>`;
+ <div class="fns-status" role="status">${esc(state.error|| (state.loading?"Veriler yükleniyor…":state.lastUpdated))}</div>`;
 }
 function summary(){
  if(!state.data)return "";
