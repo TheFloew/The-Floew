@@ -173,6 +173,34 @@ test("Video advertisement plays as native media and keeps the ad marker",async()
  assert.ok(f.scene().textContent!=="Video reklamı");
 });
 
+test("HLS news uses the existing Hls.js loader and real video playback",async()=>{
+ const f=fixture();
+ const story={title:"HLS",image:"https://img.test/hls.jpg"};
+ const slide=f.slide(story);f.setStory(story);
+ class Hls{
+  static Events={MEDIA_ATTACHED:"attached",MANIFEST_PARSED:"manifest",ERROR:"error"};
+  static ErrorTypes={MEDIA_ERROR:"media"};
+  static isSupported(){return true;}
+  constructor(){this.handlers={};}
+  on(type,fn){this.handlers[type]=fn;}
+  attachMedia(media){this.media=media;this.handlers.attached?.();}
+  loadSource(src){this.src=src;this.handlers.manifest?.();}
+  destroy(){}
+ }
+ f.config.ensureHlsLibrary=()=>Promise.resolve(Hls);
+ await f.ctrl.toggle();
+ const url="https://stream.test/playlist.m3u8";
+ slide.video(url,"application/vnd.apple.mpegurl");
+ f.tick();
+ for(let i=0;i<6;i++)await Promise.resolve();
+ const video=f.media();
+ assert.ok(video);
+ assert.equal(video.src,"","HLS attaches through MediaSource, not the playlist URL");
+ video.emit("loadeddata");
+ assert.ok(video.playCalled>=1);
+ assert.ok(video.classList.contains("is-ready"));
+});
+
 test("Provider iframe and compositor transitions use the PiP document",async()=>{
  const f=fixture();
  const a={title:"A",image:"https://img.test/a.jpg"};
