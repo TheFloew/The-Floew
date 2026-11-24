@@ -49,7 +49,7 @@
    caption.append(category,source,title);
    outer.append(fallback,shade,caption);
    const entry={item,key:key(item),outer,fallback,category,source,title,
-    image:null,imageSource:"",media:null,mediaKey:"",hls:null,serial:0,animations:[]};
+    image:null,imageSource:"",media:null,mediaKey:"",hls:null,imageSerial:0,mediaSerial:0,animations:[]};
    if(item.kind==="ad"){
     shade.remove();caption.remove();
     fallback.textContent="Reklam yükleniyor";
@@ -88,18 +88,18 @@
    const url=pickImage(entry);
    if(!url||url===entry.imageSource)return;
    entry.imageSource=url;
-   const token=++entry.serial,old=entry.image,img=el("img","floew-pip-media");
+   const token=++entry.imageSerial,old=entry.image,img=el("img","floew-pip-media");
    img.decoding="async";img.draggable=false;img.alt="";
    entry.outer.insertBefore(img,entry.outer.firstChild);
    entry.image=img;
    img.onload=()=>{
-    if(entry.image!==img||entry.serial!==token)return;
+    if(entry.image!==img||entry.imageSerial!==token)return;
     img.classList.add("is-ready");
     if(entry.item.kind==="ad")label(entry.fallback,"");
     if(old && old!==img)win.setTimeout(()=>old.remove(),180);
    };
    img.onerror=()=>{
-    if(entry.image!==img||entry.serial!==token)return;
+    if(entry.image!==img||entry.imageSerial!==token)return;
     const alternative=proxyFor(entry,url);
     if(alternative && alternative!==img.src && img.dataset.fallback!=="1"){
      img.dataset.fallback="1";img.src=alternative;
@@ -129,6 +129,7 @@
    return null;
   }
   function cleanupMedia(entry){
+   ++entry.mediaSerial;
    if(entry.hls){try{entry.hls.destroy()}catch(_){}entry.hls=null}
    if(entry.media){
     try{entry.media.pause?.()}catch(_){}
@@ -145,8 +146,8 @@
    video.setAttribute("muted","");video.setAttribute("autoplay","");video.setAttribute("playsinline","");
    entry.outer.insertBefore(video,entry.outer.firstChild);
    entry.media=video;
-   const token=entry.serial;
-   const live=()=>win&&!closing&&entry.media===video&&entry.serial===token;
+   const token=++entry.mediaSerial;
+   const live=()=>win&&!closing&&entry.media===video&&entry.mediaSerial===token;
    const play=()=>{
     if(!live())return;
     const master=desc.ref;
