@@ -153,10 +153,11 @@
     </header>
     <div class="viewport" id="viewport">
       <section class="screen overview" id="overview">
-        <div class="section-head"><div><h2>Fasiliteler</h2><p>İşlemlerine kaldığın yerden devam et.</p></div><span class="section-kicker">5 modül</span></div>
+        <div class="section-head"><div><h2>Fasiliteler</h2><p>İşlemlerine kaldığın yerden devam et.</p></div><span class="section-kicker" id="overviewModuleCount">6 modül</span></div>
         <div class="cards">
           <button type="button" class="tool-card" data-target="audience"><div class="card-top"><span class="card-icon"><svg class="icon"><use href="#i-chart"/></svg></span><span class="pill">ANALİTİK</span></div><h3>Kullanıcılar</h3><p>Oturumlar, cihazlar, coğrafya ve demografi.</p><div class="card-foot">Kullanıcı istatistiklerini aç <svg class="icon"><use href="#i-arrow"/></svg></div></button>
           <button type="button" class="tool-card" data-target="behavior"><div class="card-top"><span class="card-icon"><svg class="icon"><use href="#i-grid"/></svg></span><span class="pill">ANALİTİK</span></div><h3>Davranış</h3><p>Etkileşimler, olaylar, kaynaklar ve anahtar kelimeler.</p><div class="card-foot">Davranış analizini aç <svg class="icon"><use href="#i-arrow"/></svg></div></button>
+          <button type="button" class="tool-card" data-target="sources"><div class="card-top"><span class="card-icon"><svg class="icon"><use href="#i-chart"/></svg></span><span class="pill">ANALİTİK</span></div><h3>Haber Kaynakları</h3><p>Kaynakların erişimi, görüntülenme süresi, Flöra puanı ve paylaşım istatistikleri.</p><div class="card-foot">Kaynak istatistiklerini aç <svg class="icon"><use href="#i-arrow"/></svg></div></button>
           <button type="button" class="tool-card" data-target="ad_performance"><div class="card-top"><span class="card-icon"><svg class="icon"><use href="#i-chart"/></svg></span><span class="pill">ANALİTİK</span></div><h3>Reklam Performansı</h3><p>Gösterim, izleme, tamamlama ve kampanya raporları.</p><div class="card-foot">Performans verilerini aç <svg class="icon"><use href="#i-arrow"/></svg></div></button>
           <button type="button" class="tool-card" data-target="flowery"><div class="card-top"><span class="card-icon"><svg class="icon"><use href="#i-ad"/></svg></span><span class="pill">BAĞLI</span></div><h3>Reklam Merkezi</h3><p>Reklamları, yayın takvimini ve kampanya içeriklerini yönet.</p><div class="card-foot">Reklam merkezini aç <svg class="icon"><use href="#i-arrow"/></svg></div></button>
           <button type="button" class="tool-card" data-target="feedback"><div class="card-top"><span class="card-icon"><svg class="icon"><use href="#i-feedback"/></svg></span><span class="pill">BAĞLI</span></div><h3>Feedback</h3><p>Geri bildirimleri, kullanıcı notlarını ve bildirim eğilimlerini takip et.</p><div class="card-foot">Geri bildirimleri aç <svg class="icon"><use href="#i-arrow"/></svg></div></button>
@@ -204,7 +205,7 @@
  let currentUser=null,active='overview';
  const frames={},screens={overview:$('overview'),app:$('appScreen'),users:$('users'),account:$('account')};
  const sidebar=$('sidebar'),backdrop=$('backdrop'),menuBtn=$('menuBtn');
- const facilityNames={audience:'Kullanıcılar',behavior:'Davranış',ad_performance:'Reklam Performansı',flowery:'Reklam Merkezi',feedback:'Feedback'};
+ const facilityNames={audience:'Kullanıcılar',behavior:'Davranış',sources:'Haber Kaynakları',ad_performance:'Reklam Performansı',flowery:'Reklam Merkezi',feedback:'Feedback'};
  const enc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  async function api(path,options={}){
    const res=await fetch(AUTH+path,{credentials:'include',cache:'no-store',...options,headers:{'Accept':'application/json',...(options.body?{'Content-Type':'application/json'}:{}),...(options.headers||{})}});
@@ -217,13 +218,14 @@
  menuBtn.addEventListener('click',()=>setMenuOpen(!sidebar.classList.contains('open')));
  backdrop.addEventListener('click',closeMenu);
  window.addEventListener('keydown',ev=>{if(ev.key==='Escape')closeMenu()});
- function permitted(id){return !!currentUser&&(currentUser.role==='superadmin'||(currentUser.permissions||[]).includes(id)||(id==='sources'&&(currentUser.permissions||[]).includes('audience')))}
+ function permitted(id){return !!currentUser&&(currentUser.role==='superadmin'||(currentUser.permissions||[]).includes(id))}
  function gate(view,message=''){
    $('authGate').hidden=view==='app';$('shell').hidden=view!=='app';$('passwordChange').hidden=view!=='password';$('loginPanel').hidden=view==='password';
    if(message)$('loginError').textContent=message;
  }
  function adaptMenu(){
    $('usernameTag').textContent=currentUser.username;
+   $('overviewModuleCount').textContent=Object.keys(MODULES).filter(permitted).length+' modül';
    $('adminNav').hidden=currentUser.role!=='superadmin';$('adminGroup').hidden=currentUser.role!=='superadmin';
    document.querySelectorAll('[data-target]').forEach(el=>{
      const id=el.dataset.target;
