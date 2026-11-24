@@ -27,6 +27,10 @@
    ".floew-pip-card.is-ad{background:#1b2230}",
    ".floew-pip-media{position:absolute;inset:0;width:100%;height:100%;border:0;object-fit:cover;opacity:0;transition:opacity .17s ease}",
    ".floew-pip-media.is-ready{opacity:1}",
+   ".floew-pip-card img.floew-pip-media{z-index:1}",
+   ".floew-pip-card video.floew-pip-media,.floew-pip-card iframe.floew-pip-media{z-index:2}",
+   ".floew-pip-shade,.floew-pip-caption{z-index:3}",
+   ".floew-pip-adtag{z-index:4}",
    ".floew-pip-card.is-ad .floew-pip-media{object-fit:contain}",
    ".floew-pip-shade{position:absolute;inset:0;pointer-events:none;background:linear-gradient(to bottom,transparent 25%,rgba(0,0,0,.27) 52%,rgba(0,0,0,.93) 100%)}",
    ".floew-pip-caption{position:absolute;bottom:5%;left:5%;right:5%;text-align:right;text-shadow:0 1px 9px #000}",
@@ -77,10 +81,12 @@
    return http(config.initialStoryImage(story)||story.image);
   }
   function proxyFor(entry,url){
-   if(entry.item.kind==="story"){
+   if(entry.item.kind==="story" && http(entry.item.story.image)===url){
     const resolved=http(config.storyImageProxy(entry.item.story));
     if(resolved && resolved!==url)return resolved;
    }
+   // When the on-page image has upgraded to a different article picture,
+   // proxy precisely that URL, not the obsolete RSS thumbnail URL.
    const proxy=http(config.imageProxyBase);
    return proxy ? proxy+"?url="+encodeURIComponent(url) : "";
   }
