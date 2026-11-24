@@ -22,6 +22,14 @@
 
 ## YAYIMLANMAMIŞ DEĞİŞİKLİKLER
 
+### [PROTOTİP] Akış ve Anahtar Kelimeler tam ekran tasarımı | 24 Kasım 2026
+- **Akış:** Sıralama (Algoritmik/Kronolojik) ve zaman aralığı seçenekleri, Tercihler ile aynı karartma ve açılış/kapanış animasyonuna sahip bağımsız tam ekran penceresine alındı.
+- **Anahtar Kelimeler:** Göster, Gizle ve Uyar işlemleri, tek ve ortalanmış giriş alanı ile üç sütun altında birleştirildi: Gösterilenler, Gizlenenler, Vurgulananlar.
+- Anahtar kelimeler işlem sonrası giriş alanından temizlenir; listelerde ayrı satırlarda tutulur ve her biri çarpı düğmesiyle silinebilir. Göster/Gizle filtreleri aynı anda çalışır, Uyar eşleşen haberleri vurgular.
+- Eski filtre/takip ayarları yeni saklama biçimine aktarılır; tercih dışa/içe aktarma desteği korunur. Ayrı Anahtar Kelime Takibi araç ikonu kaldırıldı.
+- Pencereler açıkken haber akışı durur; kapanınca kaldığı yerden sürer. Mobil yerleşim, klavye ve erişilebilirlik davranışları yenilendi.
+- **Yayımlanmadı:** GitHub PR aşamasında; Merge ve canlı tarayıcı doğrulaması bekleniyor.
+
 ### [PROTOTİP] Flüsh Kaynak İstatistikleri | 24 Kasım 2026
 - Analytics altında **Haber Kaynakları** yönetim ekranı, kaynak arama/sıralama ve kaynak ayrıntıları.
 - Kaynak bazında görüntülenen farklı haber, gösterim, anonim tekil erişim, toplam ve kişi başına görüntüleme süresi, eşit ağırlıklı ortalama Flöra, paylaşım eylemleri, cihaz/tarayıcı dağılımları.
