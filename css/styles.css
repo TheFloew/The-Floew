@@ -6477,6 +6477,30 @@ body{
     visibility 0s linear 0s;
 }
 
+/* Flöra's anchored detail popover also follows the shared 320ms motion.
+   Positioning still uses the existing anchor calculations. */
+.flora-story-popover{
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  transform:translateY(8px) scale(.985);
+  transform-origin:center bottom;
+  transition:
+    opacity var(--floew-panel-motion-duration) ease,
+    transform var(--floew-panel-motion-duration) var(--floew-panel-motion-ease),
+    visibility 0s linear var(--floew-panel-motion-duration);
+}
+.flora-story-popover.open{
+  opacity:1;
+  visibility:visible;
+  pointer-events:auto;
+  transform:translateY(0) scale(1);
+  transition:
+    opacity var(--floew-panel-motion-duration) ease,
+    transform var(--floew-panel-motion-duration) var(--floew-panel-motion-ease),
+    visibility 0s linear 0s;
+}
+
 /* The hamburger's older safety rules immediately hide its children.
    Keep them visible (but inert) just during the 320ms exit. */
 #control-menu-panel.is-closing,
@@ -6497,6 +6521,7 @@ body{
   #public-stats-panel,
   #source-viewer-panel,
   #about-doc-viewer,
+  .flora-story-popover,
   #time-range-panel,
   .keyword-tool-panel,
   #control-menu-panel{
