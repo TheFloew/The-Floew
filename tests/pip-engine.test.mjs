@@ -228,6 +228,44 @@ test("CORS-safe video ad frames are drawn, not replaced with the old news",async
   assert.ok(f.drawn.some(([type,t])=>type==="text"&&t==="Reklam"));
 });
 
+test("PiP follows a feed replacement even without a transition callback",async()=>{
+  const f=fixture();
+  const a={title:"A",image:"https://cdn.example/a.jpg"};
+  const b={title:"B",image:"https://cdn.example/b.jpg"};
+  f.slides.push(f.makeSlide(a),f.makeSlide(b));
+  f.select(a);
+  await f.ctrl.toggle();await flush();
+  f.select(b);
+  const before=f.drawn.length;
+  f.ctrl.sync();await flush();
+  const next=f.drawn.slice(before);
+  assert.ok(next.some(([kind,text])=>kind==="text"&&text==="B"));
+  assert.ok(next.some(([kind,text])=>kind==="media"&&text==="decoded:"+b.image));
+});
+
+test("ad-to-story transition refuses a stale delayed campaign image",async()=>{
+  const f=fixture({deferImages:true});
+  const story={title:"News",image:"https://cdn.example/news.jpg"};
+  f.slides.push(f.makeSlide(story));
+  f.select(story);
+  await f.ctrl.toggle();
+  const ad={id:"ad",type:"image",src:"https://remote.example/ad.jpg"};
+  f.setBusy(true);
+  f.ctrl.transitionAd(ad);
+  await flush();
+  assert.ok(f.pending.has(ad.src));
+  f.ctrl.transitionStory(story);
+  await flush();
+  await f.load(story.image);
+  const before=f.drawn.length;
+  await f.load(ad.src);
+  f.forward(500);
+  f.ctrl.sync();
+  const tail=f.drawn.slice(before);
+  assert.equal(tail.some(([kind,text])=>kind==="media"&&text==="decoded:"+ad.src),false);
+  assert.ok(tail.some(([kind,text])=>kind==="text"&&text==="News"));
+});
+
 test("manual-only PiP, app integration and script order are retained",()=>{
   assert.match(app,/const floewPiP=window\.FloewPiPEngine/);
   assert.match(app,/reason==="useraction"/);
