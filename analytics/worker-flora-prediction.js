@@ -3815,6 +3815,59 @@ async function enrichAdSummaries(rows, env) {
 
 const SOURCE_REPORT_CACHE = new Map();
 
+const SOURCE_UNKNOWN_LABEL = "Bilinmiyor";
+function sourceDimensionLabel(value) {
+  const label=String(value??"").trim();
+  return !label||/^(unknown|bilinmiyor|\(not set\))$/i.test(label)?SOURCE_UNKNOWN_LABEL:label;
+}
+
+async function sourceDeviceHistory(env, since, devices, dist) {
+  // Only historical or incomplete events need session lookups. Keep the
+  // original aggregate as the baseline, so unmatched or capped rows remain
+  // counted as unknown, never disappear or get counted twice.
+  if(!env.AUDIENCE_DB||!devices.some(r=>sourceDimensionLabel(r.device)===SOURCE_UNKNOWN_LABEL||sourceDimensionLabel(r.browser)===SOURCE_UNKNOWN_LABEL))return;
+  const missing=column=>"(LOWER(TRIM(COALESCE(json_extract(meta_json,'$."+column+"'),''))) IN ('','unknown','bilinmiyor','(not set)'))";
+  const missingDevice=missing("analytics_device_type"),missingBrowser=missing("analytics_browser");
+  const groupLimit=10000,sessionLimit=1800,batchSize=90;
+  let rows;
+  try {
+    rows=await analyticsAll(env.BEHAVIOR_DB.prepare(
+      "SELECT source,session_id, "+missingDevice+" AS missing_device, "+missingBrowser+" AS missing_browser, COUNT(*) AS views "+
+      "FROM behavior_events WHERE occurred_at>=? AND source IS NOT NULL AND TRIM(source)<>'' "+
+      "AND event_type='story_view' AND session_id IS NOT NULL AND TRIM(session_id)<>'' "+
+      "AND ("+missingDevice+" OR "+missingBrowser+") "+
+      "GROUP BY source,session_id,missing_device,missing_browser ORDER BY views DESC LIMIT "+groupLimit
+    ).bind(since));
+  }catch(e){return;}
+  const ids=[...new Set(rows.map(r=>r.session_id).filter(Boolean))].slice(0,sessionLimit);
+  const sessions=new Map();
+  for(let i=0;i<ids.length;i+=batchSize){
+    const batch=ids.slice(i,i+batchSize);
+    try{
+      const found=await analyticsAll(env.AUDIENCE_DB.prepare(
+        "SELECT session_id,device_type,browser FROM sessions WHERE session_id IN ("+batch.map(()=>"?").join(",")+")"
+      ).bind(...batch));
+      for(const row of found)sessions.set(row.session_id,row);
+    }catch(e){break;} // A missing binding/schema/budget must not break the report.
+  }
+  function move(counts,label,views) {
+    label=sourceDimensionLabel(label);
+    if(label===SOURCE_UNKNOWN_LABEL)return;
+    const n=Math.min(views,counts.get(SOURCE_UNKNOWN_LABEL)||0);
+    if(n<=0)return;
+    const left=counts.get(SOURCE_UNKNOWN_LABEL)-n;
+    if(left)counts.set(SOURCE_UNKNOWN_LABEL,left);else counts.delete(SOURCE_UNKNOWN_LABEL);
+    counts.set(label,(counts.get(label)||0)+n);
+  }
+  for(const row of rows){
+    const session=sessions.get(row.session_id),d=dist.get(String(row.source||"").trim());
+    if(!session||!d)continue;
+    const views=Number(row.views)||0;
+    if(Number(row.missing_device))move(d.devices,session.device_type,views);
+    if(Number(row.missing_browser))move(d.browsers,session.browser,views);
+  }
+}
+
 async function sourceStatsReport(env, rangeKey="7d") {
   const range=analyticsRange(rangeKey);
   if(!env.CONTENT_DB||!env.BEHAVIOR_DB)throw Error("CONTENT_DB and BEHAVIOR_DB are required");
@@ -3916,9 +3969,11 @@ async function sourceStatsReport(env, rangeKey="7d") {
     const x=entry(r.source);if(!x)continue;
     if(!dist.has(x.source))dist.set(x.source,{devices:new Map(),browsers:new Map()});
     const d=dist.get(x.source),v=Number(r.views)||0;
-    d.devices.set(r.device,(d.devices.get(r.device)||0)+v);
-    d.browsers.set(r.browser,(d.browsers.get(r.browser)||0)+v);
+    const device=sourceDimensionLabel(r.device),browser=sourceDimensionLabel(r.browser);
+    d.devices.set(device,(d.devices.get(device)||0)+v);
+    d.browsers.set(browser,(d.browsers.get(browser)||0)+v);
   }
+  await sourceDeviceHistory(env,range.since,devices,dist);
   for(const [name,d] of dist){
     const x=entry(name);
     x.devices=[...d.devices].map(([label,views])=>({label,views})).sort((a,b)=>b.views-a.views);
@@ -4010,6 +4065,7 @@ async function sourceStatsReport(env, rangeKey="7d") {
       duration:"Toplam görüntüleme süresi story_leave olaylarından; kişi başına ortalama toplam süre / tekil tanımlayıcı.",
       shares:"Paylaşım eylemi başlatma sayısıdır; platformda başarıyla yayımlandığı doğrulanmaz.",
       flora:"Görüntülenen her farklı haberin Flöra puanının eşit ağırlıklı ortalaması. Çok geniş dönemlerde örneklem sınırı gösterilir.",
+      devices:"Yeni olayların kendi cihaz ve tarayıcı bilgileri önceliklidir. Eksikler aynı oturumdan tamamlanır; eşleşmeyen veya rapor başına 1.800 oturum / 10.000 grup sınırını aşanlar Bilinmiyor kalır.",
       demographics:"Yalnız rıza verilmiş GA4 floew_story_view olayları ve news_source boyutuyla; veri yoksa demografi tahmin edilmez."
     }
   };
@@ -4018,7 +4074,7 @@ async function sourceStatsReport(env, rangeKey="7d") {
 async function sourceStatsCached(env,rangeKey="7d") {
   const range=analyticsRange(rangeKey).key;
   const ttl=range==="all"?2*60*60*1000:range==="24h"?5*60*1000:15*60*1000;
-  const key="31.24.0:private-source-report:"+range;
+  const key="31.24.1:private-source-report:"+range;
   const now=Date.now(),hit=SOURCE_REPORT_CACHE.get(range);
   if(hit?.result&&hit.expires>now)return hit.result;
   if(hit?.pending)return hit.pending;
