@@ -120,7 +120,7 @@ Flöw’de yanlış başlık, yanlış görsel, hatalı bağlantı veya benzeri 
 
 Hak sahibi olduğunuz bir içeriğin Flöw üzerinde gösterilmesiyle ilgili bir talebiniz varsa:
 
-**E-posta:** `icerik@flöw.tr`
+icerik@flöw.tr
 
 adresinden bizimle iletişime geçebilirsiniz.
 
@@ -130,4 +130,4 @@ Talebinizin hızlı değerlendirilebilmesi için ilgili haberin bağlantısını
 
 Her türlü öneri, hata bildirimi, içerik talebi veya diğer konular için:
 
-**E-posta:** `bilgi@flöw.tr`
+bilgi@flöw.tr
