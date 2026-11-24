@@ -10,7 +10,9 @@ const savedScript=read("js/saved-stories.js");
 const index=read("index.html");
 
 test("desktop icon menu aligns to the fullscreen/hamburger axis without moving those buttons",()=>{
-  const tail=styles.slice(styles.indexOf("V31.96 — Araç menüsü ikonları"));
+  const start=styles.indexOf("V31.96 — Araç menüsü ikonları");
+  const end=styles.indexOf("V31.97 — final toolbar reference",start);
+  const tail=styles.slice(start,end);
   assert.ok(tail.length>0);
   assert.match(tail,/@media\(min-width:701px\)\{\s*#control-menu-panel\{/);
   assert.match(tail,/top:calc\(max\(2\.2vh,env\(safe-area-inset-top\)\) \+ 90px\) !important/);
@@ -39,7 +41,9 @@ test("only the icon drawings receive individual optical corrections",()=>{
 });
 
 test("responsive toolbar keeps the existing mobile top anchor and a small gap",()=>{
-  const tail=styles.slice(styles.indexOf("V31.96 — Araç menüsü ikonları"));
+  const start=styles.indexOf("V31.96 — Araç menüsü ikonları");
+  const end=styles.indexOf("V31.97 — final toolbar reference",start);
+  const tail=styles.slice(start,end);
   assert.match(tail,/@media\(max-width:700px\)\{\s*#control-menu-panel\{/);
   assert.match(tail,/right:calc\(max\(2\.2vw,env\(safe-area-inset-right\)\) - 2px\) !important/);
   assert.doesNotMatch(tail,/@media\(max-width:700px\)\{[\s\S]*?top:/);
