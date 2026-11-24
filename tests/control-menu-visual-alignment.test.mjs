@@ -24,7 +24,6 @@ test("only the icon drawings receive individual optical corrections",()=>{
     ["pip-button", "translateX(-1px)"],
     ["time-range-button","translateY(-2px)"],
     ["keyword-filter-button","none"],
-    ["keyword-watch-button","translate(-3px,-6px)"],
     ["info-button","translateX(-3px)"],
     ["menu-button","none"]
   ];
@@ -36,6 +35,7 @@ test("only the icon drawings receive individual optical corrections",()=>{
   assert.match(saved,/transform:translate\(-6px,-12px\)!important/);
   assert.match(saved,/left:calc\(50% - 6px\)/);
   assert.match(saved,/top:calc\(47% - 12px\)/);
+  assert.doesNotMatch(index,/id="keyword-watch-button"/);
 });
 
 test("responsive toolbar keeps the existing mobile top anchor and a small gap",()=>{
@@ -46,8 +46,8 @@ test("responsive toolbar keeps the existing mobile top anchor and a small gap",(
 });
 
 test("all affected stylesheets and saved-story script use fresh URLs",()=>{
-  assert.match(index,/css\/styles\.css\?v=20261124-icon-alignment1/);
-  assert.match(index,/css\/flow-icons\.css\?v=10\.23/);
-  assert.match(index,/js\/saved-stories\.js\?v=21/);
-  assert.match(savedScript,/saved-stories\.css\?v=19/);
+  assert.match(index,/css\/styles\.css\?v=20261124-keyword-screen1/);
+  assert.match(index,/css\/flow-icons\.css\?v=10\.25/);
+  assert.match(index,/js\/saved-stories\.js\?v=22/);
+  assert.match(savedScript,/saved-stories\.css\?v=20/);
 });
