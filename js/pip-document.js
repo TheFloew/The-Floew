@@ -245,10 +245,12 @@
   }
   function offsets(dir){
    const sign=dir<0?-1:1,axis=config.direction();
-   if(axis==="left")return ["translate3d("+(-100*sign)+"%,0,0)","translate3d("+(100*sign)+"%,0,0)"];
-   if(axis==="right")return ["translate3d("+(100*sign)+"%,0,0)","translate3d("+(-100*sign)+"%,0,0)"];
-   if(axis==="down")return ["translate3d(0,"+(100*sign)+"%,0)","translate3d(0,"+(-100*sign)+"%,0)"];
-   return ["translate3d(0,"+(-100*sign)+"%,0)","translate3d(0,"+(100*sign)+"%,0)"];
+   // Match the feed's existing vector: forward/up enters from below,
+   // backward reverses; left/right use the same directional convention.
+   if(axis==="left")return ["translate3d("+(100*sign)+"%,0,0)","translate3d("+(-100*sign)+"%,0,0)"];
+   if(axis==="right")return ["translate3d("+(-100*sign)+"%,0,0)","translate3d("+(100*sign)+"%,0,0)"];
+   if(axis==="down")return ["translate3d(0,"+(-100*sign)+"%,0)","translate3d(0,"+(100*sign)+"%,0)"];
+   return ["translate3d(0,"+(100*sign)+"%,0)","translate3d(0,"+(-100*sign)+"%,0)"];
   }
   function switchTo(item,dir=1,animate=true){
    if(!win||closing)return;
