@@ -6529,3 +6529,21 @@ body{
     animation:none !important;
   }
 }
+
+/* V31.96 — Araç menüsü ikonları: hedef hizalama (görsel 2).
+   Tam ekran ve hamburgerin konumu değişmez. Araç grubu bunların
+   merkez çizgisine 5px yaklaşır; ilk ikon 14px yukarı, takip eden
+   ikonlar ise 16px ritimde dizilir. Geçiş animasyonu korunur. */
+@media(min-width:701px){
+  #control-menu-panel{
+    top:calc(max(2.2vh,env(safe-area-inset-top)) + 82px) !important;
+    right:max(2.2vw,env(safe-area-inset-right)) !important;
+    gap:16px !important;
+  }
+}
+@media(max-width:700px){
+  #control-menu-panel{
+    right:calc(max(2.2vw,env(safe-area-inset-right)) + 1px) !important;
+    gap:12px !important;
+  }
+}
