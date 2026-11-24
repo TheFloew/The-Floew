@@ -7,7 +7,7 @@ const {readFileSync}=require("node:fs");
 const {resolve}=require("node:path");
 const worker=readFileSync(resolve(__dirname,"../analytics/worker-flora-prediction.js"),"utf8")
  .replace(/\bexport\s+default\s*\{/,"const __worker_export__ = {");
-const api=new Function(worker+"\nreturn {sourceStatsReport,sourceReportHtml,calculateFlora};")();
+const api=new Function(worker+"\nreturn {sourceStatsReport,sourceReportHtml,calculateFlora,sourceDeviceHistory};")();
 const name="Örnek <haber> & kaynak";
 function db(kind){
  return {prepare(sql){
@@ -65,5 +65,34 @@ test("Export escapes source text, excludes raw IDs and filters per source",async
  assert.doesNotMatch(html,/>Başka</);
  assert.equal(api.sourceReportHtml(data,"missing"),null);
  assert.ok(api.sourceReportHtml(data,"").includes("Kaynak karşılaştırması"));
+});
+
+test("Historical sessions fill missing dimensions independently, keeping totals and existing metadata",async()=>{
+ const dist=new Map([["A",{devices:new Map([["Bilinmiyor",7],["desktop",3]]),browsers:new Map([["Bilinmiyor",5],["Firefox",5]])}]]);
+ const rows=[
+  {source:"A",session_id:"s1",missing_device:1,missing_browser:1,views:4},
+  {source:"A",session_id:"s2",missing_device:1,missing_browser:0,views:2},
+  {source:"A",session_id:"missing",missing_device:1,missing_browser:1,views:1}
+ ];
+ const mock=results=>({prepare(){return {bind(){return {all:async()=>({results})}}}}});
+ const env={BEHAVIOR_DB:mock(rows),AUDIENCE_DB:mock([
+  {session_id:"s1",device_type:"mobile",browser:"Safari"},
+  {session_id:"s2",device_type:"desktop",browser:"Chrome"}
+ ])};
+ await api.sourceDeviceHistory(env,0,[{device:"Bilinmiyor",browser:"Bilinmiyor"}],dist);
+ const d=dist.get("A");
+ assert.deepEqual(Object.fromEntries(d.devices),{Bilinmiyor:1,desktop:5,mobile:4});
+ assert.deepEqual(Object.fromEntries(d.browsers),{Bilinmiyor:1,Firefox:5,Safari:4});
+ assert.equal([...d.devices.values()].reduce((a,b)=>a+b,0),10);
+ assert.equal([...d.browsers.values()].reduce((a,b)=>a+b,0),10);
+});
+test("No historical queries if event metadata is complete; database failures preserve unknowns",async()=>{
+ const db={prepare(){throw Error("unavailable")}};
+ const d={devices:new Map([["Bilinmiyor",2]]),browsers:new Map([["Bilinmiyor",2]])};
+ const dist=new Map([["A",d]]);
+ await api.sourceDeviceHistory({BEHAVIOR_DB:db,AUDIENCE_DB:db},0,[{device:"desktop",browser:"Firefox"}],dist);
+ await api.sourceDeviceHistory({BEHAVIOR_DB:db,AUDIENCE_DB:db},0,[{device:"unknown",browser:""}],dist);
+ assert.equal(d.devices.get("Bilinmiyor"),2);
+ assert.equal(d.browsers.get("Bilinmiyor"),2);
 });
 })();
