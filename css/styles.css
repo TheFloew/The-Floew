@@ -6477,6 +6477,18 @@ body{
     visibility 0s linear 0s;
 }
 
+/* The hamburger's older safety rules immediately hide its children.
+   Keep them visible (but inert) just during the 320ms exit. */
+#control-menu-panel.is-closing,
+#control-menu-panel.is-closing .control-menu-item{
+  visibility:visible !important;
+  pointer-events:none !important;
+}
+#control-menu-panel.is-closing{
+  opacity:0;
+  transform:translateY(8px) scale(.985);
+}
+
 @media(prefers-reduced-motion:reduce){
   #menu-overlay,
   #stats-overlay,
