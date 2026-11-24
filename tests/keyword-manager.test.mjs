@@ -175,3 +175,69 @@ test("opening and closing both screens resumes the same pause coordinator",()=>{
   assert.match(part,/closeControlMenu\(\)/);
   assert.match(part,/trapToolScreenFocus/);
 });
+
+
+test("fullscreen screens really open/close and request feed pause/resume",()=>{
+  const begin=app.indexOf("function closeTimeRangePanel(){");
+  const end=app.indexOf("/* Keyboard users can navigate all three columns",begin);
+  assert.ok(begin>=0 && end>begin);
+  const source=app.slice(begin,end);
+  const node=()=>{
+    const classes=new Set(),attributes=new Map([["aria-hidden","true"],["inert",""]]);
+    return {
+      classes,attributes,
+      classList:{
+        contains:value=>classes.has(value),
+        add:value=>classes.add(value),
+        remove:value=>classes.delete(value)
+      },
+      setAttribute:(key,value)=>attributes.set(key,value),
+      removeAttribute:key=>attributes.delete(key),
+      focus(){}
+    };
+  };
+  const elements={
+    "time-range-panel":node(),
+    "keyword-filter-panel":node(),
+    "time-range-close":node(),
+    "keyword-filter-close":node(),
+    "keyword-filter-input":{value:"draft",focus(){}}
+  };
+  let pauses=0,resumeChecks=0,closedMenus=0;
+  const ctx={
+    document:{getElementById:id=>elements[id]||null},
+    window:{matchMedia:()=>({matches:false})},
+    pauseFlowForUi:()=>{pauses++},
+    closeFloraPopover(){},
+    closeMenu(){},
+    closeStatsOverlay(){},
+    closeControlMenu(){closedMenus++},
+    renderTimeRangeControl(){},
+    renderKeywordFilterControl(){},
+    setKeywordManagerFeedback(){},
+    showFullscreenButton(){},
+    queueUiFlowResumeCheck(){resumeChecks++},
+    iddqdModeActive:false
+  };
+  const api=runInNewContext(source+
+    "\n;({openTimeRangePanel,closeTimeRangePanel,openKeywordFilterPanel,closeKeywordFilterPanel})",ctx);
+
+  api.openTimeRangePanel();
+  assert.equal(pauses,1);
+  assert.equal(closedMenus,1);
+  assert.equal(elements["time-range-panel"].classes.has("open"),true);
+  assert.equal(elements["time-range-panel"].attributes.has("inert"),false);
+
+  api.openKeywordFilterPanel();
+  assert.equal(pauses,2);
+  assert.equal(elements["time-range-panel"].classes.has("open"),false);
+  assert.equal(elements["keyword-filter-panel"].classes.has("open"),true);
+  assert.equal(elements["keyword-filter-input"].value,"");
+  assert.equal(elements["keyword-filter-panel"].attributes.has("inert"),false);
+
+  api.closeKeywordFilterPanel();
+  assert.equal(elements["keyword-filter-panel"].classes.has("open"),false);
+  assert.equal(elements["keyword-filter-panel"].attributes.get("aria-hidden"),"true");
+  assert.equal(elements["keyword-filter-panel"].attributes.has("inert"),true);
+  assert.ok(resumeChecks>=2);
+});
