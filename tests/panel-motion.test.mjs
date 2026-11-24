@@ -18,7 +18,7 @@ test("Preferences is the common duration and easing reference for all opening sc
   for(const selector of [
     "#menu-overlay","#stats-overlay","#source-viewer-overlay",
     "#settings-menu","#public-stats-panel","#source-viewer-panel",
-    "#about-doc-viewer","#time-range-panel",
+    "#about-doc-viewer",".flora-story-popover","#time-range-panel",
     ".keyword-tool-panel","#control-menu-panel"
   ]){
     assert.ok(styles.slice(styles.indexOf("Flöw panel motion standard")).includes(selector),selector);
@@ -48,6 +48,14 @@ test("Saved and visual-share dialogs do not hide their pixels before the exit co
   assert.match(share,/clearTimeout\(overlayExitTimer\)/);
   assert.match(saved,/panel\.setAttribute\("inert",""\)/);
   assert.match(share,/overlay\.setAttribute\("inert",""\)/);
+});
+
+test("Flöra popover preserves its fade and ignores late data after closing",()=>{
+  assert.match(app,/let floraPopoverExitTimer=null/);
+  assert.match(app,/popover\.classList\.remove\("open"\)/);
+  assert.match(app,/popover\.classList\.add\("open"\)/);
+  assert.match(app,/!floraPopoverOpen \|\|/);
+  assert.match(styles,/\.flora-story-popover\.open\{[\s\S]*?opacity:1/);
 });
 
 test("Source iframe survives the closing fade but is cleared afterwards",()=>{
