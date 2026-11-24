@@ -1842,17 +1842,24 @@ function renderFloraPopover(popover,story,stats){
   }
 }
 
+let floraPopoverExitTimer=null;
+
 function closeFloraPopover({resume=true}={}){
   const popover=document.getElementById("flora-story-popover");
-  if(!popover || popover.hidden)return;
+  if(!popover || popover.hidden || popover.getAttribute("aria-hidden")==="true")return;
 
-  popover.hidden=true;
+  popover.classList.remove("open");
   popover.style.visibility="";
+  popover.setAttribute("aria-hidden","true");
   floraPopoverOpen=false;
 
-  if(resume){
-    queueUiFlowResumeCheck();
-  }
+  clearTimeout(floraPopoverExitTimer);
+  const reduced=window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  floraPopoverExitTimer=setTimeout(()=>{
+    if(popover.classList.contains("open"))return;
+    popover.hidden=true;
+    if(resume)queueUiFlowResumeCheck();
+  },reduced?0:340);
 }
 
 async function loadFloraStoryStats(story,{force=false}={}){
@@ -1937,11 +1944,15 @@ async function openFloraPopover(anchor,story){
   floraPopoverOpen=true;
 
   const popover=ensureFloraPopover();
+  clearTimeout(floraPopoverExitTimer);
+  popover.setAttribute("aria-hidden","false");
   popover.dataset.storyKey=storyIdentity(story);
 
   const cached=floraStatsMap.get(storyIdentity(story))||null;
   renderFloraPopover(popover,story,cached);
   positionFloraPopover(popover,anchor);
+  void popover.offsetWidth;
+  popover.classList.add("open");
 
   if(story.customRss){
     const statusEl=popover.querySelector(".flora-story-popover-status");
@@ -1952,6 +1963,7 @@ async function openFloraPopover(anchor,story){
   const stats=await loadFloraStoryStats(story,{force:!cached});
 
   if(
+    !floraPopoverOpen ||
     popover.hidden ||
     popover.dataset.storyKey!==storyIdentity(story)
   )return;
@@ -13497,11 +13509,21 @@ function activateAboutTab(name="stats",{load=true}={}){
 }
 
 
+let controlMenuExitTimer=null;
+
 function closeControlMenu(){
   controlMenuOpen=false;
   const panel=document.getElementById("control-menu-panel");
   const button=document.getElementById("control-menu-button");
+  const wasOpen=Boolean(panel?.classList.contains("open"));
   panel?.classList.remove("open");
+  if(wasOpen){
+    // Keep icon glyphs visible during the fade even though hit-testing stops.
+    panel.classList.add("is-closing");
+    clearTimeout(controlMenuExitTimer);
+    const reduced=window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    controlMenuExitTimer=setTimeout(()=>panel.classList.remove("is-closing"),reduced?0:340);
+  }
   panel?.setAttribute("aria-hidden","true");
   panel?.setAttribute("inert","");
   button?.classList.remove("open");
@@ -13518,6 +13540,8 @@ function openControlMenu(){
   controlMenuOpen=true;
   const panel=document.getElementById("control-menu-panel");
   const button=document.getElementById("control-menu-button");
+  clearTimeout(controlMenuExitTimer);
+  panel?.classList.remove("is-closing");
   panel?.classList.add("open");
   panel?.setAttribute("aria-hidden","false");
   panel?.removeAttribute("inert");
@@ -14286,6 +14310,8 @@ function setSourceViewerFrame(articleUrl,{direct=false}={}){
   return true;
 }
 
+let sourceViewerExitTimer=null;
+
 function openSourceViewer(articleUrl,sourceName="",options={}){
   const safe=String(articleUrl||"").trim();
   if(!/^https?:\/\//i.test(safe))return false;
@@ -14294,6 +14320,7 @@ function openSourceViewer(articleUrl,sourceName="",options={}){
     pauseFlowForSourceViewer();
   }
 
+  clearTimeout(sourceViewerExitTimer);
   sourceViewerOpen=true;
   uiFlowPauseActive=false;
   uiFlowPauseRemainingMs=0;
@@ -14357,7 +14384,15 @@ function closeSourceViewer(){
   overlay?.setAttribute("aria-hidden","true");
   document.body.classList.remove("source-viewer-open");
 
-  if(frame)frame.src="about:blank";
+  // Preserve the last iframe frame while the Preferences-style exit fades.
+  // A quick reopen cancels the pending cleanup, avoiding a blank new viewer.
+  if(frame){
+    clearTimeout(sourceViewerExitTimer);
+    const reduced=window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    sourceViewerExitTimer=setTimeout(()=>{
+      if(!sourceViewerOpen)frame.src="about:blank";
+    },reduced?0:340);
+  }
   if(external){
     external.hidden=false;
     external.removeAttribute("aria-hidden");

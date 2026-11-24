@@ -8,6 +8,7 @@
   const SHORT_RE=/^https:\/\/(?:flöw\.tr|xn--flw-tna\.tr)\/s\/[A-Za-z0-9_-]+\/?$/i;
   let overlay=null,canvas=null,visualButton=null,linkButton=null,status=null;
   let current=null,buildSerial=0,focusBefore=null;
+  let overlayExitTimer=null;
 
   function el(selector,root=document){return root.querySelector(selector);}
   function textStatus(message,error){
@@ -23,6 +24,7 @@
     overlay.className="floew-visual-share";
     overlay.hidden=true;
     overlay.setAttribute("aria-hidden","true");
+    overlay.setAttribute("inert","");
     overlay.innerHTML=[
       '<section class="floew-visual-share-dialog" role="dialog" aria-modal="true" aria-labelledby="floew-visual-share-title">',
       '<header class="floew-visual-share-header">',
@@ -99,14 +101,21 @@
   }
 
   function close(){
-    if(!overlay || overlay.hidden)return;
+    if(!overlay || overlay.hidden || overlay.getAttribute("aria-hidden")==="true")return;
     buildSerial++;
-    overlay.hidden=true;
+    overlay.classList.remove("open");
     overlay.setAttribute("aria-hidden","true");
+    overlay.setAttribute("inert","");
     document.body.classList.remove("floew-visual-share-open");
-    if(typeof window.queueUiFlowResumeCheck==="function")window.queueUiFlowResumeCheck();
     if(focusBefore?.isConnected)focusBefore.focus();
     current=null;
+    clearTimeout(overlayExitTimer);
+    const reduced=window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    overlayExitTimer=setTimeout(()=>{
+      if(overlay?.classList.contains("open"))return;
+      overlay.hidden=true;
+      if(typeof window.queueUiFlowResumeCheck==="function")window.queueUiFlowResumeCheck();
+    },reduced?0:340);
   }
 
   function image(url,timeoutMs=6500){
@@ -447,12 +456,16 @@
     if(!story){return false;}
     ensure();
     if(!overlay.hidden)close();
+    clearTimeout(overlayExitTimer);
     focusBefore=document.activeElement;
     current={button,story,blob:null,file:null,canNativeShare:false};
     const serial=++buildSerial;
     overlay.hidden=false;
+    overlay.removeAttribute("inert");
     overlay.setAttribute("aria-hidden","false");
     document.body.classList.add("floew-visual-share-open");
+    void overlay.offsetWidth;
+    overlay.classList.add("open");
     if(typeof window.pauseFlowForUi==="function")window.pauseFlowForUi();
     reset();
     el(".floew-visual-share-close",overlay).focus();

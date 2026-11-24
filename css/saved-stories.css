@@ -259,3 +259,33 @@
   align-self:center!important;
   margin-top:0!important;
 }
+
+
+/* Same open/close motion as #menu-overlay / #settings-menu. */
+.floew-saved-overlay{
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  transition:
+    opacity var(--floew-panel-motion-duration,.32s) ease,
+    visibility 0s linear var(--floew-panel-motion-duration,.32s);
+}
+.floew-saved-overlay.open{
+  opacity:1;
+  visibility:visible;
+  pointer-events:auto;
+  transition:
+    opacity var(--floew-panel-motion-duration,.32s) ease,
+    visibility 0s linear 0s;
+}
+.floew-saved-panel{
+  transform:translateY(8px) scale(.985);
+  transform-origin:center top;
+  transition:transform var(--floew-panel-motion-duration,.32s) var(--floew-panel-motion-ease,cubic-bezier(.22,.61,.36,1));
+}
+.floew-saved-overlay.open .floew-saved-panel{
+  transform:translateY(0) scale(1);
+}
+@media(prefers-reduced-motion:reduce){
+  .floew-saved-overlay,.floew-saved-panel{transition:none !important}
+}

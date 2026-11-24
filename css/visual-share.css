@@ -137,3 +137,33 @@
   .floew-visual-share-action{flex:1;padding:11px 8px;font-size:10px}
   .floew-visual-share-note,.floew-visual-share-status{font-size:10px}
 }
+
+
+/* Same open/close motion as Preferences, including exit. */
+.floew-visual-share{
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  transition:
+    opacity var(--floew-panel-motion-duration,.32s) ease,
+    visibility 0s linear var(--floew-panel-motion-duration,.32s);
+}
+.floew-visual-share.open{
+  opacity:1;
+  visibility:visible;
+  pointer-events:auto;
+  transition:
+    opacity var(--floew-panel-motion-duration,.32s) ease,
+    visibility 0s linear 0s;
+}
+.floew-visual-share-dialog{
+  transform:translateY(8px) scale(.985);
+  transform-origin:center top;
+  transition:transform var(--floew-panel-motion-duration,.32s) var(--floew-panel-motion-ease,cubic-bezier(.22,.61,.36,1));
+}
+.floew-visual-share.open .floew-visual-share-dialog{
+  transform:translateY(0) scale(1);
+}
+@media(prefers-reduced-motion:reduce){
+  .floew-visual-share,.floew-visual-share-dialog{transition:none !important}
+}
