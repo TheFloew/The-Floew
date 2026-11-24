@@ -6547,3 +6547,15 @@ body{
     gap:8px !important;
   }
 }
+
+
+/* V31.97 — final toolbar reference, 24 Nov.
+   Keep the fullscreen/menu anchor and existing icon optical offsets.
+   After the smaller bookmark + About glyphs, tighten only the bottom
+   gaps; touch targets and Preferences-style transitions stay intact. */
+#control-menu-panel #info-button{
+  margin-top:-6px !important;
+}
+#control-menu-panel #menu-button{
+  margin-top:-2px !important;
+}
