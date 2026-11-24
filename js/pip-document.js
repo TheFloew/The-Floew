@@ -132,6 +132,16 @@
    if(frame&&http(frame.src))return {kind:"iframe",src:http(frame.src)};
    const daily=slide?.querySelector(".slide-dailymotion.media-visible iframe");
    if(daily&&http(daily.src))return {kind:"iframe",src:http(daily.src)};
+   // The Dailymotion SDK sometimes owns its iframe outside the host DOM.
+   // Use the exact video/player IDs supplied by the active Flöw player.
+   const host=slide?.querySelector(".slide-dailymotion.media-visible");
+   const playerId=String(host?.dataset?.dailymotionPlayerId||"");
+   const videoId=String(host?.dataset?.dailymotionVideoId||"");
+   if(/^[A-Za-z0-9_-]+$/.test(playerId)&&/^[A-Za-z0-9_-]+$/.test(videoId)){
+    const url="https://geo.dailymotion.com/player/"+playerId+
+      ".html?video="+encodeURIComponent(videoId)+"&mute=true";
+    return {kind:"iframe",src:url};
+   }
    return null;
   }
   function cleanupMedia(entry){
