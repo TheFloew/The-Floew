@@ -22,6 +22,14 @@
 
 ## YAYIMLANMAMIŞ DEĞİŞİKLİKLER
 
+### [PROTOTİP] Document PiP ve canlı medya düzeltmesi | 24 Kasım 2026
+- **PiP animasyonu:** Desteklenen tarayıcılarda Canvas kare yakalama yerine gerçek Document Picture-in-Picture penceresi ve tarayıcının CSS/Web Animations geçişleri kullanılıyor. Böylece arka sekmedeki Canvas kare/sayaç kısıtlaması kritik yolun dışına alındı.
+- **Video haberler:** PiP penceresi HTML5 videoları, HLS akışlarını (mevcut Hls.js çözücüsüyle), YouTube/Vimeo iframe'lerini ve uygun Dailymotion Player ID'si olan içerikleri doğrudan gösterebiliyor. Video yüklenirken haber kapağı korunuyor.
+- **Video reklamlar:** Video reklam URL'si PiP içinde bağımsız HTMLVideoElement ile oynatılıyor; görseli Canvas'a çizme zorunluluğu kaldırıldı. Reklam ibaresi üst katmanda kalıyor.
+- **Geç görseller:** Henüz ana akışta yüklenmemiş görseller için haberin başlangıç görseli gösteriliyor; ana görsel tamamlandığında aynı PiP kartında yeni görsele geçiliyor. Tek haberin eski çözülmüş görseli yenisi yüklenirken tutuluyor.
+- **Uyumluluk:** Document PiP desteklenmeyen tarayıcılarda klasik PiP motoru korunuyor. Klasik motorda beklenen görselin ilk URL'si, geçiş başına FPS ve arka sekmede animasyon tamamlanması iyileştirildi.
+- **Korunan davranış:** PiP kendi haber/reklam seçimini yapmıyor; manuel açılış, BaitBuster ve Flöra ile ana haber akışının mevcut mantığı değiştirilmedi. Gerçek tarayıcıda özellikle video reklamlar, harici oynatıcılar ve görünürlük geçişleri merge sonrasında test edilmeli.
+
 ### [PROTOTİP] PiP eşzamanlılık ve performans motoru v2 | 24 Kasım 2026
 - PiP bağımsız haber/görsel seçme mekanizmasından ayrıldı; akışın güncel haber veya reklam kimliğini tek doğruluk kaynağı kabul eder.
 - Haber resminde doğrudan RSS'deki ilk görsel yerine ana ekrana başarıyla yüklenmiş gerçek görselin URL'si izlenir. Eski haber görseli hiçbir durumda yeni habere yedeklenmez.

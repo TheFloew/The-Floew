@@ -10958,6 +10958,26 @@ cursorHideTimer=setTimeout(()=>{
 },2000);
 
 
+/* Prefer a real Document Picture-in-Picture window when available.
+   This renders actual HTML images/video, without canvas frame throttling. */
+const floewDocumentPiP=window.FloewDocumentPiP?.create?.({
+  slides,
+  adImage,
+  adVideo,
+  imageProxyBase:IMAGE_PROXY_API,
+  storyKey:mediaKey,
+  initialStoryImage:storyInitialImageUrl,
+  storyImageProxy:storyImageProxyUrl,
+  ensureHlsLibrary,
+  currentStory:()=>state.stories[state.index]||null,
+  currentAd:()=>adActive && adHasEntered ? currentAd : null,
+  isBusy:()=>state.busy,
+  isAdEntering:()=>adActive && !adHasEntered,
+  direction:()=>transitionDirection,
+  reducedMotion:()=>window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches||false,
+  status
+})||null;
+
 /* PiP v2 is presentation-only: the active feed and ad player remain the
    single source of truth. No independent story selection or media timeline. */
 const floewPiP=window.FloewPiPEngine?.create?.({
@@ -10965,6 +10985,7 @@ const floewPiP=window.FloewPiPEngine?.create?.({
   adImage,
   adVideo,
   imageProxyBase:IMAGE_PROXY_API,
+  initialStoryImage:storyInitialImageUrl,
   storyKey:mediaKey,
   currentStory:()=>state.stories[state.index]||null,
   currentAd:()=>adActive && adHasEntered ? currentAd : null,
@@ -10975,17 +10996,18 @@ const floewPiP=window.FloewPiPEngine?.create?.({
 })||null;
 
 function startPiPTransition(_fromStory,toStory,dir=1){
-  floewPiP?.transitionStory(toStory,dir);
+  if(floewDocumentPiP?.isActive())floewDocumentPiP.transitionStory(toStory,dir);
+  else floewPiP?.transitionStory(toStory,dir);
 }
 function startPiPAdTransition(ad,dir=1){
-  floewPiP?.transitionAd(ad,dir);
+  if(floewDocumentPiP?.isActive())floewDocumentPiP.transitionAd(ad,dir);
+  else floewPiP?.transitionAd(ad,dir);
 }
 function togglePiP(){
-  if(!floewPiP){
-    status("Picture-in-Picture yüklenemedi. Sayfayı yenileyip yeniden deneyin.");
-    return Promise.resolve(false);
-  }
-  return floewPiP.toggle();
+  if(floewDocumentPiP?.supported())return floewDocumentPiP.toggle();
+  if(floewPiP)return floewPiP.toggle();
+  status("Picture-in-Picture yüklenemedi. Sayfayı yenileyip yeniden deneyin.");
+  return Promise.resolve(false);
 }
 
 /* Only explicit user action can request PiP; tab switching stays passive. */
@@ -11003,7 +11025,7 @@ installManualOnlyPiPHandler();
 /* Start the silent media stream on pointerdown, before click, so that the
    native request does not wait for image downloads or a cold video element. */
 document.getElementById("pip-button")?.addEventListener("pointerdown",()=>{
-  floewPiP?.warm();
+  if(!floewDocumentPiP?.supported())floewPiP?.warm();
 });
 
 function isExactIddqdInput(value=""){

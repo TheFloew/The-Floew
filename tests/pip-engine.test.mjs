@@ -271,7 +271,7 @@ test("manual-only PiP, app integration and script order are retained",()=>{
   assert.match(app,/reason==="useraction"/);
   assert.match(app,/function startPiPTransition\(_fromStory,toStory,dir=1\)/);
   assert.match(app,/function startPiPAdTransition\(ad,dir=1\)/);
-  const enginePos=html.indexOf('src="js/pip-engine.js?v=2"');
+  const enginePos=html.indexOf('src="js/pip-engine.js?v=3"');
   const appPos=html.indexOf('src="js/app.js?v=');
   assert.ok(enginePos>=0 && appPos>enginePos);
   assert.doesNotMatch(app,/pipCurrent\?\.image\s*\|\|\s*null/);
