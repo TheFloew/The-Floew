@@ -10985,6 +10985,7 @@ const floewPiP=window.FloewPiPEngine?.create?.({
   adImage,
   adVideo,
   imageProxyBase:IMAGE_PROXY_API,
+  initialStoryImage:storyInitialImageUrl,
   storyKey:mediaKey,
   currentStory:()=>state.stories[state.index]||null,
   currentAd:()=>adActive && adHasEntered ? currentAd : null,
