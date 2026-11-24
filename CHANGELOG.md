@@ -22,7 +22,16 @@
 
 ## YAYIMLANMAMIŞ DEĞİŞİKLİKLER
 
-*Henüz yeni bir sürüme alınmış değişiklik kaydı yok.*
+### [PROTOTİP] Flüsh Kaynak İstatistikleri | 24 Kasım 2026
+- Analytics altında **Haber Kaynakları** yönetim ekranı, kaynak arama/sıralama ve kaynak ayrıntıları.
+- Kaynak bazında görüntülenen farklı haber, gösterim, anonim tekil erişim, toplam ve kişi başına görüntüleme süresi, eşit ağırlıklı ortalama Flöra, paylaşım eylemleri, cihaz/tarayıcı dağılımları.
+- Tüm kaynakların veya tek bir kaynağın bağımsız HTML rapor olarak indirilmesi.
+- Kaynak bazlı yaş/cinsiyet verisi için rızalı GA4 `floew_story_view` olayı ve `news_source` özel boyutu; eksik/eşiklenmiş veri açıkça gösterilir.
+- Eski cihaz/tarayıcı olaylarında eksik veriler **Bilinmiyor** olarak belirtilir; geçmişe dönük uydurma yapılmaz.
+- Yetkilendirilmiş `/admin/sources` ve `/admin/source-report` uçları, mevcut özel D1 rapor önbelleğine bağlıdır.
+- **Canlıya alınmadı:** Flüsh, News Web ve Analytics Worker dağıtımları ile Flüsh proxy erişimi ve GA4 boyut kurulumu doğrulanmalı.
+
+
 
 ---
 
