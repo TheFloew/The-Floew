@@ -3988,13 +3988,23 @@ async function sourceStatsReport(env, rangeKey="7d") {
 async function sourceStatsCached(env,rangeKey="7d") {
   const range=analyticsRange(rangeKey).key;
   const ttl=range==="all"?2*60*60*1000:range==="24h"?5*60*1000:15*60*1000;
-  const hit=SOURCE_REPORT_CACHE.get(range),now=Date.now();
-  if(hit&&hit.expires>now)return hit.result;
+  const key="31.24.0:private-source-report:"+range;
+  const now=Date.now(),hit=SOURCE_REPORT_CACHE.get(range);
+  if(hit?.result&&hit.expires>now)return hit.result;
   if(hit?.pending)return hit.pending;
-  const pending=sourceStatsReport(env,range).then(result=>{
-    SOURCE_REPORT_CACHE.set(range,{result,expires:Date.now()+ttl});
+  const pending=(async()=>{
+    // Reuse the existing private Behavior D1 snapshot table. A cold isolate
+    // must not rescan all historical events just to render the same report.
+    const durable=await analyticsBehaviorSnapshotRead(env,key,range,ttl);
+    if(durable){
+      SOURCE_REPORT_CACHE.set(range,{result:durable.data,expires:durable.expiresAt});
+      return durable.data;
+    }
+    const result=await sourceStatsReport(env,range);
+    await analyticsBehaviorSnapshotWrite(env,key,result,ttl);
+    SOURCE_REPORT_CACHE.set(range,{result,expires:result.generatedAt+ttl});
     return result;
-  }).catch(e=>{SOURCE_REPORT_CACHE.delete(range);throw e});
+  })().catch(e=>{SOURCE_REPORT_CACHE.delete(range);throw e});
   SOURCE_REPORT_CACHE.set(range,{pending,expires:0});
   return pending;
 }
