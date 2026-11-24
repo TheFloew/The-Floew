@@ -69,13 +69,13 @@ test("Source iframe survives the closing fade but is cleared afterwards",()=>{
 
 test("All new motion assets have fresh HTML version parameters",()=>{
   for(const version of [
-    "20261124-panel-motion1","visual-share.css?v=2",
-    "visual-share.js?v=7","saved-stories.js?v=20",
-    "panel-motion1"
+    "20261124-keyword-screen1","visual-share.css?v=2",
+    "visual-share.js?v=7","saved-stories.js?v=22",
+    "keywords-screen1"
   ]){
     assert.ok(html.includes(version),version);
   }
-  assert.match(saved,/saved-stories\.css\?v=18/);
+  assert.match(saved,/saved-stories\.css\?v=20/);
 });
 
 test("Saved dialog preserves closing fade, keeps navigation blocked, and can reopen mid-exit",()=>{

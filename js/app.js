@@ -49,6 +49,7 @@ const ALGO_TOP_CANDIDATES=12;
 const ALGO_SESSION_SEED=`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`;
 const KEYWORD_FILTER_KEY="thefloew.keywordFilter.v1";
 const KEYWORD_WATCH_KEY="thefloew.keywordWatch.v1";
+const KEYWORD_RULES_KEY="thefloew.keywordRules.v2";
 const WEATHER_PREFS_KEY="thefloew.weather.v1";
 const VIDEO_AUDIO_DEFAULT_KEY="thefloew.videoAudioDefault.v1";
 const FX_RATES_VISIBLE_KEY="thefloew.fxRatesVisible.v1";
@@ -2194,56 +2195,77 @@ function parseKeywordList(value){
   )];
 }
 
-function loadKeywordFilterState(){
-  try{
-    const saved=JSON.parse(
-      localStorage.getItem(KEYWORD_FILTER_KEY)||"{}"
-    );
+/* Preserve how users wrote their words in the interface; matching remains
+   case/accent insensitive through parseKeywordList / normalizeText. */
+function parseKeywordEntries(value){
+  const seen=new Set();
+  const entries=[];
+  const source=Array.isArray(value)?value:String(value||"").split(/[,\n;]+/);
 
-    const mode=
-      saved?.mode==="show" || saved?.mode==="hide"
-        ? saved.mode
-        : "off";
-
-    return {
-      text:String(saved?.text||""),
-      mode
-    };
-  }catch(e){
-    return {text:"",mode:"off"};
+  for(const item of source){
+    const word=String(item||"").trim().slice(0,100);
+    const key=normalizeText(word).trim();
+    if(!key || seen.has(key))continue;
+    seen.add(key);
+    entries.push(word);
+    if(entries.length>=120)break;
   }
+  return entries;
 }
 
-function saveKeywordFilterState(){
+function loadKeywordFilterState(){
   try{
-    localStorage.setItem(
-      KEYWORD_FILTER_KEY,
-      JSON.stringify(keywordFilterState)
-    );
-  }catch(e){}
+    const saved=JSON.parse(localStorage.getItem(KEYWORD_FILTER_KEY)||"{}");
+    return {
+      text:String(saved?.text||""),
+      mode:saved?.mode==="show" || saved?.mode==="hide" ? saved.mode : "off"
+    };
+  }catch(e){return {text:"",mode:"off"};}
 }
 
 function loadKeywordWatchText(){
+  try{return String(localStorage.getItem(KEYWORD_WATCH_KEY)||"");}
+  catch(e){return "";}
+}
+
+function loadKeywordRules(){
   try{
-    return String(
-      localStorage.getItem(KEYWORD_WATCH_KEY)||""
-    );
+    const saved=localStorage.getItem(KEYWORD_RULES_KEY);
+    if(saved!==null){
+      const parsed=JSON.parse(saved);
+      if(parsed && typeof parsed==="object" &&
+         Array.isArray(parsed.show) && Array.isArray(parsed.hide) &&
+         Array.isArray(parsed.alert)){
+        const show=parseKeywordEntries(parsed.show);
+        const hide=parseKeywordEntries(parsed.hide).filter(word=>
+          !show.some(item=>normalizeText(item)===normalizeText(word))
+        );
+        return {show,hide,alert:parseKeywordEntries(parsed.alert)};
+      }
+    }
+  }catch(e){}
+
+  /* Existing devices and exported v1 backups retain their words. */
+  const legacy=loadKeywordFilterState();
+  const legacyWords=parseKeywordEntries(legacy.text);
+  return {
+    show:legacy.mode==="show"?legacyWords:[],
+    hide:legacy.mode==="hide"?legacyWords:[],
+    alert:parseKeywordEntries(loadKeywordWatchText())
+  };
+}
+
+let keywordRules=loadKeywordRules();
+
+function saveKeywordRules(){
+  try{
+    localStorage.setItem(KEYWORD_RULES_KEY,JSON.stringify(keywordRules));
+    return true;
   }catch(e){
-    return "";
+    console.warn("Keyword rules could not be saved:",e);
+    return false;
   }
 }
-
-function saveKeywordWatchText(){
-  try{
-    localStorage.setItem(
-      KEYWORD_WATCH_KEY,
-      keywordWatchText
-    );
-  }catch(e){}
-}
-
-let keywordFilterState=loadKeywordFilterState();
-let keywordWatchText=loadKeywordWatchText();
 
 function storyKeywordText(story){
   return normalizeText([
@@ -2266,29 +2288,16 @@ function storyMatchesKeywords(story,keywords){
 }
 
 function passesKeywordFilter(story){
-  const keywords=parseKeywordList(
-    keywordFilterState.text
-  );
-
-  if(
-    keywordFilterState.mode==="off" ||
-    !keywords.length
-  ){
-    return true;
-  }
-
-  const matched=storyMatchesKeywords(
-    story,
-    keywords
-  );
-
-  return keywordFilterState.mode==="show"
-    ? matched
-    : !matched;
+  const shown=parseKeywordList(keywordRules.show.join(","));
+  const hidden=parseKeywordList(keywordRules.hide.join(","));
+  // Whitelist and blacklist work together, rather than replacing one another.
+  if(shown.length && !storyMatchesKeywords(story,shown))return false;
+  if(hidden.length && storyMatchesKeywords(story,hidden))return false;
+  return true;
 }
 
 function currentKeywordWatchKeywords(){
-  return parseKeywordList(keywordWatchText);
+  return parseKeywordList(keywordRules.alert.join(","));
 }
 
 function updateKeywordAlert(story){
@@ -2523,15 +2532,14 @@ function emptyStoriesMessage(){
     return "Seçtiğiniz filtrelerde videolu haber bulunamadı.";
   }
 
-  const keywordCount=
-    parseKeywordList(keywordFilterState.text).length;
-
-  if(keywordCount && keywordFilterState.mode==="show"){
-    return "Anahtar kelime filtresine uyan haber bulunamadı.";
+  if(keywordRules.show.length && keywordRules.hide.length){
+    return "Gösterilen ve gizlenen anahtar kelimelere uygun haber bulunamadı.";
   }
-
-  if(keywordCount && keywordFilterState.mode==="hide"){
-    return "Anahtar kelime filtresi sonrası gösterilecek haber kalmadı.";
+  if(keywordRules.show.length){
+    return "Gösterilen anahtar kelimelere uygun haber bulunamadı.";
+  }
+  if(keywordRules.hide.length){
+    return "Gizlenen kelimeler nedeniyle gösterilecek haber kalmadı.";
   }
 
   if(feedMode==="breaking"){
@@ -7833,7 +7841,7 @@ function pauseFlowForMouseMovement(){
     Tercihler açıkken akış zaten UI duraklatma koordinatörü tarafından
     tutulur; menü içindeki fare hareketleri ayrıca bir pause başlatmasın.
   */
-  if(document.getElementById("menu-overlay")?.classList.contains("open")){
+  if(uiFlowPauseActive || anyUiPauseSurfaceOpen()){
     return;
   }
 
@@ -10875,7 +10883,6 @@ function anyControlPanelOpen(){
     document.getElementById("control-menu-panel")?.classList.contains("open") ||
     document.getElementById("time-range-panel")?.classList.contains("open") ||
     document.getElementById("keyword-filter-panel")?.classList.contains("open") ||
-    document.getElementById("keyword-watch-panel")?.classList.contains("open") ||
     document.getElementById("stats-overlay")?.classList.contains("open") ||
     document.getElementById("source-viewer-overlay")?.classList.contains("open") ||
     document.getElementById("menu-overlay")?.classList.contains("open")
@@ -10890,7 +10897,6 @@ function navigationBlockingPanelOpen(){
   return Boolean(
     document.getElementById("time-range-panel")?.classList.contains("open") ||
     document.getElementById("keyword-filter-panel")?.classList.contains("open") ||
-    document.getElementById("keyword-watch-panel")?.classList.contains("open") ||
     document.getElementById("stats-overlay")?.classList.contains("open") ||
     document.getElementById("source-viewer-overlay")?.classList.contains("open")
   );
@@ -11918,64 +11924,188 @@ function runTrustedKeywordFilterButtonAction(mode,event){
   }
 }
 
+function setKeywordManagerFeedback(message){
+  const feedback=document.getElementById("keyword-manager-feedback");
+  if(feedback)feedback.textContent=message ||
+    "Birden fazla kelimeyi virgülle ayırarak ekleyebilirsiniz.";
+}
+
+function renderKeywordColumn(kind,title){
+  const list=document.getElementById("keyword-"+kind+"-list");
+  const count=document.getElementById("keyword-"+kind+"-count");
+  if(!list)return;
+  const words=keywordRules[kind]||[];
+  if(count)count.textContent=String(words.length);
+  list.replaceChildren();
+
+  if(!words.length){
+    const empty=document.createElement("p");
+    empty.className="keyword-manager-empty";
+    empty.textContent=kind==="show"
+      ? "Gösterilecek kelime yok."
+      : kind==="hide"
+        ? "Gizlenecek kelime yok."
+        : "Vurgulanacak kelime yok.";
+    list.appendChild(empty);
+    return;
+  }
+
+  const fragment=document.createDocumentFragment();
+  words.forEach((word,index)=>{
+    const row=document.createElement("div");
+    row.className="keyword-manager-item";
+    const label=document.createElement("span");
+    label.className="keyword-manager-item-label";
+    label.textContent=word;
+
+    const remove=document.createElement("button");
+    remove.type="button";
+    remove.className="keyword-manager-remove fi fi-close";
+    remove.dataset.keywordKind=kind;
+    remove.dataset.keywordIndex=String(index);
+    remove.setAttribute("aria-label",title+" listesinden "+word+" kelimesini kaldır");
+    remove.title="Sil";
+
+    row.append(label,remove);
+    fragment.appendChild(row);
+  });
+  list.appendChild(fragment);
+}
+
 function renderKeywordFilterControl(){
-  const input=document.getElementById("keyword-filter-input");
-  const show=document.getElementById("keyword-filter-show");
-  const hide=document.getElementById("keyword-filter-hide");
   const trigger=document.getElementById("keyword-filter-button");
-
-  if(input && document.activeElement!==input){
-    input.value=iddqdModeActive
-      ? IDDQD_CODE
-      : keywordFilterState.text;
+  const input=document.getElementById("keyword-filter-input");
+  if(iddqdModeActive && input && document.activeElement!==input){
+    input.value=IDDQD_CODE;
   }
 
-  const normalActive=
-    parseKeywordList(keywordFilterState.text).length>0 &&
-    keywordFilterState.mode!=="off";
+  renderKeywordColumn("show","Gösterilenler");
+  renderKeywordColumn("hide","Gizlenenler");
+  renderKeywordColumn("alert","Vurgulananlar");
 
-  const active=iddqdModeActive || normalActive;
-
-  show?.classList.toggle(
-    "active",
-    iddqdModeActive ||
-    (normalActive && keywordFilterState.mode==="show")
-  );
-
-  hide?.classList.toggle(
-    "active",
-    !iddqdModeActive &&
-    normalActive &&
-    keywordFilterState.mode==="hide"
-  );
-
-  show?.setAttribute(
-    "aria-pressed",
-    iddqdModeActive ||
-    (normalActive && keywordFilterState.mode==="show")
-      ? "true"
-      : "false"
-  );
-
-  hide?.setAttribute(
-    "aria-pressed",
-    !iddqdModeActive &&
-    normalActive &&
-    keywordFilterState.mode==="hide"
-      ? "true"
-      : "false"
-  );
-
+  const active=iddqdModeActive ||
+    keywordRules.show.length>0 ||
+    keywordRules.hide.length>0 ||
+    keywordRules.alert.length>0;
   trigger?.classList.toggle("tool-active",active);
-
   if(trigger){
-    trigger.title=iddqdModeActive
-      ? "Anahtar kelime filtresi"
-      : normalActive
-        ? `Anahtar kelime filtresi: ${keywordFilterState.mode==="show"?"Göster":"Gizle"}`
-        : "Anahtar kelime filtresi";
-    trigger.setAttribute("aria-label",trigger.title);
+    trigger.title="Anahtar kelimeler";
+    trigger.setAttribute("aria-label","Anahtar kelimeler");
   }
+}
+
+function recordKeywordRuleChange(kind,action,words){
+  const events={
+    show:action==="add"?"filter_show":"filter_clear",
+    hide:action==="add"?"filter_hide":"filter_clear",
+    alert:action==="add"?"watch_enable":"watch_clear"
+  };
+  const items=parseKeywordList(words.join(","));
+  telemetryQueueEvent(events[kind],{
+    keyword_text:words.join(","),
+    keyword_count:items.length,
+    mode:kind,
+    meta:{action,group:kind}
+  });
+}
+
+function addKeywordRule(kind){
+  if(!["show","hide","alert"].includes(kind))return "invalid-action";
+  const input=document.getElementById("keyword-filter-input");
+  const text=String(input?.value||"").trim();
+  const words=parseKeywordEntries(text);
+  if(!words.length){
+    setKeywordManagerFeedback("Önce bir anahtar kelime yazın.");
+    input?.focus();
+    return "empty";
+  }
+
+  if(iddqdModeActive){
+    setKeywordManagerFeedback("Bu modda anahtar kelime listeleri değiştirilemez.");
+    return "iddqd-locked";
+  }
+
+  if(words.some(word=>isExactIddqdInput(word))){
+    setKeywordManagerFeedback("Bu kelime yalnızca özel Göster / Gizle işlemlerinde kullanılabilir.");
+    return "iddqd-denied";
+  }
+
+  const before={
+    show:[...keywordRules.show],
+    hide:[...keywordRules.hide],
+    alert:[...keywordRules.alert]
+  };
+  const current=keywordRules[kind]||[];
+  const existing=new Set(current.map(word=>normalizeText(word)));
+  const added=[];
+  for(const word of words){
+    const key=normalizeText(word);
+    if(existing.has(key))continue;
+    if(current.length>=120)break;
+    current.push(word);
+    added.push(word);
+    existing.add(key);
+  }
+  if(kind==="show" || kind==="hide"){
+    const other=kind==="show"?"hide":"show";
+    const moving=new Set(words.map(word=>normalizeText(word)));
+    keywordRules[other]=keywordRules[other].filter(word=>!moving.has(normalizeText(word)));
+  }
+
+  if(JSON.stringify(keywordRules)===JSON.stringify(before)){
+    setKeywordManagerFeedback("Bu kelimeler zaten ilgili listede.");
+    if(input)input.value="";
+    return "unchanged";
+  }
+
+  if(!saveKeywordRules()){
+    keywordRules=before;
+    setKeywordManagerFeedback("Kelimeler bu cihazda saklanamadı.");
+    return "storage-error";
+  }
+  if(input)input.value="";
+  renderKeywordFilterControl();
+  setKeywordManagerFeedback(
+    (added.length?added.length+" kelime ":"Kelimeler ")+
+    (kind==="show"?"Gösterilenler":kind==="hide"?"Gizlenenler":"Vurgulananlar")+
+    " listesine "+(added.length?"eklendi.":"taşındı.")
+  );
+
+  if(kind==="alert"){
+    updateKeywordAlert(state.stories[state.index]||null);
+  }else{
+    applyFilters();
+    updateKeywordAlert(state.stories[state.index]||null);
+  }
+  if(added.length)recordKeywordRuleChange(kind,"add",added);
+  input?.focus();
+  return "keyword-added";
+}
+
+function removeKeywordRule(kind,index){
+  if(!["show","hide","alert"].includes(kind) || iddqdModeActive)return;
+  const list=keywordRules[kind]||[];
+  if(!Number.isInteger(index) || index<0 || index>=list.length)return;
+  const previous={
+    show:[...keywordRules.show],
+    hide:[...keywordRules.hide],
+    alert:[...keywordRules.alert]
+  };
+  const removed=list.splice(index,1);
+  if(!saveKeywordRules()){
+    keywordRules=previous;
+    setKeywordManagerFeedback("Kelime silinemedi: tarayıcı depolaması kullanılamıyor.");
+    return;
+  }
+  renderKeywordFilterControl();
+  setKeywordManagerFeedback("Kelime listeden kaldırıldı.");
+  if(kind==="alert"){
+    updateKeywordAlert(state.stories[state.index]||null);
+  }else{
+    applyFilters();
+    updateKeywordAlert(state.stories[state.index]||null);
+  }
+  recordKeywordRuleChange(kind,"remove",removed);
 }
 
 function applyKeywordFilter(mode){
@@ -11984,140 +12114,28 @@ function applyKeywordFilter(mode){
   const exactIddqd=isExactIddqdInput(rawText);
 
   if(iddqdModeActive){
-    if(
-      exactIddqd &&
-      mode==="hide" &&
-      iddqdTrustedActionGate==="hide"
-    ){
+    if(exactIddqd && mode==="hide" && iddqdTrustedActionGate==="hide"){
       exitIddqdMode();
       return "iddqd-exit";
     }
-
-    /* While active, no other filter action can alter or exit the mode. */
-    renderKeywordFilterControl();
+    setKeywordManagerFeedback("Bu modda yalnızca özel çıkış komutu kullanılabilir.");
     return "iddqd-locked";
   }
 
   if(exactIddqd){
-    if(
-      mode==="show" &&
-      iddqdTrustedActionGate==="show"
-    ){
+    if(mode==="show" && iddqdTrustedActionGate==="show"){
       enterIddqdMode();
       return "iddqd-enter";
     }
-
-    /* IDDQD is never treated as an ordinary show/hide keyword filter. */
-    renderKeywordFilterControl();
+    setKeywordManagerFeedback("Özel komut yalnızca butonla etkinleştirilir.");
     return "iddqd-denied";
   }
 
-  const text=rawText.trim();
-  const keywords=parseKeywordList(text);
-
-  keywordFilterState={
-    text,
-    mode:
-      keywords.length &&
-      (mode==="show" || mode==="hide")
-        ? mode
-        : "off"
-  };
-
-  saveKeywordFilterState();
-  renderKeywordFilterControl();
-  closeKeywordFilterPanel();
-  applyFilters();
-  showFullscreenButton();
-  return "filter-applied";
-}
-
-function clearKeywordFilter(){
-  const input=document.getElementById("keyword-filter-input");
-
-  if(iddqdModeActive){
-    if(input)input.value="";
-    setTimeout(()=>{
-      document.getElementById("keyword-filter-input")?.focus();
-    },0);
-    return "iddqd-locked";
-  }
-
-  if(input)input.value="";
-
-  keywordFilterState={
-    text:"",
-    mode:"off"
-  };
-
-  saveKeywordFilterState();
-  renderKeywordFilterControl();
-  applyFilters();
-  showFullscreenButton();
-
-  setTimeout(()=>{
-    document.getElementById("keyword-filter-input")?.focus();
-  },0);
-  return "filter-cleared";
-}
-
-function renderKeywordWatchControl(){
-  const input=document.getElementById("keyword-watch-input");
-  const apply=document.getElementById("keyword-watch-apply");
-  const trigger=document.getElementById("keyword-watch-button");
-  const active=currentKeywordWatchKeywords().length>0;
-
-  if(input && document.activeElement!==input){
-    input.value=keywordWatchText;
-  }
-
-  apply?.classList.toggle("active",active);
-  apply?.setAttribute(
-    "aria-pressed",
-    active?"true":"false"
-  );
-
-  trigger?.classList.toggle("tool-active",active);
-  if(trigger){
-    trigger.title=active
-      ? "Anahtar kelime takibi açık"
-      : "Anahtar kelime takibi";
-    trigger.setAttribute("aria-label",trigger.title);
-  }
+  return addKeywordRule(mode);
 }
 
 function applyKeywordWatch(){
-  const input=document.getElementById("keyword-watch-input");
-  keywordWatchText=String(input?.value||"").trim();
-
-  saveKeywordWatchText();
-  renderKeywordWatchControl();
-  closeKeywordWatchPanel();
-
-  updateKeywordAlert(
-    state.stories[state.index]||null
-  );
-
-  showFullscreenButton();
-}
-
-function clearKeywordWatch(){
-  const input=document.getElementById("keyword-watch-input");
-  if(input)input.value="";
-
-  keywordWatchText="";
-  saveKeywordWatchText();
-  renderKeywordWatchControl();
-
-  updateKeywordAlert(
-    state.stories[state.index]||null
-  );
-
-  showFullscreenButton();
-
-  setTimeout(()=>{
-    document.getElementById("keyword-watch-input")?.focus();
-  },0);
+  return addKeywordRule("alert");
 }
 
 function renderTimeRangeControl(){
@@ -12375,6 +12393,7 @@ function preferenceTransferKeys(){
     FEED_ORDER_KEY,
     KEYWORD_FILTER_KEY,
     KEYWORD_WATCH_KEY,
+    KEYWORD_RULES_KEY,
     WEATHER_PREFS_KEY,
     CUSTOM_RSS_STORAGE_KEY,
     NEAR_DUPLICATE_PREF_KEY,
@@ -12680,13 +12699,7 @@ renderDurationSetting();
 renderTimeRangeControl();
 renderKeywordFilterControl();
 syncIddqdLogo();
-renderKeywordWatchControl();
 renderFeedMode();
-
-document.getElementById("keyword-filter-clear")?.addEventListener("click",e=>{
-  e.stopPropagation();
-  clearKeywordFilter();
-});
 
 document.getElementById("keyword-filter-show")?.addEventListener("click",e=>{
   e.stopPropagation();
@@ -12698,40 +12711,28 @@ document.getElementById("keyword-filter-hide")?.addEventListener("click",e=>{
   runTrustedKeywordFilterButtonAction("hide",e);
 });
 
-document.getElementById("keyword-filter-input")?.addEventListener("keydown",e=>{
-  e.stopPropagation();
-
-  if(e.key==="Enter"){
-    e.preventDefault();
-
-    /* IDDQD only responds to the physical Show/Hide buttons. */
-    if(isExactIddqdInput(e.currentTarget?.value||""))return;
-
-    applyKeywordFilter(
-      keywordFilterState.mode==="hide"
-        ? "hide"
-        : "show"
-    );
-  }
-});
-
-document.getElementById("keyword-watch-clear")?.addEventListener("click",e=>{
-  e.stopPropagation();
-  clearKeywordWatch();
-});
-
 document.getElementById("keyword-watch-apply")?.addEventListener("click",e=>{
   e.stopPropagation();
   applyKeywordWatch();
 });
 
-document.getElementById("keyword-watch-input")?.addEventListener("keydown",e=>{
-  e.stopPropagation();
-
+document.getElementById("keyword-filter-input")?.addEventListener("keydown",e=>{
   if(e.key==="Enter"){
     e.preventDefault();
-    applyKeywordWatch();
+    e.stopPropagation();
+    // IDDQD actions still require a trusted physical Show/Hide click.
+    if(!isExactIddqdInput(e.currentTarget?.value||"")){
+      applyKeywordFilter("show");
+    }
   }
+});
+
+document.getElementById("keyword-filter-panel")?.addEventListener("click",e=>{
+  const button=e.target.closest?.(".keyword-manager-remove");
+  if(!button)return;
+  e.preventDefault();
+  e.stopPropagation();
+  removeKeywordRule(button.dataset.keywordKind,Number(button.dataset.keywordIndex));
 });
 
 document.querySelectorAll(".feed-tab").forEach(bindFeedTabButton);
@@ -13753,168 +13754,121 @@ function openStatsOverlay(){
   }catch(e){}
 }
 
-/* Açılır araçlar eski sabit top değerleri yerine gerçek buton merkezlerini izler.
-   Kapalı paneller visibility:hidden olsa da offsetHeight ile ölçülebilir. */
-const QUICK_PANEL_ANCHORS=[
-  ["time-range-panel","time-range-button"],
-  ["keyword-filter-panel","keyword-filter-button"],
-  ["keyword-watch-panel","keyword-watch-button"]
-];
-
-function alignQuickPanelToTrigger(panelId,triggerId){
-  const panel=document.getElementById(panelId);
-  const trigger=document.getElementById(triggerId);
-  if(!panel || !trigger)return;
-
-  const rect=trigger.getBoundingClientRect();
-  if(!rect.width || !rect.height)return;
-
-  // Mobil klavye açıkken visualViewport yüksekliği değişebilir.
-  const viewportTop=window.visualViewport?.offsetTop||0;
-  const viewportBottom=Math.min(
-    window.innerHeight,
-    viewportTop+(window.visualViewport?.height||window.innerHeight)
-  );
-  const panelHeight=panel.offsetHeight;
-  const minimumTop=viewportTop+8;
-  const maximumTop=Math.max(minimumTop,viewportBottom-panelHeight-8);
-  const targetTop=rect.top+rect.height/2-panelHeight/2;
-  const top=Math.min(maximumTop,Math.max(minimumTop,targetTop));
-
-  // Kutunun sağ kenarı, ilgili butonun solundan tam 12px içeride biter.
-  const right=Math.max(8,window.innerWidth-rect.left+12);
-
-  // Tarihsel CSS kurallarındaki !important top/right değerlerini geçersiz kıl.
-  panel.style.setProperty("top",`${Math.round(top)}px`,"important");
-  panel.style.setProperty("right",`${Math.round(right)}px`,"important");
+/* These two feature screens use the same full-page modal language as
+   Tercihler / Hakkında / Kaydedilenler. No fixed pixel anchoring remains. */
+function closeTimeRangePanel(){
+  const panel=document.getElementById("time-range-panel");
+  if(!panel?.classList.contains("open"))return;
+  panel.classList.remove("open");
+  panel.setAttribute("aria-hidden","true");
+  panel.setAttribute("inert","");
+  queueUiFlowResumeCheck();
+  showFullscreenButton();
 }
-
-function realignOpenQuickPanels(){
-  for(const [panelId,triggerId] of QUICK_PANEL_ANCHORS){
-    if(document.getElementById(panelId)?.classList.contains("open")){
-      alignQuickPanelToTrigger(panelId,triggerId);
-    }
-  }
-}
-
-window.addEventListener("resize",realignOpenQuickPanels,{passive:true});
-window.visualViewport?.addEventListener("resize",realignOpenQuickPanels,{passive:true});
 
 function closeKeywordFilterPanel(){
   const panel=document.getElementById("keyword-filter-panel");
-  panel?.classList.remove("open");
-  panel?.setAttribute("aria-hidden","true");
+  if(!panel?.classList.contains("open"))return;
+  panel.classList.remove("open");
+  panel.setAttribute("aria-hidden","true");
+  panel.setAttribute("inert","");
   queueUiFlowResumeCheck();
-}
-
-function closeKeywordWatchPanel(){
-  const panel=document.getElementById("keyword-watch-panel");
-  panel?.classList.remove("open");
-  panel?.setAttribute("aria-hidden","true");
-  queueUiFlowResumeCheck();
+  showFullscreenButton();
 }
 
 function closeQuickPanels(except=""){
   if(except!=="time")closeTimeRangePanel();
   if(except!=="filter")closeKeywordFilterPanel();
-  if(except!=="watch")closeKeywordWatchPanel();
 }
 
 function openTimeRangePanel(){
   pauseFlowForUi();
+  closeFloraPopover({resume:false});
   closeMenu();
   closeStatsOverlay();
   closeQuickPanels("time");
+  closeControlMenu();
 
   const panel=document.getElementById("time-range-panel");
   renderTimeRangeControl();
-  alignQuickPanelToTrigger("time-range-panel","time-range-button");
+  panel?.removeAttribute("inert");
   panel?.classList.add("open");
   panel?.setAttribute("aria-hidden","false");
   showFullscreenButton();
-}
-
-function closeTimeRangePanel(){
-  const panel=document.getElementById("time-range-panel");
-  panel?.classList.remove("open");
-  panel?.setAttribute("aria-hidden","true");
-  queueUiFlowResumeCheck();
+  document.getElementById("time-range-close")?.focus();
 }
 
 function toggleTimeRangePanel(){
   const panel=document.getElementById("time-range-panel");
-  if(!panel)return;
-
-  if(panel.classList.contains("open")){
-    closeTimeRangePanel();
-    showFullscreenButton();
-  }else{
-    openTimeRangePanel();
-  }
+  if(panel?.classList.contains("open"))closeTimeRangePanel();
+  else openTimeRangePanel();
 }
 
 function openKeywordFilterPanel(){
   pauseFlowForUi();
+  closeFloraPopover({resume:false});
   closeMenu();
   closeStatsOverlay();
   closeQuickPanels("filter");
+  closeControlMenu();
 
   const panel=document.getElementById("keyword-filter-panel");
+  const input=document.getElementById("keyword-filter-input");
+  if(input)input.value=iddqdModeActive?IDDQD_CODE:"";
   renderKeywordFilterControl();
-  alignQuickPanelToTrigger("keyword-filter-panel","keyword-filter-button");
+  setKeywordManagerFeedback("");
+  panel?.removeAttribute("inert");
   panel?.classList.add("open");
   panel?.setAttribute("aria-hidden","false");
   showFullscreenButton();
 
-  setTimeout(()=>{
-    const input=document.getElementById("keyword-filter-input");
+  if(window.matchMedia?.("(hover:hover) and (pointer:fine)")?.matches){
     input?.focus();
-    input?.select();
-  },0);
+  }else{
+    document.getElementById("keyword-filter-close")?.focus();
+  }
 }
 
 function toggleKeywordFilterPanel(){
   const panel=document.getElementById("keyword-filter-panel");
-  if(!panel)return;
+  if(panel?.classList.contains("open"))closeKeywordFilterPanel();
+  else openKeywordFilterPanel();
+}
 
-  if(panel.classList.contains("open")){
-    closeKeywordFilterPanel();
-    showFullscreenButton();
-  }else{
-    openKeywordFilterPanel();
+/* Keyboard users can navigate all three columns without escaping a dialog. */
+function trapToolScreenFocus(event){
+  if(event.key!=="Tab" || !event.currentTarget.classList.contains("open"))return;
+  const focusable=[...event.currentTarget.querySelectorAll(
+    'button:not(:disabled), input:not(:disabled), a[href]'
+  )].filter(el=>el.getClientRects().length>0);
+  if(!focusable.length)return;
+  const first=focusable[0],last=focusable[focusable.length-1];
+  if(event.shiftKey && document.activeElement===first){
+    event.preventDefault();
+    last.focus();
+  }else if(!event.shiftKey && document.activeElement===last){
+    event.preventDefault();
+    first.focus();
   }
 }
 
-function openKeywordWatchPanel(){
-  pauseFlowForUi();
-  closeMenu();
-  closeStatsOverlay();
-  closeQuickPanels("watch");
-
-  const panel=document.getElementById("keyword-watch-panel");
-  renderKeywordWatchControl();
-  alignQuickPanelToTrigger("keyword-watch-panel","keyword-watch-button");
-  panel?.classList.add("open");
-  panel?.setAttribute("aria-hidden","false");
-  showFullscreenButton();
-
-  setTimeout(()=>{
-    const input=document.getElementById("keyword-watch-input");
-    input?.focus();
-    input?.select();
-  },0);
-}
-
-function toggleKeywordWatchPanel(){
-  const panel=document.getElementById("keyword-watch-panel");
-  if(!panel)return;
-
-  if(panel.classList.contains("open")){
-    closeKeywordWatchPanel();
-    showFullscreenButton();
-  }else{
-    openKeywordWatchPanel();
-  }
+for(const [panelId,closeId,closeFn] of [
+  ["time-range-panel","time-range-close",closeTimeRangePanel],
+  ["keyword-filter-panel","keyword-filter-close",closeKeywordFilterPanel]
+]){
+  const panel=document.getElementById(panelId);
+  panel?.addEventListener("keydown",trapToolScreenFocus);
+  panel?.addEventListener("pointerdown",e=>e.stopPropagation());
+  panel?.addEventListener("pointerup",e=>e.stopPropagation());
+  panel?.addEventListener("click",e=>{
+    e.stopPropagation();
+    if(e.target===panel)closeFn();
+  });
+  document.getElementById(closeId)?.addEventListener("click",e=>{
+    e.preventDefault();
+    e.stopPropagation();
+    closeFn();
+  });
 }
 
 function openMenu(){
@@ -13968,30 +13922,12 @@ document.getElementById("time-range-button")?.addEventListener("click",e=>{
   toggleTimeRangePanel();
 });
 
-document.getElementById("time-range-panel")?.addEventListener("pointerdown",e=>e.stopPropagation());
-document.getElementById("time-range-panel")?.addEventListener("pointerup",e=>e.stopPropagation());
-document.getElementById("time-range-panel")?.addEventListener("click",e=>e.stopPropagation());
-
 document.getElementById("keyword-filter-button")?.addEventListener("pointerdown",e=>e.stopPropagation());
 document.getElementById("keyword-filter-button")?.addEventListener("pointerup",e=>e.stopPropagation());
 document.getElementById("keyword-filter-button")?.addEventListener("click",e=>{
   e.stopPropagation();
   toggleKeywordFilterPanel();
 });
-
-document.getElementById("keyword-watch-button")?.addEventListener("pointerdown",e=>e.stopPropagation());
-document.getElementById("keyword-watch-button")?.addEventListener("pointerup",e=>e.stopPropagation());
-document.getElementById("keyword-watch-button")?.addEventListener("click",e=>{
-  e.stopPropagation();
-  toggleKeywordWatchPanel();
-});
-
-for(const panelId of ["keyword-filter-panel","keyword-watch-panel"]){
-  const panel=document.getElementById(panelId);
-  panel?.addEventListener("pointerdown",e=>e.stopPropagation());
-  panel?.addEventListener("pointerup",e=>e.stopPropagation());
-  panel?.addEventListener("click",e=>e.stopPropagation());
-}
 
 document.getElementById("stats-close")?.addEventListener("click",closeStatsOverlay);
 
@@ -14166,7 +14102,6 @@ function anyUiPauseSurfaceOpen(){
     document.getElementById("control-menu-panel")?.classList.contains("open") ||
     document.getElementById("time-range-panel")?.classList.contains("open") ||
     document.getElementById("keyword-filter-panel")?.classList.contains("open") ||
-    document.getElementById("keyword-watch-panel")?.classList.contains("open") ||
     document.getElementById("stats-overlay")?.classList.contains("open") ||
     document.getElementById("menu-overlay")?.classList.contains("open")
   );
@@ -14557,8 +14492,6 @@ window.addEventListener("wheel",e=>{
   if(e.target.closest && e.target.closest("#time-range-panel"))return;
   if(e.target.closest && e.target.closest("#keyword-filter-button"))return;
   if(e.target.closest && e.target.closest("#keyword-filter-panel"))return;
-  if(e.target.closest && e.target.closest("#keyword-watch-button"))return;
-  if(e.target.closest && e.target.closest("#keyword-watch-panel"))return;
   if(e.target.closest && e.target.closest("#pip-button"))return;
   if(e.target.closest && e.target.closest("#menu-overlay"))return;
   e.preventDefault();
@@ -14581,10 +14514,7 @@ window.addEventListener("keydown",e=>{
   const keywordFilterOpen=
     document.getElementById("keyword-filter-panel")?.classList.contains("open");
 
-  const keywordWatchOpen=
-    document.getElementById("keyword-watch-panel")?.classList.contains("open");
-
-  if(menuOpen || statsOpen || sourceViewerIsOpen || timeOpen || keywordFilterOpen || keywordWatchOpen)return;
+  if(menuOpen || statsOpen || sourceViewerIsOpen || timeOpen || keywordFilterOpen)return;
 
   const target=e.target;
   const typingTarget=Boolean(
@@ -15860,8 +15790,6 @@ window.addEventListener("pointerdown",e=>{
   if(e.target.closest && e.target.closest("#time-range-panel"))return;
   if(e.target.closest && e.target.closest("#keyword-filter-button"))return;
   if(e.target.closest && e.target.closest("#keyword-filter-panel"))return;
-  if(e.target.closest && e.target.closest("#keyword-watch-button"))return;
-  if(e.target.closest && e.target.closest("#keyword-watch-panel"))return;
   if(e.target.closest && e.target.closest("#pip-button"))return;
   if(e.target.closest && e.target.closest("#menu-overlay"))return;
   state.x=e.clientX;state.y=e.clientY;state.t=performance.now();
@@ -16068,8 +15996,6 @@ window.addEventListener("pointerup",e=>{
   if(e.target.closest && e.target.closest("#time-range-panel"))return;
   if(e.target.closest && e.target.closest("#keyword-filter-button"))return;
   if(e.target.closest && e.target.closest("#keyword-filter-panel"))return;
-  if(e.target.closest && e.target.closest("#keyword-watch-button"))return;
-  if(e.target.closest && e.target.closest("#keyword-watch-panel"))return;
   if(e.target.closest && e.target.closest("#pip-button"))return;
   if(e.target.closest && e.target.closest("#menu-overlay"))return;
 
@@ -17227,76 +17153,8 @@ setAutoAdvancePaused=function(paused){
   return result;
 };
 
-/* Keyword filter/watch — explicit keyword text is stored in private behavior DB. */
-const __floewApplyKeywordFilter=applyKeywordFilter;
-applyKeywordFilter=function(mode){
-  const input=document.getElementById("keyword-filter-input");
-  const text=String(input?.value||"").trim();
-  const keywords=parseKeywordList(text);
-  const result=__floewApplyKeywordFilter.apply(this,arguments);
-
-  /* The easter-egg code is intentionally not written into keyword telemetry. */
-  if(String(result||"").startsWith("iddqd-")){
-    return result;
-  }
-
-  telemetryQueueEvent(
-    keywordFilterState.mode==="show" ? "filter_show" :
-    keywordFilterState.mode==="hide" ? "filter_hide" :
-    "filter_off",
-    {
-      keyword_text:text,
-      keyword_count:keywords.length,
-      mode:keywordFilterState.mode
-    }
-  );
-  return result;
-};
-
-const __floewClearKeywordFilter=clearKeywordFilter;
-clearKeywordFilter=function(){
-  const before=keywordFilterState.text;
-  const result=__floewClearKeywordFilter.apply(this,arguments);
-
-  if(String(result||"").startsWith("iddqd-")){
-    return result;
-  }
-
-  telemetryQueueEvent("filter_clear",{
-    keyword_text:before,
-    keyword_count:parseKeywordList(before).length
-  });
-  return result;
-};
-
-const __floewApplyKeywordWatch=applyKeywordWatch;
-applyKeywordWatch=function(){
-  const input=document.getElementById("keyword-watch-input");
-  const text=String(input?.value||"").trim();
-  const keywords=parseKeywordList(text);
-  const result=__floewApplyKeywordWatch.apply(this,arguments);
-  telemetryQueueEvent(
-    keywords.length ? "watch_enable" : "watch_off",
-    {
-      keyword_text:text,
-      keyword_count:keywords.length,
-      mode:keywords.length?"on":"off"
-    }
-  );
-  return result;
-};
-
-const __floewClearKeywordWatch=clearKeywordWatch;
-clearKeywordWatch=function(){
-  const before=keywordWatchText;
-  const result=__floewClearKeywordWatch.apply(this,arguments);
-  telemetryQueueEvent("watch_clear",{
-    keyword_text:before,
-    keyword_count:parseKeywordList(before).length
-  });
-  return result;
-};
-
+/* Keyword list add/remove events are recorded by recordKeywordRuleChange.
+   Existing watch_match telemetry below remains unchanged. */
 const __floewUpdateKeywordAlert=updateKeywordAlert;
 updateKeywordAlert=function(story){
   const result=__floewUpdateKeywordAlert.apply(this,arguments);

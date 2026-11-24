@@ -16,7 +16,7 @@
 
 <link rel="preload" href="assets/fonts/flow-icons.woff2?v=5" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="assets/fonts/flow-icons-bookmark.woff2?v=6" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="css/styles.css?v=20261124-final-toolbar1">
+<link rel="stylesheet" href="css/styles.css?v=20261124-keyword-screen1">
 <link rel="stylesheet" href="css/flow-icons.css?v=10.25">
 <link rel="stylesheet" href="css/visual-share.css?v=2">
 <link rel="stylesheet" href="css/instant-tooltips.css?v=4">
@@ -179,58 +179,79 @@
 
   <div id="control-menu-panel" aria-hidden="true" inert>
     <button id="pip-button" class="control-menu-item fi fi-pip" type="button" aria-label="Picture-in-Picture" title="Köşeye indir"></button>
-    <button id="time-range-button" class="control-menu-item fi fi-clock" type="button" aria-label="Haber zaman aralığı" title="Haber zaman aralığı"></button>
-    <button id="keyword-filter-button" class="control-menu-item fi fi-filter" type="button" aria-label="Anahtar kelime filtresi" title="Anahtar kelime filtresi"></button>
-    <button id="keyword-watch-button" class="control-menu-item fi fi-target" type="button" aria-label="Anahtar kelime takibi" title="Anahtar kelime takibi"></button>
+    <button id="time-range-button" class="control-menu-item fi fi-clock" type="button" aria-label="Akış" title="Akış"></button>
+    <button id="keyword-filter-button" class="control-menu-item fi fi-filter" type="button" aria-label="Anahtar kelimeler" title="Anahtar kelimeler"></button>
     <button id="info-button" class="control-menu-item fi fi-info" type="button" aria-label="Flöw hakkında bazı bilgiler" title="Flöw hakkında bazı bilgiler"></button>
     <button id="menu-button" class="control-menu-item fi fi-settings" type="button" aria-label="Tercihler" title="Tercihler"></button>
   </div>
 
-  <div id="time-range-panel" aria-hidden="true">
-    <div class="time-range-heading">
-      <strong>Zaman aralığı</strong>
-      <span id="time-range-current">Algoritmik · Tüm zamanlar</span>
-    </div>
-    <div class="feed-order-row">
-      <span class="feed-order-label">Sıralama</span>
-      <div class="feed-order-strip" role="group" aria-label="Haber sıralama biçimi">
-        <button class="feed-order-option" data-order-mode="algorithmic" type="button">Algoritmik</button>
-        <button class="feed-order-option" data-order-mode="chronological" type="button">Kronolojik</button>
+  <div id="time-range-panel" class="floew-tool-screen" aria-hidden="true" inert>
+    <section class="floew-tool-screen-content" role="dialog" aria-modal="true" aria-labelledby="flow-screen-title">
+      <div class="menu-header floew-tool-screen-header">
+        <div>
+          <div id="flow-screen-title" class="menu-title">Akış</div>
+          <div class="menu-subtitle">Haber sıralamasını ve zaman aralığını belirleyin.</div>
+        </div>
+        <button id="time-range-close" class="floew-tool-screen-close fi fi-close" type="button" aria-label="Akış ekranını kapat" title="Kapat"></button>
       </div>
-    </div>
-    <div class="time-range-strip" role="group" aria-label="Gösterilecek haberlerin zaman aralığı">
-      <button class="time-range-option" data-hours="1" type="button">1 saat</button>
-      <button class="time-range-option" data-hours="2" type="button">2 saat</button>
-      <button class="time-range-option" data-hours="4" type="button">4 saat</button>
-      <button class="time-range-option" data-hours="8" type="button">8 saat</button>
-      <button class="time-range-option" data-hours="16" type="button">16 saat</button>
-      <button class="time-range-option" data-hours="24" type="button">1 gün</button>
-      <button class="time-range-option" data-hours="120" type="button">5 gün</button>
-      <button class="time-range-option" data-hours="all" type="button">Tüm zamanlar</button>
-    </div>
+      <div class="flow-screen-settings">
+        <div class="flow-screen-setting-label">Sıralama</div>
+        <div class="feed-order-strip" role="group" aria-label="Haber sıralama biçimi">
+          <button class="feed-order-option" data-order-mode="algorithmic" type="button">Algoritmik</button>
+          <button class="feed-order-option" data-order-mode="chronological" type="button">Kronolojik</button>
+        </div>
+        <div class="flow-screen-setting-label">Zaman aralığı</div>
+        <div class="time-range-strip" role="group" aria-label="Gösterilecek haberlerin zaman aralığı">
+          <button class="time-range-option" data-hours="1" type="button">1 saat</button>
+          <button class="time-range-option" data-hours="2" type="button">2 saat</button>
+          <button class="time-range-option" data-hours="4" type="button">4 saat</button>
+          <button class="time-range-option" data-hours="8" type="button">8 saat</button>
+          <button class="time-range-option" data-hours="16" type="button">16 saat</button>
+          <button class="time-range-option" data-hours="24" type="button">1 gün</button>
+          <button class="time-range-option" data-hours="120" type="button">5 gün</button>
+          <button class="time-range-option" data-hours="all" type="button">Tüm zamanlar</button>
+        </div>
+        <div id="time-range-current" class="flow-screen-current">Algoritmik · Tüm zamanlar</div>
+      </div>
+    </section>
   </div>
 
-  <div id="keyword-filter-panel" class="keyword-tool-panel" aria-hidden="true">
-    <div class="keyword-tool-row">
-      <input id="keyword-filter-input" class="keyword-tool-input" type="text"
-        autocomplete="off" spellcheck="false"
-        placeholder="Anahtar kelimeler: ör. yapay zeka, İstanbul">
-      <button id="keyword-filter-clear" class="keyword-tool-clear" type="button"
-        aria-label="Anahtar kelime filtresini temizle" title="Temizle" class="fi fi-close"></button>
-      <button id="keyword-filter-show" class="keyword-tool-action" type="button">Göster</button>
-      <button id="keyword-filter-hide" class="keyword-tool-action" type="button">Gizle</button>
-    </div>
-  </div>
-
-  <div id="keyword-watch-panel" class="keyword-tool-panel" aria-hidden="true">
-    <div class="keyword-tool-row">
-      <input id="keyword-watch-input" class="keyword-tool-input" type="text"
-        autocomplete="off" spellcheck="false"
-        placeholder="Takip edilecek kelimeler: ör. deprem, seçim">
-      <button id="keyword-watch-clear" class="keyword-tool-clear" type="button"
-        aria-label="Anahtar kelime takibini temizle" title="Temizle" class="fi fi-close"></button>
-      <button id="keyword-watch-apply" class="keyword-tool-action" type="button">Uyar</button>
-    </div>
+  <div id="keyword-filter-panel" class="keyword-tool-panel floew-tool-screen" aria-hidden="true" inert>
+    <section class="floew-tool-screen-content" role="dialog" aria-modal="true" aria-labelledby="keywords-screen-title">
+      <div class="menu-header floew-tool-screen-header">
+        <div>
+          <div id="keywords-screen-title" class="menu-title">Anahtar kelimeler</div>
+          <div class="menu-subtitle">Haberleri gösterin, gizleyin veya eşleşenleri vurgulayın.</div>
+        </div>
+        <button id="keyword-filter-close" class="floew-tool-screen-close fi fi-close" type="button" aria-label="Anahtar kelimeler ekranını kapat" title="Kapat"></button>
+      </div>
+      <div class="keyword-manager-editor">
+        <label class="keyword-manager-label" for="keyword-filter-input">Anahtar kelime ekle</label>
+        <input id="keyword-filter-input" class="keyword-tool-input" type="text"
+          autocomplete="off" spellcheck="false" maxlength="500"
+          placeholder="Örn. yapay zeka, İstanbul, uzay">
+        <div class="keyword-manager-actions" role="group" aria-label="Kelimeye uygulanacak işlem">
+          <button id="keyword-filter-show" class="keyword-tool-action" type="button">Göster</button>
+          <button id="keyword-filter-hide" class="keyword-tool-action" type="button">Gizle</button>
+          <button id="keyword-watch-apply" class="keyword-tool-action" type="button">Uyar</button>
+        </div>
+        <p id="keyword-manager-feedback" class="keyword-manager-feedback" role="status" aria-live="polite">Birden fazla kelimeyi virgülle ayırarak ekleyebilirsiniz.</p>
+      </div>
+      <div class="keyword-manager-columns">
+        <section class="keyword-manager-column" aria-labelledby="keyword-show-title">
+          <div class="keyword-manager-column-heading"><h3 id="keyword-show-title">Gösterilenler</h3><span id="keyword-show-count"></span></div>
+          <div id="keyword-show-list" class="keyword-manager-list"></div>
+        </section>
+        <section class="keyword-manager-column" aria-labelledby="keyword-hide-title">
+          <div class="keyword-manager-column-heading"><h3 id="keyword-hide-title">Gizlenenler</h3><span id="keyword-hide-count"></span></div>
+          <div id="keyword-hide-list" class="keyword-manager-list"></div>
+        </section>
+        <section class="keyword-manager-column" aria-labelledby="keyword-alert-title">
+          <div class="keyword-manager-column-heading"><h3 id="keyword-alert-title">Vurgulananlar</h3><span id="keyword-alert-count"></span></div>
+          <div id="keyword-alert-list" class="keyword-manager-list"></div>
+        </section>
+      </div>
+    </section>
   </div>
 
   <div id="source-viewer-overlay" aria-hidden="true">
@@ -689,7 +710,7 @@
 
 <script src="js/config.js?h=beda7fe1ea23"></script>
 <script src="js/flora-predictor.js?v=2"></script>
-<script src="js/app.js?v=manual-pip-2-saved-transfer-flora1-quickpanel-anchor1" onerror="
+<script src="js/app.js?v=manual-pip-2-saved-transfer-flora1-keywords-screen1" onerror="
   var loader=document.getElementById('loading-screen');
   if(loader)loader.remove();
   var status=document.getElementById('status');
