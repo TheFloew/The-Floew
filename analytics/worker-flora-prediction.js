@@ -3822,14 +3822,44 @@ async function sourceStatsReport(env, rangeKey="7d") {
   // All-time and 24h must read the precise raw events.
   const daily=range.key==="7d"&&await analyticsDailyReady(env.CONTENT_DB);
   const sourceWhere="source IS NOT NULL AND TRIM(source)<>'' AND story_key<>''";
+  const now=Date.now();
+  // Exact rolling 7-day period: six complete UTC days from content_daily,
+  // plus the two incomplete boundary days from raw events. Avoids scanning
+  // all 7 days of raw rows while not overcounting the first calendar day.
+  const firstFullDay=analyticsUtcDayStart(range.since)+86400000;
+  const todayStart=analyticsUtcDayStart(now);
+  const aggregateArgs=daily
+    ? [firstFullDay,todayStart,range.since,firstFullDay,todayStart,now]
+    : [range.since];
+  const scoped=daily?`WITH source_story AS (
+    SELECT source,story_key,views,dwell_sum_ms,dwell_count,
+      target_sum_ms,target_count,completes,skips,backs,source_opens
+    FROM content_daily
+    WHERE day>=? AND day<? AND ${sourceWhere}
+    UNION ALL
+    SELECT source,story_key,
+      SUM(CASE WHEN event_type='story_view' THEN 1 ELSE 0 END) AS views,
+      SUM(CASE WHEN event_type='story_leave' AND dwell_ms>0 THEN dwell_ms ELSE 0 END) AS dwell_sum_ms,
+      SUM(CASE WHEN event_type='story_leave' AND dwell_ms>0 THEN 1 ELSE 0 END) AS dwell_count,
+      SUM(CASE WHEN event_type='story_leave' AND target_ms>0 THEN target_ms ELSE 0 END) AS target_sum_ms,
+      SUM(CASE WHEN event_type='story_leave' AND target_ms>0 THEN 1 ELSE 0 END) AS target_count,
+      SUM(CASE WHEN event_type='story_leave' AND completed=1 THEN 1 ELSE 0 END) AS completes,
+      SUM(CASE WHEN event_type='story_leave' AND manual_skip=1 THEN 1 ELSE 0 END) AS skips,
+      SUM(CASE WHEN event_type='story_back' THEN 1 ELSE 0 END) AS backs,
+      SUM(CASE WHEN event_type='source_open' THEN 1 ELSE 0 END) AS source_opens
+    FROM content_events
+    WHERE ((occurred_at>=? AND occurred_at<?) OR
+      (occurred_at>=? AND occurred_at<=?)) AND ${sourceWhere}
+    GROUP BY source,story_key
+  )`:"";
   const aggregate=daily
-    ? `SELECT source,
+    ? `${scoped}
+       SELECT source,
          COUNT(DISTINCT CASE WHEN views>0 THEN story_key END) AS stories,
          SUM(views) AS views,
          SUM(dwell_sum_ms) AS dwell_sum_ms,
          SUM(dwell_count) AS dwell_count
-       FROM content_daily WHERE day>=? AND ${sourceWhere}
-       GROUP BY source`
+       FROM source_story GROUP BY source`
     : `SELECT source,
          COUNT(DISTINCT CASE WHEN event_type='story_view' THEN story_key END) AS stories,
          SUM(CASE WHEN event_type='story_view' THEN 1 ELSE 0 END) AS views,
@@ -3837,9 +3867,8 @@ async function sourceStatsReport(env, rangeKey="7d") {
          SUM(CASE WHEN event_type='story_leave' AND dwell_ms>0 THEN 1 ELSE 0 END) AS dwell_count
        FROM content_events WHERE occurred_at>=? AND ${sourceWhere}
        GROUP BY source`;
-  const aggregateSince=daily?analyticsUtcDayStart(range.since):range.since;
   const [content,reach,devices]=await Promise.all([
-    analyticsAll(env.CONTENT_DB.prepare(aggregate).bind(aggregateSince)),
+    analyticsAll(env.CONTENT_DB.prepare(aggregate).bind(...aggregateArgs)),
     analyticsAll(env.BEHAVIOR_DB.prepare(`
       SELECT source,
         COUNT(DISTINCT CASE WHEN event_type='story_view' THEN NULLIF(visitor_id,'') END) AS visitors,
@@ -3899,12 +3928,13 @@ async function sourceStatsReport(env, rangeKey="7d") {
   // A finite cap bounds Worker memory for extremely large all-time datasets.
   const floraLimit=20001;
   const floraSql=daily
-    ? `SELECT source,story_key,SUM(views) AS views,
+    ? `${scoped}
+      SELECT source,story_key,SUM(views) AS views,
       CAST(SUM(dwell_sum_ms) AS REAL)/NULLIF(SUM(dwell_count),0) AS avg_dwell_ms,
       CAST(SUM(target_sum_ms) AS REAL)/NULLIF(SUM(target_count),0) AS avg_target_ms,
       SUM(completes) AS completes,SUM(skips) AS skips,SUM(backs) AS backs,
       SUM(source_opens) AS source_opens
-      FROM content_daily WHERE day>=? AND ${sourceWhere}
+      FROM source_story
       GROUP BY source,story_key HAVING SUM(views)>0
       ORDER BY views DESC LIMIT ${floraLimit}`
     : `SELECT source,story_key,
@@ -3918,7 +3948,7 @@ async function sourceStatsReport(env, rangeKey="7d") {
       FROM content_events WHERE occurred_at>=? AND ${sourceWhere}
       GROUP BY source,story_key HAVING views>0
       ORDER BY views DESC LIMIT ${floraLimit}`;
-  const floraRows=await analyticsAll(env.CONTENT_DB.prepare(floraSql).bind(aggregateSince));
+  const floraRows=await analyticsAll(env.CONTENT_DB.prepare(floraSql).bind(...aggregateArgs));
   const floraSum=new Map();
   for(const r of floraRows.slice(0,20000)){
     const x=entry(r.source);if(!x)continue;
@@ -3972,7 +4002,7 @@ async function sourceStatsReport(env, rangeKey="7d") {
   const sources=[...sourceMap.values()].filter(x=>x.views||x.shares).sort((a,b)=>b.views-a.views||a.source.localeCompare(b.source,"tr"));
   return {
     ok:true,range:range.key,label:range.label,generatedAt:Date.now(),
-    granularity:daily?"UTC günlük toplamları":"Olay zaman damgası",
+    granularity:daily?"UTC günlük + sınır günlerinde kesin olaylar":"Olay zaman damgası",
     sources,demographics:{available:demoAvailable,subjectToThresholding:demoThresholded},
     notes:{
       stories:"Akışta görüntülenmiş farklı haberler; henüz hiç gösterilmemiş yayınlanan haberler sayılmaz.",
