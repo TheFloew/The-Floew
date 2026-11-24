@@ -13753,6 +13753,53 @@ function openStatsOverlay(){
   }catch(e){}
 }
 
+/* Açılır araçlar eski sabit top değerleri yerine gerçek buton merkezlerini izler.
+   Kapalı paneller visibility:hidden olsa da offsetHeight ile ölçülebilir. */
+const QUICK_PANEL_ANCHORS=[
+  ["time-range-panel","time-range-button"],
+  ["keyword-filter-panel","keyword-filter-button"],
+  ["keyword-watch-panel","keyword-watch-button"]
+];
+
+function alignQuickPanelToTrigger(panelId,triggerId){
+  const panel=document.getElementById(panelId);
+  const trigger=document.getElementById(triggerId);
+  if(!panel || !trigger)return;
+
+  const rect=trigger.getBoundingClientRect();
+  if(!rect.width || !rect.height)return;
+
+  // Mobil klavye açıkken visualViewport yüksekliği değişebilir.
+  const viewportTop=window.visualViewport?.offsetTop||0;
+  const viewportBottom=Math.min(
+    window.innerHeight,
+    viewportTop+(window.visualViewport?.height||window.innerHeight)
+  );
+  const panelHeight=panel.offsetHeight;
+  const minimumTop=viewportTop+8;
+  const maximumTop=Math.max(minimumTop,viewportBottom-panelHeight-8);
+  const targetTop=rect.top+rect.height/2-panelHeight/2;
+  const top=Math.min(maximumTop,Math.max(minimumTop,targetTop));
+
+  // Kutunun sağ kenarı, ilgili butonun solundan tam 12px içeride biter.
+  const right=Math.max(8,window.innerWidth-rect.left+12);
+
+  // Tarihsel CSS kurallarındaki !important top/right değerlerini geçersiz kıl.
+  panel.style.setProperty("top",`${Math.round(top)}px`,"important");
+  panel.style.setProperty("right",`${Math.round(right)}px`,"important");
+}
+
+function realignOpenQuickPanels(){
+  for(const [panelId,triggerId] of QUICK_PANEL_ANCHORS){
+    if(document.getElementById(panelId)?.classList.contains("open")){
+      alignQuickPanelToTrigger(panelId,triggerId);
+    }
+  }
+}
+
+window.addEventListener("resize",realignOpenQuickPanels,{passive:true});
+window.visualViewport?.addEventListener("resize",realignOpenQuickPanels,{passive:true});
+
 function closeKeywordFilterPanel(){
   const panel=document.getElementById("keyword-filter-panel");
   panel?.classList.remove("open");
@@ -13780,10 +13827,10 @@ function openTimeRangePanel(){
   closeQuickPanels("time");
 
   const panel=document.getElementById("time-range-panel");
+  renderTimeRangeControl();
+  alignQuickPanelToTrigger("time-range-panel","time-range-button");
   panel?.classList.add("open");
   panel?.setAttribute("aria-hidden","false");
-
-  renderTimeRangeControl();
   showFullscreenButton();
 }
 
@@ -13813,9 +13860,10 @@ function openKeywordFilterPanel(){
   closeQuickPanels("filter");
 
   const panel=document.getElementById("keyword-filter-panel");
+  renderKeywordFilterControl();
+  alignQuickPanelToTrigger("keyword-filter-panel","keyword-filter-button");
   panel?.classList.add("open");
   panel?.setAttribute("aria-hidden","false");
-  renderKeywordFilterControl();
   showFullscreenButton();
 
   setTimeout(()=>{
@@ -13844,9 +13892,10 @@ function openKeywordWatchPanel(){
   closeQuickPanels("watch");
 
   const panel=document.getElementById("keyword-watch-panel");
+  renderKeywordWatchControl();
+  alignQuickPanelToTrigger("keyword-watch-panel","keyword-watch-button");
   panel?.classList.add("open");
   panel?.setAttribute("aria-hidden","false");
-  renderKeywordWatchControl();
   showFullscreenButton();
 
   setTimeout(()=>{
