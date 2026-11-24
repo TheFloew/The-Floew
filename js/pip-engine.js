@@ -60,6 +60,24 @@
       }catch(_){return "";}
     }
 
+    function boundedImage(image){
+      const w=image?.width||image?.naturalWidth||0;
+      const h=image?.height||image?.naturalHeight||0;
+      if(w<=0||h<=0)return image;
+      const factor=Math.min(1,960/w,540/h);
+      if(factor>=1)return image;
+      try{
+        const reduced=document.createElement("canvas");
+        reduced.width=Math.max(1,Math.round(w*factor));
+        reduced.height=Math.max(1,Math.round(h*factor));
+        reduced.getContext("2d").drawImage(
+          image,0,0,reduced.width,reduced.height
+        );
+        try{image.close?.();}catch(_){}
+        return reduced;
+      }catch(_){return image;}
+    }
+
     async function getImage(url){
       url=sourceUrl(url);
       if(!url)return null;
@@ -86,7 +104,7 @@
             const blob=await response.blob();
             if(typeof createImageBitmap==="function"){
               const bitmap=await createImageBitmap(blob);
-              if(bitmap?.width>0 && bitmap?.height>0)return bitmap;
+              if(bitmap?.width>0 && bitmap?.height>0)return boundedImage(bitmap);
             }
             const img=await new Promise((resolve,reject)=>{
               const el=new Image();
@@ -95,7 +113,7 @@
               el.onerror=()=>{URL.revokeObjectURL(objectURL);reject(new Error("decode"));};
               el.src=objectURL;
             });
-            if(img.naturalWidth>0)return img;
+            if(img.naturalWidth>0)return boundedImage(img);
           }catch(_){}
         }
         return null;
