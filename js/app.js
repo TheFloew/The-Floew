@@ -1842,17 +1842,24 @@ function renderFloraPopover(popover,story,stats){
   }
 }
 
+let floraPopoverExitTimer=null;
+
 function closeFloraPopover({resume=true}={}){
   const popover=document.getElementById("flora-story-popover");
-  if(!popover || popover.hidden)return;
+  if(!popover || popover.hidden || popover.getAttribute("aria-hidden")==="true")return;
 
-  popover.hidden=true;
+  popover.classList.remove("open");
   popover.style.visibility="";
+  popover.setAttribute("aria-hidden","true");
   floraPopoverOpen=false;
 
-  if(resume){
-    queueUiFlowResumeCheck();
-  }
+  clearTimeout(floraPopoverExitTimer);
+  const reduced=window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  floraPopoverExitTimer=setTimeout(()=>{
+    if(popover.classList.contains("open"))return;
+    popover.hidden=true;
+    if(resume)queueUiFlowResumeCheck();
+  },reduced?0:340);
 }
 
 async function loadFloraStoryStats(story,{force=false}={}){
@@ -1937,11 +1944,15 @@ async function openFloraPopover(anchor,story){
   floraPopoverOpen=true;
 
   const popover=ensureFloraPopover();
+  clearTimeout(floraPopoverExitTimer);
+  popover.setAttribute("aria-hidden","false");
   popover.dataset.storyKey=storyIdentity(story);
 
   const cached=floraStatsMap.get(storyIdentity(story))||null;
   renderFloraPopover(popover,story,cached);
   positionFloraPopover(popover,anchor);
+  void popover.offsetWidth;
+  popover.classList.add("open");
 
   if(story.customRss){
     const statusEl=popover.querySelector(".flora-story-popover-status");
@@ -1952,6 +1963,7 @@ async function openFloraPopover(anchor,story){
   const stats=await loadFloraStoryStats(story,{force:!cached});
 
   if(
+    !floraPopoverOpen ||
     popover.hidden ||
     popover.dataset.storyKey!==storyIdentity(story)
   )return;
