@@ -6602,6 +6602,12 @@ body{
     opacity var(--floew-panel-motion-duration,.32s) ease,
     visibility 0s linear var(--floew-panel-motion-duration,.32s) !important;
 }
+/* Old IDDQD top/right rules must never displace the full-screen dialog. */
+body.iddqd-mode #keyword-filter-panel.floew-tool-screen{
+  inset:0 !important;
+  top:0 !important;
+  right:0 !important;
+}
 #time-range-panel.floew-tool-screen.open,
 #keyword-filter-panel.floew-tool-screen.open,
 body.breaking-mode #time-range-panel.floew-tool-screen.open,
