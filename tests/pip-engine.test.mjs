@@ -110,7 +110,7 @@ function fixture({deferImages=false}={}){
   const context={
     window:{},document:doc,URL,Image:class{},
     HTMLCanvasElement:FakeCanvas,HTMLVideoElement:FakeVideo,
-    createImageBitmap:async blob=>({id:"decoded:"+blob.src,width:1200,height:675}),
+    createImageBitmap:async blob=>({id:"decoded:"+blob.src,width:800,height:450}),
     fetch:fakeFetch,console:{warn(){}},
     performance:{now:()=>clock},
     setTimeout(fn,ms){const id=nextTimer++;timers.set(id,{fn,ms});return id;},
