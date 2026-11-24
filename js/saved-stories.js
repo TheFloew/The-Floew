@@ -8,6 +8,7 @@
   const $$=(selector,root=document)=>Array.from(root.querySelectorAll(selector));
   let items=[];
   let panel=null;
+  let panelExitTimer=null;
   let lastFocus=null;
 
   function validUrl(input){
@@ -155,27 +156,40 @@
   }
   function openPanel(){
     if(!panel)return;
+    clearTimeout(panelExitTimer);
     lastFocus=document.activeElement;
     panel.hidden=false;
+    panel.removeAttribute("inert");
     panel.setAttribute("aria-hidden","false");
     document.body.classList.add("floew-saved-open");
     if(typeof window.pauseFlowForUi==="function")window.pauseFlowForUi();
     render();
+    // Force the closed frame before transitioning to the open frame.
+    void panel.offsetWidth;
+    panel.classList.add("open");
     $("#floew-saved-close",panel)?.focus();
   }
   function closePanel(){
-    if(!panel||panel.hidden)return;
-    panel.hidden=true;
+    if(!panel||panel.hidden||panel.getAttribute("aria-hidden")==="true")return;
+    panel.classList.remove("open");
     panel.setAttribute("aria-hidden","true");
+    panel.setAttribute("inert","");
     document.body.classList.remove("floew-saved-open");
-    if(typeof window.queueUiFlowResumeCheck==="function")window.queueUiFlowResumeCheck();
     if(lastFocus?.isConnected)lastFocus.focus();
+    clearTimeout(panelExitTimer);
+    const reduced=window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    panelExitTimer=setTimeout(()=>{
+      if(panel?.classList.contains("open"))return;
+      panel.hidden=true;
+      if(typeof window.queueUiFlowResumeCheck==="function")window.queueUiFlowResumeCheck();
+    },reduced?0:340);
   }
   function setupPanel(){
     panel=make("div","floew-saved-overlay");
     panel.id="floew-saved-overlay";
     panel.hidden=true;
     panel.setAttribute("aria-hidden","true");
+    panel.setAttribute("inert","");
     panel.innerHTML='<section class="floew-saved-panel" role="dialog" aria-modal="true" aria-labelledby="floew-saved-title"><div class="menu-header floew-saved-header"><div><div id="floew-saved-title" class="menu-title">Kaydedilen Haberler</div><div class="menu-subtitle">Sonra okumak için ayırdıklarınız</div></div><button id="floew-saved-close" class="fi fi-close" type="button" aria-label="Kaydedilen haberleri kapat" title="Kapat"></button></div><div class="floew-saved-meta"><span id="floew-saved-total"></span></div><p id="floew-saved-status" role="status" aria-live="polite"></p><div id="floew-saved-list" class="floew-saved-list"></div><footer>Bu liste yalnızca bu cihazda saklanır.</footer></section>';
     document.body.append(panel);
     // Pencere içi tıklama, scroll ve dokunma hareketleri haber akışına iletilmesin.
@@ -229,7 +243,7 @@
     const link=document.createElement("link");
     link.id="floew-saved-stories-css";
     link.rel="stylesheet";
-    link.href="/css/saved-stories.css?v=17";
+    link.href="/css/saved-stories.css?v=18";
     document.head.append(link);
   }
   function init(){
