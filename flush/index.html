@@ -94,6 +94,10 @@
 </head>
 <body>
 <svg aria-hidden="true" width="0" height="0" style="position:absolute;overflow:hidden"><defs>
+  <symbol id="i-permission-key" viewBox="0 0 24 24"><path d="M13.5 14.2c1.8 1.1 3.4 1.4 5-.2l3-3c1.4-1.4 1.6-3 .7-4.8A12.8 12.8 0 0 0 17.5 2c-1.6-.8-3.1-.8-4.5.6L9.7 5.9c-1.5 1.5-1.2 3.1-.1 5L2 18.5V22h4v-2.5h2.5V17H11"/><circle cx="17" cy="7" r="1.4" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-audience-users" viewBox="0 0 24 24"><path d="M8.6 9.2V7.5a3.4 3.4 0 0 1 6.8 0v1.7a3.4 3.4 0 0 1-6.8 0ZM7 10.1a2.4 2.4 0 0 1-4.8 0V9a2.4 2.4 0 0 1 4.8 0Zm14.8 0a2.4 2.4 0 0 1-4.8 0V9a2.4 2.4 0 0 1 4.8 0Z"/><path d="M6.8 20v-2.3a5.2 5.2 0 0 1 10.4 0V20M7.9 13.8a4.3 4.3 0 0 0-6.2 3.9V20h20.6v-2.3a4.3 4.3 0 0 0-6.2-3.9"/></symbol>
+  <symbol id="i-source-broadcast" viewBox="0 0 24 24"><path d="M4.7 19.6a10.5 10.5 0 1 1 14.6 0M7.4 16.8a6.7 6.7 0 1 1 9.2 0M12 14v8"/><circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-behavior-search" viewBox="0 0 24 24"><path d="M17 9V5.9L12.1 1H4a2 2 0 0 0-2 2v17a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-3.2M12 1v5h5M5.5 8h5.8M5.5 11h4.5M5.5 14h4.5M5.5 17h4.5"/><circle cx="16.3" cy="13.2" r="4.1"/><path d="m19.3 16.2 3.2 3.2"/></symbol>
   <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 11 9-8 9 8v9a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></symbol>
   <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18M7 15l4-5 4 3 5-7"/><path d="M17 6h3v3"/></symbol>
   <symbol id="i-ad" viewBox="0 0 24 24"><path d="m3 11 12-5v12L3 14zM3 11v3M15 7l3-2v14l-3-2M6 15l2 5h4l-2-5M21 10v4"/></symbol>
@@ -127,9 +131,9 @@
         <button type="button" class="navbtn" data-target="overview"><svg class="icon"><use href="#i-grid"/></svg><span class="menu-title">Genel Bakış</span><svg class="icon arrow"><use href="#i-arrow"/></svg></button>
       </div>
       <div class="group"><div class="group-label">ANALİTİK</div>
-        <button type="button" class="navbtn" data-target="audience"><svg class="icon"><use href="#i-chart"/></svg><span class="menu-title">Kullanıcılar</span></button>
-        <button type="button" class="navbtn" data-target="behavior"><svg class="icon"><use href="#i-grid"/></svg><span class="menu-title">Davranış</span></button>
-        <button type="button" class="navbtn" data-target="sources"><svg class="icon"><use href="#i-chart"/></svg><span class="menu-title">Haber Kaynakları</span></button>
+        <button type="button" class="navbtn" data-target="audience"><svg class="icon"><use href="#i-audience-users"/></svg><span class="menu-title">Kullanıcılar</span></button>
+        <button type="button" class="navbtn" data-target="behavior"><svg class="icon"><use href="#i-behavior-search"/></svg><span class="menu-title">Davranış</span></button>
+        <button type="button" class="navbtn" data-target="sources"><svg class="icon"><use href="#i-source-broadcast"/></svg><span class="menu-title">Haber Kaynakları</span></button>
         <button type="button" class="navbtn" data-target="ad_performance"><svg class="icon"><use href="#i-chart"/></svg><span class="menu-title">Reklam Performansı</span></button>
       </div>
       <div class="group"><div class="group-label">YÖNETİM</div>
@@ -137,7 +141,7 @@
         <button type="button" class="navbtn" data-target="feedback"><svg class="icon"><use href="#i-feedback"/></svg><span class="menu-title">Feedback</span></button>
       </div>
       <div class="group" id="adminGroup" hidden><div class="group-label">YETKİLENDİRME</div>
-        <button type="button" class="navbtn" id="adminNav" data-target="users" hidden><svg class="icon"><use href="#i-grid"/></svg><span class="menu-title">Kullanıcı Yetkileri</span><svg class="icon arrow"><use href="#i-arrow"/></svg></button>
+        <button type="button" class="navbtn" id="adminNav" data-target="users" hidden><svg class="icon"><use href="#i-permission-key"/></svg><span class="menu-title">Kullanıcı Yetkileri</span><svg class="icon arrow"><use href="#i-arrow"/></svg></button>
       </div>
       <div class="group"><div class="group-label">HESAP</div>
         <button type="button" class="navbtn" data-target="account"><svg class="icon"><use href="#i-home"/></svg><span class="menu-title">Hesabım</span></button>
@@ -155,9 +159,9 @@
       <section class="screen overview" id="overview">
         <div class="section-head"><div><h2>Fasiliteler</h2><p>İşlemlerine kaldığın yerden devam et.</p></div><span class="section-kicker" id="overviewModuleCount">6 modül</span></div>
         <div class="cards">
-          <button type="button" class="tool-card" data-target="audience"><div class="card-top"><span class="card-icon"><svg class="icon"><use href="#i-chart"/></svg></span><span class="pill">ANALİTİK</span></div><h3>Kullanıcılar</h3><p>Oturumlar, cihazlar, coğrafya ve demografi.</p><div class="card-foot">Kullanıcı istatistiklerini aç <svg class="icon"><use href="#i-arrow"/></svg></div></button>
-          <button type="button" class="tool-card" data-target="behavior"><div class="card-top"><span class="card-icon"><svg class="icon"><use href="#i-grid"/></svg></span><span class="pill">ANALİTİK</span></div><h3>Davranış</h3><p>Etkileşimler, olaylar, kaynaklar ve anahtar kelimeler.</p><div class="card-foot">Davranış analizini aç <svg class="icon"><use href="#i-arrow"/></svg></div></button>
-          <button type="button" class="tool-card" data-target="sources"><div class="card-top"><span class="card-icon"><svg class="icon"><use href="#i-chart"/></svg></span><span class="pill">ANALİTİK</span></div><h3>Haber Kaynakları</h3><p>Kaynakların erişimi, görüntülenme süresi, Flöra puanı ve paylaşım istatistikleri.</p><div class="card-foot">Kaynak istatistiklerini aç <svg class="icon"><use href="#i-arrow"/></svg></div></button>
+          <button type="button" class="tool-card" data-target="audience"><div class="card-top"><span class="card-icon"><svg class="icon"><use href="#i-audience-users"/></svg></span><span class="pill">ANALİTİK</span></div><h3>Kullanıcılar</h3><p>Oturumlar, cihazlar, coğrafya ve demografi.</p><div class="card-foot">Kullanıcı istatistiklerini aç <svg class="icon"><use href="#i-arrow"/></svg></div></button>
+          <button type="button" class="tool-card" data-target="behavior"><div class="card-top"><span class="card-icon"><svg class="icon"><use href="#i-behavior-search"/></svg></span><span class="pill">ANALİTİK</span></div><h3>Davranış</h3><p>Etkileşimler, olaylar, kaynaklar ve anahtar kelimeler.</p><div class="card-foot">Davranış analizini aç <svg class="icon"><use href="#i-arrow"/></svg></div></button>
+          <button type="button" class="tool-card" data-target="sources"><div class="card-top"><span class="card-icon"><svg class="icon"><use href="#i-source-broadcast"/></svg></span><span class="pill">ANALİTİK</span></div><h3>Haber Kaynakları</h3><p>Kaynakların erişimi, görüntülenme süresi, Flöra puanı ve paylaşım istatistikleri.</p><div class="card-foot">Kaynak istatistiklerini aç <svg class="icon"><use href="#i-arrow"/></svg></div></button>
           <button type="button" class="tool-card" data-target="ad_performance"><div class="card-top"><span class="card-icon"><svg class="icon"><use href="#i-chart"/></svg></span><span class="pill">ANALİTİK</span></div><h3>Reklam Performansı</h3><p>Gösterim, izleme, tamamlama ve kampanya raporları.</p><div class="card-foot">Performans verilerini aç <svg class="icon"><use href="#i-arrow"/></svg></div></button>
           <button type="button" class="tool-card" data-target="flowery"><div class="card-top"><span class="card-icon"><svg class="icon"><use href="#i-ad"/></svg></span><span class="pill">BAĞLI</span></div><h3>Reklam Merkezi</h3><p>Reklamları, yayın takvimini ve kampanya içeriklerini yönet.</p><div class="card-foot">Reklam merkezini aç <svg class="icon"><use href="#i-arrow"/></svg></div></button>
           <button type="button" class="tool-card" data-target="feedback"><div class="card-top"><span class="card-icon"><svg class="icon"><use href="#i-feedback"/></svg></span><span class="pill">BAĞLI</span></div><h3>Feedback</h3><p>Geri bildirimleri, kullanıcı notlarını ve bildirim eğilimlerini takip et.</p><div class="card-foot">Geri bildirimleri aç <svg class="icon"><use href="#i-arrow"/></svg></div></button>
@@ -193,9 +197,9 @@
  'use strict';
  const AUTH = 'https://auth.xn--flw-tna.tr';
  const MODULES = {
-  audience: {title:'Kullanıcılar',url:'https://xn--flw-tna.tr/admin/analytics.html',icon:'i-chart'},
-  behavior: {title:'Davranış',url:'https://xn--flw-tna.tr/admin/analytics.html',icon:'i-grid'},
-  sources: {title:'Haber Kaynakları',url:'https://xn--flw-tna.tr/admin/analytics.html',icon:'i-chart'},
+  audience: {title:'Kullanıcılar',url:'https://xn--flw-tna.tr/admin/analytics.html',icon:'i-audience-users'},
+  behavior: {title:'Davranış',url:'https://xn--flw-tna.tr/admin/analytics.html',icon:'i-behavior-search'},
+  sources: {title:'Haber Kaynakları',url:'https://xn--flw-tna.tr/admin/analytics.html',icon:'i-source-broadcast'},
   ad_performance: {title:'Reklam Performansı',url:'https://xn--flw-tna.tr/admin/analytics.html',icon:'i-chart'},
   flowery: {title:'Reklam Merkezi',url:'https://flowery.xn--flw-tna.tr/',icon:'i-ad'},
   feedback: {title:'Feedback',url:'https://xn--flw-tna.tr/admin/feedback-admin.html',icon:'i-feedback'}
