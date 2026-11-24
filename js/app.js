@@ -13754,168 +13754,121 @@ function openStatsOverlay(){
   }catch(e){}
 }
 
-/* Açılır araçlar eski sabit top değerleri yerine gerçek buton merkezlerini izler.
-   Kapalı paneller visibility:hidden olsa da offsetHeight ile ölçülebilir. */
-const QUICK_PANEL_ANCHORS=[
-  ["time-range-panel","time-range-button"],
-  ["keyword-filter-panel","keyword-filter-button"],
-  ["keyword-watch-panel","keyword-watch-button"]
-];
-
-function alignQuickPanelToTrigger(panelId,triggerId){
-  const panel=document.getElementById(panelId);
-  const trigger=document.getElementById(triggerId);
-  if(!panel || !trigger)return;
-
-  const rect=trigger.getBoundingClientRect();
-  if(!rect.width || !rect.height)return;
-
-  // Mobil klavye açıkken visualViewport yüksekliği değişebilir.
-  const viewportTop=window.visualViewport?.offsetTop||0;
-  const viewportBottom=Math.min(
-    window.innerHeight,
-    viewportTop+(window.visualViewport?.height||window.innerHeight)
-  );
-  const panelHeight=panel.offsetHeight;
-  const minimumTop=viewportTop+8;
-  const maximumTop=Math.max(minimumTop,viewportBottom-panelHeight-8);
-  const targetTop=rect.top+rect.height/2-panelHeight/2;
-  const top=Math.min(maximumTop,Math.max(minimumTop,targetTop));
-
-  // Kutunun sağ kenarı, ilgili butonun solundan tam 12px içeride biter.
-  const right=Math.max(8,window.innerWidth-rect.left+12);
-
-  // Tarihsel CSS kurallarındaki !important top/right değerlerini geçersiz kıl.
-  panel.style.setProperty("top",`${Math.round(top)}px`,"important");
-  panel.style.setProperty("right",`${Math.round(right)}px`,"important");
+/* These two feature screens use the same full-page modal language as
+   Tercihler / Hakkında / Kaydedilenler. No fixed pixel anchoring remains. */
+function closeTimeRangePanel(){
+  const panel=document.getElementById("time-range-panel");
+  if(!panel?.classList.contains("open"))return;
+  panel.classList.remove("open");
+  panel.setAttribute("aria-hidden","true");
+  panel.setAttribute("inert","");
+  queueUiFlowResumeCheck();
+  showFullscreenButton();
 }
-
-function realignOpenQuickPanels(){
-  for(const [panelId,triggerId] of QUICK_PANEL_ANCHORS){
-    if(document.getElementById(panelId)?.classList.contains("open")){
-      alignQuickPanelToTrigger(panelId,triggerId);
-    }
-  }
-}
-
-window.addEventListener("resize",realignOpenQuickPanels,{passive:true});
-window.visualViewport?.addEventListener("resize",realignOpenQuickPanels,{passive:true});
 
 function closeKeywordFilterPanel(){
   const panel=document.getElementById("keyword-filter-panel");
-  panel?.classList.remove("open");
-  panel?.setAttribute("aria-hidden","true");
+  if(!panel?.classList.contains("open"))return;
+  panel.classList.remove("open");
+  panel.setAttribute("aria-hidden","true");
+  panel.setAttribute("inert","");
   queueUiFlowResumeCheck();
-}
-
-function closeKeywordWatchPanel(){
-  const panel=document.getElementById("keyword-watch-panel");
-  panel?.classList.remove("open");
-  panel?.setAttribute("aria-hidden","true");
-  queueUiFlowResumeCheck();
+  showFullscreenButton();
 }
 
 function closeQuickPanels(except=""){
   if(except!=="time")closeTimeRangePanel();
   if(except!=="filter")closeKeywordFilterPanel();
-  if(except!=="watch")closeKeywordWatchPanel();
 }
 
 function openTimeRangePanel(){
   pauseFlowForUi();
+  closeFloraPopover({resume:false});
   closeMenu();
   closeStatsOverlay();
   closeQuickPanels("time");
+  closeControlMenu();
 
   const panel=document.getElementById("time-range-panel");
   renderTimeRangeControl();
-  alignQuickPanelToTrigger("time-range-panel","time-range-button");
+  panel?.removeAttribute("inert");
   panel?.classList.add("open");
   panel?.setAttribute("aria-hidden","false");
   showFullscreenButton();
-}
-
-function closeTimeRangePanel(){
-  const panel=document.getElementById("time-range-panel");
-  panel?.classList.remove("open");
-  panel?.setAttribute("aria-hidden","true");
-  queueUiFlowResumeCheck();
+  document.getElementById("time-range-close")?.focus();
 }
 
 function toggleTimeRangePanel(){
   const panel=document.getElementById("time-range-panel");
-  if(!panel)return;
-
-  if(panel.classList.contains("open")){
-    closeTimeRangePanel();
-    showFullscreenButton();
-  }else{
-    openTimeRangePanel();
-  }
+  if(panel?.classList.contains("open"))closeTimeRangePanel();
+  else openTimeRangePanel();
 }
 
 function openKeywordFilterPanel(){
   pauseFlowForUi();
+  closeFloraPopover({resume:false});
   closeMenu();
   closeStatsOverlay();
   closeQuickPanels("filter");
+  closeControlMenu();
 
   const panel=document.getElementById("keyword-filter-panel");
+  const input=document.getElementById("keyword-filter-input");
+  if(input)input.value=iddqdModeActive?IDDQD_CODE:"";
   renderKeywordFilterControl();
-  alignQuickPanelToTrigger("keyword-filter-panel","keyword-filter-button");
+  setKeywordManagerFeedback("");
+  panel?.removeAttribute("inert");
   panel?.classList.add("open");
   panel?.setAttribute("aria-hidden","false");
   showFullscreenButton();
 
-  setTimeout(()=>{
-    const input=document.getElementById("keyword-filter-input");
+  if(window.matchMedia?.("(hover:hover) and (pointer:fine)")?.matches){
     input?.focus();
-    input?.select();
-  },0);
+  }else{
+    document.getElementById("keyword-filter-close")?.focus();
+  }
 }
 
 function toggleKeywordFilterPanel(){
   const panel=document.getElementById("keyword-filter-panel");
-  if(!panel)return;
+  if(panel?.classList.contains("open"))closeKeywordFilterPanel();
+  else openKeywordFilterPanel();
+}
 
-  if(panel.classList.contains("open")){
-    closeKeywordFilterPanel();
-    showFullscreenButton();
-  }else{
-    openKeywordFilterPanel();
+/* Keyboard users can navigate all three columns without escaping a dialog. */
+function trapToolScreenFocus(event){
+  if(event.key!=="Tab" || !event.currentTarget.classList.contains("open"))return;
+  const focusable=[...event.currentTarget.querySelectorAll(
+    'button:not(:disabled), input:not(:disabled), a[href]'
+  )].filter(el=>el.getClientRects().length>0);
+  if(!focusable.length)return;
+  const first=focusable[0],last=focusable[focusable.length-1];
+  if(event.shiftKey && document.activeElement===first){
+    event.preventDefault();
+    last.focus();
+  }else if(!event.shiftKey && document.activeElement===last){
+    event.preventDefault();
+    first.focus();
   }
 }
 
-function openKeywordWatchPanel(){
-  pauseFlowForUi();
-  closeMenu();
-  closeStatsOverlay();
-  closeQuickPanels("watch");
-
-  const panel=document.getElementById("keyword-watch-panel");
-  renderKeywordWatchControl();
-  alignQuickPanelToTrigger("keyword-watch-panel","keyword-watch-button");
-  panel?.classList.add("open");
-  panel?.setAttribute("aria-hidden","false");
-  showFullscreenButton();
-
-  setTimeout(()=>{
-    const input=document.getElementById("keyword-watch-input");
-    input?.focus();
-    input?.select();
-  },0);
-}
-
-function toggleKeywordWatchPanel(){
-  const panel=document.getElementById("keyword-watch-panel");
-  if(!panel)return;
-
-  if(panel.classList.contains("open")){
-    closeKeywordWatchPanel();
-    showFullscreenButton();
-  }else{
-    openKeywordWatchPanel();
-  }
+for(const [panelId,closeId,closeFn] of [
+  ["time-range-panel","time-range-close",closeTimeRangePanel],
+  ["keyword-filter-panel","keyword-filter-close",closeKeywordFilterPanel]
+]){
+  const panel=document.getElementById(panelId);
+  panel?.addEventListener("keydown",trapToolScreenFocus);
+  panel?.addEventListener("pointerdown",e=>e.stopPropagation());
+  panel?.addEventListener("pointerup",e=>e.stopPropagation());
+  panel?.addEventListener("click",e=>{
+    e.stopPropagation();
+    if(e.target===panel)closeFn();
+  });
+  document.getElementById(closeId)?.addEventListener("click",e=>{
+    e.preventDefault();
+    e.stopPropagation();
+    closeFn();
+  });
 }
 
 function openMenu(){
@@ -13969,30 +13922,12 @@ document.getElementById("time-range-button")?.addEventListener("click",e=>{
   toggleTimeRangePanel();
 });
 
-document.getElementById("time-range-panel")?.addEventListener("pointerdown",e=>e.stopPropagation());
-document.getElementById("time-range-panel")?.addEventListener("pointerup",e=>e.stopPropagation());
-document.getElementById("time-range-panel")?.addEventListener("click",e=>e.stopPropagation());
-
 document.getElementById("keyword-filter-button")?.addEventListener("pointerdown",e=>e.stopPropagation());
 document.getElementById("keyword-filter-button")?.addEventListener("pointerup",e=>e.stopPropagation());
 document.getElementById("keyword-filter-button")?.addEventListener("click",e=>{
   e.stopPropagation();
   toggleKeywordFilterPanel();
 });
-
-document.getElementById("keyword-watch-button")?.addEventListener("pointerdown",e=>e.stopPropagation());
-document.getElementById("keyword-watch-button")?.addEventListener("pointerup",e=>e.stopPropagation());
-document.getElementById("keyword-watch-button")?.addEventListener("click",e=>{
-  e.stopPropagation();
-  toggleKeywordWatchPanel();
-});
-
-for(const panelId of ["keyword-filter-panel","keyword-watch-panel"]){
-  const panel=document.getElementById(panelId);
-  panel?.addEventListener("pointerdown",e=>e.stopPropagation());
-  panel?.addEventListener("pointerup",e=>e.stopPropagation());
-  panel?.addEventListener("click",e=>e.stopPropagation());
-}
 
 document.getElementById("stats-close")?.addEventListener("click",closeStatsOverlay);
 
