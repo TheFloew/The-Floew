@@ -5094,6 +5094,12 @@ const GA4_CUSTOM_DIMENSIONS = [
     displayName: "Floew Ad Type",
     description: "Image or video Flöw advertisement",
     scope: "EVENT"
+  },
+  {
+    parameterName: "news_source",
+    displayName: "Floew News Source",
+    description: "News publisher name on consented story impressions",
+    scope: "EVENT"
   }
 ];
 
