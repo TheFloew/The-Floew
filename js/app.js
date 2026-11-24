@@ -13497,11 +13497,21 @@ function activateAboutTab(name="stats",{load=true}={}){
 }
 
 
+let controlMenuExitTimer=null;
+
 function closeControlMenu(){
   controlMenuOpen=false;
   const panel=document.getElementById("control-menu-panel");
   const button=document.getElementById("control-menu-button");
+  const wasOpen=Boolean(panel?.classList.contains("open"));
   panel?.classList.remove("open");
+  if(wasOpen){
+    // Keep icon glyphs visible during the fade even though hit-testing stops.
+    panel.classList.add("is-closing");
+    clearTimeout(controlMenuExitTimer);
+    const reduced=window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    controlMenuExitTimer=setTimeout(()=>panel.classList.remove("is-closing"),reduced?0:340);
+  }
   panel?.setAttribute("aria-hidden","true");
   panel?.setAttribute("inert","");
   button?.classList.remove("open");
@@ -13518,6 +13528,8 @@ function openControlMenu(){
   controlMenuOpen=true;
   const panel=document.getElementById("control-menu-panel");
   const button=document.getElementById("control-menu-button");
+  clearTimeout(controlMenuExitTimer);
+  panel?.classList.remove("is-closing");
   panel?.classList.add("open");
   panel?.setAttribute("aria-hidden","false");
   panel?.removeAttribute("inert");
