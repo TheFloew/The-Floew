@@ -10883,7 +10883,6 @@ function anyControlPanelOpen(){
     document.getElementById("control-menu-panel")?.classList.contains("open") ||
     document.getElementById("time-range-panel")?.classList.contains("open") ||
     document.getElementById("keyword-filter-panel")?.classList.contains("open") ||
-    document.getElementById("keyword-watch-panel")?.classList.contains("open") ||
     document.getElementById("stats-overlay")?.classList.contains("open") ||
     document.getElementById("source-viewer-overlay")?.classList.contains("open") ||
     document.getElementById("menu-overlay")?.classList.contains("open")
@@ -10898,7 +10897,6 @@ function navigationBlockingPanelOpen(){
   return Boolean(
     document.getElementById("time-range-panel")?.classList.contains("open") ||
     document.getElementById("keyword-filter-panel")?.classList.contains("open") ||
-    document.getElementById("keyword-watch-panel")?.classList.contains("open") ||
     document.getElementById("stats-overlay")?.classList.contains("open") ||
     document.getElementById("source-viewer-overlay")?.classList.contains("open")
   );
@@ -12701,13 +12699,7 @@ renderDurationSetting();
 renderTimeRangeControl();
 renderKeywordFilterControl();
 syncIddqdLogo();
-renderKeywordWatchControl();
 renderFeedMode();
-
-document.getElementById("keyword-filter-clear")?.addEventListener("click",e=>{
-  e.stopPropagation();
-  clearKeywordFilter();
-});
 
 document.getElementById("keyword-filter-show")?.addEventListener("click",e=>{
   e.stopPropagation();
@@ -12719,40 +12711,28 @@ document.getElementById("keyword-filter-hide")?.addEventListener("click",e=>{
   runTrustedKeywordFilterButtonAction("hide",e);
 });
 
-document.getElementById("keyword-filter-input")?.addEventListener("keydown",e=>{
-  e.stopPropagation();
-
-  if(e.key==="Enter"){
-    e.preventDefault();
-
-    /* IDDQD only responds to the physical Show/Hide buttons. */
-    if(isExactIddqdInput(e.currentTarget?.value||""))return;
-
-    applyKeywordFilter(
-      keywordFilterState.mode==="hide"
-        ? "hide"
-        : "show"
-    );
-  }
-});
-
-document.getElementById("keyword-watch-clear")?.addEventListener("click",e=>{
-  e.stopPropagation();
-  clearKeywordWatch();
-});
-
 document.getElementById("keyword-watch-apply")?.addEventListener("click",e=>{
   e.stopPropagation();
   applyKeywordWatch();
 });
 
-document.getElementById("keyword-watch-input")?.addEventListener("keydown",e=>{
-  e.stopPropagation();
-
+document.getElementById("keyword-filter-input")?.addEventListener("keydown",e=>{
   if(e.key==="Enter"){
     e.preventDefault();
-    applyKeywordWatch();
+    e.stopPropagation();
+    // IDDQD actions still require a trusted physical Show/Hide click.
+    if(!isExactIddqdInput(e.currentTarget?.value||"")){
+      applyKeywordFilter("show");
+    }
   }
+});
+
+document.getElementById("keyword-filter-panel")?.addEventListener("click",e=>{
+  const button=e.target.closest?.(".keyword-manager-remove");
+  if(!button)return;
+  e.preventDefault();
+  e.stopPropagation();
+  removeKeywordRule(button.dataset.keywordKind,Number(button.dataset.keywordIndex));
 });
 
 document.querySelectorAll(".feed-tab").forEach(bindFeedTabButton);
@@ -14187,7 +14167,6 @@ function anyUiPauseSurfaceOpen(){
     document.getElementById("control-menu-panel")?.classList.contains("open") ||
     document.getElementById("time-range-panel")?.classList.contains("open") ||
     document.getElementById("keyword-filter-panel")?.classList.contains("open") ||
-    document.getElementById("keyword-watch-panel")?.classList.contains("open") ||
     document.getElementById("stats-overlay")?.classList.contains("open") ||
     document.getElementById("menu-overlay")?.classList.contains("open")
   );
@@ -17248,76 +17227,8 @@ setAutoAdvancePaused=function(paused){
   return result;
 };
 
-/* Keyword filter/watch — explicit keyword text is stored in private behavior DB. */
-const __floewApplyKeywordFilter=applyKeywordFilter;
-applyKeywordFilter=function(mode){
-  const input=document.getElementById("keyword-filter-input");
-  const text=String(input?.value||"").trim();
-  const keywords=parseKeywordList(text);
-  const result=__floewApplyKeywordFilter.apply(this,arguments);
-
-  /* The easter-egg code is intentionally not written into keyword telemetry. */
-  if(String(result||"").startsWith("iddqd-")){
-    return result;
-  }
-
-  telemetryQueueEvent(
-    keywordFilterState.mode==="show" ? "filter_show" :
-    keywordFilterState.mode==="hide" ? "filter_hide" :
-    "filter_off",
-    {
-      keyword_text:text,
-      keyword_count:keywords.length,
-      mode:keywordFilterState.mode
-    }
-  );
-  return result;
-};
-
-const __floewClearKeywordFilter=clearKeywordFilter;
-clearKeywordFilter=function(){
-  const before=keywordFilterState.text;
-  const result=__floewClearKeywordFilter.apply(this,arguments);
-
-  if(String(result||"").startsWith("iddqd-")){
-    return result;
-  }
-
-  telemetryQueueEvent("filter_clear",{
-    keyword_text:before,
-    keyword_count:parseKeywordList(before).length
-  });
-  return result;
-};
-
-const __floewApplyKeywordWatch=applyKeywordWatch;
-applyKeywordWatch=function(){
-  const input=document.getElementById("keyword-watch-input");
-  const text=String(input?.value||"").trim();
-  const keywords=parseKeywordList(text);
-  const result=__floewApplyKeywordWatch.apply(this,arguments);
-  telemetryQueueEvent(
-    keywords.length ? "watch_enable" : "watch_off",
-    {
-      keyword_text:text,
-      keyword_count:keywords.length,
-      mode:keywords.length?"on":"off"
-    }
-  );
-  return result;
-};
-
-const __floewClearKeywordWatch=clearKeywordWatch;
-clearKeywordWatch=function(){
-  const before=keywordWatchText;
-  const result=__floewClearKeywordWatch.apply(this,arguments);
-  telemetryQueueEvent("watch_clear",{
-    keyword_text:before,
-    keyword_count:parseKeywordList(before).length
-  });
-  return result;
-};
-
+/* Keyword list add/remove events are recorded by recordKeywordRuleChange.
+   Existing watch_match telemetry below remains unchanged. */
 const __floewUpdateKeywordAlert=updateKeywordAlert;
 updateKeywordAlert=function(story){
   const result=__floewUpdateKeywordAlert.apply(this,arguments);
