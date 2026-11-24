@@ -138,7 +138,9 @@
       const img=slide?.querySelector(".slide-image");
       if(!img || img.style?.visibility==="hidden" ||
          img.dataset?.imageStage==="failed" ||
-         !img.complete || !img.naturalWidth)return "";
+         !img.complete || !img.naturalWidth){
+        return sourceUrl(config.initialStoryImage?.(story)||story.image);
+      }
       return sourceUrl(img.currentSrc||img.src);
     }
     function visibleAdImage(ad){
@@ -187,7 +189,8 @@
       const retry=Boolean(item.failedAt && now()-item.failedAt>=15000);
       if(item.imageUrl===url && !retry)return;
       item.imageUrl=url;
-      item.image=null;
+      // Keep the last valid frame during image upgrades for this SAME item.
+      // A new item always starts without a borrowed image.
       item.failedAt=0;
       item.loading=false;
       const serial=++item.assetSerial;
@@ -285,7 +288,7 @@
       }catch(_){return false;}
     }
     function paintStory(ctx,item){
-      ctx.fillStyle="#090909";
+      ctx.fillStyle="#172033";
       ctx.fillRect(0,0,WIDTH,HEIGHT);
       paintMedia(ctx,storyVideo(item)||item.image,false);
       const grad=ctx.createLinearGradient(0,HEIGHT*.34,0,HEIGHT);
@@ -381,7 +384,7 @@
       resetTimer();
       if(!active)return;
       const item=target();
-      const cadence=transition?48:liveVideo(item)?90:850;
+      const cadence=transition?33:liveVideo(item)?90:850;
       timer=setTimeout(tick,cadence);
     }
     function refreshTarget(){
@@ -400,6 +403,12 @@
     function tick(){
       timer=null;
       if(!active)return;
+      // A background tab cannot sustain a frame-by-frame slide animation.
+      // Jump to the correct card rather than stretching 300ms into seconds.
+      if(document.hidden && transition){
+        current=transition.to;
+        transition=null;
+      }
       reconcile();
       draw();
       if(timer===null)schedule();
@@ -442,7 +451,13 @@
       config.adImage?.addEventListener("error",mediaUpdated);
       config.adVideo?.addEventListener("loadeddata",mediaUpdated);
       config.adVideo?.addEventListener("seeked",mediaUpdated);
-      document.addEventListener("visibilitychange",mediaUpdated);
+      document.addEventListener("visibilitychange",()=>{
+        if(document.hidden && transition){
+          current=transition.to;
+          transition=null;
+        }
+        mediaUpdated();
+      });
     }
 
     function ensureVideo(){
