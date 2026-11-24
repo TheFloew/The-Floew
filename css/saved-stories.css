@@ -86,14 +86,14 @@
   font-size:32px!important;
   line-height:1!important;
   /* Geometrik kutu aynı kalır; glif, komşu ikonların görsel merkezine alınır. */
-  transform:translate(-8px,-18px)!important;
+  transform:translate(-6px,-12px)!important;
   text-shadow:0 1px 3px rgba(0,0,0,.65),0 2px 7px rgba(0,0,0,.42);
 }
 /* Sayı, font glifinin optik merkezini izler. */
 #saved-stories-button #floew-bookmark-number-inside {
   position:absolute;
-  left:calc(50% - 8px);
-  top:calc(47% - 18px);
+  left:calc(50% - 6px);
+  top:calc(47% - 12px);
   transform:translate(-50%,-50%);
   width:auto;
   line-height:1;
