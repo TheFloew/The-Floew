@@ -516,8 +516,15 @@
         transition=null;
         ++generation;
         draw(); // deliver a valid initial frame before native PiP requests playback
+        const ready=media.readyState>=2;
         const play=media.play();
-        if(play?.then)await play;
+        // A warmed, frame-ready video must request native PiP in the user's
+        // activation task; awaiting playback first can exhaust that gesture.
+        if(ready){
+          if(play?.catch)play.catch(()=>{});
+        }else if(play?.then){
+          await play;
+        }
         if(which==="standard")await media.requestPictureInPicture();
         else media.webkitSetPresentationMode("picture-in-picture");
         active=true;
