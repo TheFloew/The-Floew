@@ -49,6 +49,7 @@ const ALGO_TOP_CANDIDATES=12;
 const ALGO_SESSION_SEED=`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`;
 const KEYWORD_FILTER_KEY="thefloew.keywordFilter.v1";
 const KEYWORD_WATCH_KEY="thefloew.keywordWatch.v1";
+const KEYWORD_RULES_KEY="thefloew.keywordRules.v2";
 const WEATHER_PREFS_KEY="thefloew.weather.v1";
 const VIDEO_AUDIO_DEFAULT_KEY="thefloew.videoAudioDefault.v1";
 const FX_RATES_VISIBLE_KEY="thefloew.fxRatesVisible.v1";
@@ -2194,56 +2195,77 @@ function parseKeywordList(value){
   )];
 }
 
-function loadKeywordFilterState(){
-  try{
-    const saved=JSON.parse(
-      localStorage.getItem(KEYWORD_FILTER_KEY)||"{}"
-    );
+/* Preserve how users wrote their words in the interface; matching remains
+   case/accent insensitive through parseKeywordList / normalizeText. */
+function parseKeywordEntries(value){
+  const seen=new Set();
+  const entries=[];
+  const source=Array.isArray(value)?value:String(value||"").split(/[,\n;]+/);
 
-    const mode=
-      saved?.mode==="show" || saved?.mode==="hide"
-        ? saved.mode
-        : "off";
-
-    return {
-      text:String(saved?.text||""),
-      mode
-    };
-  }catch(e){
-    return {text:"",mode:"off"};
+  for(const item of source){
+    const word=String(item||"").trim().slice(0,100);
+    const key=normalizeText(word).trim();
+    if(!key || seen.has(key))continue;
+    seen.add(key);
+    entries.push(word);
+    if(entries.length>=120)break;
   }
+  return entries;
 }
 
-function saveKeywordFilterState(){
+function loadKeywordFilterState(){
   try{
-    localStorage.setItem(
-      KEYWORD_FILTER_KEY,
-      JSON.stringify(keywordFilterState)
-    );
-  }catch(e){}
+    const saved=JSON.parse(localStorage.getItem(KEYWORD_FILTER_KEY)||"{}");
+    return {
+      text:String(saved?.text||""),
+      mode:saved?.mode==="show" || saved?.mode==="hide" ? saved.mode : "off"
+    };
+  }catch(e){return {text:"",mode:"off"};}
 }
 
 function loadKeywordWatchText(){
+  try{return String(localStorage.getItem(KEYWORD_WATCH_KEY)||"");}
+  catch(e){return "";}
+}
+
+function loadKeywordRules(){
   try{
-    return String(
-      localStorage.getItem(KEYWORD_WATCH_KEY)||""
-    );
+    const saved=localStorage.getItem(KEYWORD_RULES_KEY);
+    if(saved!==null){
+      const parsed=JSON.parse(saved);
+      if(parsed && typeof parsed==="object" &&
+         Array.isArray(parsed.show) && Array.isArray(parsed.hide) &&
+         Array.isArray(parsed.alert)){
+        const show=parseKeywordEntries(parsed.show);
+        const hide=parseKeywordEntries(parsed.hide).filter(word=>
+          !show.some(item=>normalizeText(item)===normalizeText(word))
+        );
+        return {show,hide,alert:parseKeywordEntries(parsed.alert)};
+      }
+    }
+  }catch(e){}
+
+  /* Existing devices and exported v1 backups retain their words. */
+  const legacy=loadKeywordFilterState();
+  const legacyWords=parseKeywordEntries(legacy.text);
+  return {
+    show:legacy.mode==="show"?legacyWords:[],
+    hide:legacy.mode==="hide"?legacyWords:[],
+    alert:parseKeywordEntries(loadKeywordWatchText())
+  };
+}
+
+let keywordRules=loadKeywordRules();
+
+function saveKeywordRules(){
+  try{
+    localStorage.setItem(KEYWORD_RULES_KEY,JSON.stringify(keywordRules));
+    return true;
   }catch(e){
-    return "";
+    console.warn("Keyword rules could not be saved:",e);
+    return false;
   }
 }
-
-function saveKeywordWatchText(){
-  try{
-    localStorage.setItem(
-      KEYWORD_WATCH_KEY,
-      keywordWatchText
-    );
-  }catch(e){}
-}
-
-let keywordFilterState=loadKeywordFilterState();
-let keywordWatchText=loadKeywordWatchText();
 
 function storyKeywordText(story){
   return normalizeText([
@@ -2266,29 +2288,16 @@ function storyMatchesKeywords(story,keywords){
 }
 
 function passesKeywordFilter(story){
-  const keywords=parseKeywordList(
-    keywordFilterState.text
-  );
-
-  if(
-    keywordFilterState.mode==="off" ||
-    !keywords.length
-  ){
-    return true;
-  }
-
-  const matched=storyMatchesKeywords(
-    story,
-    keywords
-  );
-
-  return keywordFilterState.mode==="show"
-    ? matched
-    : !matched;
+  const shown=parseKeywordList(keywordRules.show.join(","));
+  const hidden=parseKeywordList(keywordRules.hide.join(","));
+  // Whitelist and blacklist work together, rather than replacing one another.
+  if(shown.length && !storyMatchesKeywords(story,shown))return false;
+  if(hidden.length && storyMatchesKeywords(story,hidden))return false;
+  return true;
 }
 
 function currentKeywordWatchKeywords(){
-  return parseKeywordList(keywordWatchText);
+  return parseKeywordList(keywordRules.alert.join(","));
 }
 
 function updateKeywordAlert(story){
@@ -2523,15 +2532,14 @@ function emptyStoriesMessage(){
     return "Seçtiğiniz filtrelerde videolu haber bulunamadı.";
   }
 
-  const keywordCount=
-    parseKeywordList(keywordFilterState.text).length;
-
-  if(keywordCount && keywordFilterState.mode==="show"){
-    return "Anahtar kelime filtresine uyan haber bulunamadı.";
+  if(keywordRules.show.length && keywordRules.hide.length){
+    return "Gösterilen ve gizlenen anahtar kelimelere uygun haber bulunamadı.";
   }
-
-  if(keywordCount && keywordFilterState.mode==="hide"){
-    return "Anahtar kelime filtresi sonrası gösterilecek haber kalmadı.";
+  if(keywordRules.show.length){
+    return "Gösterilen anahtar kelimelere uygun haber bulunamadı.";
+  }
+  if(keywordRules.hide.length){
+    return "Gizlenen kelimeler nedeniyle gösterilecek haber kalmadı.";
   }
 
   if(feedMode==="breaking"){
@@ -12375,6 +12383,7 @@ function preferenceTransferKeys(){
     FEED_ORDER_KEY,
     KEYWORD_FILTER_KEY,
     KEYWORD_WATCH_KEY,
+    KEYWORD_RULES_KEY,
     WEATHER_PREFS_KEY,
     CUSTOM_RSS_STORAGE_KEY,
     NEAR_DUPLICATE_PREF_KEY,
