@@ -139,6 +139,30 @@
         : visibleStoryImage(item.story);
     }
 
+    /* A clean browser-decoded image can be copied immediately, without a
+       second network request. Keep a snapshot, never a live recycled <img>. */
+    function snapshotFromPage(item,url){
+      const img=item.kind==="ad"
+        ? config.adImage
+        : slideFor(item.story)?.querySelector(".slide-image");
+      if(!img || !img.complete || !img.naturalWidth || !img.naturalHeight ||
+         sourceUrl(img.currentSrc||img.src)!==url)return null;
+      const scale=Math.min(1,960/img.naturalWidth,540/img.naturalHeight);
+      const w=Math.max(1,Math.round(img.naturalWidth*scale));
+      const h=Math.max(1,Math.round(img.naturalHeight*scale));
+      try{
+        const copy=document.createElement("canvas");
+        copy.width=w;copy.height=h;
+        const ctx=copy.getContext("2d",{willReadFrequently:true});
+        ctx.drawImage(img,0,0,w,h);
+        ctx.getImageData(0,0,1,1);
+        return copy;
+      }catch(_){
+        // A cross-origin image must not taint the streaming PiP canvas.
+        return null;
+      }
+    }
+
     function refreshImage(item,epoch){
       if(!item || !isTarget(item,epoch))return;
       const url=imageUrlFor(item);
@@ -150,6 +174,12 @@
       item.loading=false;
       const serial=++item.assetSerial;
       if(!url){draw();return;}
+      const snapshot=snapshotFromPage(item,url);
+      if(snapshot){
+        item.image=snapshot;
+        draw();
+        return;
+      }
       item.loading=true;
       void getImage(url).then(image=>{
         if(!isTarget(item,epoch) || item.assetSerial!==serial)return;
