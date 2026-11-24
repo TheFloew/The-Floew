@@ -11926,64 +11926,188 @@ function runTrustedKeywordFilterButtonAction(mode,event){
   }
 }
 
+function setKeywordManagerFeedback(message){
+  const feedback=document.getElementById("keyword-manager-feedback");
+  if(feedback)feedback.textContent=message ||
+    "Birden fazla kelimeyi virgülle ayırarak ekleyebilirsiniz.";
+}
+
+function renderKeywordColumn(kind,title){
+  const list=document.getElementById("keyword-"+kind+"-list");
+  const count=document.getElementById("keyword-"+kind+"-count");
+  if(!list)return;
+  const words=keywordRules[kind]||[];
+  if(count)count.textContent=String(words.length);
+  list.replaceChildren();
+
+  if(!words.length){
+    const empty=document.createElement("p");
+    empty.className="keyword-manager-empty";
+    empty.textContent=kind==="show"
+      ? "Gösterilecek kelime yok."
+      : kind==="hide"
+        ? "Gizlenecek kelime yok."
+        : "Vurgulanacak kelime yok.";
+    list.appendChild(empty);
+    return;
+  }
+
+  const fragment=document.createDocumentFragment();
+  words.forEach((word,index)=>{
+    const row=document.createElement("div");
+    row.className="keyword-manager-item";
+    const label=document.createElement("span");
+    label.className="keyword-manager-item-label";
+    label.textContent=word;
+
+    const remove=document.createElement("button");
+    remove.type="button";
+    remove.className="keyword-manager-remove fi fi-close";
+    remove.dataset.keywordKind=kind;
+    remove.dataset.keywordIndex=String(index);
+    remove.setAttribute("aria-label",title+" listesinden "+word+" kelimesini kaldır");
+    remove.title="Sil";
+
+    row.append(label,remove);
+    fragment.appendChild(row);
+  });
+  list.appendChild(fragment);
+}
+
 function renderKeywordFilterControl(){
-  const input=document.getElementById("keyword-filter-input");
-  const show=document.getElementById("keyword-filter-show");
-  const hide=document.getElementById("keyword-filter-hide");
   const trigger=document.getElementById("keyword-filter-button");
-
-  if(input && document.activeElement!==input){
-    input.value=iddqdModeActive
-      ? IDDQD_CODE
-      : keywordFilterState.text;
+  const input=document.getElementById("keyword-filter-input");
+  if(iddqdModeActive && input && document.activeElement!==input){
+    input.value=IDDQD_CODE;
   }
 
-  const normalActive=
-    parseKeywordList(keywordFilterState.text).length>0 &&
-    keywordFilterState.mode!=="off";
+  renderKeywordColumn("show","Gösterilenler");
+  renderKeywordColumn("hide","Gizlenenler");
+  renderKeywordColumn("alert","Vurgulananlar");
 
-  const active=iddqdModeActive || normalActive;
-
-  show?.classList.toggle(
-    "active",
-    iddqdModeActive ||
-    (normalActive && keywordFilterState.mode==="show")
-  );
-
-  hide?.classList.toggle(
-    "active",
-    !iddqdModeActive &&
-    normalActive &&
-    keywordFilterState.mode==="hide"
-  );
-
-  show?.setAttribute(
-    "aria-pressed",
-    iddqdModeActive ||
-    (normalActive && keywordFilterState.mode==="show")
-      ? "true"
-      : "false"
-  );
-
-  hide?.setAttribute(
-    "aria-pressed",
-    !iddqdModeActive &&
-    normalActive &&
-    keywordFilterState.mode==="hide"
-      ? "true"
-      : "false"
-  );
-
+  const active=iddqdModeActive ||
+    keywordRules.show.length>0 ||
+    keywordRules.hide.length>0 ||
+    keywordRules.alert.length>0;
   trigger?.classList.toggle("tool-active",active);
-
   if(trigger){
-    trigger.title=iddqdModeActive
-      ? "Anahtar kelime filtresi"
-      : normalActive
-        ? `Anahtar kelime filtresi: ${keywordFilterState.mode==="show"?"Göster":"Gizle"}`
-        : "Anahtar kelime filtresi";
-    trigger.setAttribute("aria-label",trigger.title);
+    trigger.title="Anahtar kelimeler";
+    trigger.setAttribute("aria-label","Anahtar kelimeler");
   }
+}
+
+function recordKeywordRuleChange(kind,action,words){
+  const events={
+    show:action==="add"?"filter_show":"filter_clear",
+    hide:action==="add"?"filter_hide":"filter_clear",
+    alert:action==="add"?"watch_enable":"watch_clear"
+  };
+  const items=parseKeywordList(words.join(","));
+  telemetryQueueEvent(events[kind],{
+    keyword_text:words.join(","),
+    keyword_count:items.length,
+    mode:kind,
+    meta:{action,group:kind}
+  });
+}
+
+function addKeywordRule(kind){
+  if(!["show","hide","alert"].includes(kind))return "invalid-action";
+  const input=document.getElementById("keyword-filter-input");
+  const text=String(input?.value||"").trim();
+  const words=parseKeywordEntries(text);
+  if(!words.length){
+    setKeywordManagerFeedback("Önce bir anahtar kelime yazın.");
+    input?.focus();
+    return "empty";
+  }
+
+  if(iddqdModeActive){
+    setKeywordManagerFeedback("Bu modda anahtar kelime listeleri değiştirilemez.");
+    return "iddqd-locked";
+  }
+
+  if(words.some(word=>isExactIddqdInput(word))){
+    setKeywordManagerFeedback("Bu kelime yalnızca özel Göster / Gizle işlemlerinde kullanılabilir.");
+    return "iddqd-denied";
+  }
+
+  const before={
+    show:[...keywordRules.show],
+    hide:[...keywordRules.hide],
+    alert:[...keywordRules.alert]
+  };
+  const current=keywordRules[kind]||[];
+  const existing=new Set(current.map(word=>normalizeText(word)));
+  const added=[];
+  for(const word of words){
+    const key=normalizeText(word);
+    if(existing.has(key))continue;
+    if(current.length>=120)break;
+    current.push(word);
+    added.push(word);
+    existing.add(key);
+  }
+  if(kind==="show" || kind==="hide"){
+    const other=kind==="show"?"hide":"show";
+    const moving=new Set(words.map(word=>normalizeText(word)));
+    keywordRules[other]=keywordRules[other].filter(word=>!moving.has(normalizeText(word)));
+  }
+
+  if(JSON.stringify(keywordRules)===JSON.stringify(before)){
+    setKeywordManagerFeedback("Bu kelimeler zaten ilgili listede.");
+    if(input)input.value="";
+    return "unchanged";
+  }
+
+  if(!saveKeywordRules()){
+    keywordRules=before;
+    setKeywordManagerFeedback("Kelimeler bu cihazda saklanamadı.");
+    return "storage-error";
+  }
+  if(input)input.value="";
+  renderKeywordFilterControl();
+  setKeywordManagerFeedback(
+    (added.length?added.length+" kelime ":"Kelimeler ")+
+    (kind==="show"?"Gösterilenler":kind==="hide"?"Gizlenenler":"Vurgulananlar")+
+    " listesine "+(added.length?"eklendi.":"taşındı.")
+  );
+
+  if(kind==="alert"){
+    updateKeywordAlert(state.stories[state.index]||null);
+  }else{
+    applyFilters();
+    updateKeywordAlert(state.stories[state.index]||null);
+  }
+  if(added.length)recordKeywordRuleChange(kind,"add",added);
+  input?.focus();
+  return "keyword-added";
+}
+
+function removeKeywordRule(kind,index){
+  if(!["show","hide","alert"].includes(kind) || iddqdModeActive)return;
+  const list=keywordRules[kind]||[];
+  if(!Number.isInteger(index) || index<0 || index>=list.length)return;
+  const previous={
+    show:[...keywordRules.show],
+    hide:[...keywordRules.hide],
+    alert:[...keywordRules.alert]
+  };
+  const removed=list.splice(index,1);
+  if(!saveKeywordRules()){
+    keywordRules=previous;
+    setKeywordManagerFeedback("Kelime silinemedi: tarayıcı depolaması kullanılamıyor.");
+    return;
+  }
+  renderKeywordFilterControl();
+  setKeywordManagerFeedback("Kelime listeden kaldırıldı.");
+  if(kind==="alert"){
+    updateKeywordAlert(state.stories[state.index]||null);
+  }else{
+    applyFilters();
+    updateKeywordAlert(state.stories[state.index]||null);
+  }
+  recordKeywordRuleChange(kind,"remove",removed);
 }
 
 function applyKeywordFilter(mode){
@@ -11992,140 +12116,28 @@ function applyKeywordFilter(mode){
   const exactIddqd=isExactIddqdInput(rawText);
 
   if(iddqdModeActive){
-    if(
-      exactIddqd &&
-      mode==="hide" &&
-      iddqdTrustedActionGate==="hide"
-    ){
+    if(exactIddqd && mode==="hide" && iddqdTrustedActionGate==="hide"){
       exitIddqdMode();
       return "iddqd-exit";
     }
-
-    /* While active, no other filter action can alter or exit the mode. */
-    renderKeywordFilterControl();
+    setKeywordManagerFeedback("Bu modda yalnızca özel çıkış komutu kullanılabilir.");
     return "iddqd-locked";
   }
 
   if(exactIddqd){
-    if(
-      mode==="show" &&
-      iddqdTrustedActionGate==="show"
-    ){
+    if(mode==="show" && iddqdTrustedActionGate==="show"){
       enterIddqdMode();
       return "iddqd-enter";
     }
-
-    /* IDDQD is never treated as an ordinary show/hide keyword filter. */
-    renderKeywordFilterControl();
+    setKeywordManagerFeedback("Özel komut yalnızca butonla etkinleştirilir.");
     return "iddqd-denied";
   }
 
-  const text=rawText.trim();
-  const keywords=parseKeywordList(text);
-
-  keywordFilterState={
-    text,
-    mode:
-      keywords.length &&
-      (mode==="show" || mode==="hide")
-        ? mode
-        : "off"
-  };
-
-  saveKeywordFilterState();
-  renderKeywordFilterControl();
-  closeKeywordFilterPanel();
-  applyFilters();
-  showFullscreenButton();
-  return "filter-applied";
-}
-
-function clearKeywordFilter(){
-  const input=document.getElementById("keyword-filter-input");
-
-  if(iddqdModeActive){
-    if(input)input.value="";
-    setTimeout(()=>{
-      document.getElementById("keyword-filter-input")?.focus();
-    },0);
-    return "iddqd-locked";
-  }
-
-  if(input)input.value="";
-
-  keywordFilterState={
-    text:"",
-    mode:"off"
-  };
-
-  saveKeywordFilterState();
-  renderKeywordFilterControl();
-  applyFilters();
-  showFullscreenButton();
-
-  setTimeout(()=>{
-    document.getElementById("keyword-filter-input")?.focus();
-  },0);
-  return "filter-cleared";
-}
-
-function renderKeywordWatchControl(){
-  const input=document.getElementById("keyword-watch-input");
-  const apply=document.getElementById("keyword-watch-apply");
-  const trigger=document.getElementById("keyword-watch-button");
-  const active=currentKeywordWatchKeywords().length>0;
-
-  if(input && document.activeElement!==input){
-    input.value=keywordWatchText;
-  }
-
-  apply?.classList.toggle("active",active);
-  apply?.setAttribute(
-    "aria-pressed",
-    active?"true":"false"
-  );
-
-  trigger?.classList.toggle("tool-active",active);
-  if(trigger){
-    trigger.title=active
-      ? "Anahtar kelime takibi açık"
-      : "Anahtar kelime takibi";
-    trigger.setAttribute("aria-label",trigger.title);
-  }
+  return addKeywordRule(mode);
 }
 
 function applyKeywordWatch(){
-  const input=document.getElementById("keyword-watch-input");
-  keywordWatchText=String(input?.value||"").trim();
-
-  saveKeywordWatchText();
-  renderKeywordWatchControl();
-  closeKeywordWatchPanel();
-
-  updateKeywordAlert(
-    state.stories[state.index]||null
-  );
-
-  showFullscreenButton();
-}
-
-function clearKeywordWatch(){
-  const input=document.getElementById("keyword-watch-input");
-  if(input)input.value="";
-
-  keywordWatchText="";
-  saveKeywordWatchText();
-  renderKeywordWatchControl();
-
-  updateKeywordAlert(
-    state.stories[state.index]||null
-  );
-
-  showFullscreenButton();
-
-  setTimeout(()=>{
-    document.getElementById("keyword-watch-input")?.focus();
-  },0);
+  return addKeywordRule("alert");
 }
 
 function renderTimeRangeControl(){
