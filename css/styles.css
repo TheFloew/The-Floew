@@ -6393,3 +6393,102 @@ body{
     line-height:1 !important;
   }
 }
+
+
+/* =====================================================================
+   Flöw panel motion standard, based on Preferences
+   Backdrop fades over 320ms; content rises 8px and scales from .985.
+   Apply to all modal screens and compact pop-out controls alike.
+   ===================================================================== */
+:root{
+  --floew-panel-motion-duration:.32s;
+  --floew-panel-motion-ease:cubic-bezier(.22,.61,.36,1);
+}
+#menu-overlay,
+#stats-overlay,
+#source-viewer-overlay{
+  transition:
+    opacity var(--floew-panel-motion-duration) ease,
+    visibility 0s linear var(--floew-panel-motion-duration) !important;
+}
+#menu-overlay.open,
+#stats-overlay.open,
+#source-viewer-overlay.open{
+  transition:
+    opacity var(--floew-panel-motion-duration) ease,
+    visibility 0s linear 0s !important;
+}
+#settings-menu,
+#public-stats-panel,
+#source-viewer-panel{
+  transform:translateY(8px) scale(.985);
+  transform-origin:center top;
+  transition:transform var(--floew-panel-motion-duration) var(--floew-panel-motion-ease) !important;
+}
+#menu-overlay.open #settings-menu,
+#stats-overlay.open #public-stats-panel,
+#source-viewer-overlay.open #source-viewer-panel{
+  transform:translateY(0) scale(1);
+}
+
+/* Legal document dialog is layered inside About. Keep it rendered but
+   non-interactive while closed, so exit has time to animate. */
+#about-doc-viewer{
+  display:flex;
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  transform:translate(-50%,-50%) translateY(8px) scale(.985);
+  transition:
+    opacity var(--floew-panel-motion-duration) ease,
+    transform var(--floew-panel-motion-duration) var(--floew-panel-motion-ease),
+    visibility 0s linear var(--floew-panel-motion-duration);
+}
+#about-doc-viewer.open{
+  opacity:1;
+  visibility:visible;
+  pointer-events:auto;
+  animation:none !important;
+  transform:translate(-50%,-50%) translateY(0) scale(1);
+  transition:
+    opacity var(--floew-panel-motion-duration) ease,
+    transform var(--floew-panel-motion-duration) var(--floew-panel-motion-ease),
+    visibility 0s linear 0s;
+}
+
+/* Small controls keep their anchored position, but enter/leave with the
+   same movement and timing as Preferences. */
+#time-range-panel,
+.keyword-tool-panel,
+#control-menu-panel{
+  transform:translateY(8px) scale(.985);
+  transition:
+    opacity var(--floew-panel-motion-duration) ease,
+    transform var(--floew-panel-motion-duration) var(--floew-panel-motion-ease),
+    visibility 0s linear var(--floew-panel-motion-duration);
+}
+#time-range-panel.open,
+.keyword-tool-panel.open,
+#control-menu-panel.open{
+  transform:translateY(0) scale(1);
+  transition:
+    opacity var(--floew-panel-motion-duration) ease,
+    transform var(--floew-panel-motion-duration) var(--floew-panel-motion-ease),
+    visibility 0s linear 0s;
+}
+
+@media(prefers-reduced-motion:reduce){
+  #menu-overlay,
+  #stats-overlay,
+  #source-viewer-overlay,
+  #settings-menu,
+  #public-stats-panel,
+  #source-viewer-panel,
+  #about-doc-viewer,
+  #time-range-panel,
+  .keyword-tool-panel,
+  #control-menu-panel{
+    transition:none !important;
+    animation:none !important;
+  }
+}
