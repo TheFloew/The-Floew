@@ -83,7 +83,7 @@
 }
 #saved-stories-button {position:relative}
 #control-menu-panel #saved-stories-button.fi::before {
-  font-size:32px!important;
+  font-size:24px!important;
   line-height:1!important;
   /* Geometrik kutu aynı kalır; glif, komşu ikonların görsel merkezine alınır. */
   transform:translate(-6px,-12px)!important;
