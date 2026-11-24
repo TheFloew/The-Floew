@@ -7841,7 +7841,7 @@ function pauseFlowForMouseMovement(){
     Tercihler açıkken akış zaten UI duraklatma koordinatörü tarafından
     tutulur; menü içindeki fare hareketleri ayrıca bir pause başlatmasın.
   */
-  if(document.getElementById("menu-overlay")?.classList.contains("open")){
+  if(uiFlowPauseActive || anyUiPauseSurfaceOpen()){
     return;
   }
 
@@ -14492,8 +14492,6 @@ window.addEventListener("wheel",e=>{
   if(e.target.closest && e.target.closest("#time-range-panel"))return;
   if(e.target.closest && e.target.closest("#keyword-filter-button"))return;
   if(e.target.closest && e.target.closest("#keyword-filter-panel"))return;
-  if(e.target.closest && e.target.closest("#keyword-watch-button"))return;
-  if(e.target.closest && e.target.closest("#keyword-watch-panel"))return;
   if(e.target.closest && e.target.closest("#pip-button"))return;
   if(e.target.closest && e.target.closest("#menu-overlay"))return;
   e.preventDefault();
@@ -14516,10 +14514,7 @@ window.addEventListener("keydown",e=>{
   const keywordFilterOpen=
     document.getElementById("keyword-filter-panel")?.classList.contains("open");
 
-  const keywordWatchOpen=
-    document.getElementById("keyword-watch-panel")?.classList.contains("open");
-
-  if(menuOpen || statsOpen || sourceViewerIsOpen || timeOpen || keywordFilterOpen || keywordWatchOpen)return;
+  if(menuOpen || statsOpen || sourceViewerIsOpen || timeOpen || keywordFilterOpen)return;
 
   const target=e.target;
   const typingTarget=Boolean(
@@ -15795,8 +15790,6 @@ window.addEventListener("pointerdown",e=>{
   if(e.target.closest && e.target.closest("#time-range-panel"))return;
   if(e.target.closest && e.target.closest("#keyword-filter-button"))return;
   if(e.target.closest && e.target.closest("#keyword-filter-panel"))return;
-  if(e.target.closest && e.target.closest("#keyword-watch-button"))return;
-  if(e.target.closest && e.target.closest("#keyword-watch-panel"))return;
   if(e.target.closest && e.target.closest("#pip-button"))return;
   if(e.target.closest && e.target.closest("#menu-overlay"))return;
   state.x=e.clientX;state.y=e.clientY;state.t=performance.now();
@@ -16003,8 +15996,6 @@ window.addEventListener("pointerup",e=>{
   if(e.target.closest && e.target.closest("#time-range-panel"))return;
   if(e.target.closest && e.target.closest("#keyword-filter-button"))return;
   if(e.target.closest && e.target.closest("#keyword-filter-panel"))return;
-  if(e.target.closest && e.target.closest("#keyword-watch-button"))return;
-  if(e.target.closest && e.target.closest("#keyword-watch-panel"))return;
   if(e.target.closest && e.target.closest("#pip-button"))return;
   if(e.target.closest && e.target.closest("#menu-overlay"))return;
 
