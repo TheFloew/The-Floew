@@ -10976,6 +10976,124 @@ let pipCurrent=null;
 let pipTransition=null;
 const pipImageCache=new Map();
 
+/*
+  A cross-origin advertisement that can play in <video> is not necessarily
+  safe to draw into a canvas. Drawing it can taint our captured canvas and
+  permanently mute the PiP stream, leaving the last story frozen.
+  Probe on a throwaway 1x1 canvas first, NEVER on pipCanvas.
+*/
+const pipMediaOriginCache=new WeakMap();
+const pipSafeAdVideos=new Map();
+
+function pipMediaIsOriginClean(media){
+  if(!media)return false;
+  if(media.tagName==="VIDEO" && media.readyState<2)return false;
+
+  const src=String(media.currentSrc||media.src||"");
+  const cached=pipMediaOriginCache.get(media);
+  if(cached && cached.src===src)return cached.safe;
+
+  try{
+    const scratch=document.createElement("canvas");
+    scratch.width=1;
+    scratch.height=1;
+    const ctx=scratch.getContext("2d",{willReadFrequently:true});
+    ctx.drawImage(media,0,0,1,1);
+    ctx.getImageData(0,0,1,1);
+    pipMediaOriginCache.set(media,{src,safe:true});
+    return true;
+  }catch(err){
+    pipMediaOriginCache.set(media,{src,safe:false});
+    return false;
+  }
+}
+
+function updatePiPSafeAdMedia(ad,media){
+  for(const item of [
+    pipCurrent,pipTransition?.from,pipTransition?.to
+  ]){
+    if(item?.kind==="ad" && item.ad?.src===ad.src){
+      item.media=media;
+    }
+  }
+  if(pipActive)schedulePiPRender();
+}
+
+/*
+  Never change the actual feed advertisement's crossorigin setting: that
+  could break normal playback if the ad server lacks CORS. Instead try a
+  separately decoded anonymous video. If allowed by the server it provides
+  the real ad frames; otherwise we show the campaign title safely.
+*/
+function ensurePiPSafeAdVideo(ad){
+  const src=String(ad?.src||"");
+  if(!src)return null;
+  const existing=pipSafeAdVideos.get(src);
+  if(existing)return existing.safe?existing.video:null;
+
+  const video=document.createElement("video");
+  video.crossOrigin="anonymous";
+  video.muted=true;
+  video.defaultMuted=true;
+  video.volume=0;
+  video.playsInline=true;
+  video.preload="auto";
+  video.autoplay=false;
+  video.loop=false;
+  video.style.position="fixed";
+  video.style.width="1px";
+  video.style.height="1px";
+  video.style.opacity=".01";
+  video.style.pointerEvents="none";
+  video.style.zIndex="-1";
+  video.setAttribute("muted","");
+  video.setAttribute("playsinline","");
+
+  const entry={video,safe:false,failed:false};
+  pipSafeAdVideos.set(src,entry);
+
+  const failed=()=>{
+    if(entry.safe || entry.failed)return;
+    entry.failed=true;
+    try{video.pause()}catch(e){}
+    try{video.removeAttribute("src");video.load()}catch(e){}
+    video.remove();
+  };
+  const ready=()=>{
+    if(entry.failed)return;
+    if(!pipMediaIsOriginClean(video)){
+      failed();
+      return;
+    }
+
+    entry.safe=true;
+    if(adVideo && Number.isFinite(adVideo.currentTime)){
+      const time=adVideo.currentTime;
+      if(time>0 && Number.isFinite(video.duration) &&
+         video.duration>time+.2){
+        try{video.currentTime=time}catch(e){}
+      }
+    }
+    const play=video.play();
+    if(play?.catch)play.catch(()=>{});
+    updatePiPSafeAdMedia(ad,video);
+  };
+  video.addEventListener("loadeddata",ready,{once:true});
+  video.addEventListener("error",failed,{once:true});
+
+  document.body.appendChild(video);
+  video.src=src;
+  try{video.load()}catch(e){failed()}
+  return null;
+}
+
+function warmPiPUpcomingAds(){
+  if(!pipActive)return;
+  for(const ad of upcomingAds.slice(0,2)){
+    if(ad?.type==="video")ensurePiPSafeAdVideo(ad);
+  }
+}
+
 function pipSupportMode(){
   const hasCanvasStream=
     typeof HTMLCanvasElement.prototype.captureStream==="function";
@@ -11175,17 +11293,21 @@ function drawPiPAd(ctx,item,offsetX=0,offsetY=0){
   ctx.fillStyle="#000";
   ctx.fillRect(0,0,W,H);
 
-  if(media){
+  /* Origin-check before drawImage: a tainted captured canvas permanently
+     freezes standard video PiP at the previous news frame. */
+  const safeMedia=media && pipMediaIsOriginClean(media) ? media : null;
+
+  if(safeMedia){
     const iw=
-      media.videoWidth ||
-      media.naturalWidth ||
-      media.width ||
+      safeMedia.videoWidth ||
+      safeMedia.naturalWidth ||
+      safeMedia.width ||
       W;
 
     const ih=
-      media.videoHeight ||
-      media.naturalHeight ||
-      media.height ||
+      safeMedia.videoHeight ||
+      safeMedia.naturalHeight ||
+      safeMedia.height ||
       H;
 
     if(iw>0 && ih>0){
@@ -11199,7 +11321,7 @@ function drawPiPAd(ctx,item,offsetX=0,offsetY=0){
 
       try{
         ctx.drawImage(
-          media,
+          safeMedia,
           (W-dw)/2,
           (H-dh)/2,
           dw,
@@ -11207,6 +11329,19 @@ function drawPiPAd(ctx,item,offsetX=0,offsetY=0){
         );
       }catch(e){}
     }
+  }else{
+    // Show the ad's actual campaign text, never a stale news frame or a
+    // black screen, if video pixels cannot legally be captured.
+    ctx.fillStyle="#262b3b";
+    ctx.fillRect(0,0,W,H);
+    ctx.textAlign="center";
+    ctx.textBaseline="middle";
+    ctx.fillStyle="#ffffff";
+    ctx.font='700 34px "Comfortaa", Arial, sans-serif';
+    const title=String(item.ad?.title||"Reklam").trim();
+    const lines=wrapCanvasText(ctx,title,W-120,3);
+    const startY=H/2-(lines.length-1)*43/2;
+    lines.forEach((line,index)=>ctx.fillText(line,W/2,startY+index*43));
   }
 
   /*
@@ -11387,16 +11522,20 @@ async function preparePiPAd(ad){
     if(
       adVideo &&
       !adVideo.hidden &&
-      adVideo.readyState>=2
+      adVideo.readyState>=2 &&
+      pipMediaIsOriginClean(adVideo)
     ){
       media=adVideo;
+    }else{
+      media=ensurePiPSafeAdVideo(ad);
     }
   }else{
     if(
       adImage &&
       !adImage.hidden &&
       adImage.complete &&
-      adImage.naturalWidth>0
+      adImage.naturalWidth>0 &&
+      pipMediaIsOriginClean(adImage)
     ){
       media=adImage;
     }
@@ -11636,6 +11775,7 @@ async function togglePiP(){
     if(mode==="standard"){
       await video.requestPictureInPicture();
       pipActive=true;
+      warmPiPUpcomingAds();
       schedulePiPRender();
       return;
     }
@@ -11643,6 +11783,7 @@ async function togglePiP(){
     if(mode==="webkit"){
       video.webkitSetPresentationMode("picture-in-picture");
       pipActive=true;
+      warmPiPUpcomingAds();
       schedulePiPRender();
     }
   }catch(err){
