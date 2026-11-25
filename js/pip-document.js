@@ -420,11 +420,20 @@
    const finish=()=>{
     if(done)return;
     done=true;
-    // Even if another animation started, the old scene must not leak.
+    // Firefox can suspend compositor animations during a Document PiP
+    // transition. Cancel its fill effect so the active ad cannot remain
+    // translated fully outside the small viewport.
+    if(shown===currentIncoming){
+     try{enter.finish()}catch(_){}
+     try{enter.cancel()}catch(_){}
+     currentIncoming.outer.style.transform="";
+    }
     retire(old);
    };
+   const currentIncoming=shown;
    Promise.allSettled([enter.finished,leave.finished]).then(finish,finish);
    win.setTimeout(finish,MS+120);
+   root.setTimeout?.(finish,MS+550);
   }
   function attached(){
    if(!win || win.closed)return false;
@@ -477,6 +486,7 @@
   }
   function sync(){
    if(!win||closing)return;
+   if(win.closed){reset();return}
    if(!mountScene())return;
    primeUpcomingAds();
    if(!config.isBusy()&&!config.isAdEntering()){
