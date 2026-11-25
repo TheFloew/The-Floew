@@ -99,6 +99,57 @@ test("ad frames not yet decoded are not drawn, avoiding partial-video exceptions
   assert.equal(f.calls.images.length,0);
 });
 
+test("after unsafe ad the same captured canvas can still render subsequent news",()=>{
+  const f=fixture();
+  const unsafeVideo={tagName:"VIDEO",readyState:4,videoWidth:1920,videoHeight:1080,
+    currentSrc:"https://cross-origin.test/spot.mp4",tainted:true};
+  f.drawAd(f.ctx,{kind:"ad",media:unsafeVideo,ad:{title:"Campaign"}});
+  assert.equal(f.calls.images.length,0);
+
+  const storySnippet=section(
+    "function drawPiPStory(ctx,story,img,offsetX=0,offsetY=0){",
+    "function drawPiPAd(ctx,item,offsetX=0,offsetY=0){"
+  );
+  const drawStory=new Function("pipCanvas","wrapCanvasText",
+    storySnippet+";return drawPiPStory;")(
+      {width:960,height:540},(_ctx,title)=>[title]
+    );
+  f.ctx.createLinearGradient=()=>({addColorStop(){}});
+  const newsImage={width:960,height:540,tainted:false};
+  drawStory(f.ctx,{title:"Reklamdan sonraki haber",source:"Source"},newsImage);
+  assert.equal(f.calls.images.length,1,"new news frame can still reach PiP capture");
+  assert.equal(f.calls.images[0][0],newsImage);
+  assert.ok(f.calls.text.some(line=>line[0]==="Reklamdan sonraki haber"));
+});
+
+test("next story begins without awaiting network and upgrades on later image arrival",async()=>{
+  const snippet=section(
+    "async function preparePiPStory(story){",
+    "async function preparePiPAd(ad){"
+  );
+  let resolveFetch,refreshes=0;
+  const unresolved=new Promise(resolve=>{resolveFetch=resolve});
+  const transition={to:null};
+  const prepare=new Function(
+    "getPiPImage","pipCurrent","pipTransition","pipActive","schedulePiPRender",
+    snippet+";return preparePiPStory;"
+  )(()=>unresolved,null,transition,true,()=>{refreshes++});
+
+  const story={title:"Yeni haber",image:"https://assets.test/new.jpg"};
+  const item=await Promise.race([
+    prepare(story),
+    new Promise((_,reject)=>setTimeout(()=>reject(new Error("transition blocked on image")),100))
+  ]);
+  assert.equal(item.story,story);
+  assert.equal(item.image,null,"never copy previous story image while loading");
+  transition.to=item;
+  const image={width:1024,height:768};
+  resolveFetch(image);
+  for(let i=0;i<4;i++)await Promise.resolve();
+  assert.equal(item.image,image);
+  assert.equal(refreshes,1);
+});
+
 test("PiP always retains classic native video capture and manual-only activation",()=>{
   assert.match(app,/pipCanvas\.captureStream\(30\)/);
   assert.match(app,/video\.requestPictureInPicture\(\)/);
