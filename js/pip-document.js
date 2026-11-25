@@ -57,6 +57,7 @@
    const entry={item,key:key(item),outer,fallback,category,source,title,
     image:null,imageSource:"",media:null,mediaKey:"",hls:null,imageSerial:0,mediaSerial:0,animations:[],
     videoControl:null,nextPlaybackCheck:0,playPending:false,adVideoReady:false,
+    requestVideoPlay:null,syncVideoTime:null,showBlockedPlayback:null,
     failedMediaKey:"",nextRetryAt:0,mediaFailures:0};
    if(item.kind==="ad"){
     shade.remove();caption.remove();
@@ -152,6 +153,9 @@
    ++entry.mediaSerial;
    entry.playPending=false;
    entry.adVideoReady=false;
+   entry.requestVideoPlay=null;
+   entry.syncVideoTime=null;
+   entry.showBlockedPlayback=null;
    if(entry.videoControl){entry.videoControl.remove();entry.videoControl=null}
    if(entry.hls){try{entry.hls.destroy()}catch(_){}entry.hls=null}
    if(entry.media){
@@ -167,6 +171,7 @@
    video.loop=!desc.once;video.playsInline=true;video.controls=false;video.preload="auto";
    video.disablePictureInPicture=true;
    video.setAttribute("muted","");video.setAttribute("autoplay","");video.setAttribute("playsinline","");
+   video.setAttribute("webkit-playsinline","");
    entry.outer.insertBefore(video,entry.outer.firstChild);
    entry.media=video;
    entry.nextPlaybackCheck=0;
@@ -233,6 +238,9 @@
      if(error?.name!=="NotAllowedError")console.warn("PiP reklam oynatma:",error);
     });
    }
+   entry.requestVideoPlay=play;
+   entry.syncVideoTime=syncTime;
+   entry.showBlockedPlayback=updatePlayButton;
    const ready=()=>{
     if(!live())return;
     entry.adVideoReady=true;
@@ -299,23 +307,15 @@
        entry.media && entry.media.tagName==="VIDEO"){
      const movie=entry.media;
      if(!movie.paused && !movie.ended){
+      entry.syncVideoTime?.();
       entry.nextPlaybackCheck=0;
+      entry.showBlockedPlayback?.(false);
      }else if(movie.readyState>=2 &&
               Date.now()>=entry.nextPlaybackCheck &&
               !entry.playPending &&
               !movie.ended){
       entry.nextPlaybackCheck=Date.now()+1800;
-      const result=movie.play?.();
-      entry.playPending=true;
-      Promise.resolve(result).then(()=>{
-       entry.playPending=false;
-      },()=>{
-       entry.playPending=false;
-       // showVideo's loadeddata handler handles initial refusal.
-       // Expose a local user-click replay path when autoplay is blocked.
-       if(entry.media===movie && entry.videoControl)
-        entry.videoControl.hidden=false;
-      });
+      entry.requestVideoPlay?.();
      }
     }
     return;

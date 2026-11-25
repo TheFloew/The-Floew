@@ -22,6 +22,12 @@
 
 ## YAYIMLANMAMIŞ DEĞİŞİKLİKLER
 
+### PiP sekmeye dönüş düğmesi ve video reklam oynatma | 25 Kasım 2026
+- Document PiP penceresindeki tarayıcının varsayılan “Sekmeye dön” düğmesi yeniden görünür olsun diye `disallowReturnToOpener` isteği kaldırıldı.
+- PiP reklam video oynatımı engellendiğinde veya durduğunda sessizce başarısız olmak yerine tekrar deneme eklendi. Tarayıcı otomatik oynatmayı engelliyorsa PiP içinde “Reklamı oynat” düğmesi görünür ve kullanıcı elle başlatabilir.
+- Reklam oynatıcısı ana akıştaki videonun zamanını izler; hata durumunda yeni yüklemeler için bekleme süresi uygulanır. Mevcut haber akışı, reklam seçimi ve PiP animasyonları korunmuştur.
+- Canlı tarayıcıda reklam gösterimi denk gelmediğinden otomatik oynatma davranışının yerinde doğrulanması gerekir.
+
 ### [PROTOTİP] PiP pencere kontrollerini sadeleştirme | 25 Kasım 2026
 - Document PiP açılışında `disallowReturnToOpener:true` talep edilerek tarayıcı destekliyorsa yerleşik “Sekmeye dön” düğmesi gizlenir.
 - Tarayıcıya ait başlık çubuğu, adres alanı ve pencere düğmeleri web sayfasından gizlenemez. Firefox bu alanları sadeleştirmek için ayrı bir geliştirme yürütmektedir.
