@@ -61,10 +61,10 @@
    "html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#131b28;color:#fff}",
    "body{font-family:Comfortaa,Arial,sans-serif}",
    "*{box-sizing:border-box}",
-   "#floew-pip-stage{position:fixed;inset:0;isolation:isolate;overflow:hidden}",
+   "#floew-pip-stage{position:fixed;inset:0;width:100vw;height:100vh;isolation:isolate;overflow:hidden}",
    ".floew-pip-waiting{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;color:#d8e0eb;font-size:14px;line-height:1.5}",
    ".floew-pip-waiting[hidden]{display:none}",
-   ".floew-pip-card{position:absolute;inset:0;overflow:hidden;contain:layout paint;background:radial-gradient(ellipse at 28% 25%,#49516a 0%,#252c3e 45%,#111725 100%)}",
+   ".floew-pip-card{position:fixed;inset:0;width:100vw;height:100vh;overflow:hidden;background:radial-gradient(ellipse at 28% 25%,#49516a 0%,#252c3e 45%,#111725 100%)}",
    ".floew-pip-card.is-ad{background:#1b2230}",
    ".floew-pip-media{position:absolute;inset:0;width:100%;height:100%;border:0;object-fit:cover;opacity:0;transition:opacity .17s ease}",
    ".floew-pip-media.is-ready{opacity:1}",
@@ -86,9 +86,34 @@
    "@media(prefers-reduced-motion:reduce){.floew-pip-media{transition:none}}"
   ].join("\n");
   function el(tag,cls){const node=win.document.createElement(tag);if(cls)node.className=cls;return node}
+  // Firefox Document PiP can compute a zero-sized absolutely positioned
+  // section under paint/layout containment even when the stage fills the
+  // viewport. Give each visual layer explicit viewport-relative dimensions.
+  // Inline geometry also survives CSS cascade/reflow differences in Firefox.
+  function layoutStage(stage){
+   Object.assign(stage.style,{
+    position:"fixed",left:"0",top:"0",width:"100vw",height:"100vh",
+    overflow:"hidden"
+   });
+  }
+  function layoutCard(card){
+   Object.assign(card.style,{
+    position:"fixed",left:"0",top:"0",right:"0",bottom:"0",
+    width:"100vw",height:"100vh",minWidth:"0",minHeight:"0",
+    overflow:"hidden",contain:"none"
+   });
+  }
+  function layoutMedia(media,isAd=false){
+   Object.assign(media.style,{
+    position:"absolute",left:"0",top:"0",right:"0",bottom:"0",
+    width:"100%",height:"100%",minWidth:"0",minHeight:"0",
+    objectFit:isAd?"contain":"cover",display:"block"
+   });
+  }
   function label(element,value){const text=String(value||"");if(element.textContent!==text)element.textContent=text}
   function make(item){
    const outer=el("section","floew-pip-card"+(item.kind==="ad"?" is-ad":""));
+   layoutCard(outer);
    const fallback=el("div","floew-pip-fallback");
    const shade=el("div","floew-pip-shade");
    const caption=el("div","floew-pip-caption");
@@ -142,6 +167,7 @@
    entry.imageSource=url;
    const token=++entry.imageSerial,old=entry.image,img=el("img","floew-pip-media");
    img.decoding="async";img.draggable=false;img.alt="";
+   layoutMedia(img,entry.item.kind==="ad");
    entry.outer.insertBefore(img,entry.outer.firstChild);
    entry.image=img;
    img.onload=()=>{
@@ -213,6 +239,7 @@
    if(warmed)warmedAds.delete(desc.src);
    const video=warmed||el("video");
    video.className="floew-pip-media";
+   layoutMedia(video,entry.item.kind==="ad");
    video.autoplay=true;video.muted=true;video.defaultMuted=true;video.volume=0;
    video.loop=!desc.once;video.playsInline=true;video.controls=false;video.preload="auto";
    video.disablePictureInPicture=true;
@@ -342,6 +369,7 @@
   }
   function showFrame(entry,desc){
    const iframe=el("iframe","floew-pip-media");
+   layoutMedia(iframe,false);
    iframe.allow="autoplay; encrypted-media; picture-in-picture";
    iframe.referrerPolicy="strict-origin-when-cross-origin";
    iframe.tabIndex=-1;
@@ -470,6 +498,7 @@
     }
     host=doc.createElement("main");
     host.id="floew-pip-stage";
+    layoutStage(host);
     const waiting=doc.createElement("div");
     waiting.className="floew-pip-waiting";
     waiting.textContent="Flöw PiP görüntüsü hazırlanıyor";
