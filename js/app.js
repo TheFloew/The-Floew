@@ -7710,6 +7710,13 @@ async function playAdBreak(options={}){
     clearFlowTransitionClasses(adOverlay);
   }
 
+  /* A committed touch drag marks the ad as already entered. It skips
+     transitionAdIn(), so its ordinary PiP callback never executes.
+     Notify PiP at the committed ad boundary in this path too. */
+  if(preEntered && currentAd){
+    startPiPAdTransition(currentAd,adEntryDirection);
+  }
+
   let result={
     shown:false,
     direction:adEntryDirection,
@@ -10969,6 +10976,7 @@ const floewDocumentPiP=window.FloewDocumentPiP?.create?.({
   initialStoryImage:storyInitialImageUrl,
   storyImageProxy:storyImageProxyUrl,
   ensureHlsLibrary,
+  upcomingAds:()=>upcomingAds,
   currentStory:()=>state.stories[state.index]||null,
   currentAd:()=>adActive && adHasEntered ? currentAd : null,
   isBusy:()=>state.busy,
