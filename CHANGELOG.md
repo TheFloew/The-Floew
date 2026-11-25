@@ -22,6 +22,14 @@
 
 ## YAYIMLANMAMIŞ DEĞİŞİKLİKLER
 
+### [PROTOTİP] Klasik PiP: reklamdan sonra donan görüntü akışının korunması | 26 Kasım 2026
+- **Sorun:** Ad Center'dan gelen reklam videoları Flöw web sayfasından farklı origin'de sunuluyor. Klasik PiP'nin `canvas.captureStream(30)` kaynağına doğrudan farklı origin'den gelen video karesi çizmek, Canvas'ı `tainted` hale getirip yakalanan video kanalını sessize alabilir. Bu durumda PiP son haber karesinde kalır, reklamı ve sonraki haberleri gösteremez.
+- **Güvenlik düzeltmesi:** Görsel/video Canvas'a çizilmeden önce tek kullanımlık 1×1 Canvas üzerinde origin-clean denemesi yapılır. `SecurityError` veren içerik gerçek PiP Canvas'ına hiç çizilmez. Sonraki haberlerin görüntü akışı korunur.
+- **Reklam görünürlüğü:** Sunucu CORS'a izin veriyorsa reklamın bağımsız, `crossOrigin=anonymous` güvenli video kopyası PiP'e aktarılabilir. İzin verilmiyorsa önceki haberde donmak yerine reklamın katalog başlığı ve “Reklam” etiketi görünür. Ana reklamdaki oynatıcıya veya `crossOrigin` ayarına dokunulmaz.
+- **Haber geçişleri:** Reklamdan çıkış dahil tüm haber geçişleri uzak görsel indirmesini beklemeden yeni başlığı gösterebilir; görsel geldiğinde yalnız güncel kart tamamlanır. Önceki haberin görseli yanlışlıkla yeni habere kopyalanmaz.
+- **Yaşam döngüsü:** PiP kapatılınca güvenli reklam video kopyaları durdurulup temizlenir. Standart video PiP, manuel kullanım ve reklam planlama/ana akış mantığı korunur.
+- **Kontrol:** Gerçek tarayıcıda reklam videosunun tamamının görünebilmesi Ad Center'ın video endpoint'inin CORS politikasına bağlıdır. 8 hedefli test içinde güvensiz reklam sonrası haber çizimi ve gecikmeli görsel tamamlanması doğrulandı.
+
 ### [GERİ ALMA] PiP ilk klasik sürüme döndürüldü | 26 Kasım 2026
 - Kullanıcının isteğiyle PR #38 öncesinde kullanılan **klasik video Picture-in-Picture** kodu `js/app.js` içine **değiştirilmeden** geri yüklendi. Bu PiP, `canvas.captureStream(30)` kullanarak tarayıcının standart video PiP penceresine yayın yapar; Document PiP penceresi açmaz.
 - Eski PiP'nin reklam videolarını ve görsellerini doğrudan ana akışın medya nesnelerinden çizme yolu, reklam etiketi, haber geçişi ve kullanıcı eliyle açılma davranışları geri döndü.
