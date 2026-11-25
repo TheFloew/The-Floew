@@ -10,6 +10,8 @@ const html=readFileSync(new URL("../index.html",import.meta.url),"utf8");
 function fixture(){
  const intervals=new Map();
  let nextInterval=1,requestCount=0,animationCount=0,blockAutoplay=false;
+ let deferPiPTimeouts=false;
+ const pendingPiPTimeouts=[];
  const createdPiPVideos=[];
  const animations=[];
  class FakeElement{
@@ -61,10 +63,18 @@ function fixture(){
   close(){this.closed=true;this.events.pagehide?.();},
   setInterval(fn,ms){const id=nextInterval++;intervals.set(id,{fn,ms});return id;},
   clearInterval(id){intervals.delete(id);},
-  setTimeout(fn){fn();return 1;}
+  setTimeout(fn){
+   if(deferPiPTimeouts)pendingPiPTimeouts.push(fn);
+   else fn();
+   return 1;
+  }
  };
  const baseDocument={baseURI:"https://flow.test/",body:new FakeElement("body")};
- const runtime={window:{documentPictureInPicture:{
+ const runtime={window:{
+  setTimeout(fn){fn();return 1;},
+  setInterval(fn,ms){const id=nextInterval++;intervals.set(id,{fn,ms});return id;},
+  clearInterval(id){intervals.delete(id);},
+  documentPictureInPicture:{
   requestWindow:({width,height,disallowReturnToOpener})=>{
    requestCount++;
    assert.equal(width,480);assert.equal(height,270);
@@ -86,7 +96,16 @@ function fixture(){
   direction:()=>"up",reducedMotion:()=>false,status(){}
  };
  const ctrl=runtime.window.FloewDocumentPiP.create(config);
- const scene=()=>pipDocument.body.children.find(el=>el.tagName==="MAIN")?.children.at(-1);
+ const stage=()=>pipWindow.document.body.children.find(el=>el.tagName==="MAIN");
+ const scene=()=>stage()?.children.filter(el=>el.tagName==="SECTION").at(-1);
+ const replacePiPDocument=()=>{
+  const replacement={
+   head:new FakeElement("head"),body:new FakeElement("body"),
+   title:"",createElement:pipDocument.createElement
+  };
+  pipWindow.document=replacement;
+  return replacement;
+ };
  function findAll(el,tag){
   if(!el)return[];
   return [...(el.tagName===tag.toUpperCase()?[el]:[]),...el.children.flatMap(x=>findAll(x,tag))];
@@ -121,16 +140,18 @@ function fixture(){
   return el;
  }
  return {
-  ctrl,config,slides,pipWindow,scene,findAll,slide,FakeElement,
+  ctrl,config,slides,pipWindow,scene,stage,replacePiPDocument,findAll,slide,FakeElement,
   setStory:value=>{selected=value;},setAd:value=>{ad=value;},
   blockAutoplay:value=>{blockAutoplay=value;},
+  deferPiPTimeouts:value=>{deferPiPTimeouts=value;},
+  pendingPiPTimeouts,
   setBusy:value=>{busy=value;},tick:()=>{for(const item of intervals.values())item.fn();},
   requestCount:()=>requestCount,animationCount:()=>animationCount,
   animationFrames:()=>animations,
   createdPiPVideos,
   media:()=>findAll(scene(),"video")[0],
   image:()=>findAll(scene(),"img").at(-1),
-  styles:()=>findAll(pipDocument.head,"style")[0]?.textContent||""
+  styles:()=>findAll(pipWindow.document.head,"style")[0]?.textContent||""
  };
 }
 
@@ -192,6 +213,70 @@ test("Video advertisement plays as native media and keeps the ad marker",async()
  assert.ok(video.classList.contains("is-ready"));
  assert.equal(video.loop,false);
  assert.ok(f.scene().textContent!=="Video reklamı");
+});
+
+test("Firefox replaces PiP about:blank document while an ad is playing: rebuild visible ad scene",async()=>{
+ const f=fixture();
+ const story={title:"News",image:"https://img.test/story.jpg"};
+ const ad={id:"active",type:"video",src:"https://cdn.test/active.mp4"};
+ f.slide(story);f.setStory(story);
+ await f.ctrl.toggle();
+ f.setAd(ad);
+ f.ctrl.transitionAd(ad);
+ const old=f.scene();
+ assert.ok(f.media());
+ assert.ok(old);
+ const newDocument=f.replacePiPDocument();
+ assert.equal(newDocument.body.children.length,0,"Firefox's replacement document starts empty");
+ f.tick();
+ const next=f.scene();
+ assert.ok(next,"the blank window must be rehydrated");
+ assert.notEqual(next,old,"old detached scene is not reused");
+ assert.equal(f.media().src,ad.src,"the active video ad reappears");
+ assert.ok(f.styles().includes(".floew-pip-card.is-ad"));
+ assert.equal(f.stage().parentElement,newDocument.body);
+});
+
+test("An opener-owned watchdog recovers from suspended Firefox ad transitions",async()=>{
+ const f=fixture();
+ const story={title:"Before",image:"https://img.test/story.jpg"};
+ const ad={id:"ad",type:"video",src:"https://cdn.test/spot.mp4"};
+ f.slide(story);f.setStory(story);
+ await f.ctrl.toggle();
+ f.deferPiPTimeouts(true);
+ f.setAd(ad);
+ f.ctrl.transitionAd(ad);
+ const scenes=f.stage().children.filter(x=>x.tagName==="SECTION");
+ assert.equal(scenes.length,1,"the old card must be retired even if PiP timers freeze");
+ assert.equal(scenes[0],f.scene());
+ assert.equal(f.media().src,ad.src);
+ assert.ok(f.pendingPiPTimeouts.length>0,"the PiP's own timer was deliberately suspended");
+});
+
+test("PiP restores a detached stage even without a full document replacement",async()=>{
+ const f=fixture();
+ const story={title:"News",image:"https://img.test/a.jpg"};
+ f.slide(story);f.setStory(story);
+ await f.ctrl.toggle();
+ const first=f.stage();
+ first.remove();
+ f.tick();
+ assert.ok(f.scene(),"the video window must not remain blank");
+ assert.notEqual(f.stage(),first);
+ assert.equal(f.scene().tagName,"SECTION");
+});
+
+test("PiP shows a loading label if it opens before the feed is ready",async()=>{
+ const f=fixture();
+ await f.ctrl.toggle();
+ assert.ok(f.stage());
+ const wait=f.findAll(f.stage(),"div").find(el=>el.className==="floew-pip-waiting");
+ assert.ok(wait);
+ assert.match(wait.textContent,/görüntüsü hazırlanıyor/);
+ const story={title:"Delayed",image:"https://img.test/article.jpg"};
+ f.slide(story);f.setStory(story);f.tick();
+ assert.ok(f.scene());
+ assert.equal(f.image().src,story.image);
 });
 
 test("PiP advertisement offers a replay button if autoplay is blocked",async()=>{
@@ -342,6 +427,6 @@ test("Opening and closing is explicit; audio/video providers are configurable",a
  assert.equal(f.ctrl.isActive(),false);
  assert.match(app,/floewDocumentPiP\?\.supported\(\)/);
  assert.match(app,/ensureHlsLibrary,/);
- assert.match(html,/src="js\/pip-document\.js\?v=6"/);
- assert.ok(html.indexOf("js/pip-document.js?v=6")<html.indexOf("js/app.js?v="));
+ assert.match(html,/src="js\/pip-document\.js\?v=7"/);
+ assert.ok(html.indexOf("js/pip-document.js?v=7")<html.indexOf("js/app.js?v="));
 });

@@ -3,7 +3,8 @@
  "use strict";
  function create(config){
   const MS=300, W=480, H=270;
-  let win=null,host=null,shown=null,poll=null,epoch=0,opening=false,closing=false;
+  let win=null,host=null,shown=null,poll=null,openerPoll=null;
+  let sceneDocument=null,epoch=0,opening=false,closing=false,recovering=false;
   const http=value=>{
    try{const u=new URL(String(value||""),document.baseURI);return /^https?:$/.test(u.protocol)?u.href:""}catch(_){return ""}
   };
@@ -61,6 +62,8 @@
    "body{font-family:Comfortaa,Arial,sans-serif}",
    "*{box-sizing:border-box}",
    "#floew-pip-stage{position:fixed;inset:0;isolation:isolate;overflow:hidden}",
+   ".floew-pip-waiting{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;color:#d8e0eb;font-size:14px;line-height:1.5}",
+   ".floew-pip-waiting[hidden]{display:none}",
    ".floew-pip-card{position:absolute;inset:0;overflow:hidden;contain:layout paint;background:radial-gradient(ellipse at 28% 25%,#49516a 0%,#252c3e 45%,#111725 100%)}",
    ".floew-pip-card.is-ad{background:#1b2230}",
    ".floew-pip-media{position:absolute;inset:0;width:100%;height:100%;border:0;object-fit:cover;opacity:0;transition:opacity .17s ease}",
@@ -417,28 +420,92 @@
    const finish=()=>{
     if(done)return;
     done=true;
-    // Even if another animation started, the old scene must not leak.
+    // Firefox can suspend compositor animations during a Document PiP
+    // transition. Cancel its fill effect so the active ad cannot remain
+    // translated fully outside the small viewport.
+    if(shown===currentIncoming){
+     try{enter.finish()}catch(_){}
+     try{enter.cancel()}catch(_){}
+     currentIncoming.outer.style.transform="";
+    }
     retire(old);
    };
+   const currentIncoming=shown;
    Promise.allSettled([enter.finished,leave.finished]).then(finish,finish);
    win.setTimeout(finish,MS+120);
+   root.setTimeout?.(finish,MS+550);
+  }
+  function attached(){
+   if(!win || win.closed)return false;
+   let doc;
+   try{doc=win.document}catch(_){return false}
+   if(!doc?.body || !doc?.head || !host || doc!==sceneDocument)return false;
+   if(typeof doc.body.contains==="function")return doc.body.contains(host);
+   return Array.from(doc.body.children||[]).includes(host);
+  }
+  function mountScene(){
+   if(!win||closing||win.closed||recovering)return false;
+   if(attached())return true;
+   recovering=true;
+   try{
+    const doc=win.document;
+    if(!doc?.head||!doc?.body)return false;
+
+    // Firefox may replace the initial about:blank Document *after*
+    // requestWindow resolves. Old nodes then belong to a detached page,
+    // leaving an apparently open PiP window with no visible content.
+    const old=shown;
+    shown=null;
+    retire(old);
+    for(const media of warmedAds.values())stopWarmedMedia(media);
+    warmedAds.clear();
+
+    sceneDocument=doc;
+    let style=doc.getElementById?.("floew-pip-styles");
+    if(!style){
+     style=doc.createElement("style");
+     style.id="floew-pip-styles";
+     style.textContent=css;
+     doc.head.appendChild(style);
+    }
+    host=doc.createElement("main");
+    host.id="floew-pip-stage";
+    const waiting=doc.createElement("div");
+    waiting.className="floew-pip-waiting";
+    waiting.textContent="Flöw PiP görüntüsü hazırlanıyor";
+    host.appendChild(waiting);
+    doc.body.appendChild(host);
+    const item=desired();
+    if(item)switchTo(item,1,false);
+    if(shown)waiting.hidden=true;
+    return true;
+   }catch(error){
+    console.warn("Flöw PiP sahnesi yeniden kurulamıyor:",error);
+    return false;
+   }finally{recovering=false}
   }
   function sync(){
    if(!win||closing)return;
+   if(win.closed){reset();return}
+   if(!mountScene())return;
    primeUpcomingAds();
    if(!config.isBusy()&&!config.isAdEntering()){
     const item=desired();
     if(key(item)!==shown?.key)switchTo(item,1,false);
    }
+   const waiting=host?.querySelector?.(".floew-pip-waiting");
+   if(waiting)waiting.hidden=Boolean(shown);
    refresh(shown);
   }
   function reset(){
-   if(win && poll!==null){win.clearInterval(poll);poll=null}
+   if(win && poll!==null){try{win.clearInterval(poll)}catch(_){}poll=null}
+   if(openerPoll!==null){try{root.clearInterval(openerPoll)}catch(_){}openerPoll=null}
    for(const media of warmedAds.values())stopWarmedMedia(media);
    warmedAds.clear();
    const old=shown;
    shown=null;retire(old);
-   host=null;win=null;opening=false;closing=false;epoch++;
+   host=null;sceneDocument=null;win=null;
+   opening=false;closing=false;recovering=false;epoch++;
   }
   async function toggle(){
    if(!supported()||opening)return false;
@@ -449,14 +516,19 @@
     // Restore the browser's normal "return to tab" control.
     const opened=await root.documentPictureInPicture.requestWindow({width:W,height:H});
     win=opened;
-    win.document.title="Flöw";
-    const style=el("style");style.textContent=css;win.document.head.appendChild(style);
-    host=el("main");host.id="floew-pip-stage";win.document.body.appendChild(host);
-    win.addEventListener("pagehide",reset,{once:true});
-    switchTo(desired(),1,false);
+    try{win.document.title="Flöw"}catch(_){}
+    // Do not interpret a transient about:blank navigation as closing PiP.
+    win.addEventListener("pagehide",()=>{
+     if(win?.closed)reset();
+     else root.setTimeout?.(sync,0);
+    });
+    win.addEventListener("load",()=>root.setTimeout?.(sync,0));
+    mountScene();
     primeUpcomingAds();
-    // The clock runs in the visible PiP document, not the background feed.
+    // Firefox can suspend the provisional PiP document's timers. Keep an
+    // opener-owned heartbeat to restore the scene if it is replaced.
     poll=win.setInterval(sync,180);
+    openerPoll=root.setInterval?.(sync,300)??null;
     return true;
    }catch(err){
     console.warn("Flöw Document PiP:",err);
@@ -466,8 +538,16 @@
   }
   return Object.freeze({
    supported,toggle,preloadAd,
-   transitionStory(story,dir=1){if(win&&!closing&&story)switchTo({kind:"story",story},dir,true)},
-   transitionAd(ad,dir=1){if(win&&!closing&&ad)switchTo({kind:"ad",ad},dir,true)},
+   transitionStory(story,dir=1){
+    if(win&&!closing&&story){
+     if(mountScene())switchTo({kind:"story",story},dir,!document.hidden);
+    }
+   },
+   transitionAd(ad,dir=1){
+    if(win&&!closing&&ad){
+     if(mountScene())switchTo({kind:"ad",ad},dir,!document.hidden);
+    }
+   },
    sync,isActive:()=>Boolean(win&&!win.closed&&!closing)
   });
  }
