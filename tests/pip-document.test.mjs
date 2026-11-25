@@ -54,9 +54,10 @@ function fixture(){
  };
  const baseDocument={baseURI:"https://flow.test/",body:new FakeElement("body")};
  const runtime={window:{documentPictureInPicture:{
-  requestWindow:({width,height})=>{
+  requestWindow:({width,height,disallowReturnToOpener})=>{
    requestCount++;
    assert.equal(width,480);assert.equal(height,270);
+   assert.equal(disallowReturnToOpener,true,"request minimal browser-supplied PiP controls");
    return Promise.resolve(pipWindow);
   }
  }},document:baseDocument,URL,console:{warn(){}}};
@@ -254,6 +255,6 @@ test("Opening and closing is explicit; audio/video providers are configurable",a
  assert.equal(f.ctrl.isActive(),false);
  assert.match(app,/floewDocumentPiP\?\.supported\(\)/);
  assert.match(app,/ensureHlsLibrary,/);
- assert.match(html,/src="js\/pip-document\.js\?v=3"/);
- assert.ok(html.indexOf("js/pip-document.js?v=3")<html.indexOf("js/app.js?v="));
+ assert.match(html,/src="js\/pip-document\.js\?v=4"/);
+ assert.ok(html.indexOf("js/pip-document.js?v=4")<html.indexOf("js/app.js?v="));
 });
