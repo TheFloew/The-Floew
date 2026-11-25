@@ -313,7 +313,7 @@
    const isHls=/mpegurl/i.test(desc.type||"")||/\.m3u8(?:[?#]|$)/i.test(desc.src);
    if(!isHls){
     if(video.src!==desc.src)video.src=desc.src;
-    if(video.readyState>=2)queueMicrotask(ready);
+    if(video.readyState>=2)Promise.resolve().then(ready);
     else play();
     return;
    }
