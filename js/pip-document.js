@@ -31,6 +31,8 @@
    ".floew-pip-card video.floew-pip-media,.floew-pip-card iframe.floew-pip-media{z-index:2}",
    ".floew-pip-shade,.floew-pip-caption{z-index:3}",
    ".floew-pip-adtag{z-index:4}",
+   ".floew-pip-play{position:absolute;z-index:5;left:50%;top:50%;transform:translate(-50%,-50%);border:1px solid rgba(255,255,255,.55);border-radius:999px;padding:12px 19px;background:rgba(0,0,0,.7);color:#fff;font:700 16px Comfortaa,Arial,sans-serif;cursor:pointer}",
+   ".floew-pip-play[hidden]{display:none}",
    ".floew-pip-card.is-ad .floew-pip-media{object-fit:contain}",
    ".floew-pip-shade{position:absolute;inset:0;pointer-events:none;background:linear-gradient(to bottom,transparent 25%,rgba(0,0,0,.27) 52%,rgba(0,0,0,.93) 100%)}",
    ".floew-pip-caption{position:absolute;bottom:5%;left:5%;right:5%;text-align:right;text-shadow:0 1px 9px #000}",
@@ -53,7 +55,9 @@
    caption.append(category,source,title);
    outer.append(fallback,shade,caption);
    const entry={item,key:key(item),outer,fallback,category,source,title,
-    image:null,imageSource:"",media:null,mediaKey:"",hls:null,imageSerial:0,mediaSerial:0,animations:[]};
+    image:null,imageSource:"",media:null,mediaKey:"",hls:null,imageSerial:0,mediaSerial:0,animations:[],
+    videoControl:null,nextPlaybackCheck:0,playPending:false,adVideoReady:false,
+    failedMediaKey:"",nextRetryAt:0,mediaFailures:0};
    if(item.kind==="ad"){
     shade.remove();caption.remove();
     fallback.textContent="Reklam yükleniyor";
@@ -146,6 +150,9 @@
   }
   function cleanupMedia(entry){
    ++entry.mediaSerial;
+   entry.playPending=false;
+   entry.adVideoReady=false;
+   if(entry.videoControl){entry.videoControl.remove();entry.videoControl=null}
    if(entry.hls){try{entry.hls.destroy()}catch(_){}entry.hls=null}
    if(entry.media){
     try{entry.media.pause?.()}catch(_){}
@@ -162,31 +169,95 @@
    video.setAttribute("muted","");video.setAttribute("autoplay","");video.setAttribute("playsinline","");
    entry.outer.insertBefore(video,entry.outer.firstChild);
    entry.media=video;
+   entry.nextPlaybackCheck=0;
+   entry.playPending=false;
+   entry.adVideoReady=false;
    const token=++entry.mediaSerial;
    const live=()=>win&&!closing&&entry.media===video&&entry.mediaSerial===token;
-   const play=()=>{
-    if(!live())return;
-    const master=desc.ref;
-    if(master && Number.isFinite(master.currentTime) && Number.isFinite(video.duration) && video.duration>0){
-     const time=Number(master.currentTime)||0;
-     if(time>=0&&time<video.duration-.3&&Math.abs(video.currentTime-time)>2)
-      try{video.currentTime=time}catch(_){}
+   const isAd=entry.item.kind==="ad";
+   function updatePlayButton(show){
+    if(!isAd||!live())return;
+    if(!show){
+     if(entry.videoControl)entry.videoControl.hidden=true;
+     return;
     }
-    const result=video.play();
-    if(result?.catch)result.catch(()=>{});
-   };
+    if(!entry.videoControl){
+     const button=el("button","floew-pip-play");
+     button.type="button";
+     button.textContent="▶ Reklamı oynat";
+     button.setAttribute("aria-label","Reklam videosunu oynat");
+     button.addEventListener("click",()=>{
+      entry.nextPlaybackCheck=0;
+      play(true);
+     });
+     entry.outer.appendChild(button);
+     entry.videoControl=button;
+    }
+    entry.videoControl.hidden=false;
+   }
+   function syncTime(){
+    const master=desc.ref;
+    if(!master||!Number.isFinite(master.currentTime)||
+       !Number.isFinite(video.duration)||video.duration<=0)return;
+    const time=Number(master.currentTime)||0;
+    if(time>=0&&time<video.duration-.35 &&
+       Math.abs(Number(video.currentTime)-time)>2.5){
+     try{video.currentTime=time}catch(_){}
+    }
+   }
+   function play(byUser=false){
+    if(!live()||entry.playPending)return;
+    if(video.ended && isAd){
+     const master=desc.ref;
+     if(!master||master.ended)return;
+     try{video.currentTime=Math.min(Number(master.currentTime)||0,Math.max(0,video.duration-.5))}catch(_){}
+    }
+    if(video.readyState>=1)syncTime();
+    entry.playPending=true;
+    let result;
+    try{result=video.play()}catch(error){
+     entry.playPending=false;
+     if(isAd)updatePlayButton(true);
+     return;
+    }
+    Promise.resolve(result).then(()=>{
+     if(!live())return;
+     entry.playPending=false;
+     entry.nextPlaybackCheck=0;
+     updatePlayButton(false);
+    },error=>{
+     if(!live())return;
+     entry.playPending=false;
+     entry.nextPlaybackCheck=Date.now()+1800;
+     if(isAd)updatePlayButton(true);
+     if(error?.name!=="NotAllowedError")console.warn("PiP reklam oynatma:",error);
+    });
+   }
    const ready=()=>{
     if(!live())return;
+    entry.adVideoReady=true;
     video.classList.add("is-ready");
-    if(entry.item.kind==="ad")label(entry.fallback,"");
+    if(isAd)label(entry.fallback,"");
     play();
    };
+   video.addEventListener("loadedmetadata",syncTime);
    video.addEventListener("loadeddata",ready);
    video.addEventListener("canplay",ready);
+   video.addEventListener("playing",()=>{
+    if(!live())return;
+    entry.adVideoReady=true;
+    video.classList.add("is-ready");
+    if(isAd)label(entry.fallback,"");
+    updatePlayButton(false);
+   });
    video.addEventListener("error",()=>{
     if(!live())return;
+    const failedKey=entry.mediaKey;
     cleanupMedia(entry);
-    if(entry.item.kind==="ad")label(entry.fallback,"Video reklam açılamadı");
+    entry.failedMediaKey=failedKey;
+    entry.mediaFailures++;
+    entry.nextRetryAt=Date.now()+Math.min(15000,2000*entry.mediaFailures);
+    if(isAd)label(entry.fallback,"Video reklam yüklenemedi");
    });
    const isHls=/mpegurl/i.test(desc.type||"")||/\.m3u8(?:[?#]|$)/i.test(desc.src);
    if(!isHls){video.src=desc.src;play();return}
@@ -223,7 +294,33 @@
   function mediaUpdate(entry){
    const media=descriptor(entry);
    const identity=media ? media.kind+"|"+media.src : "";
-   if(identity===entry.mediaKey)return;
+   if(identity===entry.mediaKey){
+    if(entry.item.kind==="ad" && media?.kind==="video" &&
+       entry.media && entry.media.tagName==="VIDEO"){
+     const movie=entry.media;
+     if(!movie.paused && !movie.ended){
+      entry.nextPlaybackCheck=0;
+     }else if(movie.readyState>=2 &&
+              Date.now()>=entry.nextPlaybackCheck &&
+              !entry.playPending &&
+              !movie.ended){
+      entry.nextPlaybackCheck=Date.now()+1800;
+      const result=movie.play?.();
+      entry.playPending=true;
+      Promise.resolve(result).then(()=>{
+       entry.playPending=false;
+      },()=>{
+       entry.playPending=false;
+       // showVideo's loadeddata handler handles initial refusal.
+       // Expose a local user-click replay path when autoplay is blocked.
+       if(entry.media===movie && entry.videoControl)
+        entry.videoControl.hidden=false;
+      });
+     }
+    }
+    return;
+   }
+   if(identity && entry.failedMediaKey===identity && Date.now()<entry.nextRetryAt)return;
    cleanupMedia(entry);
    if(!media)return;
    entry.mediaKey=identity;
@@ -298,11 +395,8 @@
    opening=true;
    try{
     // Requires transient activation: do not await network, image, or video.
-    // Hide the browser's optional "return to opener" control where supported.
-    // The OS titlebar and window buttons remain browser-owned.
-    const opened=await root.documentPictureInPicture.requestWindow({
-     width:W,height:H,disallowReturnToOpener:true
-    });
+    // Restore the browser's normal "return to tab" control.
+    const opened=await root.documentPictureInPicture.requestWindow({width:W,height:H});
     win=opened;
     win.document.title="Flöw";
     const style=el("style");style.textContent=css;win.document.head.appendChild(style);
