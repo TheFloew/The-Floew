@@ -467,6 +467,6 @@ test("Opening and closing is explicit; audio/video providers are configurable",a
  assert.equal(f.ctrl.isActive(),false);
  assert.match(app,/floewDocumentPiP\?\.supported\(\)/);
  assert.match(app,/ensureHlsLibrary,/);
- assert.match(html,/src="js\/pip-document\.js\?v=7"/);
- assert.ok(html.indexOf("js/pip-document.js?v=7")<html.indexOf("js/app.js?v="));
+ assert.match(html,/src="js\/pip-document\.js\?v=8"/);
+ assert.ok(html.indexOf("js/pip-document.js?v=8")<html.indexOf("js/app.js?v="));
 });
