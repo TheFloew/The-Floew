@@ -10,6 +10,7 @@ const html=readFileSync(new URL("../index.html",import.meta.url),"utf8");
 function fixture(){
  const intervals=new Map();
  let nextInterval=1,requestCount=0,animationCount=0,blockAutoplay=false;
+ const createdPiPVideos=[];
  const animations=[];
  class FakeElement{
   constructor(tag){
@@ -48,7 +49,11 @@ function fixture(){
  }
  const pipDocument={
   head:new FakeElement("head"),body:new FakeElement("body"),
-  title:"",createElement:tag=>new FakeElement(tag)
+  title:"",createElement(tag){
+   const element=new FakeElement(tag);
+   if(tag==="video")createdPiPVideos.push(element);
+   return element;
+  }
  };
  const pipWindow={
   closed:false,document:pipDocument,events:{},
@@ -72,6 +77,7 @@ function fixture(){
  let selected=null,ad=null,busy=false,adEntering=false;
  const config={
   slides,adImage:null,adVideo:null,imageProxyBase:"https://worker.test/image",
+  upcomingAds:()=>[],
   storyKey:s=>s.title,initialStoryImage:s=>s.image,
   storyImageProxy:s=>"https://worker.test/image?url="+encodeURIComponent(s.image),
   ensureHlsLibrary:()=>Promise.resolve(null),
@@ -121,6 +127,7 @@ function fixture(){
   setBusy:value=>{busy=value;},tick:()=>{for(const item of intervals.values())item.fn();},
   requestCount:()=>requestCount,animationCount:()=>animationCount,
   animationFrames:()=>animations,
+  createdPiPVideos,
   media:()=>findAll(scene(),"video")[0],
   image:()=>findAll(scene(),"img").at(-1),
   styles:()=>findAll(pipDocument.head,"style")[0]?.textContent||""
@@ -227,6 +234,39 @@ test("Paused advertisement is restarted without replacing the media element",asy
  assert.equal(movie.paused,false);
 });
 
+test("Upcoming video ads are buffered before their PiP transition and reuse the decoder",async()=>{
+ const f=fixture();
+ const story={title:"Current",image:"https://img.test/current.jpg"};
+ const ad={id:"upcoming",type:"video",src:"https://cdn.test/upcoming.mp4"};
+ f.slide(story);f.setStory(story);
+ f.config.upcomingAds=()=>[ad];
+ await f.ctrl.toggle();
+ assert.equal(f.createdPiPVideos.length,1,"the upcoming video is warmed while news is visible");
+ const warmed=f.createdPiPVideos[0];
+ assert.equal(warmed.src,ad.src);
+ f.setAd(ad);
+ f.ctrl.transitionAd(ad);
+ assert.equal(f.media(),warmed,"the PiP ad reuses its warmed video");
+ assert.equal(f.createdPiPVideos.length,1,"no second decoder should be created for the same ad");
+ warmed.emit("canplay");
+ assert.ok(warmed.classList.contains("is-ready"));
+});
+
+test("PiP opened during a video ad renders that ad immediately",async()=>{
+ const f=fixture();
+ const story={title:"News",image:"https://img.test/news.jpg"};
+ const ad={id:"active",type:"video",src:"https://cdn.test/active.mp4"};
+ f.slide(story);f.setStory(story);f.setAd(ad);
+ await f.ctrl.toggle();
+ assert.equal(f.scene().className.includes("is-ad"),true);
+ assert.equal(f.media().src,ad.src);
+});
+
+test("Touch-committed ads notify the PiP engine even without transitionAdIn",()=>{
+ assert.match(app,/if\(preEntered && currentAd\)\s*\{\s*startPiPAdTransition\(currentAd,adEntryDirection\)/);
+ assert.match(app,/upcomingAds:\(\)=>upcomingAds/);
+});
+
 test("HLS news uses the existing Hls.js loader and real video playback",async()=>{
  const f=fixture();
  const story={title:"HLS",image:"https://img.test/hls.jpg"};
@@ -302,6 +342,6 @@ test("Opening and closing is explicit; audio/video providers are configurable",a
  assert.equal(f.ctrl.isActive(),false);
  assert.match(app,/floewDocumentPiP\?\.supported\(\)/);
  assert.match(app,/ensureHlsLibrary,/);
- assert.match(html,/src="js\/pip-document\.js\?v=5"/);
- assert.ok(html.indexOf("js/pip-document.js?v=5")<html.indexOf("js/app.js?v="));
+ assert.match(html,/src="js\/pip-document\.js\?v=6"/);
+ assert.ok(html.indexOf("js/pip-document.js?v=6")<html.indexOf("js/app.js?v="));
 });

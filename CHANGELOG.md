@@ -22,6 +22,13 @@
 
 ## YAYIMLANMAMIŞ DEĞİŞİKLİKLER
 
+### [PROTOTİP] PiP reklam geçişi ve video hazırlama düzeltmesi | 25 Kasım 2026
+- Reklam Merkezi API'sinde iki aktif kampanyanın hem yatay hem dikey MP4 yaratıcıları olduğu görüldü. Bu düzeltme reklam sıralamasını veya reklam seçimini değiştirmez.
+- **Dokunmatik reklam geçişleri:** `preEntered` ile tamamlanan reklam girişlerinde `transitionAdIn()` atlandığı için PiP bildirimini kaçırma ihtimali giderildi; reklam gerçekten ekrana yerleştiğinde PiP de bilgilendirilir.
+- **Video reklam hazırlığı:** Document PiP kendi penceresindeki sonraki en fazla iki reklam videosunu önceden buffer'a alır. Reklam başlayınca sıfırdan video oluşturmak yerine bu hazırlanmış öğeyi kullanır; kaynağı önceden hazır olan videonun yüklenme olayı beklenmez. PiP kapanınca hazırlanan öğeler temizlenir.
+- **Önbellek:** Değişikliklerin eski JavaScript üzerinden çalışmaması için hem `js/app.js` hem `js/pip-document.js` sürüm sorgu anahtarları yenilendi.
+- **Test:** PiP reklam videosu hazırlama, dokunmatik geçiş bildirimi, reklam sırasında açılış ve önceki reklam/haber regresyon testleri doğrulandı. Canlı reklam gösterimi ve GitHub Pages dağıtımı ayrıca kontrol edilmelidir.
+
 ### PiP sekmeye dönüş düğmesi ve video reklam oynatma | 25 Kasım 2026
 - Document PiP penceresindeki tarayıcının varsayılan “Sekmeye dön” düğmesi yeniden görünür olsun diye `disallowReturnToOpener` isteği kaldırıldı.
 - PiP reklam video oynatımı engellendiğinde veya durduğunda sessizce başarısız olmak yerine tekrar deneme eklendi. Tarayıcı otomatik oynatmayı engelliyorsa PiP içinde “Reklamı oynat” düğmesi görünür ve kullanıcı elle başlatabilir.

@@ -12,6 +12,44 @@
    :"story|"+config.storyKey(item.story);
   const slideFor=story=>config.slides.find(s=>s?.dataset?.storyKey===config.storyKey(story))||null;
   const supported=()=>typeof root.documentPictureInPicture?.requestWindow==="function";
+  // The main page already warms upcoming adverts; the PiP document has a
+  // separate media decoder. Prime the next adverts here before the main
+  // ad finishes, so short videos are visible from their first frames.
+  const warmedAds=new Map();
+  const MAX_WARM_ADS=2;
+  function stopWarmedMedia(media){
+   try{media.pause?.()}catch(_){}
+   try{media.removeAttribute?.("src")}catch(_){}
+   try{media.load?.()}catch(_){}
+   try{media.remove?.()}catch(_){}
+  }
+  function preloadAd(ad){
+   if(!win||closing||ad?.type!=="video")return false;
+   const src=http(ad.src);
+   if(!src||warmedAds.has(src))return false;
+   const media=el("video");
+   media.muted=true;media.defaultMuted=true;media.volume=0;
+   media.preload="auto";media.playsInline=true;
+   media.disablePictureInPicture=true;
+   media.setAttribute("muted","");
+   media.setAttribute("playsinline","");
+   media.src=src;
+   warmedAds.set(src,media);
+   try{media.load?.()}catch(_){}
+   while(warmedAds.size>MAX_WARM_ADS){
+    const oldest=warmedAds.keys().next().value;
+    const removed=warmedAds.get(oldest);
+    warmedAds.delete(oldest);
+    stopWarmedMedia(removed);
+   }
+   return true;
+  }
+  function primeUpcomingAds(){
+   if(!win||closing)return;
+   for(const ad of (config.upcomingAds?.()||[]).slice(0,MAX_WARM_ADS)){
+    preloadAd(ad);
+   }
+  }
   const desired=()=>{
    const ad=config.currentAd();
    if(ad)return {kind:"ad",ad};
@@ -166,7 +204,12 @@
    entry.mediaKey="";
   }
   function showVideo(entry,desc){
-   const video=el("video","floew-pip-media");
+   // Reuse an already-buffered video instead of creating a cold decoder
+   // when the ad arrives. Normal news videos still use a fresh element.
+   const warmed=entry.item.kind==="ad"?warmedAds.get(desc.src):null;
+   if(warmed)warmedAds.delete(desc.src);
+   const video=warmed||el("video");
+   video.className="floew-pip-media";
    video.autoplay=true;video.muted=true;video.defaultMuted=true;video.volume=0;
    video.loop=!desc.once;video.playsInline=true;video.controls=false;video.preload="auto";
    video.disablePictureInPicture=true;
@@ -268,7 +311,12 @@
     if(isAd)label(entry.fallback,"Video reklam yüklenemedi");
    });
    const isHls=/mpegurl/i.test(desc.type||"")||/\.m3u8(?:[?#]|$)/i.test(desc.src);
-   if(!isHls){video.src=desc.src;play();return}
+   if(!isHls){
+    if(video.src!==desc.src)video.src=desc.src;
+    if(video.readyState>=2)Promise.resolve().then(ready);
+    else play();
+    return;
+   }
    Promise.resolve(config.ensureHlsLibrary()).then(Hls=>{
     if(!live())return;
     if(Hls?.isSupported?.()){
@@ -377,6 +425,7 @@
   }
   function sync(){
    if(!win||closing)return;
+   primeUpcomingAds();
    if(!config.isBusy()&&!config.isAdEntering()){
     const item=desired();
     if(key(item)!==shown?.key)switchTo(item,1,false);
@@ -385,6 +434,8 @@
   }
   function reset(){
    if(win && poll!==null){win.clearInterval(poll);poll=null}
+   for(const media of warmedAds.values())stopWarmedMedia(media);
+   warmedAds.clear();
    const old=shown;
    shown=null;retire(old);
    host=null;win=null;opening=false;closing=false;epoch++;
@@ -403,6 +454,7 @@
     host=el("main");host.id="floew-pip-stage";win.document.body.appendChild(host);
     win.addEventListener("pagehide",reset,{once:true});
     switchTo(desired(),1,false);
+    primeUpcomingAds();
     // The clock runs in the visible PiP document, not the background feed.
     poll=win.setInterval(sync,180);
     return true;
@@ -413,7 +465,7 @@
    }finally{opening=false}
   }
   return Object.freeze({
-   supported,toggle,
+   supported,toggle,preloadAd,
    transitionStory(story,dir=1){if(win&&!closing&&story)switchTo({kind:"story",story},dir,true)},
    transitionAd(ad,dir=1){if(win&&!closing&&ad)switchTo({kind:"ad",ad},dir,true)},
    sync,isActive:()=>Boolean(win&&!win.closed&&!closing)
