@@ -22,6 +22,13 @@
 
 ## YAYIMLANMAMIŞ DEĞİŞİKLİKLER
 
+### [GERİ ALMA] PiP ilk klasik sürüme döndürüldü | 26 Kasım 2026
+- Kullanıcının isteğiyle PR #38 öncesinde kullanılan **klasik video Picture-in-Picture** kodu `js/app.js` içine **değiştirilmeden** geri yüklendi. Bu PiP, `canvas.captureStream(30)` kullanarak tarayıcının standart video PiP penceresine yayın yapar; Document PiP penceresi açmaz.
+- Eski PiP'nin reklam videolarını ve görsellerini doğrudan ana akışın medya nesnelerinden çizme yolu, reklam etiketi, haber geçişi ve kullanıcı eliyle açılma davranışları geri döndü.
+- `js/pip-engine.js` ve `js/pip-document.js` ile bunlara ait artık gereksiz testler kaldırıldı. HTML'den bu dosyaları çağıran iki script silindi; `js/app.js` için önbellek sürümü yenilendi.
+- Sonradan yapılan PiP dışı değişiklikler korunmuştur. Bu geri dönüş **eski animasyon takılmasını yeniden getirebilir**. Bu düzeltmede hız/animasyon optimizasyonu yapılmadı; çalışan eski davranışın geri kazanılması önceliklendirildi.
+- `tests/pip-classic-restore.test.mjs` ile eski motorun kullanımı, manuel PiP, reklam videosunun ana akıştan alınması ve reklam karesinin çizimi doğrulandı. Gerçek tarayıcıda reklam gösterimi merge/deploy sonrasında kontrol edilmelidir.
+
 ### [PROTOTİP] Document PiP sıfır boyutlu reklam kartı düzeltmesi | 26 Kasım 2026
 - **Gerçek Firefox teşhisi:** Kullanıcı konsolunda ana PiP sahnesi 719×658, reklam kartı ve video 0×0 piksel ölçüldü. Video dosyası tamamen yükleniyor (1920×1080, readyState 4, oynuyor, hata yok); bu nedenle sorun reklam aktarımı/oynatımı değil, elemanların yerleşimi.
 - **Düzeltme:** PiP sahnesi, her haber/reklam kartı ve görüntü/video/iframe katmanına açık, yeniden boyutlanabilir genişlik/yükseklik tanımlandı. Kart tarayıcı viewport'una `position:fixed` ve `100vw/100vh` ile sabitlendi; medya katmanı kartın `100%` alanını kaplıyor. Firefox'un olası `contain:layout paint` boyutlandırma çatışması kaldırıldı.
