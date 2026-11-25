@@ -11505,20 +11505,27 @@ function schedulePiPRender(){
 async function preparePiPStory(story){
   if(!story)return null;
 
-  const loadedImage=story.image
-    ? await getPiPImage(story.image)
-    : null;
+  // A news transition must not wait for a remote image download.
+  // Render the new headline right away; upgrade the picture asynchronously.
+  // Never borrow the previous news image when the new one is loading.
+  const prepared={kind:"story",story,image:null};
 
-  const image=
-    loadedImage ||
-    pipCurrent?.image ||
-    null;
+  if(story.image){
+    void getPiPImage(story.image).then(image=>{
+      if(!image)return;
+      prepared.image=image;
+      if(
+        pipActive &&
+        (pipCurrent===prepared ||
+         pipTransition?.to===prepared ||
+         pipTransition?.from===prepared)
+      ){
+        schedulePiPRender();
+      }
+    }).catch(()=>{});
+  }
 
-  return {
-    kind:"story",
-    story,
-    image
-  };
+  return prepared;
 }
 
 
