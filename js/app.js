@@ -11094,6 +11094,15 @@ function warmPiPUpcomingAds(){
   }
 }
 
+function releasePiPSafeAdVideos(){
+  for(const {video} of pipSafeAdVideos.values()){
+    try{video.pause()}catch(e){}
+    try{video.removeAttribute("src");video.load()}catch(e){}
+    video.remove();
+  }
+  pipSafeAdVideos.clear();
+}
+
 function pipSupportMode(){
   const hasCanvasStream=
     typeof HTMLCanvasElement.prototype.captureStream==="function";
@@ -11705,6 +11714,7 @@ async function ensurePiPVideo(){
     ()=>{
       pipActive=false;
       stopPiPRenderLoop();
+      releasePiPSafeAdVideos();
     }
   );
 
@@ -11720,6 +11730,7 @@ async function ensurePiPVideo(){
         schedulePiPRender();
       }else{
         stopPiPRenderLoop();
+        releasePiPSafeAdVideos();
       }
     }
   );
@@ -11790,6 +11801,7 @@ async function togglePiP(){
     console.error("Video PiP:",err);
     pipActive=false;
     stopPiPRenderLoop();
+    releasePiPSafeAdVideos();
 
     status(
       "Picture-in-Picture açılamadı. Tarayıcı bu oturumda PiP isteğine izin vermedi."
