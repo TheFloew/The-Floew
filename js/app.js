@@ -11089,7 +11089,7 @@ function ensurePiPSafeAdVideo(ad){
 
 function warmPiPUpcomingAds(){
   if(!pipActive)return;
-  for(const ad of upcomingAds.slice(0,2)){
+  for(const ad of upcomingAds.slice(0,1)){
     if(ad?.type==="video")ensurePiPSafeAdVideo(ad);
   }
 }
