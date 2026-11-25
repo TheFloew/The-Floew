@@ -22,6 +22,11 @@
 
 ## YAYIMLANMAMIŞ DEĞİŞİKLİKLER
 
+### [PROTOTİP] PiP pencere kontrollerini sadeleştirme | 25 Kasım 2026
+- Document PiP açılışında `disallowReturnToOpener:true` talep edilerek tarayıcı destekliyorsa yerleşik “Sekmeye dön” düğmesi gizlenir.
+- Tarayıcıya ait başlık çubuğu, adres alanı ve pencere düğmeleri web sayfasından gizlenemez. Firefox bu alanları sadeleştirmek için ayrı bir geliştirme yürütmektedir.
+- Video, reklam, animasyon ve klasik PiP fallback kodlarına dokunulmadı; istemci PiP script önbellek anahtarı güncellendi.
+
 ### [PROTOTİP] Document PiP ve canlı medya düzeltmesi | 24 Kasım 2026
 - **PiP animasyonu:** Desteklenen tarayıcılarda Canvas kare yakalama yerine gerçek Document Picture-in-Picture penceresi ve tarayıcının CSS/Web Animations geçişleri kullanılıyor. Böylece arka sekmedeki Canvas kare/sayaç kısıtlaması kritik yolun dışına alındı.
 - **Video haberler:** PiP penceresi HTML5 videoları, HLS akışlarını (mevcut Hls.js çözücüsüyle), YouTube/Vimeo iframe'lerini ve uygun Dailymotion Player ID'si olan içerikleri doğrudan gösterebiliyor. Video yüklenirken haber kapağı korunuyor.

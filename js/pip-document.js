@@ -298,7 +298,11 @@
    opening=true;
    try{
     // Requires transient activation: do not await network, image, or video.
-    const opened=await root.documentPictureInPicture.requestWindow({width:W,height:H});
+    // Hide the browser's optional "return to opener" control where supported.
+    // The OS titlebar and window buttons remain browser-owned.
+    const opened=await root.documentPictureInPicture.requestWindow({
+     width:W,height:H,disallowReturnToOpener:true
+    });
     win=opened;
     win.document.title="Flöw";
     const style=el("style");style.textContent=css;win.document.head.appendChild(style);
