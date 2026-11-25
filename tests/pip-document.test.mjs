@@ -9,13 +9,14 @@ const html=readFileSync(new URL("../index.html",import.meta.url),"utf8");
 
 function fixture(){
  const intervals=new Map();
- let nextInterval=1,requestCount=0,animationCount=0;
+ let nextInterval=1,requestCount=0,animationCount=0,blockAutoplay=false;
  const animations=[];
  class FakeElement{
   constructor(tag){
    this.tagName=tag.toUpperCase();this.children=[];this.parentElement=null;
    this.className="";this.dataset={};this.style={};this.events={};
    this.textContent="";this._src="";this.muted=false;this.currentTime=0;this.duration=10;
+   this.readyState=3;this.paused=true;this.ended=false;this.hidden=false;
    this.classList={
     add:name=>{this.className=(this.className+" "+name).trim()},
     contains:name=>this.className.split(" ").includes(name)
@@ -36,8 +37,13 @@ function fixture(){
   }
   set src(url){this._src=url;}
   get src(){return this._src;}
-  play(){this.playCalled=(this.playCalled||0)+1;return Promise.resolve();}
-  pause(){this.pauseCalled=(this.pauseCalled||0)+1;}
+  play(){
+   this.playCalled=(this.playCalled||0)+1;
+   if(blockAutoplay)return Promise.reject(Object.assign(new Error("Autoplay blocked"),{name:"NotAllowedError"}));
+   this.paused=false;
+   return Promise.resolve();
+  }
+  pause(){this.pauseCalled=(this.pauseCalled||0)+1;this.paused=true;}
   canPlayType(){return "";}
  }
  const pipDocument={
@@ -57,7 +63,7 @@ function fixture(){
   requestWindow:({width,height,disallowReturnToOpener})=>{
    requestCount++;
    assert.equal(width,480);assert.equal(height,270);
-   assert.equal(disallowReturnToOpener,true,"request minimal browser-supplied PiP controls");
+   assert.equal(disallowReturnToOpener,undefined,"return-to-tab button stays available");
    return Promise.resolve(pipWindow);
   }
  }},document:baseDocument,URL,console:{warn(){}}};
@@ -111,6 +117,7 @@ function fixture(){
  return {
   ctrl,config,slides,pipWindow,scene,findAll,slide,FakeElement,
   setStory:value=>{selected=value;},setAd:value=>{ad=value;},
+  blockAutoplay:value=>{blockAutoplay=value;},
   setBusy:value=>{busy=value;},tick:()=>{for(const item of intervals.values())item.fn();},
   requestCount:()=>requestCount,animationCount:()=>animationCount,
   animationFrames:()=>animations,
@@ -178,6 +185,46 @@ test("Video advertisement plays as native media and keeps the ad marker",async()
  assert.ok(video.classList.contains("is-ready"));
  assert.equal(video.loop,false);
  assert.ok(f.scene().textContent!=="Video reklamı");
+});
+
+test("PiP advertisement offers a replay button if autoplay is blocked",async()=>{
+ const f=fixture();
+ const story={title:"News",image:"https://img.test/news.jpg"};
+ f.slide(story);f.setStory(story);await f.ctrl.toggle();
+ f.blockAutoplay(true);
+ const ad={id:"blocked",type:"video",src:"https://cdn.test/ad.mp4"};
+ f.ctrl.transitionAd(ad);
+ const movie=f.media();
+ movie.emit("loadeddata");
+ for(let i=0;i<12;i++)await Promise.resolve();
+ const button=f.findAll(f.scene(),"button")[0];
+ assert.ok(button,"a blocked advertisement should expose a replay control");
+ assert.equal(button.hidden,false);
+ f.blockAutoplay(false);
+ button.emit("click");
+ for(let i=0;i<12;i++)await Promise.resolve();
+ assert.ok(movie.playCalled>=2);
+ assert.equal(movie.paused,false);
+ assert.equal(button.hidden,true);
+});
+
+test("Paused advertisement is restarted without replacing the media element",async()=>{
+ const f=fixture();
+ const story={title:"News",image:"https://img.test/a.jpg"};
+ f.slide(story);f.setStory(story);await f.ctrl.toggle();
+ const ad={id:"restart",type:"video",src:"https://cdn.test/ad.mp4"};
+ f.setAd(ad);
+ f.ctrl.transitionAd(ad);
+ const movie=f.media();
+ movie.emit("loadeddata");
+ for(let i=0;i<12;i++)await Promise.resolve();
+ const calls=movie.playCalled;
+ movie.paused=true;movie.ended=false;movie.readyState=3;
+ f.tick();
+ for(let i=0;i<12;i++)await Promise.resolve();
+ assert.equal(f.media(),movie,"PiP must not recreate media on transient pauses");
+ assert.ok(movie.playCalled>calls);
+ assert.equal(movie.paused,false);
 });
 
 test("HLS news uses the existing Hls.js loader and real video playback",async()=>{
@@ -255,6 +302,6 @@ test("Opening and closing is explicit; audio/video providers are configurable",a
  assert.equal(f.ctrl.isActive(),false);
  assert.match(app,/floewDocumentPiP\?\.supported\(\)/);
  assert.match(app,/ensureHlsLibrary,/);
- assert.match(html,/src="js\/pip-document\.js\?v=4"/);
- assert.ok(html.indexOf("js/pip-document.js?v=4")<html.indexOf("js/app.js?v="));
+ assert.match(html,/src="js\/pip-document\.js\?v=5"/);
+ assert.ok(html.indexOf("js/pip-document.js?v=5")<html.indexOf("js/app.js?v="));
 });
