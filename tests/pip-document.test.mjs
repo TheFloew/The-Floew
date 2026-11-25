@@ -279,6 +279,46 @@ test("PiP shows a loading label if it opens before the feed is ready",async()=>{
  assert.equal(f.image().src,story.image);
 });
 
+test("Firefox 0x0 regression: ad card and video occupy explicit viewport geometry",async()=>{
+ const f=fixture();
+ const story={title:"News",image:"https://img.test/news.jpg"};
+ const ad={id:"orange",type:"video",src:"https://cdn.test/orange.mp4"};
+ f.slide(story);f.setStory(story);
+ await f.ctrl.toggle();
+ f.setAd(ad);f.ctrl.transitionAd(ad);
+ const stage=f.stage(),card=f.scene(),movie=f.media();
+ assert.ok(stage && card && movie);
+ assert.equal(stage.style.width,"100vw","stage fills the PiP viewport");
+ assert.equal(stage.style.height,"100vh");
+ assert.equal(card.style.position,"fixed","card is viewport anchored, not auto-sized");
+ assert.equal(card.style.width,"100vw","ad card cannot shrink to 0px");
+ assert.equal(card.style.height,"100vh");
+ assert.equal(card.style.contain,"none","disable Firefox layout paint containment");
+ assert.equal(movie.style.position,"absolute");
+ assert.equal(movie.style.width,"100%","video fills the card");
+ assert.equal(movie.style.height,"100%");
+ assert.equal(movie.style.objectFit,"contain");
+ assert.doesNotMatch(f.styles(),/contain:layout paint/,"no containment in the stylesheet either");
+});
+
+test("Image news cards and iframe news use the same explicit dimensions",async()=>{
+ const f=fixture();
+ const story={title:"Photo",image:"https://img.test/photo.jpg"};
+ const embed={title:"Embed",image:"https://img.test/thumbnail.jpg"};
+ f.slide(story);const embedded=f.slide(embed);
+ f.setStory(story);await f.ctrl.toggle();
+ assert.equal(f.scene().style.width,"100vw");
+ assert.equal(f.image().style.width,"100%");
+ assert.equal(f.image().style.height,"100%");
+ assert.equal(f.image().style.objectFit,"cover");
+ embedded.embed("https://www.youtube.com/embed/test?autoplay=1");
+ f.ctrl.transitionStory(embed);
+ const iframe=f.findAll(f.scene(),"iframe")[0];
+ assert.ok(iframe);
+ assert.equal(iframe.style.width,"100%");
+ assert.equal(iframe.style.height,"100%");
+});
+
 test("PiP advertisement offers a replay button if autoplay is blocked",async()=>{
  const f=fixture();
  const story={title:"News",image:"https://img.test/news.jpg"};
@@ -427,6 +467,6 @@ test("Opening and closing is explicit; audio/video providers are configurable",a
  assert.equal(f.ctrl.isActive(),false);
  assert.match(app,/floewDocumentPiP\?\.supported\(\)/);
  assert.match(app,/ensureHlsLibrary,/);
- assert.match(html,/src="js\/pip-document\.js\?v=7"/);
- assert.ok(html.indexOf("js/pip-document.js?v=7")<html.indexOf("js/app.js?v="));
+ assert.match(html,/src="js\/pip-document\.js\?v=8"/);
+ assert.ok(html.indexOf("js/pip-document.js?v=8")<html.indexOf("js/app.js?v="));
 });
