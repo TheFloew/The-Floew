@@ -22,6 +22,13 @@
 
 ## YAYIMLANMAMIŞ DEĞİŞİKLİKLER
 
+### [PROTOTİP] Firefox Document PiP boş pencere kurtarma | 25 Kasım 2026
+- **Boş PiP penceresi:** Document PiP açıldıktan sonra Firefox'un başlangıç belgesi değişirse veya PiP sahnesi DOM'dan kaybolursa, yeni belgeye mevcut haber/reklam kartı otomatik olarak yeniden kurulur. Gerçek video reklam kaynağı kullanılır; siyah/boş pencereyi kalıcı duruma dönüştüren ayrışma önlenir.
+- **İlk yükleme:** Henüz hiç haber/reklam seçilmemişse pencerede görünür “Flöw PiP görüntüsü hazırlanıyor” mesajı kalır; aktif içerik geldiğinde onunla değiştirilir.
+- **Animasyon watchdog:** PiP penceresinin kendi zamanlayıcıları veya Firefox Web Animations geçişi askıya alınırsa, ana pencerenin zamanlayıcısı geçişi bitirip reklam kartının ekran dışında asılı kalmasını önler.
+- **Yaşam döngüsü:** İlk `about:blank` belgesinin `pagehide` olayında aktif PiP yanlışlıkla sıfırlanmaz. Kaynak sekmenin periyodik kontrolü PiP sahnesini tekrar bağlar ve PiP kapatılınca zamanlayıcılar temizlenir.
+- **Korunan özellikler:** Asıl reklam ve haber akışı, videoların sessiz oynatımı, normal reklam aralıkları ve tarayıcı pencere kontrolleri değişmez. Gerçek Firefox sürümünde canlı kontrol gerekir.
+
 ### [PROTOTİP] PiP reklam geçişi ve video hazırlama düzeltmesi | 25 Kasım 2026
 - Reklam Merkezi API'sinde iki aktif kampanyanın hem yatay hem dikey MP4 yaratıcıları olduğu görüldü. Bu düzeltme reklam sıralamasını veya reklam seçimini değiştirmez.
 - **Dokunmatik reklam geçişleri:** `preEntered` ile tamamlanan reklam girişlerinde `transitionAdIn()` atlandığı için PiP bildirimini kaçırma ihtimali giderildi; reklam gerçekten ekrana yerleştiğinde PiP de bilgilendirilir.
