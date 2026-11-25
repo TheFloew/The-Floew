@@ -37,7 +37,7 @@ function fixture(){
   const drawSnippet=section("function drawPiPAd(ctx,item,offsetX=0,offsetY=0){","function drawPiPItem(ctx,item,offsetX=0,offsetY=0){");
   const drawAd=new Function("pipCanvas","pipMediaIsOriginClean","wrapCanvasText",
     drawSnippet+";return drawPiPAd;")(
-    {width:960,height:540},safe,text=>[String(text)]
+    {width:960,height:540},safe,(_ctx,text)=>[String(text)]
   );
   const calls={images:[],text:[],fills:0};
   const noop=()=>{};
