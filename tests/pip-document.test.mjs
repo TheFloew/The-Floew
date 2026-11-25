@@ -10,6 +10,8 @@ const html=readFileSync(new URL("../index.html",import.meta.url),"utf8");
 function fixture(){
  const intervals=new Map();
  let nextInterval=1,requestCount=0,animationCount=0,blockAutoplay=false;
+ let deferPiPTimeouts=false;
+ const pendingPiPTimeouts=[];
  const createdPiPVideos=[];
  const animations=[];
  class FakeElement{
@@ -61,10 +63,18 @@ function fixture(){
   close(){this.closed=true;this.events.pagehide?.();},
   setInterval(fn,ms){const id=nextInterval++;intervals.set(id,{fn,ms});return id;},
   clearInterval(id){intervals.delete(id);},
-  setTimeout(fn){fn();return 1;}
+  setTimeout(fn){
+   if(deferPiPTimeouts)pendingPiPTimeouts.push(fn);
+   else fn();
+   return 1;
+  }
  };
  const baseDocument={baseURI:"https://flow.test/",body:new FakeElement("body")};
- const runtime={window:{documentPictureInPicture:{
+ const runtime={window:{
+  setTimeout(fn){fn();return 1;},
+  setInterval(fn,ms){const id=nextInterval++;intervals.set(id,{fn,ms});return id;},
+  clearInterval(id){intervals.delete(id);},
+  documentPictureInPicture:{
   requestWindow:({width,height,disallowReturnToOpener})=>{
    requestCount++;
    assert.equal(width,480);assert.equal(height,270);
@@ -133,6 +143,8 @@ function fixture(){
   ctrl,config,slides,pipWindow,scene,stage,replacePiPDocument,findAll,slide,FakeElement,
   setStory:value=>{selected=value;},setAd:value=>{ad=value;},
   blockAutoplay:value=>{blockAutoplay=value;},
+  deferPiPTimeouts:value=>{deferPiPTimeouts=value;},
+  pendingPiPTimeouts,
   setBusy:value=>{busy=value;},tick:()=>{for(const item of intervals.values())item.fn();},
   requestCount:()=>requestCount,animationCount:()=>animationCount,
   animationFrames:()=>animations,
@@ -223,6 +235,22 @@ test("Firefox replaces PiP about:blank document while an ad is playing: rebuild 
  assert.equal(f.media().src,ad.src,"the active video ad reappears");
  assert.ok(f.styles().includes(".floew-pip-card.is-ad"));
  assert.equal(f.stage().parentElement,newDocument.body);
+});
+
+test("An opener-owned watchdog recovers from suspended Firefox ad transitions",async()=>{
+ const f=fixture();
+ const story={title:"Before",image:"https://img.test/story.jpg"};
+ const ad={id:"ad",type:"video",src:"https://cdn.test/spot.mp4"};
+ f.slide(story);f.setStory(story);
+ await f.ctrl.toggle();
+ f.deferPiPTimeouts(true);
+ f.setAd(ad);
+ f.ctrl.transitionAd(ad);
+ const scenes=f.stage().children.filter(x=>x.tagName==="SECTION");
+ assert.equal(scenes.length,1,"the old card must be retired even if PiP timers freeze");
+ assert.equal(scenes[0],f.scene());
+ assert.equal(f.media().src,ad.src);
+ assert.ok(f.pendingPiPTimeouts.length>0,"the PiP's own timer was deliberately suspended");
 });
 
 test("PiP restores a detached stage even without a full document replacement",async()=>{
