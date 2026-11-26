@@ -13188,7 +13188,6 @@ document.getElementById("optional-cookie-setting")?.addEventListener("click",e=>
   e.stopPropagation();
   setCookieChoice(getSavedCookieChoice()==="accepted"?"rejected":"accepted");
 });
-renderCookiePreferences();
 
 
 const WEATHER_GEOCODING_API="https://geocoding-api.open-meteo.com/v1/search";
