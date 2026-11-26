@@ -2,11 +2,6 @@
 (function(){
   "use strict";
 
-  var reducedMotion=window.matchMedia
-    ? window.matchMedia("(prefers-reduced-motion: reduce)")
-    : null;
-  function motionOff(){return !!(reducedMotion&&reducedMotion.matches);}
-
   // 1) A single indicator follows the actually selected tab, including
   // temporary category/source tabs and responsive changes in tab widths.
   var tabs=document.getElementById("feed-tabs");
@@ -70,37 +65,4 @@
   }
 
 
-  ["a","b"].forEach(function(id){
-    var slide=document.getElementById(id);
-    if(!slide)return;
-
-    // 2) BaitBuster changes the H1 node's textContent synchronously inside
-    // its own toggle handler. Watch that real change instead of guessing
-    // event order. Guard against preload/automatic headline updates.
-    var heading=slide.querySelector("h1");
-    if(!heading)return;
-    var previousTitle=heading.textContent;
-    var lastHeadlineAnimation=null;
-    new MutationObserver(function(){
-      var nextTitle=heading.textContent;
-      if(nextTitle===previousTitle)return;
-      previousTitle=nextTitle;
-      if(motionOff()||!slide.classList.contains("active"))return;
-      if(!window.__floewInitialReady&&document.getElementById("loading-screen"))return;
-      if(heading.dataset.baitbusterApplied!=="1")return;
-      if(!slide.querySelector(".baitbuster-rewrite-mark"))return;
-      if(typeof heading.animate!=="function")return;
-
-      if(lastHeadlineAnimation)lastHeadlineAnimation.cancel();
-      // H1 is inline for the β marker layout; opacity works on inline
-      // text without changing width/wrapping, unlike transform/flip.
-      lastHeadlineAnimation=heading.animate(
-        [{opacity:.18,filter:"blur(1.5px)"},
-         {opacity:1,filter:"blur(0px)"}],
-        {duration:300,easing:"cubic-bezier(.16,1,.3,1)"}
-      );
-    }).observe(heading,{
-      childList:true,characterData:true,subtree:true
-    });
-  });
 })();
