@@ -13920,6 +13920,7 @@ function closeStatsOverlay(){
   overlay?.classList.remove("open");
   overlay?.setAttribute("aria-hidden","true");
   queueUiFlowResumeCheck();
+  if(controlMenuOpen)showFullscreenButton();
 }
 
 function publicStatsEscape(value){
@@ -14240,6 +14241,7 @@ function closeMenu(){
   overlay.classList.remove("open");
   overlay.setAttribute("aria-hidden","true");
   queueUiFlowResumeCheck();
+  if(controlMenuOpen)showFullscreenButton();
 }
 
 document.getElementById("control-menu-button")?.addEventListener("pointerdown",e=>e.stopPropagation());
@@ -14249,11 +14251,17 @@ document.getElementById("control-menu-button")?.addEventListener("click",e=>{
   toggleControlMenu();
 });
 
-// Capture outside clicks even when another feed control stops bubbling.
-// Closing the tray must not prevent the clicked element's own action.
+// Only clicks on the main screen dismiss the tray. Modal interactions,
+// including the click that closes a screen, belong to that screen.
+function controlMenuScreenOwnsClick(target){
+  return Boolean(target?.closest?.(
+    "#menu-overlay, #stats-overlay, #time-range-panel, #keyword-filter-panel, #floew-saved-overlay, #source-viewer-overlay"
+  ));
+}
 document.addEventListener("click",e=>{
   if(!controlMenuOpen)return;
   if(e.target?.closest?.("#control-menu-button, #control-menu-panel"))return;
+  if(controlMenuScreenOwnsClick(e.target))return;
   closeControlMenu();
 },true);
 
@@ -14671,7 +14679,8 @@ function openSourceViewer(articleUrl,sourceName="",options={}){
   closeFloraPopover({resume:false});
   closeStatsOverlay();
   closeQuickPanels();
-  closeControlMenu();
+  // A source opened from a menu screen inherits the open tray;
+  // a main-screen click has already dismissed it in capture phase.
   closeMenu();
 
   const overlay=document.getElementById("source-viewer-overlay");
