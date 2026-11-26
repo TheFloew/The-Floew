@@ -11151,12 +11151,13 @@ function pipSupportMode(){
 }
 
 
-async function getPiPImage(url){
+async function getPiPImage(url,{exact=false}={}){
   if(!url)return null;
-  if(pipImageCache.has(url))return pipImageCache.get(url);
+  const key=(exact?"exact:":"proxy:")+url;
+  if(pipImageCache.has(key))return pipImageCache.get(key);
 
   const promise=(async()=>{
-    const proxied=
+    const proxied=exact?url:
       `${IMAGE_PROXY_API}?url=${encodeURIComponent(url)}`;
 
     try{
@@ -11196,7 +11197,10 @@ async function getPiPImage(url){
     }
   })();
 
-  pipImageCache.set(url,promise);
+  pipImageCache.set(key,promise);
+  void promise.then(image=>{
+    if(!image && pipImageCache.get(key)===promise)pipImageCache.delete(key);
+  });
   return promise;
 }
 
@@ -11391,6 +11395,43 @@ function drawPiPAd(ctx,item,offsetX=0,offsetY=0){
   ctx.restore();
 }
 
+// Only use media belonging to the exact story, never a recycled slide.
+function pipStorySlide(item){
+  if(item?.kind!=="story")return null;
+  const key=mediaKey(item.story);
+  return slides.find(el=>el.dataset.storyKey===key && el.classList.contains("active"))
+    || slides.find(el=>el.dataset.storyKey===key) || null;
+}
+
+function pipStoryVideo(item){
+  if(!videoEnabled)return null;
+  const video=pipStorySlide(item)?.querySelector(".slide-video.media-visible");
+  if(!video || video.__floewMediaStoryKey!==mediaKey(item.story))return null;
+  return pipMediaIsOriginClean(video)?video:null;
+}
+
+function refreshPiPStoryImage(item){
+  const img=pipStorySlide(item)?.querySelector(".slide-image");
+  if(!img || img.dataset.imageResolveKey!==mediaKey(item.story) ||
+     !img.complete || !img.naturalWidth || img.style.visibility==="hidden")return;
+  const src=img.currentSrc||img.src;
+  if(!src || item.slideImageUrl===src)return;
+  item.slideImageUrl=src;
+  if(pipMediaIsOriginClean(img)){
+    // Snapshot the decoded image before its slide is recycled.
+    const snapshot=document.createElement("canvas");
+    snapshot.width=img.naturalWidth;
+    snapshot.height=img.naturalHeight;
+    snapshot.getContext("2d").drawImage(img,0,0);
+    item.image=snapshot;
+    return;
+  }
+  void (async()=>{
+    const image=await getPiPImage(src,{exact:true}) || await getPiPImage(src);
+    if(image && item.slideImageUrl===src)item.image=image;
+  })().catch(()=>{});
+}
+
 function drawPiPItem(ctx,item,offsetX=0,offsetY=0){
   if(!item)return;
 
@@ -11404,10 +11445,11 @@ function drawPiPItem(ctx,item,offsetX=0,offsetY=0){
     return;
   }
 
+  refreshPiPStoryImage(item);
   drawPiPStory(
     ctx,
     item.story,
-    item.image,
+    pipStoryVideo(item)||item.image,
     offsetX,
     offsetY
   );
@@ -11512,7 +11554,9 @@ function schedulePiPRender(){
       pipCurrent?.kind==="ad" &&
       pipCurrent?.ad?.type==="video" && adActive;
 
-    if(pipTransition || liveAdVideo){
+    const storyVideo=pipStoryVideo(pipCurrent);
+    const liveStoryVideo=storyVideo && !storyVideo.paused && !storyVideo.ended;
+    if(pipTransition || liveAdVideo || liveStoryVideo){
       if(document.hidden){
         pipAnimationTimer=setTimeout(tick,33);
       }else{
@@ -11536,8 +11580,15 @@ async function preparePiPStory(story){
   const prepared={kind:"story",story,image:null};
 
   if(story.image){
-    void getPiPImage(story.image).then(image=>{
-      if(!image)return;
+    void (async()=>{
+      const candidates=[storyImageProxyUrl(story),story.image,storyExternalImageProxyUrl(story)];
+      for(const url of new Set(candidates.filter(Boolean))){
+        const image=await getPiPImage(url,{exact:true});
+        if(image)return image;
+      }
+      return null;
+    })().then(image=>{
+      if(!image || prepared.image)return;
       prepared.image=image;
       if(
         pipActive &&
