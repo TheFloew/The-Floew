@@ -11067,15 +11067,7 @@ function ensurePiPSafeAdVideo(ad){
     }
 
     entry.safe=true;
-    if(adVideo && Number.isFinite(adVideo.currentTime)){
-      const time=adVideo.currentTime;
-      if(time>0 && Number.isFinite(video.duration) &&
-         video.duration>time+.2){
-        try{video.currentTime=time}catch(e){}
-      }
-    }
-    const play=video.play();
-    if(play?.catch)play.catch(()=>{});
+    // Preload only. The main ad player owns the playback clock.
     updatePiPSafeAdMedia(ad,video);
   };
   video.addEventListener("loadeddata",ready,{once:true});
@@ -11085,6 +11077,36 @@ function ensurePiPSafeAdVideo(ad){
   video.src=src;
   try{video.load()}catch(e){failed()}
   return null;
+}
+
+function syncPiPAdVideos(){
+  const item=pipTransition?.to || pipCurrent;
+  const activeSrc=item?.kind==="ad" && item.ad?.type==="video" &&
+    adActive && currentAd?.src===item.ad.src ? item.ad.src : "";
+  const now=performance.now();
+  for(const [src,entry] of pipSafeAdVideos){
+    const video=entry.video;
+    if(!entry.safe)continue;
+    if(src!==activeSrc || !adVideo || adVideo.paused || adVideo.ended){
+      if(!video.paused)video.pause();
+      continue;
+    }
+    const target=adVideo.currentTime;
+    if(Number.isFinite(target) && !video.seeking &&
+       (video.ended || Math.abs(video.currentTime-target)>.35)){
+      try{video.currentTime=target}catch(e){}
+    }
+    if((video.paused || video.ended) && !entry.playPending &&
+       now-(entry.lastPlayAttempt??-Infinity)>500){
+      entry.lastPlayAttempt=now;
+      entry.playPending=true;
+      try{
+        Promise.resolve(video.play()).catch(()=>{}).finally(()=>{
+          entry.playPending=false;
+        });
+      }catch(e){entry.playPending=false}
+    }
+  }
 }
 
 function warmPiPUpcomingAds(){
@@ -11483,23 +11505,26 @@ function schedulePiPRender(){
   const tick=()=>{
     if(!pipActive)return;
 
+    syncPiPAdVideos();
     drawPiPScene();
 
     const liveAdVideo=
       pipCurrent?.kind==="ad" &&
-      pipCurrent?.ad?.type==="video" &&
-      pipCurrent?.media &&
-      !pipCurrent.media.paused &&
-      !pipCurrent.media.ended;
+      pipCurrent?.ad?.type==="video" && adActive;
 
     if(pipTransition || liveAdVideo){
-      pipAnimationFrame=requestAnimationFrame(tick);
+      if(document.hidden){
+        pipAnimationTimer=setTimeout(tick,33);
+      }else{
+        pipAnimationFrame=requestAnimationFrame(tick);
+      }
     }else{
       pipAnimationTimer=setTimeout(tick,500);
     }
   };
 
-  pipAnimationFrame=requestAnimationFrame(tick);
+  // Do not depend on the first rAF when the tab is already hidden.
+  tick();
 }
 
 async function preparePiPStory(story){
