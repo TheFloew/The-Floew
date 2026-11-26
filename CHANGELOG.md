@@ -22,8 +22,8 @@
 
 ## YAYIMLANMAMIŞ DEĞİŞİKLİKLER
 
-### Flöra puanı animasyonunun kaldırılması | 26 Kasım 2026
-- Mobil kaydırma sırasında oluşan kasılmaları azaltmak için Flöra'nın 800 ms sayma animasyonu, görsel kopyası, puana özel MutationObserver ve requestAnimationFrame işlemleri kaldırıldı. Gerçek puan doğrudan gösterilir; puan hesaplama, BaitBuster ve sekme animasyonu değişmez.
+### Flöra ve BaitBuster animasyonlarının kaldırılması | 26 Kasım 2026
+- Mobil kaydırma sırasında oluşan kasılmaları azaltmak için Flöra'nın 800 ms sayma animasyonu, görsel kopyası, puana özel MutationObserver ve requestAnimationFrame işlemleri kaldırıldı. Gerçek puan doğrudan gösterilir. BaitBuster başlık geçişinin blur/opacity animasyonu ve buna özel MutationObserver da kaldırıldı. Puan hesaplama, başlık düzeltme ve sekme göstergesi animasyonu korunur.
 
 ### Hamburger ekran dönüşü ve ikon kapanışı | 26 Kasım 2026
 - Menüden açılan ekranların içindeki tıklamalar ve kapatma işlemleri hamburgeri kapatmaz; ana ekrandaki sonraki dış tıklama kapatır.
