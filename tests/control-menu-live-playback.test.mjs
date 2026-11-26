@@ -8,7 +8,7 @@ const app=read("js/app.js");
 const html=read("index.html");
 const css=read("css/styles.css");
 
-test("hamburger opens without pausing auto-advance, including an existing mouse pause",()=>{
+test("hamburger opens without pausing auto-advance, and preserves an existing mouse pause",()=>{
   const begin=app.indexOf("let controlMenuExitTimer=null;");
   const end=app.indexOf("function closeStatsOverlay(){",begin);
   assert.ok(begin>=0 && end>begin);
@@ -53,8 +53,9 @@ test("hamburger opens without pausing auto-advance, including an existing mouse 
   api.openControlMenu();
 
   assert.equal(pauses,0);
-  assert.equal(ctx.mouseFlowPaused,false);
-  assert.deepEqual(timers,[2400]);
+  assert.equal(ctx.mouseFlowPaused,true);
+  assert.equal(ctx.mouseFlowResumeTimer,5);
+  assert.deepEqual(timers,[]);
   assert.equal(panel.classList.contains("open"),true);
   assert.equal(button.getAttribute("aria-expanded"),"true");
   api.closeControlMenu();
@@ -68,7 +69,9 @@ test("hamburger is not a modal pause surface and click-outside uses capture",()=
   assert.ok(start>=0 && end>start);
   assert.doesNotMatch(app.slice(start,end),/control-menu-panel/);
   assert.match(app,/document\.addEventListener\("click",e=>\{[\s\S]*?if\(!controlMenuOpen\)return;[\s\S]*?e\.target\?\.closest\?\.\("#control-menu-button, #control-menu-panel"\)[\s\S]*?closeControlMenu\(\);\s*\},true\);/);
-  assert.match(app,/document\.getElementById\("control-menu-panel"\)\?\.classList\.contains\("open"\)\s*\)\{\s*return;/);
+  const mouseStart=app.indexOf("function pauseFlowForMouseMovement(){");
+  const mouseEnd=app.indexOf("function resumeFlowAfterMouseStops(){",mouseStart);
+  assert.doesNotMatch(app.slice(mouseStart,mouseEnd),/control-menu-panel|controlMenuOpen/);
 });
 
 test("toolbar play/pause shares the existing auto-advance setting",()=>{
