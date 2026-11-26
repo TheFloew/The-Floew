@@ -243,7 +243,7 @@
     const link=document.createElement("link");
     link.id="floew-saved-stories-css";
     link.rel="stylesheet";
-    link.href="/css/saved-stories.css?v=20-menu-close1";
+    link.href="/css/saved-stories.css?v=20-menu-close1-sync-exit2";
     document.head.append(link);
   }
   function init(){
