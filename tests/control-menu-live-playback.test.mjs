@@ -68,7 +68,7 @@ test("hamburger is not a modal pause surface and click-outside uses capture",()=
   const end=app.indexOf("function pauseFlowForUi(){",start);
   assert.ok(start>=0 && end>start);
   assert.doesNotMatch(app.slice(start,end),/control-menu-panel/);
-  assert.match(app,/document\.addEventListener\("click",e=>\{[\s\S]*?if\(!controlMenuOpen\)return;[\s\S]*?e\.target\?\.closest\?\.\("#control-menu-button, #control-menu-panel"\)[\s\S]*?closeControlMenu\(\);\s*\},true\);/);
+  assert.match(app,/if\(controlMenuScreenOwnsClick\(e\.target\)\)return;\s*closeControlMenu\(\);/);
   const mouseStart=app.indexOf("function pauseFlowForMouseMovement(){");
   const mouseEnd=app.indexOf("function resumeFlowAfterMouseStops(){",mouseStart);
   assert.doesNotMatch(app.slice(mouseStart,mouseEnd),/control-menu-panel|controlMenuOpen/);
@@ -93,4 +93,29 @@ test("toolbar positions do not overlap on desktop or mobile",()=>{
   assert.match(section,/\+ 140px\) !important/);
   assert.match(section,/\+ 44px\) !important/);
   assert.match(section,/\+ 86px\) !important/);
+});
+
+test("clicks on all menu screens, including close controls, do not dismiss the tray",()=>{
+  const start=app.indexOf("function controlMenuScreenOwnsClick(target){");
+  const end=app.indexOf("document.getElementById(\"control-menu-panel\")?.addEventListener",start);
+  assert.ok(start>=0 && end>start);
+  let listener;
+  let closes=0;
+  const ctx={controlMenuOpen:true,document:{addEventListener:(name,fn,capture)=>{
+    assert.equal(name,"click");assert.equal(capture,true);listener=fn;
+  }},closeControlMenu:()=>closes++};
+  runInNewContext(app.slice(start,end),ctx);
+  for(const id of ["menu-overlay","stats-overlay","time-range-panel","keyword-filter-panel","floew-saved-overlay","source-viewer-overlay","control-menu-button","control-menu-panel"]){
+    listener({target:{closest:selector=>selector.split(", ").includes("#"+id)?{}:null}});
+  }
+  assert.equal(closes,0);
+  listener({target:{closest:()=>null}});
+  assert.equal(closes,1);
+});
+test("all toolbar icons share the closing visibility rule",()=>{
+  const rule=css.match(/#control-menu-panel\.is-closing :is\(([^)]+)\)\{([^}]+)\}/);
+  assert.ok(rule);
+  for(const id of ["pip-button","time-range-button","keyword-filter-button","info-button","menu-button","saved-stories-button"])assert.ok(rule[1].includes("#"+id));
+  assert.match(rule[2],/visibility:visible !important/);
+  assert.match(rule[2],/pointer-events:none !important/);
 });
