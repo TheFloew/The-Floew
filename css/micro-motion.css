@@ -17,14 +17,6 @@
              width 240ms cubic-bezier(.22,.7,.2,1),
              opacity 160ms ease;
 }
-.flora-inline{position:relative}
-.flora-inline .flow-flora-value-hidden{opacity:0!important}
-.flora-inline .flow-flora-count{
-  position:absolute;
-  white-space:nowrap;
-  pointer-events:none;
-  font-variant-numeric:tabular-nums;
-}
 @media(prefers-reduced-motion:reduce){
   #feed-tabs .flow-feed-indicator.is-ready{transition:none}
 }
