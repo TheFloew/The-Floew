@@ -1,5 +1,5 @@
 window.__floewAppStarted=true;
-window.__floewAppVersion="31.81.4";
+window.__floewAppVersion="31.82.0";
 const FLOEW_CONFIG=window.FLOEW_CONFIG||{};
 const NEWS_WORKER_BASE=String(
   FLOEW_CONFIG.newsWorkerBase||"https://thefloew.thefloewback.workers.dev"
@@ -786,7 +786,7 @@ const NEW_CATEGORIES=["#Yaşam","#Sağlık","#Otomotiv","#Sinema","#Müzik","#Ed
 function loadPreferences(){
   try{
     const raw=localStorage.getItem(PREFS_KEY);
-    if(!raw)return {sources:null,categories:null,direction:"up",videoEnabled:true,videoOnlyEnabled:false};
+    if(!raw)return {sources:null,categories:null,direction:"up",videoEnabled:true,videoOnlyEnabled:false,videoFitEnabled:false};
     const p=JSON.parse(raw)||{};
 
     let categories=Array.isArray(p.categories)?p.categories.filter(c=>c!=="#Gündem"):null;
@@ -801,11 +801,12 @@ function loadPreferences(){
       categories,
       direction:["up","down"].includes(p.direction)?p.direction:"up",
       videoEnabled:p.videoEnabled!==false,
-      videoOnlyEnabled:p.videoOnlyEnabled===true
+      videoOnlyEnabled:p.videoOnlyEnabled===true,
+      videoFitEnabled:p.videoFitEnabled===true
     };
   }catch(e){
     console.warn("Preferences:",e);
-    return {sources:null,categories:null,direction:"up",videoEnabled:true,videoOnlyEnabled:false};
+    return {sources:null,categories:null,direction:"up",videoEnabled:true,videoOnlyEnabled:false,videoFitEnabled:false};
   }
 }
 
@@ -813,6 +814,8 @@ const savedPreferences=loadPreferences();
 let transitionDirection=savedPreferences.direction||"up";
 let videoEnabled=savedPreferences.videoEnabled!==false;
 let videoOnlyEnabled=savedPreferences.videoOnlyEnabled===true;
+let videoFitEnabled=savedPreferences.videoFitEnabled===true;
+const newsVideoPortraitQuery=window.matchMedia?.("(orientation: portrait)");
 let sourcePreferencesApplied=false;
 
 function savePreferences(){
@@ -822,7 +825,8 @@ function savePreferences(){
       categories:[...filters.categories],
       direction:transitionDirection,
       videoEnabled,
-      videoOnlyEnabled
+      videoOnlyEnabled,
+      videoFitEnabled
     }));
   }catch(e){
     console.warn("Preferences:",e);
@@ -4378,7 +4382,7 @@ function cleanEmbedUrl(media){
       u.searchParams.set("autoplay","true");
       u.searchParams.set("mute","true");
       u.searchParams.set("loop","true");
-      u.searchParams.set("scaleMode","fill");
+      u.searchParams.set("scaleMode",newsVideoScaleMode());
     }else{
       return "";
     }
@@ -4602,7 +4606,7 @@ function monitorDailymotionExactVideo(host,player,expected,isCurrent){
       ){
         try{await player.loadContent?.({video:expected});}catch(e){}
         try{await player.setVolume?.(0);}catch(e){}
-        try{await player.setScaleMode?.("fill");}catch(e){}
+        try{await player.setScaleMode?.(newsVideoScaleMode());}catch(e){}
         try{await player.play?.();}catch(e){}
       }
     }finally{
@@ -4645,7 +4649,7 @@ async function showDailymotionVideo(el,story,media,token){
         autoplay:true,
         loop:true,
         mute:true,
-        scaleMode:"fill"
+        scaleMode:newsVideoScaleMode()
       }
     };
     if(parts.playerId)options.player=parts.playerId;
@@ -4661,7 +4665,7 @@ async function showDailymotionVideo(el,story,media,token){
     }
 
     try{await player.setVolume?.(0)}catch(e){}
-    try{await player.setScaleMode?.("fill")}catch(e){}
+    try{await player.setScaleMode?.(newsVideoScaleMode())}catch(e){}
 
     if(!await ensureDailymotionExactVideo(player,parts.videoId) || !isCurrent()){
       retireDailymotionHost(host);
@@ -4793,6 +4797,49 @@ async function prepareSlideMedia(el,story,{preload=false}={}){
 }
 
 bindVideoAudioUi();
+
+// Dikey ekranlar disinda eski cover gorunumu aynen korunur.
+function newsVideoScaleMode(){
+  const portrait=newsVideoPortraitQuery
+    ? newsVideoPortraitQuery.matches
+    : window.innerHeight>window.innerWidth;
+  return videoFitEnabled && portrait?"fit":"fill";
+}
+
+function syncNewsVideoScaleMode(){
+  const mode=newsVideoScaleMode();
+  document.querySelectorAll(".slide-dailymotion").forEach(host=>{
+    if(host.dataset.retired==="1")return;
+    const player=host.__floewDailymotionPlayer;
+    if(!player?.setScaleMode)return;
+    try{
+      Promise.resolve(player.setScaleMode(mode)).catch(()=>{});
+    }catch(e){}
+  });
+}
+
+function renderVideoFitSetting(){
+  const btn=document.getElementById("video-fit-setting");
+  if(!btn)return;
+  btn.classList.toggle("active",videoFitEnabled);
+  btn.setAttribute("aria-pressed",videoFitEnabled?"true":"false");
+  const state=btn.querySelector(".media-setting-state");
+  if(state)state.textContent=videoFitEnabled?"Açık":"Kapalı";
+}
+
+function applyVideoFitSetting(){
+  document.body.classList.toggle("news-video-contain",videoFitEnabled);
+  renderVideoFitSetting();
+  syncNewsVideoScaleMode();
+}
+
+if(newsVideoPortraitQuery?.addEventListener){
+  newsVideoPortraitQuery.addEventListener("change",syncNewsVideoScaleMode);
+}else if(newsVideoPortraitQuery?.addListener){
+  newsVideoPortraitQuery.addListener(syncNewsVideoScaleMode);
+}else{
+  window.addEventListener("resize",syncNewsVideoScaleMode);
+}
 
 function renderVideoSetting(){
   const btn=document.getElementById("video-setting");
@@ -13560,12 +13607,20 @@ document.querySelectorAll(".direction-option").forEach(btn=>{
 renderDirectionOptions();
 renderVideoSetting();
 renderVideoOnlySetting();
+applyVideoFitSetting();
 
 document.getElementById("video-setting")?.addEventListener("click",e=>{
   e.stopPropagation();
   videoEnabled=!videoEnabled;
   savePreferences();
   applyVideoSetting();
+});
+
+document.getElementById("video-fit-setting")?.addEventListener("click",e=>{
+  e.stopPropagation();
+  videoFitEnabled=!videoFitEnabled;
+  savePreferences();
+  applyVideoFitSetting();
 });
 
 document.getElementById("video-only-setting")?.addEventListener("click",e=>{
