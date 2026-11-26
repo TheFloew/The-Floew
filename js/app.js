@@ -7845,14 +7845,10 @@ function timer(durationMs=null){
 
 function pauseFlowForMouseMovement(){
   /*
-    Tercihler açıkken akış zaten UI duraklatma koordinatörü tarafından
-    tutulur; menü içindeki fare hareketleri ayrıca bir pause başlatmasın.
+    Gerçek modal ekranlar akışı zaten durdurur. Hamburger modal değildir;
+    açık veya kapalı olması fare hareketi duraklatmasını değiştirmez.
   */
-  if(
-    uiFlowPauseActive ||
-    anyUiPauseSurfaceOpen() ||
-    document.getElementById("control-menu-panel")?.classList.contains("open")
-  ){
+  if(uiFlowPauseActive || anyUiPauseSurfaceOpen()){
     return;
   }
 
@@ -13895,19 +13891,7 @@ function openControlMenu(){
   closeMenu();
   closeStatsOverlay();
 
-  // Hamburger is non-modal: opening it never pauses the news timer.
-  // Release a pending mouse-movement pause from reaching the toolbar.
-  if(mouseFlowPaused){
-    clearTimeout(mouseFlowResumeTimer);
-    mouseFlowResumeTimer=null;
-    mouseFlowPaused=false;
-    if(
-      !uiFlowPauseActive && !sourceViewerOpen && !adActive &&
-      !state.busy && !autoAdvancePaused && state.stories.length
-    ){
-      timer(state.timerRemainingMs || Math.max(5,showDurationSeconds)*1000);
-    }
-  }
+  // Opening the tray neither pauses playback nor cancels a mouse pause.
   controlMenuOpen=true;
   const panel=document.getElementById("control-menu-panel");
   const button=document.getElementById("control-menu-button");
