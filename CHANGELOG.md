@@ -22,6 +22,14 @@
 
 ## YAYIMLANMAMIŞ DEĞİŞİKLİKLER
 
+### [PROTOTİP] Canlı hamburger menüsü ve üst Play/Pause kontrolü | 26 Kasım 2026
+- **Kesintisiz haber akışı:** Hamburger araç menüsünü açmak, otomatik haber geçiş sayacını artık durdurmaz. Menü açık veya kapalıyken mevcut fare hareketi duraklatması korunur; fare hareketsiz kalınca akış aynı zamanlama ile devam eder.
+- **Dışarı tıklayınca kapanış:** Menü ya da hamburger düğmesi dışındaki tıklama menüyü kapatır. Tıklanan haber veya diğer kontrolün kendi işlevi engellenmez.
+- **Üst oynatma kontrolü:** Tam ekran ile hamburger arasına aynı ikon ailesinden Play/Pause eklendi. Tercihler'deki mevcut otomatik ilerleme ayarıyla çift yönlü senkronizedir; duraklatıldığında Play, akış çalışırken Pause görünür.
+- **Duyarlı yerleşim:** Masaüstünde Tam ekran / Play-Pause / Menü, mobilde Play-Pause / Menü dizilimi; mevcut panel animasyonu ve diğer modal ekranların duraklatma davranışı korunur.
+- **Kontrol:** Yeni regresyon testi eklendi. Gerçek tarayıcıda otomatik geçiş, dışarı tıklama ve mobil yerleşim merge/deploy sonrasında doğrulanmalıdır.
+
+
 ### [PROTOTİP] Klasik PiP: reklamdan sonra donan görüntü akışının korunması | 26 Kasım 2026
 - **Sorun:** Ad Center'dan gelen reklam videoları Flöw web sayfasından farklı origin'de sunuluyor. Klasik PiP'nin `canvas.captureStream(30)` kaynağına doğrudan farklı origin'den gelen video karesi çizmek, Canvas'ı `tainted` hale getirip yakalanan video kanalını sessize alabilir. Bu durumda PiP son haber karesinde kalır, reklamı ve sonraki haberleri gösteremez.
 - **Güvenlik düzeltmesi:** Görsel/video Canvas'a çizilmeden önce tek kullanımlık 1×1 Canvas üzerinde origin-clean denemesi yapılır. `SecurityError` veren içerik gerçek PiP Canvas'ına hiç çizilmez. Sonraki haberlerin görüntü akışı korunur.
