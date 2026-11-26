@@ -68,7 +68,7 @@ test("hamburger is not a modal pause surface and click-outside uses capture",()=
   const end=app.indexOf("function pauseFlowForUi(){",start);
   assert.ok(start>=0 && end>start);
   assert.doesNotMatch(app.slice(start,end),/control-menu-panel/);
-  assert.match(app,/document\.addEventListener\("click",e=>\{[\s\S]*?if\(!controlMenuOpen\)return;[\s\S]*?e\.target\?\.closest\?\.\("#control-menu-button, #control-menu-panel"\)[\s\S]*?closeControlMenu\(\);\s*\},true\);/);
+  assert.match(app,/if\(controlMenuScreenOwnsClick\(e\.target\)\)return;\s*closeControlMenu\(\);/);
   const mouseStart=app.indexOf("function pauseFlowForMouseMovement(){");
   const mouseEnd=app.indexOf("function resumeFlowAfterMouseStops(){",mouseStart);
   assert.doesNotMatch(app.slice(mouseStart,mouseEnd),/control-menu-panel|controlMenuOpen/);
