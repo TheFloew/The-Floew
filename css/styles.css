@@ -6508,6 +6508,12 @@ body{
   visibility:visible !important;
   pointer-events:none !important;
 }
+/* Match the specificity of historical per-ID closed-state rules so
+   every glyph fades with the parent, including the saved-story count. */
+#control-menu-panel.is-closing :is(#pip-button,#time-range-button,#keyword-filter-button,#keyword-watch-button,#info-button,#menu-button,#saved-stories-button){
+  visibility:visible !important;
+  pointer-events:none !important;
+}
 #control-menu-panel.is-closing{
   opacity:0;
   transform:translateY(8px) scale(.985);
