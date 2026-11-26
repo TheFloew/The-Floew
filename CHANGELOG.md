@@ -22,6 +22,11 @@
 
 ## YAYIMLANMAMIŞ DEĞİŞİKLİKLER
 
+### Hamburger ekran dönüşü ve ikon kapanışı | 26 Kasım 2026
+- Menüden açılan ekranların içindeki tıklamalar ve kapatma işlemleri hamburgeri kapatmaz; ana ekrandaki sonraki dış tıklama kapatır.
+- Kaydedilenler dahil tüm araç ikonları aynı panel kapanış animasyonunu izler; eski ID bazlı görünürlük kurallarının özgüllük farkı giderildi.
+- Regresyon testleri güncellendi; canlı tarayıcı doğrulaması bekleniyor.
+
 ### [PROTOTİP] Canlı hamburger menüsü ve üst Play/Pause kontrolü | 26 Kasım 2026
 - **Kesintisiz haber akışı:** Hamburger araç menüsünü açmak, otomatik haber geçiş sayacını artık durdurmaz. Menü açık veya kapalıyken mevcut fare hareketi duraklatması korunur; fare hareketsiz kalınca akış aynı zamanlama ile devam eder.
 - **Dışarı tıklayınca kapanış:** Menü ya da hamburger düğmesi dışındaki tıklama menüyü kapatır. Tıklanan haber veya diğer kontrolün kendi işlevi engellenmez.
