@@ -7848,7 +7848,11 @@ function pauseFlowForMouseMovement(){
     Tercihler açıkken akış zaten UI duraklatma koordinatörü tarafından
     tutulur; menü içindeki fare hareketleri ayrıca bir pause başlatmasın.
   */
-  if(uiFlowPauseActive || anyUiPauseSurfaceOpen()){
+  if(
+    uiFlowPauseActive ||
+    anyUiPauseSurfaceOpen() ||
+    document.getElementById("control-menu-panel")?.classList.contains("open")
+  ){
     return;
   }
 
@@ -10911,12 +10915,14 @@ function navigationBlockingPanelOpen(){
 
 function showFullscreenButton(){
   const fs=document.getElementById("fullscreen-button");
+  const playback=document.getElementById("feed-play-pause-button");
   const hub=document.getElementById("control-menu-button");
   const feedTabs=document.getElementById("feed-tabs");
 
   document.body.classList.remove("cursor-idle");
 
   fs?.classList.add("is-visible");
+  playback?.classList.add("is-visible");
   hub?.classList.add("is-visible");
   feedTabs?.classList.add("is-visible");
 
@@ -10925,6 +10931,7 @@ function showFullscreenButton(){
     if(anyControlPanelOpen())return;
 
     fs?.classList.remove("is-visible");
+    playback?.classList.remove("is-visible");
     hub?.classList.remove("is-visible");
     feedTabs?.classList.remove("is-visible");
 
@@ -12983,6 +12990,15 @@ function renderAutoAdvanceSetting(){
     pause.classList.toggle("active",autoAdvancePaused);
     pause.setAttribute("aria-pressed",autoAdvancePaused?"true":"false");
   }
+
+  const playback=document.getElementById("feed-play-pause-button");
+  if(playback){
+    const action=autoAdvancePaused?"Akışı oynat":"Akışı duraklat";
+    playback.classList.toggle("fi-play",autoAdvancePaused);
+    playback.classList.toggle("fi-pause",!autoAdvancePaused);
+    playback.setAttribute("aria-label",action);
+    playback.title=action;
+  }
 }
 
 function setAutoAdvancePaused(paused){
@@ -13879,7 +13895,19 @@ function openControlMenu(){
   closeMenu();
   closeStatsOverlay();
 
-  pauseFlowForUi();
+  // Hamburger is non-modal: opening it never pauses the news timer.
+  // Release a pending mouse-movement pause from reaching the toolbar.
+  if(mouseFlowPaused){
+    clearTimeout(mouseFlowResumeTimer);
+    mouseFlowResumeTimer=null;
+    mouseFlowPaused=false;
+    if(
+      !uiFlowPauseActive && !sourceViewerOpen && !adActive &&
+      !state.busy && !autoAdvancePaused && state.stories.length
+    ){
+      timer(state.timerRemainingMs || Math.max(5,showDurationSeconds)*1000);
+    }
+  }
   controlMenuOpen=true;
   const panel=document.getElementById("control-menu-panel");
   const button=document.getElementById("control-menu-button");
@@ -14237,6 +14265,14 @@ document.getElementById("control-menu-button")?.addEventListener("click",e=>{
   toggleControlMenu();
 });
 
+// Capture outside clicks even when another feed control stops bubbling.
+// Closing the tray must not prevent the clicked element's own action.
+document.addEventListener("click",e=>{
+  if(!controlMenuOpen)return;
+  if(e.target?.closest?.("#control-menu-button, #control-menu-panel"))return;
+  closeControlMenu();
+},true);
+
 document.getElementById("control-menu-panel")?.addEventListener("pointerdown",e=>e.stopPropagation());
 document.getElementById("control-menu-panel")?.addEventListener("pointerup",e=>e.stopPropagation());
 document.getElementById("control-menu-panel")?.addEventListener("click",e=>e.stopPropagation());
@@ -14439,7 +14475,6 @@ function currentFlowRemainingTime(){
 function anyUiPauseSurfaceOpen(){
   return Boolean(
     floraPopoverOpen ||
-    document.getElementById("control-menu-panel")?.classList.contains("open") ||
     document.getElementById("time-range-panel")?.classList.contains("open") ||
     document.getElementById("keyword-filter-panel")?.classList.contains("open") ||
     document.getElementById("stats-overlay")?.classList.contains("open") ||
@@ -14819,9 +14854,18 @@ document.getElementById("fullscreen-button").addEventListener("click",e=>{
 });
 document.addEventListener("fullscreenchange",setFullscreenIcon);
 
+document.getElementById("feed-play-pause-button")?.addEventListener("pointerdown",e=>e.stopPropagation());
+document.getElementById("feed-play-pause-button")?.addEventListener("pointerup",e=>e.stopPropagation());
+document.getElementById("feed-play-pause-button")?.addEventListener("click",e=>{
+  e.stopPropagation();
+  setAutoAdvancePaused(!autoAdvancePaused);
+  showFullscreenButton();
+});
+
 window.addEventListener("wheel",e=>{
   if(e.target.closest && e.target.closest("#feed-tabs"))return;
   if(e.target.closest && e.target.closest("#fullscreen-button"))return;
+  if(e.target.closest && e.target.closest("#feed-play-pause-button"))return;
   if(e.target.closest && e.target.closest("#control-menu-button"))return;
   if(e.target.closest && e.target.closest("#control-menu-panel"))return;
   if(e.target.closest && e.target.closest("#info-button"))return;
@@ -16120,6 +16164,7 @@ window.addEventListener("pointerdown",e=>{
   }
   if(e.target.closest && e.target.closest("#feed-tabs"))return;
   if(e.target.closest && e.target.closest("#fullscreen-button"))return;
+  if(e.target.closest && e.target.closest("#feed-play-pause-button"))return;
   if(e.target.closest && e.target.closest("#control-menu-button"))return;
   if(e.target.closest && e.target.closest("#control-menu-panel"))return;
   if(e.target.closest && e.target.closest("#info-button"))return;
@@ -16328,6 +16373,7 @@ window.addEventListener("pointerup",e=>{
   if(document.getElementById("menu-overlay").classList.contains("open"))return;
   if(document.getElementById("stats-overlay")?.classList.contains("open"))return;
   if(e.target.closest && e.target.closest("#fullscreen-button"))return;
+  if(e.target.closest && e.target.closest("#feed-play-pause-button"))return;
   if(e.target.closest && e.target.closest("#control-menu-button"))return;
   if(e.target.closest && e.target.closest("#control-menu-panel"))return;
   if(e.target.closest && e.target.closest("#info-button"))return;
