@@ -6984,3 +6984,36 @@ body.ad-mode #feed-play-pause-button{
     top:calc(max(1.7vh,env(safe-area-inset-top)) + 86px) !important;
   }
 }
+
+/* Preferences: cookie consent, matching the existing advanced-setting rows. */
+#cookies-panel .cookie-preferences{width:100%;padding:8px 2px 16px;box-sizing:border-box}
+#cookies-panel .cookie-preferences > .setting-copy{display:grid;gap:7px;margin-bottom:20px}
+#cookies-panel .setting-copy strong,
+#cookies-panel .cookie-essential-setting strong{display:block;font-size:13px;font-weight:700}
+#cookies-panel .setting-copy small,
+#cookies-panel .cookie-essential-setting small{display:block;margin-top:5px;font-size:11px;line-height:1.55;color:rgba(255,255,255,.57)}
+#cookies-panel .cookie-essential-setting{
+  display:flex;align-items:center;justify-content:space-between;gap:24px;
+  min-height:62px;padding:12px 2px;
+  border-top:1px solid rgba(255,255,255,.10);
+  border-bottom:1px solid rgba(255,255,255,.10);
+}
+#cookies-panel .cookie-essential-setting > span:first-child{min-width:0}
+#cookies-panel .cookie-essential-state{
+  flex:0 0 auto;color:rgba(255,255,255,.74);font-size:11px;white-space:nowrap
+}
+#cookies-panel #optional-cookie-setting{
+  min-height:74px;border-bottom:1px solid rgba(255,255,255,.10)
+}
+#cookies-panel #optional-cookie-setting > span:first-child{min-width:0}
+#cookies-panel #optional-cookie-setting small{line-height:1.55}
+#cookies-panel .cookie-preference-status{
+  margin:17px 2px 6px;color:rgba(255,255,255,.85);font-size:11px;line-height:1.5
+}
+#cookies-panel .cookie-preference-note{
+  margin:0 2px;color:rgba(255,255,255,.48);font-size:10px;line-height:1.6
+}
+@media(max-width:520px){
+  #cookies-panel .cookie-essential-setting{gap:12px;align-items:flex-start}
+  #cookies-panel .cookie-essential-state{font-size:10px;padding-top:3px}
+}
