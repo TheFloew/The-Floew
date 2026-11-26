@@ -13115,78 +13115,78 @@ function hideCookieNotice(){
   if(notice)notice.hidden=true;
 }
 
+/* The banner and Preferences must read the same saved decision.
+   Legacy "accepted" and GA4 "granted/denied" choices are supported. */
+function getSavedCookieChoice(){
+  const ga4Choice=getGa4Consent();
+  if(ga4Choice==="granted")return "accepted";
+  if(ga4Choice==="denied")return "rejected";
+  try{
+    const choice=localStorage.getItem(COOKIE_NOTICE_KEY);
+    return choice==="accepted"||choice==="rejected"?choice:"";
+  }catch(e){
+    return "";
+  }
+}
+
+function renderCookiePreferences(){
+  const button=document.getElementById("optional-cookie-setting");
+  const choice=getSavedCookieChoice();
+  const allowed=choice==="accepted";
+  if(button){
+    button.classList.toggle("active",allowed);
+    button.setAttribute("aria-pressed",allowed?"true":"false");
+    const state=button.querySelector(".media-setting-state");
+    if(state)state.textContent=allowed?"Açık":"Kapalı";
+  }
+  const status=document.getElementById("cookie-preference-status");
+  if(status){
+    status.textContent=choice==="accepted"
+      ?"İsteğe bağlı çerezlere izin verildi."
+      :choice==="rejected"
+        ?"İsteğe bağlı çerezler reddedildi."
+        :"Henüz bir çerez tercihi kaydedilmedi.";
+  }
+}
+
 function updateAnalyticsConsentNotice(){
   const notice=document.getElementById("cookie-notice");
-  if(!notice)return;
-
-  let acceptedLocally=false;
-  try{
-    acceptedLocally=
-      localStorage.getItem(COOKIE_NOTICE_KEY)==="accepted";
-  }catch(e){}
-
-  if(ga4CollectionEnabled){
-    /*
-      "denied" analitik tercihi korunur, ancak Reddet seçimi banner'ı
-      sonraki site girişlerinde kalıcı olarak kapatmaz.
-    */
-    if(getGa4Consent()==="granted"){
-      notice.hidden=true;
-      return;
-    }
-  }else if(acceptedLocally){
-    notice.hidden=true;
-    return;
+  if(notice){
+    const hasChoice=Boolean(getSavedCookieChoice());
+    notice.hidden=hasChoice;
+    if(!hasChoice)notice.dataset.mode="consent";
   }
-
-  notice.dataset.mode="consent";
-  notice.hidden=false;
+  renderCookiePreferences();
 }
 
 function showCookieNoticeIfNeeded(){
   updateAnalyticsConsentNotice();
 }
 
-function rememberCookieAcceptance(){
+function setCookieChoice(choice){
+  const normalized=choice==="accepted"?"accepted":"rejected";
   try{
-    localStorage.setItem(
-      COOKIE_NOTICE_KEY,
-      "accepted"
-    );
+    localStorage.setItem(COOKIE_NOTICE_KEY,normalized);
   }catch(e){}
+  /* Persist GA4 consent even while analytics is disabled by configuration. */
+  setGa4Consent(normalized==="accepted"?"granted":"denied");
+  hideCookieNotice();
+  renderCookiePreferences();
 }
 
-function forgetCookieAcceptance(){
-  try{
-    localStorage.removeItem(COOKIE_NOTICE_KEY);
-  }catch(e){}
+for(const id of ["cookie-close","cookie-reject","cookie-accept"]){
+  const button=document.getElementById(id);
+  button?.addEventListener("pointerdown",e=>e.stopPropagation());
+  button?.addEventListener("pointerup",e=>e.stopPropagation());
+  button?.addEventListener("click",e=>{
+    e.stopPropagation();
+    setCookieChoice(id==="cookie-accept"?"accepted":"rejected");
+  });
 }
 
-document.getElementById("cookie-close")?.addEventListener("pointerdown",e=>e.stopPropagation());
-document.getElementById("cookie-close")?.addEventListener("pointerup",e=>e.stopPropagation());
-document.getElementById("cookie-close")?.addEventListener("click",e=>{
+document.getElementById("optional-cookie-setting")?.addEventListener("click",e=>{
   e.stopPropagation();
-  forgetCookieAcceptance();
-  if(ga4CollectionEnabled)setGa4Consent("denied");
-  hideCookieNotice();
-});
-
-document.getElementById("cookie-reject")?.addEventListener("pointerdown",e=>e.stopPropagation());
-document.getElementById("cookie-reject")?.addEventListener("pointerup",e=>e.stopPropagation());
-document.getElementById("cookie-reject")?.addEventListener("click",e=>{
-  e.stopPropagation();
-  forgetCookieAcceptance();
-  if(ga4CollectionEnabled)setGa4Consent("denied");
-  hideCookieNotice();
-});
-
-document.getElementById("cookie-accept")?.addEventListener("pointerdown",e=>e.stopPropagation());
-document.getElementById("cookie-accept")?.addEventListener("pointerup",e=>e.stopPropagation());
-document.getElementById("cookie-accept")?.addEventListener("click",e=>{
-  e.stopPropagation();
-  rememberCookieAcceptance();
-  if(ga4CollectionEnabled)setGa4Consent("granted");
-  hideCookieNotice();
+  setCookieChoice(getSavedCookieChoice()==="accepted"?"rejected":"accepted");
 });
 
 
@@ -16598,7 +16598,17 @@ function setGa4Consent(value){
   }catch(e){}
 
   if(normalized==="granted"){
-    initGa4();
+    if(ga4Initialized && window.gtag){
+      /* Re-enable Consent Mode immediately after an in-session opt-in. */
+      window.gtag("consent","update",{
+        ad_storage:"granted",
+        ad_user_data:"granted",
+        ad_personalization:"granted",
+        analytics_storage:"granted"
+      });
+    }else{
+      initGa4();
+    }
   }else if(window.gtag){
     window.gtag("consent","update",{
       ad_storage:"denied",
