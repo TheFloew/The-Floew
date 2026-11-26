@@ -22,6 +22,12 @@
 
 ## YAYIMLANMAMIŞ DEĞİŞİKLİKLER
 
+### [PROTOTİP] Dikey ekranda haber videosunu sığdırma | 26 Kasım 2026
+- Tercihler → Görünüm altına **Videoyu ekrana sığdır** anahtarı eklendi. Varsayılan kapalıdır: mevcut kırpılmış tam ekran davranışı korunur.
+- Açıkken portre ekranlarda doğrudan videolar `contain`, YouTube/Vimeo oynatıcıları tam 16:9 yüzey ve Dailymotion Player `fit` ölçekleme kullanır. Dikey oynatıcıda siyah boşluk oluşabilir, ancak görüntü kırpılmaz.
+- Ekran yataya döndüğünde görüntü mevcut `cover/fill` biçimine döner; Dailymotion yön değişiminde yerinde güncellenir. Reklam videoları ve haber geçişleri etkilenmez.
+- Seçim mevcut tercihlerle birlikte yerel olarak saklanır ve dışa/içe aktarılan tercih dosyasına dahil edilir. Canlı tarayıcı testi merge/deploy sonrasında yapılmalıdır.
+
 ### [PROTOTİP] Çerez tercihlerini sonradan değiştirme | 26 Kasım 2026
 - Tercihler ekranına **Çerezler** sekmesi eklendi. Zorunlu teknolojiler bilgilendirme olarak, isteğe bağlı Google Analytics ve reklam izinleri ise Açık/Kapalı kontrolüyle gösterilir.
 - İlk girişteki Kabul Et / Reddet ve Tercihler'deki seçenek aynı saklanan karar üzerinden çalışır. Kullanıcı ret verse bile çerez bildiriminin her ziyarette yeniden görünmesi engellendi.
