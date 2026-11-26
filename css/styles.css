@@ -7017,3 +7017,35 @@ body.ad-mode #feed-play-pause-button{
   #cookies-panel .cookie-essential-setting{gap:12px;align-items:flex-start}
   #cookies-panel .cookie-essential-state{font-size:10px;padding-top:3px}
 }
+
+/* V31.82.0 - Kullanici secimi: portre haber videolarini kirpmadan goster.
+   Varsayilan cover, yatay ekranlar ve reklam video yuzeyleri degismez. */
+@media (orientation:portrait){
+  body.news-video-contain .slide-video{
+    object-fit:contain !important;
+  }
+
+  /* YouTube ve Vimeo iframe'leri icin 16:9 oynaticinin tamamini sigdir. */
+  body.news-video-contain .slide-embed[data-provider="youtube"],
+  body.news-video-contain .slide-embed[data-provider="vimeo"]{
+    inset:auto !important;
+    top:50% !important;
+    left:50% !important;
+    right:auto !important;
+    bottom:auto !important;
+    width:100vw !important;
+    height:56.25vw !important;
+    min-width:0 !important;
+    min-height:0 !important;
+    max-width:100vw !important;
+    max-height:100vh !important;
+    transform:translate(-50%,-50%) !important;
+  }
+
+  @supports (height:100dvh){
+    body.news-video-contain .slide-embed[data-provider="youtube"],
+    body.news-video-contain .slide-embed[data-provider="vimeo"]{
+      max-height:100dvh !important;
+    }
+  }
+}
