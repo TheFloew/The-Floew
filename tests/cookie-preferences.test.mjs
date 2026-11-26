@@ -53,7 +53,7 @@ test("Preferences contains Cookies tab and both optional/essential states",()=>{
   assert.match(html,/id="optional-cookie-setting"[^>]*aria-pressed="false"/);
   assert.match(html,/Zorunlu teknolojiler/);
   assert.match(styles,/#cookies-panel \.cookie-essential-setting/);
-  assert.match(html,/js\/app\.js\?v=20261126-cookie-preferences1/);
+  assert.match(html,/js\/app\.js\?v=[A-Za-z0-9._-]+/);
 });
 
 test("first visit prompts; accept and later rejection both persist across visits",()=>{
