@@ -23,7 +23,7 @@
 ## YAYIMLANMAMIŞ DEĞİŞİKLİKLER
 
 ### [PROTOTİP] Canlı hamburger menüsü ve üst Play/Pause kontrolü | 26 Kasım 2026
-- **Kesintisiz haber akışı:** Hamburger araç menüsünü açmak, otomatik haber geçiş sayacını artık durdurmaz. Menüye giderken başlayan fare-hareketi duraklatması temizlenir; menü açıkken fare hareketi yeni duraklatma başlatmaz.
+- **Kesintisiz haber akışı:** Hamburger araç menüsünü açmak, otomatik haber geçiş sayacını artık durdurmaz. Menü açık veya kapalıyken mevcut fare hareketi duraklatması korunur; fare hareketsiz kalınca akış aynı zamanlama ile devam eder.
 - **Dışarı tıklayınca kapanış:** Menü ya da hamburger düğmesi dışındaki tıklama menüyü kapatır. Tıklanan haber veya diğer kontrolün kendi işlevi engellenmez.
 - **Üst oynatma kontrolü:** Tam ekran ile hamburger arasına aynı ikon ailesinden Play/Pause eklendi. Tercihler'deki mevcut otomatik ilerleme ayarıyla çift yönlü senkronizedir; duraklatıldığında Play, akış çalışırken Pause görünür.
 - **Duyarlı yerleşim:** Masaüstünde Tam ekran / Play-Pause / Menü, mobilde Play-Pause / Menü dizilimi; mevcut panel animasyonu ve diğer modal ekranların duraklatma davranışı korunur.
