@@ -6939,7 +6939,7 @@ body.iddqd-mode #keyword-filter-panel.floew-tool-screen.open{
 }
 #feed-play-pause-button.fi::before{
   font-size:30px !important;
-  transform:none !important;
+  transform:translateX(3px) !important;
 }
 #feed-play-pause-button.fi:hover,
 #feed-play-pause-button.fi:focus-visible{
