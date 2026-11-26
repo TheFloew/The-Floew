@@ -22,6 +22,13 @@
 
 ## YAYIMLANMAMIŞ DEĞİŞİKLİKLER
 
+### [PROTOTİP] Çerez tercihlerini sonradan değiştirme | 26 Kasım 2026
+- Tercihler ekranına **Çerezler** sekmesi eklendi. Zorunlu teknolojiler bilgilendirme olarak, isteğe bağlı Google Analytics ve reklam izinleri ise Açık/Kapalı kontrolüyle gösterilir.
+- İlk girişteki Kabul Et / Reddet ve Tercihler'deki seçenek aynı saklanan karar üzerinden çalışır. Kullanıcı ret verse bile çerez bildiriminin her ziyarette yeniden görünmesi engellendi.
+- Onay değişikliği anında uygulanır ve sayfa yenilenmeden Google Analytics Consent Mode yeniden etkinleştirilebilir. Önceki yerel tercihlerle uyumluluk ve yeni davranış için test eklendi.
+- Ana akış, zorunlu tarayıcı depolaması ve diğer Tercihler sekmeleri değiştirilmedi. Canlı tarayıcı doğrulaması merge/deploy sonrasında yapılmalıdır.
+
+
 ### Flöra ve BaitBuster animasyonlarının kaldırılması | 26 Kasım 2026
 - Mobil kaydırma sırasında oluşan kasılmaları azaltmak için Flöra'nın 800 ms sayma animasyonu, görsel kopyası, puana özel MutationObserver ve requestAnimationFrame işlemleri kaldırıldı. Gerçek puan doğrudan gösterilir. BaitBuster başlık geçişinin blur/opacity animasyonu ve buna özel MutationObserver da kaldırıldı. Puan hesaplama, başlık düzeltme ve sekme göstergesi animasyonu korunur.
 
