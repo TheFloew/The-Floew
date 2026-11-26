@@ -11403,11 +11403,96 @@ function pipStorySlide(item){
     || slides.find(el=>el.dataset.storyKey===key) || null;
 }
 
-function pipStoryVideo(item){
-  if(!videoEnabled)return null;
+let pipStoryDecoder=null;
+const pipStoryCorsFailures=new Set();
+
+function releasePiPStoryDecoder(){
+  const entry=pipStoryDecoder;
+  pipStoryDecoder=null;
+  if(!entry)return;
+  const video=entry.video;
+  video.onerror=null;
+  video.onloadeddata=null;
+  try{video.pause();video.removeAttribute("src");video.load()}catch(e){}
+  video.remove();
+}
+
+function pipNativeStoryVideo(item){
+  if(!videoEnabled || item?.kind!=="story")return null;
   const video=pipStorySlide(item)?.querySelector(".slide-video.media-visible");
-  if(!video || video.__floewMediaStoryKey!==mediaKey(item.story))return null;
-  return pipMediaIsOriginClean(video)?video:null;
+  return video && video.__floewMediaStoryKey===mediaKey(item.story)?video:null;
+}
+
+function syncPiPStoryDecoder(){
+  const item=pipTransition?.to||pipCurrent;
+  const source=pipActive?pipNativeStoryVideo(item):null;
+  const src=String(source?.currentSrc||source?.src||"");
+  if(!source || pipMediaIsOriginClean(source) || !/^https?:\/\//i.test(src) ||
+     /\.m3u8(?:[?#]|$)/i.test(src) ||
+     String(source.__floewMediaDescriptor?.type||"").toLowerCase().includes("mpegurl") ||
+     pipStoryCorsFailures.has(src)){
+    releasePiPStoryDecoder();
+    return;
+  }
+  const key=mediaKey(item.story);
+  if(pipStoryDecoder?.key!==key || pipStoryDecoder?.src!==src){
+    releasePiPStoryDecoder();
+    const video=document.createElement("video");
+    video.crossOrigin="anonymous";
+    video.muted=true;
+    video.defaultMuted=true;
+    video.volume=0;
+    video.playsInline=true;
+    video.preload="auto";
+    video.setAttribute("aria-hidden","true");
+    video.style.cssText="position:fixed;width:1px;height:1px;opacity:.01;pointer-events:none;z-index:-1";
+    const entry={key,src,video,ready:false,pending:false,lastAttempt:-Infinity};
+    pipStoryDecoder=entry;
+    const fail=()=>{
+      if(pipStoryDecoder!==entry)return;
+      if(pipStoryCorsFailures.size>=128)pipStoryCorsFailures.clear();
+      pipStoryCorsFailures.add(src);
+      releasePiPStoryDecoder();
+    };
+    video.onerror=fail;
+    video.onloadeddata=()=>{
+      if(pipStoryDecoder!==entry)return;
+      if(!pipMediaIsOriginClean(video)){fail();return}
+      entry.ready=true;
+    };
+    document.body.appendChild(video);
+    video.src=src;
+    try{video.load()}catch(e){fail()}
+  }
+  const entry=pipStoryDecoder;
+  if(!entry?.ready)return;
+  const video=entry.video;
+  if(Number.isFinite(source.currentTime) && !video.seeking &&
+     (video.ended || Math.abs(video.currentTime-source.currentTime)>.35)){
+    try{video.currentTime=source.currentTime}catch(e){}
+  }
+  if(source.paused || source.ended){
+    if(!video.paused)video.pause();
+    return;
+  }
+  const now=performance.now();
+  if((video.paused || video.ended) && !entry.pending && now-entry.lastAttempt>500){
+    entry.lastAttempt=now;
+    entry.pending=true;
+    try{Promise.resolve(video.play()).catch(()=>{}).finally(()=>{entry.pending=false})}
+    catch(e){entry.pending=false}
+  }
+}
+
+function pipStoryVideo(item){
+  const source=pipNativeStoryVideo(item);
+  if(!source)return null;
+  if(pipMediaIsOriginClean(source))return source;
+  const entry=pipStoryDecoder;
+  if(entry?.ready && entry.key===mediaKey(item.story) &&
+     entry.src===String(source.currentSrc||source.src||"") &&
+     pipMediaIsOriginClean(entry.video))return entry.video;
+  return null;
 }
 
 function refreshPiPStoryImage(item){
@@ -11548,6 +11633,7 @@ function schedulePiPRender(){
     if(!pipActive)return;
 
     syncPiPAdVideos();
+    syncPiPStoryDecoder();
     drawPiPScene();
 
     const liveAdVideo=
@@ -11798,6 +11884,7 @@ async function ensurePiPVideo(){
       pipActive=false;
       stopPiPRenderLoop();
       releasePiPSafeAdVideos();
+      releasePiPStoryDecoder();
     }
   );
 
@@ -11814,6 +11901,7 @@ async function ensurePiPVideo(){
       }else{
         stopPiPRenderLoop();
         releasePiPSafeAdVideos();
+      releasePiPStoryDecoder();
       }
     }
   );
@@ -11885,6 +11973,7 @@ async function togglePiP(){
     pipActive=false;
     stopPiPRenderLoop();
     releasePiPSafeAdVideos();
+      releasePiPStoryDecoder();
 
     status(
       "Picture-in-Picture açılamadı. Tarayıcı bu oturumda PiP isteğine izin vermedi."
