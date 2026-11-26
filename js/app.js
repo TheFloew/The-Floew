@@ -11284,14 +11284,8 @@ function drawPiPStory(ctx,story,img,offsetX=0,offsetY=0){
   ctx.shadowColor="rgba(0,0,0,.65)";
   ctx.shadowBlur=7;
 
-  ctx.font='700 18px "Comfortaa", Arial, sans-serif';
-  ctx.fillStyle="rgba(255,255,255,.88)";
-  ctx.fillText(story?.flowCategory||"",W-28,H-132);
-
-  ctx.font='700 20px "Comfortaa", Arial, sans-serif';
-  ctx.fillStyle="#fff";
-  ctx.fillText(story?.source||"",W-28,H-102);
-
+  // Anchor the headline to the bottom; position metadata above its actual
+  // first line rather than at fixed coordinates that overlap two-line titles.
   ctx.font='700 34px "Comfortaa", Arial, sans-serif';
   const lines=wrapCanvasText(
     ctx,
@@ -11299,8 +11293,24 @@ function drawPiPStory(ctx,story,img,offsetX=0,offsetY=0){
     W-56,
     2
   );
+  const titleY=H-58-(lines.length-1)*40;
+  const ascent=Math.max(34,...lines.map(line=>ctx.measureText(line).actualBoundingBoxAscent||0));
+  ctx.font='700 20px "Comfortaa", Arial, sans-serif';
+  const source=story?.source||"";
+  const descent=Math.max(5,ctx.measureText(source).actualBoundingBoxDescent||0);
+  const sourceY=titleY-ascent-descent-8;
+  const categoryY=sourceY-30;
 
-  let y=H-58-(lines.length-1)*40;
+  ctx.font='700 18px "Comfortaa", Arial, sans-serif';
+  ctx.fillStyle="rgba(255,255,255,.88)";
+  ctx.fillText(story?.flowCategory||"",W-28,categoryY);
+
+  ctx.font='700 20px "Comfortaa", Arial, sans-serif';
+  ctx.fillStyle="#fff";
+  ctx.fillText(source,W-28,sourceY);
+
+  ctx.font='700 34px "Comfortaa", Arial, sans-serif';
+  let y=titleY;
 
   for(const line of lines){
     ctx.fillText(line,W-28,y);
