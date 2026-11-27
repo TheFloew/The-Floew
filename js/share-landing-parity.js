@@ -104,6 +104,10 @@
     const previous=numeric(badge.querySelector(".flora-inline-value")?.textContent);
     // A valid positive snapshot is already a suitable score: no extra request.
     if(previous!==null && previous>0)return;
+    // Never flash a misleading 0.0 while we check the missing score.
+    badge.querySelector(".flora-inline-value").textContent="—";
+    badge.classList.remove("has-score");
+    badge.title="Flöra puanı yükleniyor";
     const url=sourceUrl();
     if(!url)return;
     const key=canonicalKey(url);
