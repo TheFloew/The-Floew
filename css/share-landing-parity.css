@@ -10,19 +10,17 @@
   gap:10px;
   max-width:calc(100vw - 32px);
   min-height:42px;
-  padding:10px 16px;
-  border:1px solid rgba(255,255,255,.25);
-  border-radius:999px;
-  background:rgba(10,12,14,.58);
+  padding:10px 0;
+  border:0;
+  border-radius:0;
+  background:transparent;
   color:#fff;
   font:700 12px/1.2 "Comfortaa",Arial,sans-serif;
   letter-spacing:.01em;
   text-decoration:none;
   text-shadow:0 1px 4px rgba(0,0,0,.6);
-  backdrop-filter:blur(10px);
-  -webkit-backdrop-filter:blur(10px);
   opacity:.88;
-  transition:background .18s ease,opacity .18s ease;
+  transition:opacity .18s ease;
 }
 /* Hide the old branding badge only when the replacement link exists. */
 body:has(#floew-continue-feed) .share-page-badge{display:none!important;}
@@ -32,7 +30,7 @@ body:has(#floew-continue-feed) .share-page-badge{display:none!important;}
 }
 #floew-continue-feed:hover,
 #floew-continue-feed:focus-visible{
-  background:rgba(24,28,30,.85);
+  background:transparent;
   color:#fff;
   opacity:1;
 }
@@ -61,7 +59,7 @@ body:has(#floew-continue-feed) .share-page-badge{display:none!important;}
     bottom:max(12px,calc(env(safe-area-inset-bottom) + 8px));
     left:max(12px,calc(env(safe-area-inset-left) + 10px));
     font-size:11px;
-    padding:9px 12px;
+    padding:9px 0;
     min-height:40px;
   }
 }
