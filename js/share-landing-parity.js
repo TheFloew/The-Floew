@@ -225,7 +225,7 @@
     // Keep the original 1080x1920 visual card and QR renderer from the feed.
     shareToolsPromise=Promise.resolve()
       .then(()=>loadScript(HOST+"/js/vendor/qrcode-generator.js?v=1"))
-      .then(()=>loadScript(HOST+"/js/visual-share.js?v=8"));
+      .then(()=>loadScript(HOST+"/js/visual-share.js?v=9"));
     return shareToolsPromise;
   }
   // Capture wins over the Worker's direct-share click listener at the target.
