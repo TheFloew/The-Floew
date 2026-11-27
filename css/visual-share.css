@@ -133,7 +133,8 @@
   .floew-visual-share-canvas-wrap{width:min(220px,55vw);min-height:0;padding:6px}
   #floew-visual-share-canvas{max-height:min(42vh,390px)}
   .floew-visual-share-controls{width:100%;justify-content:flex-start;gap:10px}
-  .floew-visual-share-links{flex-direction:row;gap:9px}
+  .floew-visual-share-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+  #floew-visual-share-new-tab{grid-column:1/-1}
   .floew-visual-share-action{flex:1;padding:11px 8px;font-size:10px}
   .floew-visual-share-note,.floew-visual-share-status{font-size:10px}
 }
