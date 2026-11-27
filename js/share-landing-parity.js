@@ -33,7 +33,7 @@
     return match?"https://flöw.tr/s/"+match[1]:location.href.split("#")[0];
   };
   const numeric=value=>{
-    const cleaned=String(value||"").replace(/[≈\s]/g,"").replace(",",".");
+    const cleaned=String(value??"").replace(/[≈\s]/g,"").replace(",",".");
     if(!cleaned || cleaned==="—")return null;
     const parsed=Number(cleaned);
     return Number.isFinite(parsed)&&parsed>=0&&parsed<=100?parsed:null;
