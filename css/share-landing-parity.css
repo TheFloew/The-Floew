@@ -1,0 +1,72 @@
+/* Shared news landing: route back to the feed and consistent panel motion. */
+#floew-continue-feed{
+  position:fixed;
+  top:max(18px,calc(env(safe-area-inset-top) + 14px));
+  right:max(18px,calc(env(safe-area-inset-right) + 16px));
+  z-index:1550;
+  box-sizing:border-box;
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  max-width:calc(100vw - 32px);
+  min-height:42px;
+  padding:10px 16px;
+  border:1px solid rgba(255,255,255,.25);
+  border-radius:999px;
+  background:rgba(10,12,14,.58);
+  color:#fff;
+  font:700 12px/1.2 "Comfortaa",Arial,sans-serif;
+  letter-spacing:.01em;
+  text-decoration:none;
+  text-shadow:0 1px 4px rgba(0,0,0,.6);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  opacity:.88;
+  transition:background .18s ease,opacity .18s ease;
+}
+#floew-continue-feed::after{
+  content:"\2192";
+  font:400 21px/1 Arial,sans-serif;
+}
+#floew-continue-feed:hover,
+#floew-continue-feed:focus-visible{
+  background:rgba(24,28,30,.85);
+  color:#fff;
+  opacity:1;
+}
+#floew-continue-feed:focus-visible{
+  outline:2px solid #fff;
+  outline-offset:3px;
+}
+#share-slide .flora-inline.flora-estimated .flora-inline-value{
+  font-variant-numeric:tabular-nums;
+}
+#share-source-overlay{
+  transition:opacity .32s cubic-bezier(.22,.61,.36,1),visibility 0s linear .34s!important;
+}
+#share-source-overlay.open{
+  transition:opacity .32s cubic-bezier(.22,.61,.36,1),visibility 0s linear 0s!important;
+}
+#share-source-panel{
+  transform:translateY(8px) scale(.985);
+  transition:transform .32s cubic-bezier(.22,.61,.36,1);
+}
+#share-source-overlay.open #share-source-panel{
+  transform:translateY(0) scale(1);
+}
+@media(max-width:700px){
+  #floew-continue-feed{
+    top:max(12px,calc(env(safe-area-inset-top) + 8px));
+    right:max(12px,calc(env(safe-area-inset-right) + 10px));
+    font-size:11px;
+    padding:9px 12px;
+    min-height:40px;
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  #floew-continue-feed,
+  #share-source-overlay,
+  #share-source-panel{
+    transition:none!important;
+  }
+}
