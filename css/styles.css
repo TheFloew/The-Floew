@@ -3196,15 +3196,17 @@ body.foreign-mode #time-range-button{
 #custom-rss-add{
   width:38px;
   height:38px;
-  border:1px solid rgba(255,255,255,.22);
-  border-radius:50%;
-  background:rgba(255,255,255,.06);
+  border:0;
+  border-radius:0;
+  background:transparent;
   color:#fff;
   cursor:pointer;
+  opacity:.72;
   font:300 24px/36px Arial,sans-serif;
 }
-#custom-rss-add:hover{
-  background:rgba(255,255,255,.13);
+#custom-rss-add:hover:not(:disabled){
+  background:transparent;
+  opacity:1;
 }
 .custom-rss-feedback{
   margin:2px 0 10px;
@@ -3249,7 +3251,7 @@ body.foreign-mode #time-range-button{
   height:30px;
   padding:0;
   border:0;
-  border-radius:50%;
+  border-radius:0;
   background:transparent;
   color:#fff;
   cursor:pointer;
@@ -3258,7 +3260,13 @@ body.foreign-mode #time-range-button{
 }
 .custom-rss-remove:hover{
   opacity:1;
-  background:rgba(255,255,255,.08);
+  background:transparent;
+}
+#custom-rss-add:focus-visible,
+.custom-rss-remove:focus-visible{
+  opacity:1;
+  outline:1px solid rgba(255,255,255,.58);
+  outline-offset:2px;
 }
 
 @media(max-width:700px){
