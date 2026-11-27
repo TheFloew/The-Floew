@@ -151,11 +151,12 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 
 
 .option-check{
-  flex:0 0 18px;width:18px;height:18px;border-radius:5px;
-  border:1px solid rgba(255,255,255,.35);
-  display:grid;place-items:center;font:700 12px/18px Arial,sans-serif;
+  flex:0 0 18px;width:18px;height:18px;
+  border:0;border-radius:0;background:transparent;
+  display:grid;place-items:center;
+  color:transparent;font:700 17px/1 Arial,sans-serif;
 }
-.option.on .option-check{background:#fff;color:#111;border-color:#fff}
+.option.on .option-check{background:transparent;color:#fff;border-color:transparent}
 .menu-footer{margin-top:18px;padding-top:12px;border-top:1px solid rgba(255,255,255,.1);font-size:11px;opacity:.55}
 @media(max-width:700px){
   .option-list{grid-template-columns:1fr}
@@ -536,9 +537,10 @@ body{font-family:"Comfortaa",sans-serif;user-select:none;touch-action:none}
 .option:hover{background:transparent !important}
 .option-name{font-size:12px !important;font-weight:400 !important}
 .option-check{
-  width:15px !important;height:15px !important;flex-basis:15px !important;
-  border-radius:50% !important;
-  font-size:10px !important;line-height:15px !important;
+  width:18px !important;height:18px !important;flex-basis:18px !important;
+  border:0 !important;border-radius:0 !important;
+  background:transparent !important;
+  font-size:17px !important;line-height:1 !important;
 }
 .menu-footer{
   margin-top:18px !important;
