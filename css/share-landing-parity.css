@@ -25,9 +25,20 @@
 }
 /* Hide the old branding badge only when the replacement link exists. */
 body:has(#floew-continue-feed) .share-page-badge{display:none!important;}
-#floew-continue-feed::after{
-  content:"\2193";
-  font:400 21px/1 Arial,sans-serif;
+#floew-continue-feed::after{content:none!important}
+.floew-continue-gesture{
+  width:42px;height:42px;flex:0 0 42px;
+  color:#fff;overflow:visible;
+  filter:drop-shadow(0 1px 3px rgba(0,0,0,.55));
+}
+.floew-continue-hand{animation:floew-continue-swipe 2.2s ease-in-out infinite}
+@keyframes floew-continue-swipe{
+  0%,18%{transform:translateY(-8px)}
+  60%,78%{transform:translateY(4px)}
+  100%{transform:translateY(-8px)}
+}
+@media(prefers-reduced-motion:reduce){
+  .floew-continue-hand{animation:none!important}
 }
 #floew-continue-feed:hover,
 #floew-continue-feed:focus-visible{

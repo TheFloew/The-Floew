@@ -12,7 +12,7 @@
   const HOME="https://flöw.tr/";
   const ANALYTICS="https://thefloew-analytics.thefloewback.workers.dev";
   const assets=[
-    ["/css/share-landing-parity.css?v=3","stylesheet"],
+    ["/css/share-landing-parity.css?v=4","stylesheet"],
     ["/css/visual-share.css?v=3","stylesheet"]
   ];
   for(const item of assets){
@@ -45,9 +45,48 @@
     const link=document.createElement("a");
     link.id="floew-continue-feed";link.href=HOME;
     link.setAttribute("aria-label","Flöw ana haber akışına devam et");
-    link.textContent="Akışa devam et";
+    link.innerHTML='<span>Akışa devam et</span><svg class="floew-continue-gesture" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><path d="M22 25V61M17 56l5 5 5-5" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><g class="floew-continue-hand"><path fill="currentColor" d="M41 39c-4-3-9 3-5 7l22 19c2 2 1 4-1 5l-9 3c-5 2-7 5-7 9h35q2 0 3-2l7-14q1-2 0-4L76 48q-6-7-13-3l-9 6q-2 1-4-1z"/></g></svg>';
     document.body.appendChild(link);
   }
+
+
+  // Downward page navigation: positive wheel delta or upward finger swipe.
+  // Never intercept gestures inside overlays, interactive controls or scrollable content.
+  let feedNavigating=false,wheelSum=0,lastWheel=0,touch=null;
+  const blocked=target=>{
+    if(document.querySelector('#share-source-overlay.open,#floew-visual-share:not([hidden]),[aria-modal="true"]:not([hidden]):not([aria-hidden="true"])'))return true;
+    if(!(target instanceof Element))return true;
+    if(target.closest('a,button,input,textarea,select,video,[contenteditable],iframe,[role="button"]'))return true;
+    for(let node=target;node&&node!==document.body;node=node.parentElement){
+      if(/auto|scroll/.test(getComputedStyle(node).overflowY)&&node.scrollHeight>node.clientHeight+2)return true;
+    }
+    return false;
+  };
+  const goFeed=()=>{
+    if(feedNavigating)return;
+    feedNavigating=true;
+    location.assign(HOME);
+  };
+  window.addEventListener("pageshow",()=>{feedNavigating=false;wheelSum=0;touch=null;});
+  window.addEventListener("wheel",event=>{
+    if(event.ctrlKey||event.metaKey||blocked(event.target)||event.deltaY<=0||Math.abs(event.deltaX)>=event.deltaY){wheelSum=0;return;}
+    const now=performance.now();
+    if(now-lastWheel>220)wheelSum=0;
+    lastWheel=now;
+    wheelSum+=event.deltaY*(event.deltaMode===1?16:event.deltaMode===2?innerHeight:1);
+    if(wheelSum>=72){if(event.cancelable)event.preventDefault();goFeed();}
+  },{passive:false});
+  window.addEventListener("touchstart",event=>{
+    touch=event.touches.length===1&&!blocked(event.target)?{x:event.touches[0].clientX,y:event.touches[0].clientY}:null;
+  },{passive:true});
+  window.addEventListener("touchcancel",()=>{touch=null;},{passive:true});
+  window.addEventListener("touchend",event=>{
+    const start=touch;touch=null;
+    if(!start||event.touches.length||blocked(event.target))return;
+    const end=event.changedTouches[0];if(!end)return;
+    const dy=start.y-end.clientY,dx=Math.abs(start.x-end.clientX);
+    if(dy>=60&&dy>dx*1.4)goFeed();
+  },{passive:true});
 
   // The Worker has historically serialized null as 0.0. Prefer the saved
   // positive score; otherwise resolve the canonical story key on demand.
