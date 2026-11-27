@@ -5,6 +5,7 @@ import test from "node:test";
 
 const read=path=>readFileSync(new URL("../"+path,import.meta.url),"utf8");
 const source=read("js/share-landing-parity.js");
+const loader=read("js/share-landing-ui.js");
 const css=read("css/share-landing-parity.css");
 const doc=read("docs/share-landing-parity.md");
 
@@ -41,6 +42,7 @@ test("source viewer, feed navigation and reduced-motion affordances exist",()=>{
 
 test("the deployment guide warns that the Worker must be updated separately",()=>{
   assert.match(doc,/Share Worker'a manuel ekleme/);
-  assert.match(doc,/share-landing-parity\.js\?v=1/);
+  assert.match(doc,/share-landing-ui\.js\?v=2/);
+  assert.match(loader,/share-landing-parity\.js\?v=1/);
   assert.match(doc,/Güncel Worker'ı eski bir dosyayla tamamen değiştirme/);
 });
