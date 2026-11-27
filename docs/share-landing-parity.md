@@ -11,12 +11,13 @@ Bu dal ana haber akışını değiştirmez. Tahmini Flöra puanı gerçek puanm�
 ## ÖNEMLİ: Share Worker'a manuel ekleme gerekiyor
 Canlı `/s/*` HTML'i Cloudflare Share Worker tarafından üretiliyor; GitHub Pages bu route'u sunmaz. 27 Kasım 2026 tarihli canlı kontrolünde paylaşım sayfası `share-landing-ui.js` dahil **hiçbir dış UI betiğini** yüklemiyordu. Bu yüzden bu PR'yi merge etmek tek başına canlı `/s/*` sayfalarını değiştirmez.
 
-**Share Worker'ın mevcut, canlı sürümündeki** paylaşılmış haber HTML'ini oluşturan `<head>` bölgesine, `</head>` öncesine aşağıdaki iki satırı ekle. Güncel Worker'ı eski bir dosyayla tamamen değiştirme:
+**Share Worker'ın mevcut, canlı sürümündeki** paylaşılmış haber HTML'ini oluşturan `<head>` bölgesine, `</head>` öncesine aşağıdaki tek satırı ekle. Güncel Worker'ı eski bir dosyayla tamamen değiştirme:
 
 ```html
-<script defer src="https://xn--flw-tna.tr/js/share-landing-ui.js?v=1"></script>
-<script defer src="https://xn--flw-tna.tr/js/share-landing-parity.js?v=1"></script>
+<script defer src="https://xn--flw-tna.tr/js/share-landing-ui.js?v=2"></script>
 ```
+
+Bu satır ikon arayüzünü yükler, o da otomatik olarak `share-landing-parity.js` davranış katmanını çağırır.
 
 Kısa `/s/<kod>` ve eski `/share/<token>` rotaları ayrı şablon kullanıyorsa iki HTML'ye de ekle. Önce GitHub Pages'in bu dalı yayınladığından emin ol, sonra yalnız Share Worker'ı deploy et. Cloudflare'daki KV binding, route ve mevcut video/BaitBuster işlevleri korunmalı.
 
