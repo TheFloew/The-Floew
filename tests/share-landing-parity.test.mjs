@@ -36,13 +36,13 @@ test("source viewer, feed navigation and reduced-motion affordances exist",()=>{
   assert.match(source,/https:\/\/flöw\.tr\//);
   assert.match(source,/share-source-overlay/);
   assert.match(source,/sourceFrame\.src="about:blank"/);
-  assert.match(css,/safe-area-inset-top/);
+  assert.match(css,/safe-area-inset-bottom/);
   assert.match(css,/prefers-reduced-motion/);
 });
 
 test("the deployment guide warns that the Worker must be updated separately",()=>{
   assert.match(doc,/Share Worker'a manuel ekleme/);
   assert.match(doc,/share-landing-ui\.js\?v=2/);
-  assert.match(loader,/share-landing-parity\.js\?v=1/);
+  assert.match(loader,/share-landing-parity\.js\?v=2/);
   assert.match(doc,/Güncel Worker'ı eski bir dosyayla tamamen değiştirme/);
 });
