@@ -6,7 +6,7 @@ Bu dal ana haber akışını değiştirmez. Tahmini Flöra puanı gerçek puanm�
 - Flöra: kısa linke kaydedilmiş pozitif puan korunur. Eksik/şüpheli `0.0` için yalnız ilgili haberin **indeksli** `/stats/flora-story` uç noktası sorgulanır; yeterli gerçek veri yoksa 24 saat önbellekli Flöra sözlüğü ve mevcut yerel tahminci kullanılır. Veri yoksa yapay `0.0` yerine `—` gösterilir. Her ziyaretçi için yeni AI çağrısı yapılmaz.
 - Paylaş: ana akıştaki `js/visual-share.js` ve QR kütüphanesi **yalnız paylaş düğmesine basıldığında** yüklenir. Aynı iki seçenek, “Bağlantı paylaş” ve “Görsel paylaş / Görseli indir” sunulur. Mevcut `/s/<kod>` bağlantısı yeniden kullanılır; yeni KV kaydı oluşturulmaz. Eski `/share/<token>` linklerinde QR kartı kullanılamıyorsa bağlantı paylaşımı çalışır.
 - Kaynak: mevcut News Worker `/source` proxy'si korunur. Açılan kaynak penceresinde dış alana tıklama, Escape ve kapanışın 340 ms sonrasında iframe temizliği eklenir.
-- Akışa yönlendirme: logo bağlantısına ek olarak üst sağda “Akışa devam et” belirgin bağlantısı vardır. Mobil safe area ve klavye odağı desteklenir.
+- Akışa yönlendirme: logo bağlantısına ek olarak sol altta “Akışa devam et” belirgin bağlantısı vardır. Mobil safe area ve klavye odağı desteklenir.
 
 ## ÖNEMLİ: Share Worker'a manuel ekleme gerekiyor
 Canlı `/s/*` HTML'i Cloudflare Share Worker tarafından üretiliyor; GitHub Pages bu route'u sunmaz. 27 Kasım 2026 tarihli canlı kontrolünde paylaşım sayfası `share-landing-ui.js` dahil **hiçbir dış UI betiğini** yüklemiyordu. Bu yüzden bu PR'yi merge etmek tek başına canlı `/s/*` sayfalarını değiştirmez.
@@ -44,7 +44,7 @@ const floraRaw =
 1. Yeni bir ana akış haberi paylaş, `/s/<kod>` sayfasını gizli pencerede aç. Flöra varsa puan aynı olmalı; eksik veride `0.0` uydurulmamalı.
 2. Paylaş'a tıkla. Ana sayfadaki gibi iki seçenek açılmalı; bağlantı paylaşınca aynı kısa link gelmeli, görsel kart indirilebilmeli/paylaşılabilmeli.
 3. Kaynağı gör -> iframe aç -> Escape veya kapat -> tekrar aç. Çıkışta beyaz kare olmamalı, geri dönüş odağı kaynak düğmesine dönmeli.
-4. Sağ üstteki “Akışa devam et” bağlantısı PC ve dikey mobilde `https://flöw.tr/` ana akışını açmalı.
+4. Sol alttaki “Akışa devam et” bağlantısı PC ve dikey mobilde `https://flöw.tr/` ana akışını açmalı.
 5. Video, ses, BaitBuster, kısa link/QR ve mevcut reklam davranışlarını ayrıca kontrol et.
 
 > Sınır: Bu dalda canlı Cloudflare Worker'a deploy yapılmadı. v2.9.3'ün tamamını canlı Worker'ın üstüne yazmak yerine yalnız entegrasyon satırlarını ve uygun null/0 düzeltmesini güncel Worker'a işle.
