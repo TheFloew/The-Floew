@@ -242,8 +242,10 @@
 
     if(!raw || raw==="—")return null;
 
+    // The visible Flöra estimate includes "≈". Preserve its numeric
+    // snapshot in short-link metadata rather than silently dropping it.
     const value=Number(
-      raw.replace(",",".")
+      raw.replace(/^≈\s*/,"").replace(",",".")
     );
 
     return Number.isFinite(value)
