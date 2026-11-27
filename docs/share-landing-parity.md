@@ -1,7 +1,7 @@
 # Flöw | Paylaşılan haber sayfasında işlev eşitliği
 
 ## Kapsam
-Bu dal ana haber akışını değiştirmez (yalnızca `js/share.js` içindeki Flöra tahminini kısa bağlantı snapshot'ına kaydetme hatası düzeltilir). Paylaşım sayfasının davranışı `js/share-landing-parity.js`, tasarımı `css/share-landing-parity.css` içindedir.
+Bu dal ana haber akışını değiştirmez. Tahmini Flöra puanı gerçek puanmış gibi kısa bağlantıya yazılmaz; paylaşım sayfasında yeniden tahmin edilirse `≈` işaretiyle gösterilir. Paylaşım sayfasının davranışı `js/share-landing-parity.js`, tasarımı `css/share-landing-parity.css` içindedir.
 
 - Flöra: kısa linke kaydedilmiş pozitif puan korunur. Eksik/şüpheli `0.0` için yalnız ilgili haberin **indeksli** `/stats/flora-story` uç noktası sorgulanır; yeterli gerçek veri yoksa 24 saat önbellekli Flöra sözlüğü ve mevcut yerel tahminci kullanılır. Veri yoksa yapay `0.0` yerine `—` gösterilir. Her ziyaretçi için yeni AI çağrısı yapılmaz.
 - Paylaş: ana akıştaki `js/visual-share.js` ve QR kütüphanesi **yalnız paylaş düğmesine basıldığında** yüklenir. Aynı iki seçenek, “Bağlantı paylaş” ve “Görsel paylaş / Görseli indir” sunulur. Mevcut `/s/<kod>` bağlantısı yeniden kullanılır; yeni KV kaydı oluşturulmaz. Eski `/share/<token>` linklerinde QR kartı kullanılamıyorsa bağlantı paylaşımı çalışır.
