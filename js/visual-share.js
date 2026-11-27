@@ -6,7 +6,7 @@
   const W=1080,H=1920;
   const NEWS_WORKER=String(window.FLOEW_CONFIG?.newsWorkerBase||"https://thefloew.thefloewback.workers.dev").replace(/\/$/,"");
   const SHORT_RE=/^https:\/\/(?:flöw\.tr|xn--flw-tna\.tr)\/s\/[A-Za-z0-9_-]+\/?$/i;
-  let overlay=null,canvas=null,visualButton=null,linkButton=null,status=null;
+  let overlay=null,canvas=null,visualButton=null,linkButton=null,newTabButton=null,status=null;
   let current=null,buildSerial=0,focusBefore=null;
   let overlayExitTimer=null;
 
@@ -41,7 +41,7 @@
       '<div class="floew-visual-share-links">',
       '<button type="button" class="floew-visual-share-action secondary" id="floew-visual-share-link">Bağlantı paylaş</button>',
       '<button type="button" class="floew-visual-share-action" id="floew-visual-share-image" disabled>Görsel hazırlanıyor…</button>',
-      '<button type="button" class="floew-visual-share-action secondary" id="floew-visual-share-new-tab">Yeni sekmede aç</button>',
+      '<button type="button" class="floew-visual-share-action secondary" id="floew-visual-share-new-tab" disabled>Yeni sekmede aç</button>',
       '</div>',
       '<p class="floew-visual-share-status" id="floew-visual-share-status" role="status" aria-live="polite">Kart oluşturuluyor…</p>',
       '</div></div></section>'
@@ -50,6 +50,7 @@
     canvas=el("#floew-visual-share-canvas",overlay);
     visualButton=el("#floew-visual-share-image",overlay);
     linkButton=el("#floew-visual-share-link",overlay);
+    newTabButton=el("#floew-visual-share-new-tab",overlay);
     status=el("#floew-visual-share-status",overlay);
 
     overlay.addEventListener("click",event=>{
@@ -73,11 +74,11 @@
         void window.FloewShare?.shareStory(entry.button);
       }
     });
-    el("#floew-visual-share-new-tab",overlay).addEventListener("click",()=>{
+    newTabButton.addEventListener("click",()=>{
       const entry=current;
       if(!entry)return;
       let url;
-      try{url=new URL(entry.story.articleUrl);if(!/^https?:$/.test(url.protocol))return;}catch(_){return;}
+      try{url=new URL(entry.story.shareUrl);if(url.protocol!=="https:"||url.hostname!=="xn--flw-tna.tr")return;}catch(_){return;}
       window.open(url.href,"_blank","noopener,noreferrer");
       close();
     });
@@ -405,6 +406,8 @@
   function reset(){
     visualButton.disabled=true;
     visualButton.textContent="Görsel hazırlanıyor…";
+    newTabButton.disabled=true;
+    try{const url=new URL(current?.story?.shareUrl);newTabButton.disabled=url.protocol!=="https:"||url.hostname!=="xn--flw-tna.tr";}catch(_){}
     linkButton.disabled=true;
     linkButton.textContent="Bağlantı hazırlanıyor…";
     textStatus("Flöw kartı hazırlanıyor…",false);
@@ -425,6 +428,7 @@
       entry.story.shareUrl=shortUrl;
       linkButton.textContent="Bağlantı paylaş";
       linkButton.disabled=!shortUrl;
+      try{const url=new URL(shortUrl);newTabButton.disabled=url.protocol!=="https:"||url.hostname!=="xn--flw-tna.tr";}catch(_){newTabButton.disabled=true;}
       if(!SHORT_RE.test(shortUrl)){
         throw new Error("short_link_unavailable");
       }
