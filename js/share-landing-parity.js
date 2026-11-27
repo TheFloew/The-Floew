@@ -12,7 +12,7 @@
   const HOME="https://flöw.tr/";
   const ANALYTICS="https://thefloew-analytics.thefloewback.workers.dev";
   const assets=[
-    ["/css/share-landing-parity.css?v=1","stylesheet"],
+    ["/css/share-landing-parity.css?v=2","stylesheet"],
     ["/css/visual-share.css?v=2","stylesheet"]
   ];
   for(const item of assets){
