@@ -127,7 +127,7 @@
     }
     try{
       if(!window.FloewFloraPredictor){
-        await loadScript(HOST+"/js/flora-predictor.js?v=1");
+        await loadScript(HOST+"/js/flora-predictor.js?v=2");
       }
       const response=await fetch(ANALYTICS+"/stats/flora-vocabulary?stream=main",{
         mode:"cors",credentials:"omit",cache:"default",headers:{"Accept":"application/json"}
