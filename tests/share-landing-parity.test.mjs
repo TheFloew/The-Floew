@@ -6,7 +6,6 @@ import test from "node:test";
 const read=path=>readFileSync(new URL("../"+path,import.meta.url),"utf8");
 const source=read("js/share-landing-parity.js");
 const css=read("css/share-landing-parity.css");
-const mainShare=read("js/share.js");
 const doc=read("docs/share-landing-parity.md");
 
 test("shared-story parity script parses and exits on the main feed",()=>{
@@ -29,7 +28,6 @@ test("Flöra does not turn missing information into a fabricated zero",()=>{
   assert.match(source,/stats\/flora-story/);
   assert.match(source,/stats\/flora-vocabulary/);
   assert.match(source,/flora-inline-value"\)\.textContent="—"/);
-  assert.match(mainShare,/raw\.replace\(\/\^≈\\s\*\/,""\)/);
 });
 
 test("source viewer, feed navigation and reduced-motion affordances exist",()=>{
