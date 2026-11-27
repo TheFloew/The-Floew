@@ -29,7 +29,7 @@
       '<section class="floew-visual-share-dialog" role="dialog" aria-modal="true" aria-labelledby="floew-visual-share-title">',
       '<header class="floew-visual-share-header">',
       '<div><div class="floew-visual-share-heading" id="floew-visual-share-title">Haberi paylaş</div>',
-      '<div class="floew-visual-share-subtitle">Flöw bağlantısı veya Instagram hikâyesi için görsel</div></div>',
+      '<div class="floew-visual-share-subtitle">Bağlantı, görsel veya yeni sekmede aç</div></div>',
       '<button class="floew-visual-share-close" type="button" title="Kapat" aria-label="Kapat">×</button>',
       '</header>',
       '<div class="floew-visual-share-body">',
@@ -41,6 +41,7 @@
       '<div class="floew-visual-share-links">',
       '<button type="button" class="floew-visual-share-action secondary" id="floew-visual-share-link">Bağlantı paylaş</button>',
       '<button type="button" class="floew-visual-share-action" id="floew-visual-share-image" disabled>Görsel hazırlanıyor…</button>',
+      '<button type="button" class="floew-visual-share-action secondary" id="floew-visual-share-new-tab">Yeni sekmede aç</button>',
       '</div>',
       '<p class="floew-visual-share-status" id="floew-visual-share-status" role="status" aria-live="polite">Kart oluşturuluyor…</p>',
       '</div></div></section>'
@@ -71,6 +72,14 @@
       }else{
         void window.FloewShare?.shareStory(entry.button);
       }
+    });
+    el("#floew-visual-share-new-tab",overlay).addEventListener("click",()=>{
+      const entry=current;
+      if(!entry)return;
+      let url;
+      try{url=new URL(entry.story.articleUrl);if(!/^https?:$/.test(url.protocol))return;}catch(_){return;}
+      window.open(url.href,"_blank","noopener,noreferrer");
+      close();
     });
     visualButton.addEventListener("click",()=>{
       if(current?.blob)void shareImage();
