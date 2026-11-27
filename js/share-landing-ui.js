@@ -144,4 +144,13 @@
       characterData:true
     });
   }
+
+  // One Share Worker script tag now installs both the shared icon styling
+  // and the separate Flöra/share/source/feed behavioral parity layer.
+  if (!document.querySelector('script[data-floew-share-parity]')) {
+    const script = document.createElement("script");
+    script.src = new URL("share-landing-parity.js?v=1", scriptSource).href;
+    script.dataset.floewShareParity = "1";
+    document.head.appendChild(script);
+  }
 })();
