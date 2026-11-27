@@ -1,8 +1,8 @@
 /* Shared news landing: route back to the feed and consistent panel motion. */
 #floew-continue-feed{
   position:fixed;
-  top:max(18px,calc(env(safe-area-inset-top) + 14px));
-  right:max(18px,calc(env(safe-area-inset-right) + 16px));
+  bottom:max(18px,calc(env(safe-area-inset-bottom) + 14px));
+  left:max(18px,calc(env(safe-area-inset-left) + 16px));
   z-index:1550;
   box-sizing:border-box;
   display:inline-flex;
@@ -24,8 +24,10 @@
   opacity:.88;
   transition:background .18s ease,opacity .18s ease;
 }
+/* Hide the old branding badge only when the replacement link exists. */
+body:has(#floew-continue-feed) .share-page-badge{display:none!important;}
 #floew-continue-feed::after{
-  content:"\2192";
+  content:"\2193";
   font:400 21px/1 Arial,sans-serif;
 }
 #floew-continue-feed:hover,
@@ -56,8 +58,8 @@
 }
 @media(max-width:700px){
   #floew-continue-feed{
-    top:max(12px,calc(env(safe-area-inset-top) + 8px));
-    right:max(12px,calc(env(safe-area-inset-right) + 10px));
+    bottom:max(12px,calc(env(safe-area-inset-bottom) + 8px));
+    left:max(12px,calc(env(safe-area-inset-left) + 10px));
     font-size:11px;
     padding:9px 12px;
     min-height:40px;
