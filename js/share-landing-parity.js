@@ -51,7 +51,7 @@
 
 
   // Capture before Worker/slide handlers can stop propagation.
-  let feedNavigating=false,wheelSum=0,lastWheel=0,touch=null;
+  let feedNavigating=false,wheelSum=0,lastWheel=0,touch=null,exitAnimations=[];
   const blocked=target=>{
     if(document.querySelector('#share-source-overlay.open,#floew-visual-share.open'))return true;
     const element=target instanceof Element?target:target?.parentElement;
@@ -65,9 +65,27 @@
   const goFeed=()=>{
     if(feedNavigating)return;
     feedNavigating=true;
-    location.assign(HOME);
+    if(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches || typeof slide.animate!=="function"){
+      location.assign(HOME);return;
+    }
+    // Animate the shared story as one surface before entering the feed.
+    const duration=240;
+    const motion={duration,easing:"cubic-bezier(.22,.61,.36,1)",fill:"forwards"};
+    try{
+      exitAnimations.push(slide.animate([{translate:"0 0"},{translate:"0 -100vh"}],motion));
+      const link=document.getElementById("floew-continue-feed");
+      if(link)exitAnimations.push(link.animate([{opacity:1},{opacity:0}],{duration:160,fill:"forwards"}));
+    }catch(_){location.assign(HOME);return;}
+    setTimeout(()=>location.assign(HOME),duration);
   };
-  window.addEventListener("pageshow",()=>{feedNavigating=false;wheelSum=0;touch=null;});
+  document.getElementById("floew-continue-feed")?.addEventListener("click",event=>{
+    if(event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
+    event.preventDefault();goFeed();
+  });
+  window.addEventListener("pageshow",()=>{
+    feedNavigating=false;wheelSum=0;touch=null;
+    exitAnimations.forEach(animation=>animation.cancel());exitAnimations=[];
+  });
   window.addEventListener("wheel",event=>{
     if(event.ctrlKey||event.metaKey||blocked(event.target)||event.deltaY<=0||Math.abs(event.deltaX)>=event.deltaY){wheelSum=0;return;}
     const now=performance.now();
